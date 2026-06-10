@@ -1,0 +1,16 @@
+TASK:
+
+I'm using claude code to code my app... But is there anyway that claude can test on android?!!? like whilst running its claude code auto tests?
+
+do the full setup process that I need to do for you, so that we are ready to go...
+
+i want something suckless a, relaible, minimal, that just works, and that you'll be able to interact and test with as claude code... 
+
+I'm currently on debain 13, xfce...
+
+i want use my phone rather than an emulator...
+i want to use kotlin i guess over java if thats possible...
+
+
+Then a very very minimal simple readme saying what we have setup in just bullet points (no bolding or whatever)
+    --> and then what needs to be done in idiot proof language before running the tests... (i.e. plugging in the phone, enabling stuff on the phone if not done, etc). 

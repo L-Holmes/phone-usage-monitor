@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/disclosure"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="12dp"
+        android:text="@string/disclosure"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:id="@+id/status_accessibility"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/page_monitoring" />
+
+        <Button
+            android:id="@+id/btn_accessibility"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/enable" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:id="@+id/status_capture"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/screen_capture" />
+
+        <Button
+            android:id="@+id/btn_capture"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/start" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_clear"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:text="@string/clear_list" />
+
+    <TextView
+        android:id="@+id/empty_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="24dp"
+        android:text="@string/empty_list"
+        android:textAlignment="center"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingTop="8dp" />
+
+</LinearLayout>
