@@ -13,10 +13,23 @@ the screen, across every app and browser, with no root and no network MITM.
 - Blocks pages that match a block rule by covering the screen with a full-screen "Blocked" overlay (with Go back / Leave / Report buttons)
 - Domain detection and blocking are browser-agnostic on purpose (they scan for a hostname rather than relying on a specific browser), so they keep working when browsers change
 
-## What it deliberately does not do
+## What we can and cannot detect (honest limits, for future dev)
 
-- It does not decrypt HTTPS, so it never sees full URLs, image URLs, or page paths. You get the domain plus the on-screen text and the screenshot instead. This is the same approach Covenant Eyes / Ever Accountable / Accountable2You use.
-- No root, no certificate installation, no VPN.
+What we CAN get (no root, via Accessibility + screen capture):
+- The website domain, from the address bar. In Chrome this is only the registrable domain (reddit.com), in Firefox it can include the path.
+- The page title (e.g. "Wolf - Wikipedia"), usually, across browsers — but not guaranteed for every app/page.
+- A sample of the visible on-screen text, across any app or browser.
+- Periodic screenshots of the screen.
+- Domain + title + text are captured in private/incognito browsing too (accessibility still works there).
+
+What we CANNOT get (do not pretend otherwise):
+- Full URLs / exact page paths reliably. Chrome exposes only the registrable domain; to identify a specific page use the title/text. Getting real URLs everywhere would need root or a proxy/MITM with an installed certificate, which we are not doing.
+- Image or video URLs (HTTPS hides them). We rely on the screenshot pixels instead.
+- Screenshots in private/incognito tabs, and in banking/DRM apps: these come out BLACK. Android's FLAG_SECURE blocks screen capture there and it cannot be bypassed without root. Page monitoring (domain/title/text) still works in private mode; only the image is black.
+
+Consequences for blocking:
+- Block a whole site with a domain rule (redgifs.com). Works on actual visits, in any browser, including private mode.
+- Block a specific page with a title keyword (wolf), or by tapping its row. Cannot block by full URL path.
 
 ## How it works (for later maintenance)
 
@@ -31,9 +44,10 @@ the screen, across every app and browser, with no root and no network MITM.
 
 ## How blocking behaves
 
-- Go back: fires the system Back. If it reaches allowed content the cover clears automatically; if Back cannot go anywhere, the cover stays (content stays hidden).
+- The cover only appears on an actual web page (when the address bar is readable). The tab switcher, the home screen, and non-browser apps are never covered, so a blocked tab's thumbnail in the switcher does not trap you — you can open the switcher and close the tab.
+- Go back: fires the system Back. If it reaches allowed content the cover clears automatically; if Back cannot go anywhere, the cover stays. It is debounced (about 0.8s) so an impatient double-tap does not skip back two pages; tap again after a moment to keep going back.
 - Leave: goes to the home screen and clears the cover. This is the always-works escape hatch for any app.
-- Report incorrect block: lets the current page through until the app is restarted.
+- Report incorrect block: lets the current page through until the app is restarted. The block screen names the rule that matched (e.g. "wolf") so you know why.
 - This is the realistic no-root limit: we cannot show a fake 404 inside the browser, and we cannot block only the images on an HTTPS page. Covering the screen and offering Back/Leave is what is reliably possible.
 
 ## How to test blocking (until the real classifier exists)

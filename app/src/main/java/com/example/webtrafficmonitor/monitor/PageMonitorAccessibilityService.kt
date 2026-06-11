@@ -29,9 +29,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var overlay: OverlayController? = null
     private var lastProcessedAt = 0L
     private var lastLogSignature: String? = null
+    private var lastGoBackAt = 0L
 
-    private var currentPackage: String? = null
-    private var currentDomain: String? = null
+    private var lastPackage: String? = null
+    private var lastHost: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -65,14 +66,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         val root = rootInActiveWindow ?: return
 
-        // A new app means a new page; forget the previous domain.
-        if (packageName != currentPackage) {
-            currentPackage = packageName
-            currentDomain = null
-        }
+        // The host is read fresh each event. It is non-null only when an address bar
+        // is actually on screen (i.e. a web page is being viewed) — NOT in the tab
+        // switcher, on the home screen, or in a non-browser app. Blocking keys off
+        // this, so a blocked page's tab thumbnail/title does not trigger the cover.
+        val host = readAddressBarHost()
 
-        // Update the remembered domain only when we can read a committed address bar.
-        readAddressBarHost()?.let { currentDomain = it }
+        if (packageName != lastPackage) {
+            lastPackage = packageName
+            lastHost = null
+        }
+        if (host != null) lastHost = host
 
         val text = sampleVisibleText(root)
         val firstLine = text?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
@@ -82,12 +86,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             .takeIf { it.isNotBlank() }
         val title = eventTitle ?: firstLine?.take(MAX_TITLE_CHARS)
 
-        // Always re-check the block so the cover persists while the page is shown.
-        evaluateBlock(packageName, currentDomain, title)
+        // Re-check the block every event so the cover persists while the page shows.
+        evaluateBlock(host, title)
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
         if (packageName in NOT_LOGGED_PACKAGES) return
-        val signature = "$packageName|$currentDomain|${firstLine?.take(40)}"
+        val signature = "$packageName|$lastHost|${firstLine?.take(40)}"
         if (signature == lastLogSignature) return
         lastLogSignature = signature
 
@@ -98,23 +102,33 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 kind = MonitorEntry.KIND_PAGE,
                 packageName = packageName,
                 title = title,
-                domain = currentDomain,
+                domain = lastHost,
                 text = text,
             ),
         )
     }
 
-    private fun evaluateBlock(packageName: String, domain: String?, title: String?) {
+    private fun evaluateBlock(host: String?, title: String?) {
         val controller = overlay ?: return
 
-        if (BlockRules.matches(domain, title, packageName)) {
-            val key = domain ?: packageName
+        // Only block when an address bar is visible (an actual web page), so the tab
+        // switcher and home screen never get covered.
+        val matchedRule = if (host != null) BlockRules.matchedRule(host, title) else null
+
+        if (matchedRule != null) {
             controller.show(
-                reason = domain ?: title ?: packageName,
+                reason = matchedRule,
                 // Fire Back, but don't hide here: if Back reaches allowed content the
                 // detection loop hides the cover; if it can't go anywhere, the cover
-                // stays and the content remains hidden.
-                onGoBack = { performGlobalAction(GLOBAL_ACTION_BACK) },
+                // stays and the content remains hidden. Debounced so one tap is one
+                // page (rapid double-taps don't skip two pages back).
+                onGoBack = {
+                    val tapAt = System.currentTimeMillis()
+                    if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
+                        lastGoBackAt = tapAt
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
+                },
                 // Home always works as an escape hatch; hide right away since going
                 // home reliably removes the blocked app from the foreground.
                 onLeave = {
@@ -122,7 +136,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     controller.hide()
                 },
                 onReport = {
-                    BlockRules.allowForSession(key)
+                    BlockRules.allowForSession(host)
                     controller.hide()
                 },
             )
@@ -207,6 +221,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40
         private const val ADDRESS_BAR_DEPTH = 25
+        private const val GO_BACK_DEBOUNCE_MS = 800L
 
         // Status bar / notification shade: skip entirely.
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
