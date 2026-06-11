@@ -1,53 +1,31 @@
 
-------------------------------------------------------------------------------------
+I reckon...
+- integrate the image adam cod processing...
+- test issue with the screenshot taker turning off
+    - ensure that always stays on!
+- Change the functionality of the report this thing...
+    - just make it just do nothing for now... don't make it unblock an app...
+- Make it so that the app can't be deleted...(?)
+- Add my own custom words blocklist(?)
+    - for strict mode...
+    - like bkni etc.
+- Load in an open source nsfw domains list (blacklist)
+    - auto add them all to ban
+- Load in an open source nsfw words list (blacklist of words)
+    - auto add them all to ban
+- Load in an open source nsfw app list 
+    - auto add them all to whitelist
+- Load in an open source trusted domains list (blacklist)
+    - auto add them all to whitelist
+- Load in an open source trusted non-sexual app list 
+    - auto add them all to whitelist
 
-Have issue with firefox focus... as the user acan enable blocking of screenshots... via the 'stealth mode' enable which is a toggle in the settings...
-
-OOh!
-by the way ive already switched back to using firefox focus as the main web browser and updated the code for that.
-
-
-can we also, in the logs, remove 'url: ' from being shown before every entry? just list the title...
-
-could we block it when this entry is detected:
-
-
-org.mozilla.focus
-package: org.mozilla.focus
-url: (none)
-domain: (none)
-title: Privacy & Security
-content/dump:
-Privacy & Security
-Cookies and Site Data
-Block cookies
-....
-Stealth
-...
-
-(for ai 
- I'm thinking maybe we match on entry name (org.mozilla.focus) and the title (Privacy & Security), and then perhaps if we're keen that the content / dump contains 'stealth'
-the thing is... I clicked on that entry myself to add to the block list... but then the block popup doesn't seem to show on the app... so maybe have a look at the functionality there... 
+- integrate the whitelisting....
+    - don't care about whats happening.. ideally no screenshotting / processing if we know we're on a whitelist app.. althgouh that may be difficult to determine
 
 ------------------------------------------------------------------------------------
-
-Hmmm.. would it be possible to just vibe code up my own firefox based browser?
-- similar to zen...
-- except;
-
-Perhaps:
-- Prevent history clearing
-- automatically block unsafe things
-- etc.
-
-
-----
-
 
 Next steps:
-- do i ask for a summary of what we've done?    
-    - or at least more detailed description of why we haven't gone for certain approaches...
-    - and a summary of what data we can or can't capture using the current system...
 - App whitelist (spotify, google maps, etc)
 - ensure we are monitoring web traffic? 
 
@@ -56,10 +34,6 @@ Then:
     - load in some banned sexual content blacklist from somewhere...
 do i close the app? 
 do i do something like what 'stay focused' app does?
-
-
-
-
 
 -------
 
