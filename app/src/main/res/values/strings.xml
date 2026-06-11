@@ -19,4 +19,20 @@
     <string name="capture_notification_title">Screen monitoring active</string>
     <string name="capture_notification_text">Recording screen activity for accountability.</string>
     <string name="capture_channel_name">Screen monitoring</string>
+
+    <string name="overlay_permission">Block overlay permission</string>
+    <string name="grant">Grant</string>
+
+    <string name="blocking_label">Blocking (tap a row below to block it):</string>
+    <string name="blocking_none">(nothing blocked)</string>
+    <string name="block_hint">domain or keyword</string>
+    <string name="block">Block</string>
+    <string name="clear_blocks">Clear blocks</string>
+    <string name="toast_blocking">Blocking: %1$s</string>
+
+    <string name="block_title">Blocked</string>
+    <string name="block_explanation">This content was identified by Web Traffic Monitor as distracting.</string>
+    <string name="go_back">Go back</string>
+    <string name="leave">Leave (home screen)</string>
+    <string name="report_block">Report incorrect block</string>
 </resources>

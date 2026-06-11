@@ -10,7 +10,8 @@ the screen, across every app and browser, with no root and no network MITM.
 - Works in any app or browser, because it reads the screen, not the network
 - Stores everything locally on the device in a database
 - Shows it all in a scrollable list in the app
-- Domain detection is browser-agnostic on purpose (it scans for a hostname rather than relying on a specific browser), so it keeps working when browsers change
+- Blocks pages that match a block rule by covering the screen with a full-screen "Blocked" overlay (with Go back / Leave / Report buttons)
+- Domain detection and blocking are browser-agnostic on purpose (they scan for a hostname rather than relying on a specific browser), so they keep working when browsers change
 
 ## What it deliberately does not do
 
@@ -19,11 +20,26 @@ the screen, across every app and browser, with no root and no network MITM.
 
 ## How it works (for later maintenance)
 
-- PageMonitorAccessibilityService: reads the foreground app, domain, title and text. Event-driven and throttled, so it is cheap.
+- PageMonitorAccessibilityService: reads the foreground app, domain, title and text. Event-driven and throttled, so it is cheap. It also decides whether to block.
 - ScreenCaptureService: a foreground service holding a MediaProjection. Frames are downscaled and saved as JPEGs every 3 seconds.
+- BlockRules: the list of things to block (a simple stand-in for the real classifier until that exists). A rule is a lowercase substring matched against the domain, title, text and package, so "wikipedia.org" blocks "en.wikipedia.org" and "elephant" blocks any page mentioning it.
+- OverlayController: draws/removes the full-screen block cover. The cover is opaque (hides content) but not focusable, so the system Back action still reaches the app underneath.
 - Room database (monitor.db) stores one row per page view or screenshot.
-- MainActivity shows the list and the two on/off controls.
+- MainActivity shows the list, the three on/off/permission controls, and the block-rule controls.
 - All third-party libraries are Apache-2.0 or compatible (AndroidX, Room, Coil, Kotlin coroutines). No GPL, so it is fine for a paid app.
+
+## How blocking behaves
+
+- Go back: fires the system Back. If it reaches allowed content the cover clears automatically; if Back cannot go anywhere, the cover stays (content stays hidden).
+- Leave: goes to the home screen and clears the cover. This is the always-works escape hatch for any app.
+- Report incorrect block: lets the current page through until the app is restarted.
+- This is the realistic no-root limit: we cannot show a fake 404 inside the browser, and we cannot block only the images on an HTTPS page. Covering the screen and offering Back/Leave is what is reliably possible.
+
+## How to test blocking (until the real classifier exists)
+
+- Type a domain or keyword into the box in the app and tap Block, or
+- Tap any row in the list to block that row's domain (or app).
+- Then open that site/app and the block cover appears. Use Clear blocks to remove all rules.
 
 ## Already set up on this computer (you do not need to touch this)
 
@@ -46,7 +62,8 @@ You only need steps 1 to 3 once per phone. The app must be installed first
 3. Open the Web Traffic Monitor app.
 4. Tap ENABLE next to Page monitoring. This opens Accessibility settings. Find Web Traffic Monitor in the list and turn it on, then come back.
 5. Tap START next to Screen capture. Tap Allow / Start now on the popup that asks to record the screen.
-6. That is it. Use the phone normally. Open the app again any time to see the scrollable list of what was recorded.
+6. Tap GRANT next to Block overlay permission. Turn on "Allow display over other apps" for Web Traffic Monitor, then come back. (Needed only if you want blocking.)
+7. That is it. Use the phone normally. Open the app again any time to see the scrollable list of what was recorded.
 
 To stop: tap STOP for screen capture, and turn the Accessibility service off in settings.
 
@@ -67,7 +84,8 @@ To stop: tap STOP for screen capture, and turn the Accessibility service off in 
 
 ## Not done yet (next steps)
 
-- Analysing the screenshots/text to decide if content is appropriate. The data
-  is captured and stored now; the analysis step (for example an on-device
-  classifier) can be added on top later.
+- Analysing the screenshots/text to decide if content is appropriate, and feeding
+  that decision into the blocker instead of the manual block rules. The data is
+  captured and stored now; the analysis step (for example an on-device classifier)
+  can be added on top later.
 - A whitelist of apps to skip.

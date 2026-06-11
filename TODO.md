@@ -1,7 +1,24 @@
 
 
+
 Resume this session with:
 claude --resume ecd479f3-4e19-492a-88f0-7d4a2476b670
+
+
+
+----
+
+Hmmm.. would it be possible to just vibe code up my own firefox based browser?
+- similar to zen...
+- except;
+
+Perhaps:
+- Prevent history clearing
+- automatically block unsafe things
+- etc.
+
+
+----
 
 
 Next steps:
@@ -34,43 +51,51 @@ Add my guide pictures for setup.
 
 ----------
 
+RULES:
+If naughty thing on screen -> show the block page.
+If naughty thing on screen, and we know the specific website subdomain.
+    (and it must have at least one slash. e.g. example.com not blocked..    example.com/something... blocked...
+    (and it isn't a search like google or duckduckgo for instance...)
+If its on a known app / app base (chromium / firefox / youtube / tiktok)
+    - try and have specific integration
+    - get the exact urls if possible
+    - get the search terms and text on screen as well...
+
+----------
 
 
-Next task:
-Think how to actually block the user. 
---> in an ideal world: 
-Say they're on chrome then visit wikipedia.com and say we detect it needs to be banned, just like give a 404 type page saying website can't be found. So then they have to press the back button to return to the Google search.
 
-Or alternatively show an overlay which says that the screen content has been identified by [our app] as being distracting to purpose. 
-Then an option to report incorrect blockage, or ideally a go back button which lets them go back. 
-
-OR alternatively, let them browse the website but block all images / videos from loading. 
-
-I want them to be able to then reopen the chrome app and continue browsing you see... 
-
-E.g. I Google search for "hi" then I Google search for "elephants". If elephants is blocked, I want to be able to then go back on the app... 
-I appreciate this may not be possible depending on the app though, so maybe we just block it, and then the user has to like manually swipe off the app to block it... 
+Notes from local testing:
+- If I type a url in the search bar, and as part of the auto correct of the browser app has it (e.g. m.youtube.com), the block screen comes up.
+    - i.e. When the thing I'm using loads things in from other pages... I don't want it to be blocked until I actually visit that page... 
+    -> I only want that to happen for if the actual page is loaded!
+    -> Same as if say I open a page, which then loads in a provider (i.e. i.reddit.com)... it will block that page!
+    --> Also, I wouldn't want just all of i.reddit.com to be banned, only the specific subdomain..
+    - the thing is i don't want to have to store the screenshots though... so we'll have to do some text solution...
+    - sometimes we will want to block an entire domain, like redgifs.com ... but ideally only when the person actually visits that website...
 
 
----
+- also add an easy way to clear the browsing history as it builds up really fast.
+    - also have an ignore list for that- create it yourself..
+    - things like comsec.android.app.launcher ... 
 
-Maybe pre the system back button once before then blocking? 
-
-For browsers though, must be browser agnostic.. not a hsrdcoded lost... 
-
-
----
-
-Will want a way to test that.. 
-I'm thinking either you can click on an entry, or have a text box where you can type an entry in (obviously in the future we'll process the results and determine whether block needed...).
-You know what the log format is etc. pick what will be best to help you test. 
+- also automatically clear things older than say 10 mins for now...
+    - as we don't need more than that for testing purposes...
+    - (but obviously link that to some sort of debug or IS_PRODUCTION flag... or IS_TESTING (probs best, yeah lets do IS_TESTING)) 
 
 
-To jtoe:
-- obviously there is a variety of different scenarios so we'll want a variety of tests.
-- some we will just have to do the best we can. And that's okay.
-- obviously things were the user is likely to be doing other work, like a web browser, we'll want to put as a higher priority to allow them to carry on whatever, whilst still blocking.
-- things like a random app... Not so much...
-- and of course, maybe some random apps may be difficult and not interact with back button well etc. again, in those cases, happy just having the user swipe off the app to close it, presuming they can then re-access it...
+- also do you think we need specific integration for like chromium based or firefox based browsers? so we can see the specific url and page contents etc? (or can that be done via screen reader etc?) or youtube / common social media apps with search?
 
-Actually, for yourself you can have a blacklist and use that for testing, but please still add the manual selection or text box for me to manually 
+- also quick test:
+    - type in 'wolf wikipedia' in google search
+    - click on the wikipedia page
+    - go back
+    - go to our app
+        --> I don't really even know which entry is actually the right one! illl assume its en.wikipedia.org -> wolf - wikipedia
+            - but then wikipedia is blocked! when it should be that specific page! 
+            - but then after a second, the page unblocks and i can use it as usual? like i didn't even click anything and im on the app... and i can visit the wolf page... 
+            - so the block doesn't seem to persist.. and then i can click on wolf wikipedia all i want....
+        - the block thing should persist whilst im on the blocked page..
+        - and it should only block the specific page... not the whole website...
+
+Lets not overly worry about being perfect at this stage, lets just ensure we don't overblock and that the blocking itself actually works...

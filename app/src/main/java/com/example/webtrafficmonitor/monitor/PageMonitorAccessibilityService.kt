@@ -3,6 +3,8 @@ package com.example.webtrafficmonitor.monitor
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.example.webtrafficmonitor.block.BlockRules
+import com.example.webtrafficmonitor.block.OverlayController
 import com.example.webtrafficmonitor.data.MonitorEntry
 import com.example.webtrafficmonitor.data.MonitorStore
 
@@ -22,6 +24,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     private var lastSignature: String? = null
     private var lastProcessedAt = 0L
+    private var overlay: OverlayController? = null
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        overlay = OverlayController(this)
+        BlockRules.load(this)
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
@@ -34,7 +43,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
 
         val packageName = event.packageName?.toString() ?: return
-        if (packageName == this.packageName) return // ignore our own app
+        // Ignore our own app, including events from our own block-overlay window
+        // (hiding on those would make the overlay instantly dismiss itself).
+        if (packageName == this.packageName) return
+
+        // The status bar / notification shade fire events constantly but are not
+        // the foreground content. Ignoring them stops their churn from dismissing
+        // a block cover and from polluting the log.
+        if (packageName in IGNORED_PACKAGES) return
 
         // Keep the latest foreground app available for the screen-capture service.
         ForegroundApp.packageName = packageName
@@ -71,10 +87,45 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 text = text,
             ),
         )
+
+        evaluateBlock(packageName, domain, title, text)
+    }
+
+    /** Shows the block cover if the current screen matches a block rule, else hides it. */
+    private fun evaluateBlock(packageName: String, domain: String?, title: String?, text: String?) {
+        val controller = overlay ?: return
+
+        if (BlockRules.matches(domain, title, text, packageName)) {
+            val key = domain ?: packageName
+            controller.show(
+                reason = domain ?: packageName,
+                // Fire Back, but don't hide here: if Back reaches allowed content the
+                // detection loop hides the cover; if it can't go anywhere, the cover
+                // stays and the content remains hidden.
+                onGoBack = { performGlobalAction(GLOBAL_ACTION_BACK) },
+                // Home always works as an escape hatch. We hide right away because
+                // going home reliably removes the blocked app from the foreground.
+                onLeave = {
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    controller.hide()
+                },
+                onReport = {
+                    BlockRules.allowForSession(key)
+                    controller.hide()
+                },
+            )
+        } else {
+            controller.hide()
+        }
     }
 
     override fun onInterrupt() {
         // Nothing to clean up.
+    }
+
+    override fun onDestroy() {
+        overlay?.hide()
+        super.onDestroy()
     }
 
     /**
@@ -139,6 +190,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val MAX_TEXT_CHARS = 1000
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40
+
+        // System UI windows (status bar, notification shade) are not foreground
+        // content, so we skip them entirely.
+        private val IGNORED_PACKAGES = setOf("com.android.systemui")
 
         // Matches a hostname (label.label.tld), optionally with scheme and path,
         // anywhere inside a larger string. Group 1 is the host.

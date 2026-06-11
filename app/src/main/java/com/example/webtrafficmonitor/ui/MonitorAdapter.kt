@@ -16,8 +16,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Shows the monitored entries in the scrollable list. */
-class MonitorAdapter : ListAdapter<MonitorEntry, MonitorAdapter.ViewHolder>(DIFF) {
+/** Shows the monitored entries in the scrollable list. Tapping a row blocks it. */
+class MonitorAdapter(
+    private val onEntryClick: (MonitorEntry) -> Unit,
+) : ListAdapter<MonitorEntry, MonitorAdapter.ViewHolder>(DIFF) {
 
     private val timeFormat = SimpleDateFormat("MMM d  HH:mm:ss", Locale.getDefault())
 
@@ -37,6 +39,8 @@ class MonitorAdapter : ListAdapter<MonitorEntry, MonitorAdapter.ViewHolder>(DIFF
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val entry = getItem(position)
         val time = timeFormat.format(Date(entry.timestamp))
+
+        holder.itemView.setOnClickListener { onEntryClick(entry) }
 
         if (entry.kind == MonitorEntry.KIND_SCREEN) {
             holder.thumbnail.visibility = View.VISIBLE
