@@ -113,3 +113,47 @@ To add or remove a browser, edit the `BLOCKED_BROWSERS` set:
 - **Allow a browser:** delete or comment out its line.
 - **DuckDuckGo** (`com.duckduckgo.mobile.android`) is intentionally left out so it
   stays allowed.
+
+
+### What the page monitor can and can't read (and why no VPN)
+
+The page monitor reads browser activity through the **accessibility service** — the
+same mechanism screen readers (TalkBack) use. When an accessibility service is
+active, browsers build a full accessibility tree of the page on demand, so we read
+exactly what a screen reader would. No VPN, no root, no external service.
+
+Captured into the log (page entries):
+- **URL** — read from the browser's address-bar node. Chrome shows the full URL
+  again since Chrome 91 (only `https://` is hidden). DuckDuckGo exposes its omnibar
+  text the same way.
+- **Page title** — from the window-state event.
+- **Readable content** — the page text from the WebView/Chromium accessibility
+  tree (capped for performance). DuckDuckGo uses the system WebView, so its page
+  content is fully readable.
+
+NOT captured:
+- **Image / video source URLs** — accessibility only exposes an image's alt text,
+  never its `src`. This is a hard platform limit, not a bug. The periodic
+  **screenshot capture** covers "what was visually on screen" instead.
+
+How this compares to other tools: app-blockers (e.g. StayFocused) use accessibility
+to read the foreground app + URL bar — same as us. Accountability apps
+(EverAccountable, Accountable2You) add screenshots + OCR, and some add a VPN to
+catch domains across all apps. We deliberately use only accessibility + screenshots.
+
+#### If a browser's URL isn't being captured
+
+URL extraction targets each browser's address-bar view id, listed in
+`ADDRESS_BAR_IDS` in `PageMonitorAccessibilityService` (search the file for it).
+To add a browser whose URL column stays blank:
+1. The DuckDuckGo omnibar is mid-rewrite upstream (the view id can change between
+   versions), so its id is the most likely to drift — the editable-field fallback
+   usually still catches it, but the dedicated id is more reliable.
+2. To find a browser's real id, run `adb shell uiautomator dump` while its page is
+   open and look for the address field's `resource-id`, then add its `:id/...`
+   suffix to `ADDRESS_BAR_IDS` (lowercase).
+
+#### Limits to expect
+- Some browsers (or Chrome with a non-default flag) may show only the domain in the
+  bar; then only the domain is captured, not the full path.
+- The URL is read only when the bar is on screen and not being edited.

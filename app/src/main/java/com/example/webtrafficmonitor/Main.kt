@@ -309,7 +309,7 @@ interface MonitorDao {
 // --------------------------------------------------------------
 
 
-@Database(entities = [MonitorEntry::class], version = 1, exportSchema = false)
+@Database(entities = [MonitorEntry::class], version = 2, exportSchema = false)
 abstract class MonitorDatabase : RoomDatabase() {
 
     abstract fun dao(): MonitorDao
@@ -324,7 +324,12 @@ abstract class MonitorDatabase : RoomDatabase() {
                     context.applicationContext,
                     MonitorDatabase::class.java,
                     "monitor.db",
-                ).build().also { instance = it }
+                )
+                    // Dev build: a schema change just wipes old rows (they expire in
+                    // 10 min anyway). If your Room is 2.6+, you may get a deprecation
+                    // warning — swap for .fallbackToDestructiveMigration(dropAllTables = true)
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }
@@ -347,6 +352,7 @@ data class MonitorEntry(
     val packageName: String?,
     val title: String? = null,
     val domain: String? = null,
+    val url: String? = null,
     val text: String? = null,
     val screenshotPath: String? = null,
 ) {
@@ -445,6 +451,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
+    private var lastUrl: String? = null
 
     // App-level block state. While true, the cover is OWNED by the recheck loop
     // below: it is kept up / taken down based on what is actually in the
@@ -528,18 +535,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         val root = rootInActiveWindow ?: return
 
-        // The host is read fresh each event. It is non-null only when an address bar
-        // is actually on screen (i.e. a web page is being viewed) — NOT in the tab
-        // switcher, on the home screen, or in a non-browser app.
-        val host = readAddressBarHost()
+        // The bar text is the full address (URL or search), as a screen reader sees
+        // it. The host is derived from it purely for blocking.
+        val barText = readAddressBarText()
+        val host = barText?.let { hostInText(it) }
 
         if (packageName != lastPackage) {
             lastPackage = packageName
             lastHost = null
+            lastUrl = null
         }
         if (host != null) lastHost = host
+        if (barText != null) lastUrl = barText
 
-        val text = sampleVisibleText(root)
+        val text = sampleVisibleText(root)   // the page's readable content (WebView a11y tree)
         val firstLine = text?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
         val eventTitle = event.text
             .joinToString(" ") { it.toString() }
@@ -547,13 +556,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             .takeIf { it.isNotBlank() }
         val title = eventTitle ?: firstLine?.take(MAX_TITLE_CHARS)
 
-        // Re-check the page-level block every event so the cover persists while
-        // the page shows.
+        // Re-check the page-level block every event so the cover persists.
         evaluateBlock(host, title)
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
         if (packageName in NOT_LOGGED_PACKAGES) return
-        val signature = "$packageName|$lastHost|${firstLine?.take(40)}"
+        val signature = "$packageName|${lastUrl ?: lastHost}|${firstLine?.take(40)}"
         if (signature == lastLogSignature) return
         lastLogSignature = signature
 
@@ -565,6 +573,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 packageName = packageName,
                 title = title,
                 domain = lastHost,
+                url = lastUrl,          // NEW
                 text = text,
             ),
         )
@@ -668,33 +677,48 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
+
     /**
-     * Reads the host shown in the browser address bar, but only when the bar is
-     * not being edited. Returns null if no address bar is visible.
+     * Reads the full address shown in the browser's address bar — the same text a
+     * screen reader would announce — but only when the bar is NOT being edited (so
+     * a half-typed URL or autocomplete suggestion isn't mistaken for the page).
+     * Returns null when no address bar is visible.
      */
-    private fun readAddressBarHost(): String? {
-        rootInActiveWindow?.let { findAddressBarHost(it, depth = 0)?.let { host -> return host } }
+    private fun readAddressBarText(): String? {
+        rootInActiveWindow?.let { findAddressBarText(it, depth = 0)?.let { t -> return t } }
         for (window in windows) {
-            window.root?.let { findAddressBarHost(it, depth = 0)?.let { host -> return host } }
+            window.root?.let { findAddressBarText(it, depth = 0)?.let { t -> return t } }
         }
         return null
     }
 
-    private fun findAddressBarHost(node: AccessibilityNodeInfo?, depth: Int): String? {
+    private fun findAddressBarText(node: AccessibilityNodeInfo?, depth: Int): String? {
         if (node == null || depth > ADDRESS_BAR_DEPTH) return null
-
         if (isAddressBar(node) && !node.isFocused) {
-            hostInText(node.text?.toString())?.let { return it }
-            hostInText(node.contentDescription?.toString())?.let { return it }
+            addressTextOf(node)?.let { return it }
         }
-
         for (i in 0 until node.childCount) {
-            findAddressBarHost(node.getChild(i), depth + 1)?.let { return it }
+            findAddressBarText(node.getChild(i), depth + 1)?.let { return it }
         }
         return null
+    }
+
+    /** Pulls the address text off a bar node, skipping empty/hint placeholders. */
+    private fun addressTextOf(node: AccessibilityNodeInfo): String? {
+        val raw = node.text?.toString()?.trim()?.takeIf { it.isNotBlank() }
+            ?: node.contentDescription?.toString()?.trim()?.takeIf { it.isNotBlank() }
+            ?: return null
+        // Don't capture hint text like "Search or type URL" as if it were the page.
+        val lower = raw.lowercase()
+        if (ADDRESS_BAR_HINTS.any { it in lower }) return null
+        return raw.take(MAX_URL_CHARS)
     }
 
     private fun isAddressBar(node: AccessibilityNodeInfo): Boolean {
+        // Most reliable: the browser's own view id for its URL bar (see ADDRESS_BAR_IDS).
+        val viewId = node.viewIdResourceName?.lowercase()
+        if (viewId != null && ADDRESS_BAR_IDS.any { viewId.endsWith(it) }) return true
+        // Fallback: an editable field, or a toolbar with an address-bar hint.
         if (node.isEditable || node.className == "android.widget.EditText") return true
         val description = node.contentDescription?.toString()?.lowercase() ?: return false
         return ADDRESS_BAR_HINTS.any { it in description }
@@ -763,8 +787,23 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             "edit url",
         )
 
-        private val HOST_PATTERN =
-            Regex("""(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/?#]\S*)?""", RegexOption.IGNORE_CASE)
+        private val HOST_PATTERN = Regex("""(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/?#]\S*)?""", RegexOption.IGNORE_CASE)
+
+        private const val MAX_URL_CHARS = 2048
+
+        // Known address-bar view IDs, matched by suffix (the package prefix varies).
+        // This is the list to extend if a browser's URL isn't being captured.
+        // Find a browser's real id: open it, and if the URL column stays blank,
+        // its bar id isn't here yet — see the README for how to discover it.
+        private val ADDRESS_BAR_IDS = listOf(
+            ":id/url_bar",                        // Chrome, Edge, Brave, most Chromium
+            ":id/url_field",                      // Opera
+            ":id/mozac_browser_toolbar_url_view", // Firefox / Fenix / Focus
+            ":id/location_bar_edit_text",         // Samsung Internet
+            ":id/omnibartextinput",               // DuckDuckGo (classic omnibar)
+            ":id/omnibartextinput",               // DuckDuckGo (casing variant)
+        )
+
     }
 }
 
@@ -1419,7 +1458,7 @@ class MonitorAdapter(
         } else {
             holder.thumbnail.visibility = View.GONE
             holder.thumbnail.setImageDrawable(null)
-            holder.primary.text = entry.domain ?: entry.packageName ?: "Page"
+            holder.primary.text = entry.url ?: entry.domain ?: entry.packageName ?: "Page"
             holder.secondary.text = entry.title.orEmpty()
             val snippet = entry.text?.replace('\n', ' ')?.take(80).orEmpty()
             holder.meta.text = "$time  ·  ${entry.packageName.orEmpty()}  ·  $snippet"
