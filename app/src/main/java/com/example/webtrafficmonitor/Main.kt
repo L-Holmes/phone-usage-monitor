@@ -518,6 +518,26 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Built-in guards for in-app screens we never want reachable. Currently:
+     * Firefox Focus's privacy settings, where the "stealth" option blocks
+     * screenshots and would blind the screen capture.
+     *
+     * Only ever called off the web (host == null), so a web page that merely
+     * mentions the keyword can't trip it. To add another guarded screen, copy the
+     * if-block and change the package / keywords.
+     */
+    private fun appScreenBlock(packageName: String, title: String?, content: String?): String? {
+        if (packageName == "org.mozilla.focus") {
+            val t = title?.lowercase().orEmpty()
+            val c = content?.lowercase().orEmpty()
+            if ("privacy" in t || "stealth" in c) {
+                return "Firefox Focus stealth/privacy settings are blocked"
+            }
+        }
+        return null
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = OverlayController(this)
@@ -605,7 +625,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val title = cleanTitle(rawTitle)   // logged/displayed: "Dog"
 
         // Block on the RAW title so keyword rules (e.g. "wikipedia") still match.
-        evaluateBlock(host, rawTitle)
+        evaluateBlock(packageName, host, rawTitle, text)
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
         if (packageName in NOT_LOGGED_PACKAGES) return
@@ -657,10 +677,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /** Page-level (domain/keyword) blocking — unchanged behaviour. */
-    private fun evaluateBlock(host: String?, title: String?) {
+    private fun evaluateBlock(packageName: String, host: String?, title: String?, content: String?) {
         val controller = overlay ?: return
 
-        val matchedRule = if (host != null) BlockRules.matchedRule(host, title) else null
+        val matchedRule = if (host == null) {
+            // Off the web (settings screens, etc.): first the built-in guards, then
+            // keyword rules against the screen title — so tapping a non-web log row
+            // to block it actually works. Skip launchers so a stray keyword can't
+            // lock you out of your home screen.
+            appScreenBlock(packageName, title, content)
+                ?: if (packageName !in NOT_LOGGED_PACKAGES) BlockRules.matchedRule(null, title) else null
+        } else {
+            // Web pages: domain or keyword rules, as before.
+            BlockRules.matchedRule(host, title)
+        }
 
         if (matchedRule != null) {
             controller.show(
@@ -677,12 +707,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     controller.hide()
                 },
                 onReport = {
+                    // Web blocks can be let through for the session; the in-app
+                    // guard can't (host is null, so this is a no-op for guards).
                     BlockRules.allowForSession(host)
                     controller.hide()
                 },
             )
         } else {
-            // Never hide an app-level block from here; the recheck loop owns it.
+            // Never hide an app-level (whole-browser) block from here.
             if (!appBlockActive) controller.hide()
         }
     }
@@ -1674,10 +1706,11 @@ class MonitorAdapter(
         } else {
             holder.thumbnail.visibility = View.GONE
             holder.thumbnail.setImageDrawable(null)
-            holder.primary.text = "url: " + (entry.url ?: entry.domain ?: entry.packageName ?: "?")
-            holder.secondary.text = "title: " + entry.title.orEmpty()
+            holder.primary.text = entry.title?.takeIf { it.isNotBlank() }
+                ?: entry.url ?: entry.domain ?: entry.packageName ?: "Page"
+            holder.secondary.text = entry.url ?: entry.domain ?: entry.packageName.orEmpty()
             val snippet = entry.text?.replace('\n', ' ')?.trim()?.take(40).orEmpty()
-            holder.meta.text = "page content: " + snippet.ifBlank { "(none)" } + "   ·   $time"
+            holder.meta.text = snippet.ifBlank { "(none)" } + "   ·   $time"
         }
     }
 

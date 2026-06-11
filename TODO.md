@@ -1,7 +1,33 @@
 
 ------------------------------------------------------------------------------------
 
-Have issue with firefox focus... as the user acan enable blocking of screenshots...
+Have issue with firefox focus... as the user acan enable blocking of screenshots... via the 'stealth mode' enable which is a toggle in the settings...
+
+OOh!
+by the way ive already switched back to using firefox focus as the main web browser and updated the code for that.
+
+
+can we also, in the logs, remove 'url: ' from being shown before every entry? just list the title...
+
+could we block it when this entry is detected:
+
+
+org.mozilla.focus
+package: org.mozilla.focus
+url: (none)
+domain: (none)
+title: Privacy & Security
+content/dump:
+Privacy & Security
+Cookies and Site Data
+Block cookies
+....
+Stealth
+...
+
+(for ai 
+ I'm thinking maybe we match on entry name (org.mozilla.focus) and the title (Privacy & Security), and then perhaps if we're keen that the content / dump contains 'stealth'
+the thing is... I clicked on that entry myself to add to the block list... but then the block popup doesn't seem to show on the app... so maybe have a look at the functionality there... 
 
 ------------------------------------------------------------------------------------
 
