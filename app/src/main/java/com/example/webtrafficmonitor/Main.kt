@@ -74,6 +74,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
+import android.os.Looper
+import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inputmethod.InputMethodManager
+
 // NOTE: This whole module is intentionally kept in ONE file.
 // These classes would normally live in separate files / sub-packages;
 // they are consolidated here on purpose to make development easier.
@@ -155,6 +159,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
+        AppBlocklist.refresh(this)
     }
 
     private fun observeEntries() {
@@ -441,10 +446,43 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var lastPackage: String? = null
     private var lastHost: String? = null
 
+    // App-level block state. While true, the cover is OWNED by the recheck loop
+    // below: it is kept up / taken down based on what is actually in the
+    // foreground, never by individual events (events flicker; window state doesn't).
+    private var appBlockActive = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var keyboardPackages: Set<String> = emptySet()
+
+    /**
+     * Runs every RECHECK_MS while an app block is up. Looks at the real window
+     * state: still in a blocked app -> keep the cover; an allowed app is genuinely
+     * in front -> drop it; can't tell (mid-animation) -> keep it and try again.
+     */
+    private val recheck = object : Runnable {
+        override fun run() {
+            if (!appBlockActive) return
+            val pkg = currentForegroundPackage()
+            val blocked = AppBlocklist.blockedReason(pkg)
+            when {
+                blocked != null -> showAppBlock(blocked, pkg!!) // keeps cover + reposts
+                pkg != null -> {
+                    appBlockActive = false
+                    overlay?.hide()
+                }
+                else -> {
+                    mainHandler.removeCallbacks(this)
+                    mainHandler.postDelayed(this, RECHECK_MS)
+                }
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = OverlayController(this)
         BlockRules.load(this)
+        AppBlocklist.refresh(this)
+        loadKeyboardPackages()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -458,14 +496,31 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
 
         val packageName = event.packageName?.toString() ?: return
-        // Ignore our own app (including our own overlay window, whose events would
-        // otherwise make the cover dismiss itself).
         if (packageName == this.packageName) return
-        // The status bar / notification shade fire events constantly and are not
-        // foreground content; skipping them stops their churn from clearing a block.
         if (packageName in IGNORED_PACKAGES) return
+        // Keyboards pop their own window over the app and fire events under their
+        // own package; treating that as "the foreground app changed" is what made
+        // the cover flicker. Skip them completely.
+        if (packageName.lowercase() in keyboardPackages || isKeyboardWindow(event)) return
 
         ForegroundApp.packageName = packageName
+
+        // ---- App-level block: FIRST, on every event, before any throttling. ----
+        // A plain set lookup is effectively free, and running it on the very first
+        // window event of an app launch is what makes the cover appear instantly
+        // (no waiting for rootInActiveWindow, no 700ms throttle).
+        val blockedApp = AppBlocklist.blockedReason(packageName)
+        if (blockedApp != null) {
+            showAppBlock(blockedApp, packageName)
+            return // No point reading or logging pages inside a blocked app.
+        }
+
+        // An allowed app fired a real window change while an app block is up
+        // (e.g. user pressed Home): verify against actual window state right away.
+        if (appBlockActive && type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            mainHandler.removeCallbacks(recheck)
+            mainHandler.post(recheck)
+        }
 
         val now = System.currentTimeMillis()
         if (now - lastProcessedAt < MIN_INTERVAL_MS) return
@@ -475,8 +530,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // The host is read fresh each event. It is non-null only when an address bar
         // is actually on screen (i.e. a web page is being viewed) — NOT in the tab
-        // switcher, on the home screen, or in a non-browser app. Blocking keys off
-        // this, so a blocked page's tab thumbnail/title does not trigger the cover.
+        // switcher, on the home screen, or in a non-browser app.
         val host = readAddressBarHost()
 
         if (packageName != lastPackage) {
@@ -493,7 +547,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             .takeIf { it.isNotBlank() }
         val title = eventTitle ?: firstLine?.take(MAX_TITLE_CHARS)
 
-        // Re-check the block every event so the cover persists while the page shows.
+        // Re-check the page-level block every event so the cover persists while
+        // the page shows.
         evaluateBlock(host, title)
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
@@ -515,20 +570,44 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         )
     }
 
+    /** Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop. */
+    private fun showAppBlock(reason: String, blockedPackage: String) {
+        val controller = overlay ?: return
+        appBlockActive = true
+        controller.show(
+            reason = reason,
+            // Don't hide on Back: the recheck loop drops the cover only once an
+            // allowed app is actually in front. Debounced as before.
+            onGoBack = {
+                val tapAt = System.currentTimeMillis()
+                if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
+                    lastGoBackAt = tapAt
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }
+            },
+            // Don't hide on Home either; the loop hides it the moment the launcher
+            // is genuinely in front (so a failed Home press can't unblock).
+            onLeave = { performGlobalAction(GLOBAL_ACTION_HOME) },
+            onReport = {
+                AppBlocklist.allowForSession(blockedPackage)
+                appBlockActive = false
+                mainHandler.removeCallbacks(recheck)
+                controller.hide()
+            },
+        )
+        mainHandler.removeCallbacks(recheck)
+        mainHandler.postDelayed(recheck, RECHECK_MS)
+    }
+
+    /** Page-level (domain/keyword) blocking — unchanged behaviour. */
     private fun evaluateBlock(host: String?, title: String?) {
         val controller = overlay ?: return
 
-        // Only block when an address bar is visible (an actual web page), so the tab
-        // switcher and home screen never get covered.
         val matchedRule = if (host != null) BlockRules.matchedRule(host, title) else null
 
         if (matchedRule != null) {
             controller.show(
                 reason = matchedRule,
-                // Fire Back, but don't hide here: if Back reaches allowed content the
-                // detection loop hides the cover; if it can't go anywhere, the cover
-                // stays and the content remains hidden. Debounced so one tap is one
-                // page (rapid double-taps don't skip two pages back).
                 onGoBack = {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
@@ -536,8 +615,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 },
-                // Home always works as an escape hatch; hide right away since going
-                // home reliably removes the blocked app from the foreground.
                 onLeave = {
                     performGlobalAction(GLOBAL_ACTION_HOME)
                     controller.hide()
@@ -548,14 +625,52 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 },
             )
         } else {
-            controller.hide()
+            // Never hide an app-level block from here; the recheck loop owns it.
+            if (!appBlockActive) controller.hide()
+        }
+    }
+
+    /** The package of the application window that is actually in front, or null. */
+    private fun currentForegroundPackage(): String? {
+        try {
+            for (window in windows) {
+                if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                if (!window.isActive && !window.isFocused) continue
+                val pkg = window.root?.packageName?.toString() ?: continue
+                if (isNoise(pkg)) continue
+                return pkg
+            }
+        } catch (_: Throwable) {
+            // fall through to the fallback below
+        }
+        val pkg = rootInActiveWindow?.packageName?.toString() ?: return null
+        return if (isNoise(pkg)) null else pkg
+    }
+
+    private fun isNoise(pkg: String): Boolean =
+        pkg == packageName || pkg in IGNORED_PACKAGES || pkg.lowercase() in keyboardPackages
+
+    private fun loadKeyboardPackages() {
+        keyboardPackages = try {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.inputMethodList.map { it.packageName.lowercase() }.toSet()
+        } catch (_: Throwable) {
+            emptySet()
+        }
+    }
+
+    private fun isKeyboardWindow(event: AccessibilityEvent): Boolean {
+        val id = event.windowId
+        return try {
+            windows.firstOrNull { it.id == id }?.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD
+        } catch (_: Throwable) {
+            false
         }
     }
 
     /**
      * Reads the host shown in the browser address bar, but only when the bar is
-     * not being edited (so a half-typed URL or an autocomplete suggestion is not
-     * mistaken for the current page). Returns null if no address bar is visible.
+     * not being edited. Returns null if no address bar is visible.
      */
     private fun readAddressBarHost(): String? {
         rootInActiveWindow?.let { findAddressBarHost(it, depth = 0)?.let { host -> return host } }
@@ -579,14 +694,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return null
     }
 
-    /** Looks like a browser address bar: an editable field, or a toolbar with an address hint. */
     private fun isAddressBar(node: AccessibilityNodeInfo): Boolean {
         if (node.isEditable || node.className == "android.widget.EditText") return true
         val description = node.contentDescription?.toString()?.lowercase() ?: return false
         return ADDRESS_BAR_HINTS.any { it in description }
     }
 
-    /** Walks the screen's text, capped in depth and length so it stays cheap. */
     private fun sampleVisibleText(root: AccessibilityNodeInfo): String? {
         val builder = StringBuilder()
         collectText(root, builder, depth = 0)
@@ -606,7 +719,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Finds the first hostname inside a piece of text, or null. */
     private fun hostInText(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
         val match = HOST_PATTERN.find(raw) ?: return null
@@ -618,23 +730,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(recheck)
         overlay?.hide()
         super.onDestroy()
     }
 
     companion object {
         private const val MIN_INTERVAL_MS = 700L
+        private const val RECHECK_MS = 400L
         private const val MAX_TEXT_CHARS = 1000
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 800L
 
-        // Status bar / notification shade: skip entirely.
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
 
-        // Home screens and similar: still checked for blocking (so a block clears
-        // when you go home), but not worth recording in the list.
         private val NOT_LOGGED_PACKAGES = setOf(
             "com.sec.android.app.launcher",
             "com.google.android.apps.nexuslauncher",
@@ -643,7 +754,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             "com.microsoft.launcher",
         )
 
-        // Content descriptions that mark a browser address bar across browsers.
         private val ADDRESS_BAR_HINTS = listOf(
             "search or enter",
             "search or type",
@@ -653,7 +763,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             "edit url",
         )
 
-        // A hostname (label.label.tld), optionally with scheme and path. Group 1 is the host.
         private val HOST_PATTERN =
             Regex("""(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/?#]\S*)?""", RegexOption.IGNORE_CASE)
     }
@@ -999,6 +1108,212 @@ object BlockRules {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
+
+// --------------------------------------------------------------
+// AppBlocklist
+// --------------------------------------------------------------
+
+
+/**
+ * Apps blocked outright by package name, regardless of what is on screen. Used to
+ * block web browsers so they can't be used to get around the page-level rules in
+ * [BlockRules].
+ *
+ * HOW TO UPDATE THIS LIST (manual):
+ *  - Each entry is an Android package name (the app's applicationId), e.g.
+ *    "org.mozilla.firefox". This is EXACTLY the value shown in the log rows in the
+ *    app: the "·  <package>  ·" part of a page entry's bottom (meta) line, and the
+ *    top line of a screenshot entry.
+ *  - To block a new browser: open it once with monitoring on, find its row in the
+ *    list, copy the package name, and add a line to BLOCKED_BROWSERS below.
+ *  - To allow a browser: delete (or comment out) its line.
+ *  - DuckDuckGo (com.duckduckgo.mobile.android) is intentionally NOT listed, so it
+ *    stays allowed.
+ *  - Casing doesn't matter: matching is case-insensitive, so keep entries lowercase.
+ */
+object AppBlocklist {
+
+    private val sessionAllow = mutableSetOf<String>()
+
+    // NEW: browsers detected on THIS device at runtime. Starts empty, so if
+    // detection never runs or fails, only the static list below is used.
+    @Volatile
+    private var dynamicBrowsers: Set<String> = emptySet()
+
+    @Volatile
+    private var refreshing = false
+
+    /**
+     * Returns the package name (used as the cover's reason text) if [packageName]
+     * is a blocked browser, or null if it is allowed.
+     */
+    fun blockedReason(packageName: String?): String? {
+        if (packageName.isNullOrBlank()) return null
+        val pkg = packageName.lowercase()
+        if (pkg in sessionAllow) return null
+        if (pkg in ALLOWED_BROWSERS) return null         // NEW: e.g. DuckDuckGo, never block
+        if (pkg in BLOCKED_BROWSERS) return packageName   // static list
+        if (pkg in dynamicBrowsers) return packageName    // NEW: detected at runtime
+        return null
+    }
+
+    /** Lets a blocked app through until the app process restarts ("report" button). */
+    fun allowForSession(packageName: String?) {
+        if (!packageName.isNullOrBlank()) sessionAllow.add(packageName.lowercase())
+    }
+
+    /**
+     * NEW. Asks Android which installed apps can open web links and remembers them
+     * as extra browsers to block. Completely optional and self-contained:
+     *  - Runs on a background thread, so it can never freeze the UI or the service.
+     *  - Wrapped in try/catch: if anything goes wrong it leaves the detected set
+     *    empty and the static list keeps working.
+     *  - Skips the allow-list (DuckDuckGo) and our own app.
+     * Safe to call repeatedly; overlapping calls are ignored.
+     */
+    fun refresh(context: Context) {
+        if (refreshing) return
+        refreshing = true
+        val appContext = context.applicationContext
+        Thread {
+            try {
+                val found = detectBrowsers(appContext)
+                dynamicBrowsers = found
+                // Visible diagnostic: one row in the app's list showing what was found.
+                MonitorStore.record(
+                    appContext,
+                    MonitorEntry(
+                        timestamp = System.currentTimeMillis(),
+                        kind = MonitorEntry.KIND_PAGE,
+                        packageName = appContext.packageName,
+                        title = "Browser detection: found ${found.size}",
+                        text = found.sorted().joinToString("\n"),
+                    ),
+                )
+            } catch (_: Throwable) {
+                // Leave dynamicBrowsers as-is. The static list still works.
+            } finally {
+                refreshing = false
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    private fun detectBrowsers(context: Context): Set<String> {
+        val pm = context.packageManager
+        val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+
+        // MATCH_ALL is the crucial flag: without it, once a default browser is set,
+        // Android returns ONLY that default and hides every other installed browser.
+        @Suppress("DEPRECATION")
+        val resolved = pm.queryIntentActivities(probe, PackageManager.MATCH_ALL)
+
+        val ownPackage = context.packageName.lowercase()
+        return resolved
+            .mapNotNull { it.activityInfo?.packageName?.lowercase() }
+            .filter { it != ownPackage && it !in ALLOWED_BROWSERS }
+            .toSet()
+    }
+
+    // NEW: browsers that must stay allowed even if detected at runtime.
+    // Add a package name here to whitelist a browser.
+    private val ALLOWED_BROWSERS = setOf(
+        "com.duckduckgo.mobile.android",   // DuckDuckGo — intentionally allowed
+    )
+
+    // ================================================================
+    // EDIT BELOW — the browser package names to block. All lowercase.
+    // DuckDuckGo is in ALLOWED_BROWSERS above, so it stays allowed even
+    // if dynamic detection finds it.
+    // ================================================================
+    private val BLOCKED_BROWSERS = setOf(
+        // --- Chrome ---
+        "com.android.chrome",
+        "com.chrome.beta",
+        "com.chrome.dev",
+        "com.chrome.canary",
+
+        // --- Firefox / Gecko family ---
+        "org.mozilla.firefox",
+        "org.mozilla.firefox_beta",
+        "org.mozilla.fenix",
+        "org.mozilla.fennec_fdroid",
+        "org.mozilla.focus",
+        "org.mozilla.klar",
+        "org.mozilla.rocket",
+        "org.mozilla.reference.browser",
+        "io.github.forkmaintainers.iceraven",
+        "us.spotco.fennec_dos",
+
+        // --- Edge / Opera / Samsung / Vivaldi / Yandex ---
+        "com.microsoft.emmx",
+        "com.opera.browser",
+        "com.opera.browser.beta",
+        "com.opera.mini.native",
+        "com.opera.gx",
+        "com.opera.touch",
+        "com.sec.android.app.sbrowser",
+        "com.sec.android.app.sbrowser.beta",
+        "com.vivaldi.browser",
+        "com.vivaldi.browser.snapshot",
+        "com.yandex.browser",
+        "com.yandex.browser.beta",
+
+        // --- Brave ---
+        "com.brave.browser",
+        "com.brave.browser_beta",
+        "com.brave.browser_nightly",
+
+        // --- AOSP / stock ---
+        "com.android.browser",
+        "com.google.android.browser",
+
+        // --- OEM built-ins ---
+        "com.miui.browser",
+        "com.mi.globalbrowser",
+        "com.mi.globalbrowser.mini",
+        "com.heytap.browser",
+        "com.coloros.browser",
+        "com.oppo.browser",
+        "com.vivo.browser",
+        "com.huawei.browser",
+
+        // --- Chromium forks / FOSS ---
+        "org.bromite.bromite",
+        "org.cromite.cromite",
+        "com.kiwibrowser.browser",
+        "com.stoutner.privacybrowser.standard",
+        "com.stoutner.privacybrowser.free",
+        "acr.browser.lightning",
+        "acr.browser.barebones",
+        "jp.hazuki.yuzubrowser",
+        "foundation.e.browser",
+        "org.adblockplus.browser",
+        "org.torproject.torbrowser",
+
+        // --- Other popular third-party ---
+        "com.ucmobile.intl",
+        "com.uc.browser.en",
+        "com.tencent.mtt",
+        "com.qihoo.browser",
+        "com.cloudmosa.puffinfree",
+        "com.cloudmosa.puffin",
+        "mark.via.gp",
+        "mark.via",
+        "com.aloha.browser",
+        "com.naver.whale",
+        "com.phoenix.browser",
+        "com.apusapps.browser",
+        "com.ksmobile.cb",
+        "mobi.mgeek.tunnybrowser",
+
+        // --- Added after testing on real devices ---
+        "net.quetta.browser",      // Quetta
+        "com.qwant.liberty",       // Qwant
+        // "org.triple.banana",       // Banana Browser
+    )
+}
+
 
 // --------------------------------------------------------------
 // OverlayController

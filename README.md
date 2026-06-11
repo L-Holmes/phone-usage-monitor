@@ -99,10 +99,17 @@ To stop: tap STOP for screen capture, and turn the Accessibility service off in 
 - adb shell run-as com.example.webtrafficmonitor cat databases/monitor.db   read the recorded data
 - adb logcat                                     watch device logs
 
-## Not done yet (next steps)
+### Blocking whole browser apps
 
-- Analysing the screenshots/text to decide if content is appropriate, and feeding
-  that decision into the blocker instead of the manual block rules. The data is
-  captured and stored now; the analysis step (for example an on-device classifier)
-  can be added on top later.
-- A whitelist of apps to skip.
+Web browsers are blocked outright by package name so they can't be used to bypass
+the page-level blocking. The list lives in **one place**: the `AppBlocklist` object
+in `WebTrafficMonitor.kt` (search the file for `BLOCKED_BROWSERS`).
+
+To add or remove a browser, edit the `BLOCKED_BROWSERS` set:
+
+- **Find a package name:** open the browser once with monitoring on, then look at
+  its row in the in-app log — the package name is the `·  <package>  ·` part of the
+  meta line. Copy it verbatim and add it as a new `"..."` line (lowercase).
+- **Allow a browser:** delete or comment out its line.
+- **DuckDuckGo** (`com.duckduckgo.mobile.android`) is intentionally left out so it
+  stays allowed.
