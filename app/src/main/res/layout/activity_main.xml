@@ -106,6 +106,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/block" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal">
 
         <Button
             android:id="@+id/btn_clear_blocks"
@@ -113,6 +120,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/clear_blocks" />
+
+        <Button
+            android:id="@+id/btn_clear_log"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/clear_log" />
     </LinearLayout>
 
     <TextView

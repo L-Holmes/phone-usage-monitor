@@ -20,12 +20,13 @@ the screen, across every app and browser, with no root and no network MITM.
 
 ## How it works (for later maintenance)
 
-- PageMonitorAccessibilityService: reads the foreground app, domain, title and text. Event-driven and throttled, so it is cheap. It also decides whether to block.
+- PageMonitorAccessibilityService: reads the foreground app, domain, title and text. The domain comes only from the browser address bar (read while it is not being edited), and is remembered until the app or address changes. It decides blocking from the domain and title only, never from arbitrary on-screen text, so autocomplete suggestions and embedded resources do not trigger blocks. Event-driven and throttled.
 - ScreenCaptureService: a foreground service holding a MediaProjection. Frames are downscaled and saved as JPEGs every 3 seconds.
-- BlockRules: the list of things to block (a simple stand-in for the real classifier until that exists). A rule is a lowercase substring matched against the domain, title, text and package, so "wikipedia.org" blocks "en.wikipedia.org" and "elephant" blocks any page mentioning it.
+- BlockRules: the list of things to block (a simple stand-in for the real classifier until that exists). A rule with a dot is a domain rule ("redgifs.com" blocks the site and its subdomains; "i.reddit.com" blocks only that subdomain). A rule without a dot is a keyword matched against the page title ("wolf" blocks pages titled like "Wolf - Wikipedia").
 - OverlayController: draws/removes the full-screen block cover. The cover is opaque (hides content) but not focusable, so the system Back action still reaches the app underneath.
-- Room database (monitor.db) stores one row per page view or screenshot.
-- MainActivity shows the list, the three on/off/permission controls, and the block-rule controls.
+- Room database (monitor.db) stores one row per page view or screenshot. In testing builds (BuildConfig.IS_TESTING) data older than 10 minutes is auto-deleted so it does not pile up.
+- MainActivity shows the list, the three on/off/permission controls, the block-rule controls, and Clear blocks / Clear log buttons.
+- Launchers and the system UI are skipped so the log is not full of noise.
 - All third-party libraries are Apache-2.0 or compatible (AndroidX, Room, Coil, Kotlin coroutines). No GPL, so it is fine for a paid app.
 
 ## How blocking behaves
@@ -37,9 +38,11 @@ the screen, across every app and browser, with no root and no network MITM.
 
 ## How to test blocking (until the real classifier exists)
 
-- Type a domain or keyword into the box in the app and tap Block, or
-- Tap any row in the list to block that row's domain (or app).
-- Then open that site/app and the block cover appears. Use Clear blocks to remove all rules.
+- To block a whole site: type its domain (e.g. redgifs.com) into the box and tap Block.
+- To block a topic: type a keyword (e.g. wolf) and tap Block — it matches the page title.
+- To block one specific page: tap that row in the list (it blocks by the page title, so other pages on the same site stay allowed).
+- Then open the site/page and the block cover appears. Use Clear blocks to remove rules, Clear log to empty the list.
+- Blocking only fires when you actually load the page (from the address bar), not when a domain merely appears in a suggestion or on the page.
 
 ## Already set up on this computer (you do not need to touch this)
 

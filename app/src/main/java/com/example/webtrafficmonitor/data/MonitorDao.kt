@@ -18,6 +18,12 @@ interface MonitorDao {
     @Query("SELECT screenshotPath FROM monitor_entries WHERE screenshotPath IS NOT NULL")
     suspend fun allScreenshotPaths(): List<String>
 
+    @Query("SELECT screenshotPath FROM monitor_entries WHERE timestamp < :cutoff AND screenshotPath IS NOT NULL")
+    suspend fun screenshotPathsBefore(cutoff: Long): List<String>
+
+    @Query("DELETE FROM monitor_entries WHERE timestamp < :cutoff")
+    suspend fun deleteBefore(cutoff: Long)
+
     @Query("DELETE FROM monitor_entries")
     suspend fun clear()
 }

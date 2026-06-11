@@ -4,10 +4,16 @@ import android.content.Context
 
 /**
  * The list of things to block, plus a per-session allow list for "report
- * incorrect block". Rules are simple lowercase substrings matched against the
- * domain, title, on-screen text and package name. A rule like "wikipedia.org"
- * therefore blocks "en.wikipedia.org", and a rule like "elephant" blocks any
- * page whose visible text mentions it.
+ * incorrect block".
+ *
+ * A rule is matched against only the current page's domain, title and app — never
+ * the full on-screen text, so an autocomplete suggestion or an embedded resource
+ * mentioning a domain does not trigger a block.
+ *
+ *  - A rule containing a dot is a DOMAIN rule: "redgifs.com" blocks redgifs.com
+ *    and its subdomains; "i.reddit.com" blocks only that exact subdomain.
+ *  - A rule without a dot is a KEYWORD rule, matched against the page title (and
+ *    the app package): "wolf" blocks pages titled like "Wolf - Wikipedia".
  *
  * This is the temporary stand-in for the real content classifier: it lets us
  * (and the maintainer) trigger and test blocking by hand.
@@ -45,22 +51,26 @@ object BlockRules {
         if (!key.isNullOrBlank()) sessionAllow.add(key.lowercase())
     }
 
-    /** True if the current screen should be blocked. */
-    fun matches(domain: String?, title: String?, text: String?, packageName: String?): Boolean {
+    /** True if the current page should be blocked. */
+    fun matches(domain: String?, title: String?, packageName: String?): Boolean {
         if (rules.isEmpty()) return false
 
         val key = (domain ?: packageName)?.lowercase()
         if (key != null && key in sessionAllow) return false
 
-        val haystack = buildString {
-            domain?.let { append(it).append(' ') }
-            title?.let { append(it).append(' ') }
-            packageName?.let { append(it).append(' ') }
-            text?.let { append(it) }
-        }.lowercase()
-        if (haystack.isBlank()) return false
+        val host = domain?.lowercase()
+        val titleText = title?.lowercase()
+        val pkg = packageName?.lowercase()
 
-        return rules.any { it in haystack }
+        return rules.any { rule ->
+            if ('.' in rule) {
+                // Domain rule: exact host or a subdomain of it.
+                host != null && (host == rule || host.endsWith(".$rule"))
+            } else {
+                // Keyword rule: match the page title or the app package.
+                (titleText?.contains(rule) == true) || (pkg?.contains(rule) == true)
+            }
+        }
     }
 
     private fun persist(context: Context) {

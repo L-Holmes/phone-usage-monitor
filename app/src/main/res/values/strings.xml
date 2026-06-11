@@ -28,6 +28,7 @@
     <string name="block_hint">domain or keyword</string>
     <string name="block">Block</string>
     <string name="clear_blocks">Clear blocks</string>
+    <string name="clear_log">Clear log</string>
     <string name="toast_blocking">Blocking: %1$s</string>
 
     <string name="block_title">Blocked</string>

@@ -19,9 +19,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
+        debug {
+            // Testing builds keep only recent data and seed nothing.
+            buildConfigField("boolean", "IS_TESTING", "true")
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField("boolean", "IS_TESTING", "false")
         }
     }
 

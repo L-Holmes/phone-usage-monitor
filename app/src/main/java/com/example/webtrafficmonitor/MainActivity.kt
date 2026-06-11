@@ -29,7 +29,9 @@ import com.example.webtrafficmonitor.data.MonitorEntry
 import com.example.webtrafficmonitor.monitor.PageMonitorAccessibilityService
 import com.example.webtrafficmonitor.monitor.ScreenCaptureService
 import com.example.webtrafficmonitor.ui.MonitorAdapter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -86,6 +88,7 @@ class MainActivity : AppCompatActivity() {
             BlockRules.clear(this)
             refreshBlockRules()
         }
+        findViewById<Button>(R.id.btn_clear_log).setOnClickListener { clearLog() }
 
         observeEntries()
         refreshBlockRules()
@@ -149,12 +152,27 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, getString(R.string.toast_blocking, rule), Toast.LENGTH_SHORT).show()
     }
 
-    /** Tapping a row blocks its domain (or its app, if there is no domain). */
+    /**
+     * Tapping a row blocks that specific page by its title (so other pages on the
+     * same site stay allowed). Falls back to the domain or app if there is no title.
+     * To block a whole site instead, type its domain into the box.
+     */
     private fun blockEntry(entry: MonitorEntry) {
-        val rule = entry.domain ?: entry.packageName ?: return
+        val rule = entry.title?.takeIf { it.isNotBlank() }
+            ?: entry.domain
+            ?: entry.packageName
+            ?: return
         BlockRules.add(this, rule)
         refreshBlockRules()
         Toast.makeText(this, getString(R.string.toast_blocking, rule), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun clearLog() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val dao = database.dao()
+            dao.allScreenshotPaths().forEach { File(it).delete() }
+            dao.clear()
+        }
     }
 
     private fun refreshBlockRules() {
