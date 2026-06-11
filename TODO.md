@@ -1,25 +1,7 @@
 
 ------------------------------------------------------------------------------------
-# Ask claude:
-(after 6:40pm...)
 
-
-
-added all those.
-But im not seeing any changes in the logs.
-I'm not seeing entries as i expect like:
-
----
-url: wikipedia.org/wiki/Dog 
----
-title: Dog
----
-page content: <first 40 chars of page content>
----
-
-all i see is en.wikipedia.org \n Dog - Wikipedia 
-
-Please focus, and get it to retrieve those things... its just duckduckgo... and it should be possible through accessibility information.
+Have issue with firefox focus... as the user acan enable blocking of screenshots...
 
 ------------------------------------------------------------------------------------
 

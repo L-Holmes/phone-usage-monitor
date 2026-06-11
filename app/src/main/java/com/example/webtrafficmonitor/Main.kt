@@ -77,6 +77,8 @@ import kotlinx.coroutines.launch
 import android.os.Looper
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.ScrollView
+import androidx.appcompat.app.AlertDialog
 
 // NOTE: This whole module is intentionally kept in ONE file.
 // These classes would normally live in separate files / sub-packages;
@@ -98,7 +100,10 @@ import android.view.inputmethod.InputMethodManager
 class MainActivity : AppCompatActivity() {
 
     private val database by lazy { MonitorDatabase.get(this) }
-    private val adapter = MonitorAdapter(onEntryClick = ::blockEntry)
+    private val adapter = MonitorAdapter(
+        onEntryClick = ::blockEntry,
+        onEntryLongClick = ::showEntryDetails,
+    )
 
     private lateinit var statusAccessibility: TextView
     private lateinit var statusCapture: TextView
@@ -121,6 +126,30 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission(),
     ) {
         requestScreenCapture()
+    }
+
+    /** Long-press a row to read the whole entry — including the full NODE DUMP. */
+    private fun showEntryDetails(entry: MonitorEntry) {
+        val details = buildString {
+            append("kind: ").append(entry.kind).append("\n\n")
+            append("package: ").append(entry.packageName).append("\n\n")
+            append("url: ").append(entry.url ?: "(none)").append("\n\n")
+            append("domain: ").append(entry.domain ?: "(none)").append("\n\n")
+            append("title: ").append(entry.title ?: "(none)").append("\n\n")
+            append("content / dump:\n").append(entry.text ?: "(none)")
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val textView = TextView(this).apply {
+            text = details
+            setTextIsSelectable(true)
+            setPadding(pad, pad, pad, pad)
+        }
+        val scroll = ScrollView(this).apply { addView(textView) }
+        AlertDialog.Builder(this)
+            .setTitle("Entry details")
+            .setView(scroll)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -460,6 +489,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var keyboardPackages: Set<String> = emptySet()
 
+    private var lastDumpAt = 0L
+
     /**
      * Runs every RECHECK_MS while an app block is up. Looks at the real window
      * state: still in a blocked app -> keep the cover; an allowed app is genuinely
@@ -535,6 +566,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         val root = rootInActiveWindow ?: return
 
+        if (DEBUG_DUMP_NODES && packageName in BROWSER_DEBUG_PACKAGES &&
+            now - lastDumpAt > DUMP_INTERVAL_MS
+        ) {
+            lastDumpAt = now
+            dumpBrowserNodes(root, packageName)
+        }
+
         // The bar text is the full address (URL or search), as a screen reader sees
         // it. The host is derived from it purely for blocking.
         val barText = readAddressBarText()
@@ -548,16 +586,19 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (host != null) lastHost = host
         if (barText != null) lastUrl = barText
 
-        val text = sampleVisibleText(root)   // the page's readable content (WebView a11y tree)
+        // Content = the web page itself (WebView subtree), falling back to the whole
+        // screen for non-browser apps.
+        val text = readWebViewText() ?: sampleVisibleText(root)
         val firstLine = text?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
-        val eventTitle = event.text
+        val rawTitle = event.text
             .joinToString(" ") { it.toString() }
             .trim()
             .takeIf { it.isNotBlank() }
-        val title = eventTitle ?: firstLine?.take(MAX_TITLE_CHARS)
+            ?: firstLine?.take(MAX_TITLE_CHARS)
+        val title = cleanTitle(rawTitle)   // logged/displayed: "Dog"
 
-        // Re-check the page-level block every event so the cover persists.
-        evaluateBlock(host, title)
+        // Block on the RAW title so keyword rules (e.g. "wikipedia") still match.
+        evaluateBlock(host, rawTitle)
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
         if (packageName in NOT_LOGGED_PACKAGES) return
@@ -679,28 +720,45 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
 
     /**
-     * Reads the full address shown in the browser's address bar — the same text a
-     * screen reader would announce — but only when the bar is NOT being edited (so
-     * a half-typed URL or autocomplete suggestion isn't mistaken for the page).
-     * Returns null when no address bar is visible.
+     * Reads the address bar, preferring the FULL url. DuckDuckGo's unfocused
+     * omnibar has several matching nodes — typically a chip/label showing only the
+     * host ("en.wikipedia.org") AND the real input field holding the full URL
+     * ("https://en.wikipedia.org/wiki/Dog"). A plain depth-first walk hits the
+     * host-only one first, which is why we were logging just the domain. So gather
+     * ALL candidates and keep the richest.
      */
     private fun readAddressBarText(): String? {
-        rootInActiveWindow?.let { findAddressBarText(it, depth = 0)?.let { t -> return t } }
+        val candidates = mutableListOf<String>()
+        rootInActiveWindow?.let { collectAddressCandidates(it, depth = 0, out = candidates) }
         for (window in windows) {
-            window.root?.let { findAddressBarText(it, depth = 0)?.let { t -> return t } }
+            window.root?.let { collectAddressCandidates(it, depth = 0, out = candidates) }
         }
-        return null
+        return candidates.distinct().maxByOrNull { urlRichness(it) }?.take(MAX_URL_CHARS)
     }
 
-    private fun findAddressBarText(node: AccessibilityNodeInfo?, depth: Int): String? {
-        if (node == null || depth > ADDRESS_BAR_DEPTH) return null
+    private fun collectAddressCandidates(
+        node: AccessibilityNodeInfo?,
+        depth: Int,
+        out: MutableList<String>,
+    ) {
+        if (node == null || depth > ADDRESS_BAR_DEPTH) return
         if (isAddressBar(node) && !node.isFocused) {
-            addressTextOf(node)?.let { return it }
+            addressTextOf(node)?.let { out.add(it) }
         }
         for (i in 0 until node.childCount) {
-            findAddressBarText(node.getChild(i), depth + 1)?.let { return it }
+            collectAddressCandidates(node.getChild(i), depth + 1, out)
         }
-        return null
+    }
+
+    /** Higher = more like a real, full URL. A path is the strongest signal. */
+    private fun urlRichness(value: String): Int {
+        val afterScheme = value.substringAfter("://", value)
+        var score = 0
+        if (value.startsWith("http", ignoreCase = true)) score += 2
+        if (afterScheme.contains('/')) score += 5     // has a path -> richest
+        if (afterScheme.contains('?')) score += 1
+        score += minOf(value.length, 250) / 50
+        return score
     }
 
     /** Pulls the address text off a bar node, skipping empty/hint placeholders. */
@@ -749,6 +807,66 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return match.groupValues[1].lowercase()
     }
 
+
+    /** "Dog - Wikipedia" -> "Dog". Strips a trailing " - Site" style suffix. */
+    private fun cleanTitle(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        var t = raw.trim()
+        for (sep in listOf(" — ", " – ", " - ", " | ", " · ", " :: ")) {
+            val idx = t.indexOf(sep)
+            if (idx > 0) { t = t.substring(0, idx).trim(); break }
+        }
+        return t.take(MAX_TITLE_CHARS).takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Collects text from INSIDE the WebView only — i.e. the actual web page,
+     * skipping the browser's own chrome (toolbar, tabs, menus). This is what makes
+     * "page content" the page, not the address bar.
+     */
+    private fun readWebViewText(): String? {
+        val out = StringBuilder()
+        rootInActiveWindow?.let { collectWebViewText(it, depth = 0, out = out, insideWeb = false) }
+        return out.toString().trim().take(MAX_TEXT_CHARS).takeIf { it.isNotBlank() }
+    }
+
+    // private fun collectWebViewText(
+        // node: AccessibilityNodeInfo?,
+        // depth: Int,
+        // out: StringBuilder,
+        // insideWeb: Boolean,
+    // ) {
+        // if (node == null || depth > MAX_DEPTH || out.length >= MAX_TEXT_CHARS) return
+        // val nowInside = insideWeb || node.className == "android.webkit.WebView"
+        // if (nowInside) {
+            // val t = node.text?.toString()?.trim()
+            // if (!t.isNullOrEmpty()) out.append(t).append('\n')
+        // }
+        // for (i in 0 until node.childCount) {
+            // collectWebViewText(node.getChild(i), depth + 1, out, nowInside)
+        // }
+    // }
+
+
+    private fun collectWebViewText(
+        node: AccessibilityNodeInfo?,
+        depth: Int,
+        out: StringBuilder,
+        insideWeb: Boolean,
+    ) {
+        if (node == null || depth > MAX_DEPTH || out.length >= MAX_TEXT_CHARS) return
+        val nowInside = insideWeb || node.className == "android.webkit.WebView"
+        if (nowInside) {
+            val t = node.text?.toString()?.trim()
+            val d = node.contentDescription?.toString()?.trim()
+            if (!t.isNullOrEmpty()) out.append(t).append('\n')
+            if (!d.isNullOrEmpty() && d != t) out.append(d).append('\n')  // page content also hides here
+        }
+        for (i in 0 until node.childCount) {
+            collectWebViewText(node.getChild(i), depth + 1, out, nowInside)
+        }
+    }
+
     override fun onInterrupt() {
         // Nothing to clean up.
     }
@@ -757,6 +875,61 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         mainHandler.removeCallbacks(recheck)
         overlay?.hide()
         super.onDestroy()
+    }
+
+
+    /**
+     * DEBUG ONLY. Logs every text-bearing / editable node in the current browser
+     * window with its view-id, class, editable/focused flags, text and
+     * description. Open DuckDuckGo on a known page (e.g. the Dog article), then
+     * read the "NODE DUMP" row in the list to see EXACTLY which node holds the full
+     * URL on your version. Add that node's id suffix to ADDRESS_BAR_IDS, then set
+     * DEBUG_DUMP_NODES = false.
+     */
+     private fun dumpBrowserNodes(root: AccessibilityNodeInfo, packageName: String) {
+        val flagged = StringBuilder()
+        val all = StringBuilder()
+        dumpNode(root, depth = 0, all = all, flagged = flagged)
+        val out = buildString {
+            append("=== LIKELY URL / INPUT NODES (look here first) ===\n")
+            append(if (flagged.isBlank()) "(none found)\n" else flagged.toString())
+            append("\n=== ALL TEXT NODES ===\n")
+            append(all)
+        }
+        MonitorStore.record(
+            this,
+            MonitorEntry(
+                timestamp = System.currentTimeMillis(),
+                kind = MonitorEntry.KIND_PAGE,
+                packageName = packageName,
+                title = "NODE DUMP",
+                text = out.take(8000),
+            ),
+        )
+    }
+
+    private fun dumpNode(
+        node: AccessibilityNodeInfo?,
+        depth: Int,
+        all: StringBuilder,
+        flagged: StringBuilder,
+    ) {
+        if (node == null || depth > 30) return
+        val id = node.viewIdResourceName
+        val text = node.text?.toString()
+        val desc = node.contentDescription?.toString()
+        val idLower = id?.lowercase()
+        val urlish = idLower != null &&
+            ("url" in idLower || "omni" in idLower || "address" in idLower || "location" in idLower)
+        val line = "id=$id cls=${node.className} edit=${node.isEditable} " +
+            "foc=${node.isFocused} text=$text desc=$desc\n"
+        if (!text.isNullOrBlank() || !desc.isNullOrBlank() || node.isEditable || urlish) {
+            all.append(line)
+        }
+        if (urlish || node.isEditable) flagged.append("★ ").append(line)
+        for (i in 0 until node.childCount) {
+            dumpNode(node.getChild(i), depth + 1, all, flagged)
+        }
     }
 
     companion object {
@@ -803,6 +976,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             ":id/omnibartextinput",               // DuckDuckGo (classic omnibar)
             ":id/omnibartextinput",               // DuckDuckGo (casing variant)
         )
+
+        // Diagnostics: true logs a "NODE DUMP" row for the browsers below. Turn OFF
+        // once you've found the URL node.
+        private const val DEBUG_DUMP_NODES = true
+        private const val DUMP_INTERVAL_MS = 1500L
+        private val BROWSER_DEBUG_PACKAGES = setOf("com.duckduckgo.mobile.android")
 
     }
 }
@@ -1257,7 +1436,7 @@ object AppBlocklist {
     // NEW: browsers that must stay allowed even if detected at runtime.
     // Add a package name here to whitelist a browser.
     private val ALLOWED_BROWSERS = setOf(
-        "com.duckduckgo.mobile.android",   // DuckDuckGo — intentionally allowed
+        "org.mozilla.focus",
     )
 
     // ================================================================
@@ -1277,12 +1456,14 @@ object AppBlocklist {
         "org.mozilla.firefox_beta",
         "org.mozilla.fenix",
         "org.mozilla.fennec_fdroid",
-        "org.mozilla.focus",
         "org.mozilla.klar",
         "org.mozilla.rocket",
         "org.mozilla.reference.browser",
         "io.github.forkmaintainers.iceraven",
         "us.spotco.fennec_dos",
+
+        // duckduckgo 
+        "com.duckduckgo.mobile.android",
 
         // --- Edge / Opera / Samsung / Vivaldi / Yandex ---
         "com.microsoft.emmx",
@@ -1426,6 +1607,7 @@ class OverlayController(private val context: Context) {
 /** Shows the monitored entries in the scrollable list. Tapping a row blocks it. */
 class MonitorAdapter(
     private val onEntryClick: (MonitorEntry) -> Unit,
+    private val onEntryLongClick: (MonitorEntry) -> Unit,
 ) : ListAdapter<MonitorEntry, MonitorAdapter.ViewHolder>(DIFF) {
 
     private val timeFormat = SimpleDateFormat("MMM d  HH:mm:ss", Locale.getDefault())
@@ -1448,6 +1630,7 @@ class MonitorAdapter(
         val time = timeFormat.format(Date(entry.timestamp))
 
         holder.itemView.setOnClickListener { onEntryClick(entry) }
+        holder.itemView.setOnLongClickListener { onEntryLongClick(entry); true }
 
         if (entry.kind == MonitorEntry.KIND_SCREEN) {
             holder.thumbnail.visibility = View.VISIBLE
@@ -1458,10 +1641,10 @@ class MonitorAdapter(
         } else {
             holder.thumbnail.visibility = View.GONE
             holder.thumbnail.setImageDrawable(null)
-            holder.primary.text = entry.url ?: entry.domain ?: entry.packageName ?: "Page"
-            holder.secondary.text = entry.title.orEmpty()
-            val snippet = entry.text?.replace('\n', ' ')?.take(80).orEmpty()
-            holder.meta.text = "$time  ·  ${entry.packageName.orEmpty()}  ·  $snippet"
+            holder.primary.text = "url: " + (entry.url ?: entry.domain ?: entry.packageName ?: "?")
+            holder.secondary.text = "title: " + entry.title.orEmpty()
+            val snippet = entry.text?.replace('\n', ' ')?.trim()?.take(40).orEmpty()
+            holder.meta.text = "page content: " + snippet.ifBlank { "(none)" } + "   ·   $time"
         }
     }
 
