@@ -157,3 +157,23 @@ To add a browser whose URL column stays blank:
 - Some browsers (or Chrome with a non-default flag) may show only the domain in the
   bar; then only the domain is captured, not the full path.
 - The URL is read only when the bar is on screen and not being edited.
+
+### URL capture limits (DuckDuckGo)
+
+DuckDuckGo only shows the **host** in its address bar when it isn't being edited
+(`omnibarTextInput` reads e.g. `en.wikipedia.org`, no path) — confirmed by reading
+the accessibility tree directly. The full path simply isn't present in the tree in
+steady state; it's a DDG privacy-design choice, not a missing feature on our side.
+
+So per page we reliably capture:
+- **host** (e.g. `en.wikipedia.org`)
+- **title** (e.g. `Dog`)
+- **page content** (text + image/element descriptions from the WebView)
+
+The **full path** (`/wiki/Dog`) is only captured opportunistically, when the user
+taps the address bar (DDG expands it to the full URL while focused). Link-tap
+navigations stay host-only. Host + title + content already identify the exact page,
+so this is rarely a practical gap.
+
+(Most Chromium browsers expose the full URL unfocused — but those are all in the
+browser blocklist by design, leaving DDG as the sole allowed browser.)

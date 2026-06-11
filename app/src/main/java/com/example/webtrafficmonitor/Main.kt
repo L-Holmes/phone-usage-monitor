@@ -450,6 +450,8 @@ object ForegroundApp {
     var packageName: String? = null
 }
 
+
+
 // --------------------------------------------------------------
 // PageMonitorAccessibilityService
 // --------------------------------------------------------------
@@ -481,6 +483,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var lastPackage: String? = null
     private var lastHost: String? = null
     private var lastUrl: String? = null
+    private var lastFullUrl: String? = null
 
     // App-level block state. While true, the cover is OWNED by the recheck loop
     // below: it is kept up / taken down based on what is actually in the
@@ -582,9 +585,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             lastPackage = packageName
             lastHost = null
             lastUrl = null
+            lastFullUrl = null
         }
+        // A host change makes any captured full URL stale.
+        if (host != null && host != lastHost) lastFullUrl = null
         if (host != null) lastHost = host
         if (barText != null) lastUrl = barText
+        readFocusedFullUrl(host)?.let { lastFullUrl = it }   // fills in path if user taps the bar
 
         // Content = the web page itself (WebView subtree), falling back to the whole
         // screen for non-browser apps.
@@ -614,7 +621,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 packageName = packageName,
                 title = title,
                 domain = lastHost,
-                url = lastUrl,          // NEW
+                url = lastFullUrl ?: lastUrl,   
                 text = text,
             ),
         )
@@ -867,6 +874,32 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * DDG only exposes the full path while the omnibar is focused (tapped). Grab it
+     * then, but only if the host matches the current page and there's a real path,
+     * so a half-typed search isn't mistaken for the URL. Link taps don't focus the
+     * bar, so those navigations stay host-only — that's a DDG limit, not a bug.
+     */
+    private fun readFocusedFullUrl(currentHost: String?): String? {
+        if (currentHost == null) return null
+        var found: String? = null
+        fun walk(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > ADDRESS_BAR_DEPTH || found != null) return
+            if (isAddressBar(node) && node.isFocused) {
+                val t = node.text?.toString()?.trim()
+                if (!t.isNullOrBlank() &&
+                    hostInText(t) == currentHost &&
+                    t.substringAfter("://", t).contains('/')
+                ) {
+                    found = t.take(MAX_URL_CHARS)
+                }
+            }
+            for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
+        }
+        rootInActiveWindow?.let { walk(it, 0) }
+        return found
+    }
+
     override fun onInterrupt() {
         // Nothing to clean up.
     }
@@ -979,7 +1012,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // Diagnostics: true logs a "NODE DUMP" row for the browsers below. Turn OFF
         // once you've found the URL node.
-        private const val DEBUG_DUMP_NODES = true
+        private const val DEBUG_DUMP_NODES = false
         private const val DUMP_INTERVAL_MS = 1500L
         private val BROWSER_DEBUG_PACKAGES = setOf("com.duckduckgo.mobile.android")
 
