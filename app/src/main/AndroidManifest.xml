@@ -23,7 +23,7 @@
 
         <!-- Reads the foreground app, address-bar domain, page title and on-screen text. -->
         <service
-            android:name=".monitor.PageMonitorAccessibilityService"
+            android:name=".PageMonitorAccessibilityService"
             android:exported="false"
             android:label="@string/accessibility_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -37,7 +37,7 @@
 
         <!-- Captures periodic downscaled screenshots via MediaProjection. -->
         <service
-            android:name=".monitor.ScreenCaptureService"
+            android:name=".ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
