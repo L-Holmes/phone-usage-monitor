@@ -99,3 +99,35 @@ Notes from local testing:
         - and it should only block the specific page... not the whole website...
 
 Lets not overly worry about being perfect at this stage, lets just ensure we don't overblock and that the blocking itself actually works...
+
+
+---------
+
+New notes from local testing:
+- when I type in 'wolf' to the block list, and then visit the wolf wikipedia page, it says 'Blocked \n en.wikipedia.org \n ...' surely it should say it blocked on 'wolf' right?
+    - it seems to function fine though, and allow me to use the rest of wikipedia... so... just the text issue I guess...
+- also i added the wikipedia spider man page url to the blocklist, but that obviously didn't work.
+    - im not sure what youve done? beaus ein the logs we dont have a url so how are you planning to block by url?
+    - it just says en.wikipedia.org \n Spider-Man - Wikipedia... 
+    - please don't just make things up.. you know we'd need a specific integration to get the urls.. either do that, or stop lying about it!
+    -> well.. i mean it seems to work with top level? like 'apps.apple.com' as that actually matches what we have in our logs... 
+    - seems to work with reddit.com etc... but yeah will this be consistent for any website?
+
+- it doesn't seem to work when private browing in firefox?
+    - all the screenshots are blank...  / black.
+    - also, it seems to record only screenshots... it doesn't seem to get any actual websites back...
+    - THIS IS A BIG PROBLEM!
+    
+- also, if i have a tab that is blocked, and i go on tab view, the block screen come sup even though ive not clickedon the tab!
+    - so i can't close it and then carry on browsing!
+
+
+- also with the go back button, there is an annoying delay where i clicked, but then it doesn't instantl go back so im able to click again in that time but then i go back towo pages.
+    - now, its good to keep going back pages so i can escape from deep i na website back to google search, but this delay is annoying me! add some fix. either to the delay, or if that not possible some inidcation to me or something.. or even a seperate button.. like keep going back...
+
+
+If things aren't possible. be honest. and record that clearly in simple bullet points in the readme for future dev reference.
+- If we need specific integration to get urls then we do that if its possible, or just accpet it isn't! im fine with that!
+- also add to the readme a list o fwhat we can detect vi
+    - screenshots and limitations (ideally bypass privvate mode!)
+    - can we always gte page titles? or just top level domain teec?
