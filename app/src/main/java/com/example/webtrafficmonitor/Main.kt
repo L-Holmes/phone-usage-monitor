@@ -931,7 +931,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     clearContentBlock()
                 },
                 onLeave = { exitToHome(); clearContentBlock() },
-                onReport = { //do nothing },
+                onReport = { /* do nothing */ },
             )
             controller.showImages(frames, durationMs)
             return
@@ -943,7 +943,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 reason = reason,
                 onGoBack = { performGlobalAction(GLOBAL_ACTION_BACK); clearContentBlock() },
                 onLeave = { exitToHome(); clearContentBlock() },
-                onReport = { // do nothing},
+                onReport = { /* do nothing */ },
             )
             controller.showImages(frames, durationMs)
             return
