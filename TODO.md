@@ -1,23 +1,42 @@
 
 
-You are a top software engineer, extremely intelligent
-You are tasked with integrating Image categorisation into the apps 
-I have added my existing rust project in IMAGE_ANALYSER/
-    - please integrate it as possible into our code...
-        - we'll want to integrate this functionality:
-            cargo run --release -- --file test/static/testImages/<test-img>.jpeg
-            but of course pass in our screenshots instead... 
-    - obviously it has a setup script and what not...
-        - but obviously we are running an andoird app, so you'll have to think how to resolve that... 
 
-What it must do:
-- For each of the screenshots taken
-    - Run them against the classifier
-    - Get the score
-    --> write the score alongside the image in our logs
+okay, do you think perhaps we could use the faster version as well? alongside it? Like switch between
+  the fast one and the slow one?
 
-ideally id want to keep the functionality running fast... (would i be able to stay with rust or whatever? or would w ehave to pre generate something at build time or whatever? don't know if we will but hopefully this classifying code won't change much... so happy if thats a manual option if needed.. but yeah i dont even know if that'll be needed)
+And then perhaps if we are really getting rate hit, we can maybe do the fast one say up to every three screenshots? 
 
+Please feel free to do your own testing for the weights with this 'new' model that you speak of...
+
+
+-----------
+Is there any way we can process the images in parallel?
+    -> they take ages to come through.
+    -> Lets also decrease the frequency of the screenshots slighlty.
+        - I mean... obviously the image processing takes like just over a second (well with rust at least!)
+            - but the screenshots seem way behind in my testing...
+    - again, keep in modern smart phones in mind and think what they can handle...
+        - optimise, based on your own knowledge!
+    - i don't want to reduce the model itself as i need the accuracy...
+    - maybe we need some log or something to know how long its taking... so we can optimise how many screenshots we're taking...
+
+Lets also add a whitelist for apps to not screenshot on if possible...
+    - please be sensible:
+        - like:
+            - settings
+            - com.sec.android.app.launcher
+            - com.google.android.googlequicksearchbox
+            - etc.
+
+
+here are my logs by the way:
+adb logcat -s NsfwClassifier
+--------- beginning of main
+06-12 13:14:55.628 26666 26716 I NsfwClassifier: staged model -> /data/user/0/com.example.webtrafficmonitor/files/nsfw/model.onnx (344538902 bytes)
+06-12 13:14:56.952 26666 26716 I NsfwClassifier: model ready: model.onnx input=pixel_values size=384 threshold=0.11
+
+
+===========
 
 # THEN
 - now add Blocking rules:

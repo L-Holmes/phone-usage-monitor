@@ -7,6 +7,10 @@ build/
 /captures
 *.apk
 
+# NSFW model + sidecars staged into the APK at build time by the stageNsfwModel
+# Gradle task. Large + regenerable from IMAGE_ANALYSER — never commit.
+/app/src/main/assets/nsfw/
+
 
 # ALL OF THE IMAGES ANALYSER STUFF
 # =====================
@@ -18,6 +22,7 @@ IMAGE_ANALYSER/**/*.rs.bk
 
 # Python
 IMAGE_ANALYSER/.venv/
+IMAGE_ANALYSER/.venv-quant/
 IMAGE_ANALYSER/__pycache__/
 IMAGE_ANALYSER/*.py[cod]
 IMAGE_ANALYSER/*$py.class

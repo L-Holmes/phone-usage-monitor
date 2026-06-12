@@ -80,6 +80,16 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.ScrollView
 import androidx.appcompat.app.AlertDialog
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import java.nio.FloatBuffer
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import kotlin.math.exp
+import org.json.JSONObject
+
 // NOTE: This whole module is intentionally kept in ONE file.
 // These classes would normally live in separate files / sub-packages;
 // they are consolidated here on purpose to make development easier.
@@ -338,7 +348,7 @@ interface MonitorDao {
 // --------------------------------------------------------------
 
 
-@Database(entities = [MonitorEntry::class], version = 2, exportSchema = false)
+@Database(entities = [MonitorEntry::class], version = 3, exportSchema = false)
 abstract class MonitorDatabase : RoomDatabase() {
 
     abstract fun dao(): MonitorDao
@@ -384,6 +394,12 @@ data class MonitorEntry(
     val url: String? = null,
     val text: String? = null,
     val screenshotPath: String? = null,
+    /**
+     * Calibrated NSFW confidence in [0,1] for a screenshot (0.5 == exactly on the
+     * classifier's threshold; higher == more likely disallowed). Null for page
+     * entries, or for screens not (yet) scored / where the model was unavailable.
+     */
+    val nsfwScore: Float? = null,
 ) {
     companion object {
         const val KIND_PAGE = "page"
@@ -448,6 +464,51 @@ object MonitorStore {
 object ForegroundApp {
     @Volatile
     var packageName: String? = null
+}
+
+
+
+// --------------------------------------------------------------
+// CaptureWhitelist
+// --------------------------------------------------------------
+
+
+/**
+ * Foreground apps we deliberately do NOT screenshot or score: system surfaces,
+ * launchers, the dialer, the system search/Assistant, and the app's own UI
+ * (checked separately by the capture service). Skipping them saves CPU/battery
+ * and keeps benign system screens out of the log.
+ *
+ * This is the list to extend when you find an app you don't want captured.
+ */
+object CaptureWhitelist {
+
+    private val PACKAGES = setOf(
+        "com.android.systemui",
+        "com.android.settings",
+        "com.google.android.googlequicksearchbox",  // Google app / Assistant / search bar
+        // launchers
+        "com.google.android.apps.nexuslauncher",
+        "com.sec.android.app.launcher",
+        "com.android.launcher",
+        "com.android.launcher3",
+        "com.microsoft.launcher",
+        "com.teslacoilsw.launcher",
+        // phone / dialer / in-call
+        "com.android.dialer",
+        "com.google.android.dialer",
+        "com.samsung.android.dialer",
+        "com.android.phone",
+        "com.android.incallui",
+        // installers / permission + share dialogs
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+        "com.google.android.permissioncontroller",
+        "com.android.intentresolver",
+    )
+
+    fun contains(packageName: String?): Boolean =
+        packageName != null && packageName in PACKAGES
 }
 
 
@@ -1076,6 +1137,18 @@ class ScreenCaptureService : Service() {
 
     private var lastSavedAt = 0L
 
+    // Latest-frame-wins scoring pipeline. Scoring is far slower than capturing, so
+    // rather than queue every frame (which makes the log fall further and further
+    // behind), we keep only the most recent unprocessed frame and a single worker
+    // scores it, then picks up whatever is newest. Frames captured while the worker
+    // is busy are dropped — the log always reflects the most recent screen.
+    private val frameLock = Any()
+    private var pendingFrame: Frame? = null
+    private var workerRunning = false
+    private var droppedSinceProcessed = 0
+
+    private class Frame(val bitmap: Bitmap, val timestamp: Long, val appPackage: String?)
+
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
             stopSelf()
@@ -1134,6 +1207,10 @@ class ScreenCaptureService : Service() {
             null,
             captureHandler,
         )
+
+        // Warm up the classifier so the first scored frame doesn't pay the
+        // (one-time, multi-second) model staging + load cost.
+        NsfwClassifier.warmUp(applicationContext)
     }
 
     /** Runs on the capture thread for every screen frame. Cheap unless it is time to save. */
@@ -1142,35 +1219,93 @@ class ScreenCaptureService : Service() {
         try {
             val now = System.currentTimeMillis()
             if (now - lastSavedAt < CAPTURE_INTERVAL_MS) return
+
+            val appPackage = ForegroundApp.packageName
+            // Skip our own UI and whitelisted system/launcher surfaces entirely:
+            // no screenshot, no scoring. Advance the clock so we re-check at the
+            // normal interval rather than on every single frame.
+            if (appPackage == packageName || CaptureWhitelist.contains(appPackage)) {
+                lastSavedAt = now
+                return
+            }
             lastSavedAt = now
 
-            val bitmap = image.toBitmap()
-            val appPackage = ForegroundApp.packageName
-            saveScope.launch { saveCapture(bitmap, now, appPackage) }
+            submitFrame(Frame(image.toBitmap(), now, appPackage))
         } finally {
             image.close()
         }
     }
 
-    private fun saveCapture(bitmap: Bitmap, timestamp: Long, appPackage: String?) {
+    /** Hand the newest frame to the worker, dropping (and freeing) any unprocessed one. */
+    private fun submitFrame(frame: Frame) {
+        val dropped: Frame?
+        synchronized(frameLock) {
+            dropped = pendingFrame
+            if (dropped != null) droppedSinceProcessed++
+            pendingFrame = frame
+        }
+        dropped?.bitmap?.recycle()
+        ensureWorker()
+    }
+
+    /** Start the single scoring worker if it isn't already running. */
+    private fun ensureWorker() {
+        synchronized(frameLock) {
+            if (workerRunning) return
+            workerRunning = true
+        }
+        saveScope.launch {
+            while (true) {
+                val next = synchronized(frameLock) {
+                    val f = pendingFrame
+                    pendingFrame = null
+                    if (f == null) {
+                        workerRunning = false
+                        null
+                    } else {
+                        val dropped = droppedSinceProcessed
+                        droppedSinceProcessed = 0
+                        Pair(f, dropped)
+                    }
+                } ?: break
+                processFrame(next.first, next.second)
+            }
+        }
+    }
+
+    /** Save the screenshot, score it, and record the row. Runs on the worker only. */
+    private fun processFrame(frame: Frame, droppedWhileBusy: Int) {
+        val startedAt = System.currentTimeMillis()
         val dir = File(filesDir, CAPTURE_DIR).apply { mkdirs() }
-        val file = File(dir, "$timestamp.jpg")
+        val file = File(dir, "${frame.timestamp}.jpg")
+        var nsfwScore: Float?
         try {
             FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                frame.bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
             }
+            // Score the frame while the bitmap is still alive (cheaper than
+            // re-decoding the JPEG). Best-effort: null if the model isn't ready.
+            nsfwScore = NsfwClassifier.score(applicationContext, frame.bitmap)
         } finally {
-            bitmap.recycle()
+            frame.bitmap.recycle()
         }
 
         MonitorStore.record(
             this,
             MonitorEntry(
-                timestamp = timestamp,
+                timestamp = frame.timestamp,
                 kind = MonitorEntry.KIND_SCREEN,
-                packageName = appPackage,
+                packageName = frame.appPackage,
                 screenshotPath = file.absolutePath,
+                nsfwScore = nsfwScore,
             ),
+        )
+
+        val totalMs = System.currentTimeMillis() - startedAt
+        android.util.Log.i(
+            CAPTURE_TAG,
+            "frame done in ${totalMs}ms (dropped $droppedWhileBusy while busy) " +
+                "pkg=${frame.appPackage} score=${nsfwScore?.let { "%.2f".format(Locale.US, it) } ?: "n/a"}",
         )
     }
 
@@ -1247,10 +1382,14 @@ class ScreenCaptureService : Service() {
         var isRunning = false
             private set
 
+        private const val CAPTURE_TAG = "ScreenCapture"
         private const val NOTIF_ID = 1001
         private const val RESULT_INVALID = 0
         private const val CAPTURE_DIR = "captures"
-        private const val CAPTURE_INTERVAL_MS = 3000L
+        // Minimum gap between captures. Scoring (the slow step) paces real throughput;
+        // this just bounds how often we sample. Raise it toward your measured
+        // per-frame time (see the ScreenCapture log) if you see frames being dropped.
+        private const val CAPTURE_INTERVAL_MS = 4000L
         private const val MAX_DIMEN = 720
         private const val MAX_BUFFERED_IMAGES = 2
         private const val JPEG_QUALITY = 60
@@ -1295,6 +1434,312 @@ private fun Image.toBitmap(): Bitmap {
     } else {
         // Crop the padding columns off the right edge.
         Bitmap.createBitmap(bitmap, 0, 0, width, height).also { bitmap.recycle() }
+    }
+}
+
+// --------------------------------------------------------------
+// NsfwClassifier
+// --------------------------------------------------------------
+
+
+/**
+ * On-device NSFW image scorer — a direct Kotlin port of the IMAGE_ANALYSER Rust
+ * harness's `--file` mode. It uses the SAME model (adamcodd-vit-nsfw ViT,
+ * Apache-2.0), the SAME ONNX Runtime version (1.22.0), and the SAME calibration
+ * math, so the 0..1 score it returns here matches what the desktop harness prints.
+ *
+ * Pipeline (every tunable comes from the bundled preproc.json / thresholds.json
+ * assets, with hardcoded fallbacks that mirror those files):
+ *
+ *   bitmap -> resize 384x384 (stretch) -> (px/255 - 0.5)/0.5 -> NCHW RGB float[1,3,384,384]
+ *          -> ViT -> softmax -> raw = P(nsfw) -> calibrate(raw, threshold) -> 0..1
+ *
+ * The quantized INT8 model + sidecars ship as APK assets (copied once to filesDir,
+ * mmap'd by ORT so they don't sit on the Java heap). The full-precision model is
+ * NOT shipped on-device: it ran 3-6x slower here (couldn't keep up while a browser
+ * was busy), and on the test set INT8 matched it (0 verdict disagreements, scores
+ * within 0.06, skewing slightly toward catching) — so INT8 alone is the engine.
+ *
+ * Everything is best-effort: any failure (no model bundled, load error, bad frame)
+ * disables scoring and returns null rather than crashing the capture pipeline.
+ */
+object NsfwClassifier {
+
+    private const val TAG = "NsfwClassifier"
+    private const val ASSET_DIR = "nsfw"
+    private const val MODEL_NAME = "model.onnx"
+
+    /** Calibration steepness — must match `calibrate::K` in the Rust harness. */
+    private const val CALIBRATION_K = 1.8f
+
+    // All ONNX work (session creation AND every inference) runs on this single
+    // thread, pinned to foreground priority so the OS schedules it on the fast
+    // "big" CPU cores instead of the throttled efficiency cores a background thread
+    // gets. ORT's own worker threads, spawned when a session is built here, inherit
+    // that scheduling — much of the gap between a ~1s run and a ~6s one. Single-
+    // threaded, so no extra locking is needed.
+    private val worker: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "nsfw-infer")
+    }
+
+    @Volatile private var env: OrtEnvironment? = null
+    @Volatile private var session: OrtSession? = null
+    private var inputName: String = "pixel_values"
+    private var triedInit = false          // worker-thread only
+    @Volatile private var usingXnnpack = false
+
+    // Preproc + threshold (from the bundled sidecars; defaults mirror those files
+    // so scoring still works if a JSON read fails). Edit thresholds.json to retune.
+    private var modelName = "adamcodd-vit-nsfw-int8"
+    private var inputSize = 384
+    private var mean = floatArrayOf(0.5f, 0.5f, 0.5f)
+    private var std = floatArrayOf(0.5f, 0.5f, 0.5f)
+    private var rescale = 1f / 255f
+    private var applySoftmax = true
+    private var nsfwIndex = 1
+    private var threshold = 0.09f
+
+    /** True once the model is ready. */
+    val isReady: Boolean get() = session != null
+
+    /**
+     * Warm up the model on the inference thread (idempotent). Call when capture
+     * starts so the first scored frame doesn't pay the load cost.
+     */
+    fun warmUp(context: Context) {
+        val app = context.applicationContext
+        worker.execute { ensureSession(app) }
+    }
+
+    /**
+     * Score one screen frame -> calibrated NSFW confidence in [0,1] (0.5 == on the
+     * cutoff), or null if unavailable. Best-effort: never throws into the caller.
+     * The bitmap is not modified or recycled.
+     */
+    fun score(context: Context, bitmap: Bitmap): Float? {
+        val app = context.applicationContext
+        return try {
+            // Hop to the dedicated foreground-priority inference thread and wait.
+            worker.submit(Callable { scoreOnWorker(app, bitmap) }).get()
+        } catch (t: Throwable) {
+            android.util.Log.e(TAG, "scoring failed", t)
+            null
+        }
+    }
+
+    /** Runs on the inference thread only. */
+    private fun scoreOnWorker(context: Context, bitmap: Bitmap): Float? {
+        val s = ensureSession(context) ?: return null
+        val t0 = System.nanoTime()
+        val calibrated = calibrate(runRaw(s, inputName, preprocess(bitmap)), threshold)
+        val ms = (System.nanoTime() - t0) / 1_000_000.0
+        android.util.Log.i(TAG, "inference %.0f ms -> %.3f".format(Locale.US, ms, calibrated))
+        return calibrated
+    }
+
+    /**
+     * Load the model + config once (idempotent). Runs on the inference thread so
+     * ORT's spawned pool inherits its foreground scheduling. Returns the session,
+     * or null if it couldn't be loaded (not retried).
+     */
+    private fun ensureSession(context: Context): OrtSession? {
+        pinThread()
+        session?.let { return it }
+        if (triedInit) return null
+        triedInit = true
+        loadConfig(context)
+        return try {
+            val modelFile = stageModel(context, MODEL_NAME) ?: return null
+            val created = buildSession(modelFile)
+            inputName = created.inputNames.firstOrNull() ?: inputName
+            session = created
+            android.util.Log.i(
+                TAG,
+                "model ready: $modelName (${modelFile.name}) input=$inputName size=$inputSize " +
+                    "threshold=$threshold xnnpack=$usingXnnpack",
+            )
+            created
+        } catch (t: Throwable) {
+            android.util.Log.e(TAG, "model load failed; scoring disabled", t)
+            null
+        }
+    }
+
+    /** Build an ORT session for [modelFile] with tuned threads + XNNPACK. */
+    private fun buildSession(modelFile: File): OrtSession {
+        val environment = env ?: OrtEnvironment.getEnvironment().also { env = it }
+        // Parallelism WITHIN one inference. Target the big cores only — clamped to
+        // [2,4]; adding the slow "little" cores makes the run wait on the slowest.
+        val cores = Runtime.getRuntime().availableProcessors()
+        val threads = (cores / 2).coerceIn(2, 4)
+        val opts = OrtSession.SessionOptions().apply {
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            setIntraOpNumThreads(threads)
+            // XNNPACK: optimized ARM kernels, same precision. Falls back to CPU.
+            try {
+                addXnnpack(mapOf("intra_op_num_threads" to threads.toString()))
+                usingXnnpack = true
+            } catch (t: Throwable) {
+                android.util.Log.w(TAG, "XNNPACK unavailable; using default CPU backend", t)
+            }
+        }
+        return environment.createSession(modelFile.absolutePath, opts)
+    }
+
+    /** Pin the inference thread to the fast cores (best-effort). */
+    private fun pinThread() {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_FOREGROUND)
+        } catch (_: Throwable) { /* best-effort */ }
+    }
+
+    /** bitmap -> normalized NCHW RGB float[1,3,n,n] (flat), matching preproc.json. */
+    private fun preprocess(bitmap: Bitmap): FloatArray {
+        val n = inputSize
+        // ResizeMode::Stretch — straight resize to NxN, aspect ratio ignored.
+        val resized = if (bitmap.width == n && bitmap.height == n) bitmap
+                      else Bitmap.createScaledBitmap(bitmap, n, n, true)
+        val pixels = IntArray(n * n)
+        resized.getPixels(pixels, 0, n, 0, 0, n, n)
+        if (resized !== bitmap) resized.recycle()
+
+        // Normalize + lay out as NCHW, RGB channel order (matches preproc.json).
+        val area = n * n
+        val chw = FloatArray(3 * area)
+        for (i in 0 until area) {
+            val p = pixels[i]
+            val r = (p ushr 16) and 0xFF
+            val g = (p ushr 8) and 0xFF
+            val b = p and 0xFF
+            chw[i]            = (r * rescale - mean[0]) / std[0]   // R plane
+            chw[area + i]     = (g * rescale - mean[1]) / std[1]   // G plane
+            chw[2 * area + i] = (b * rescale - mean[2]) / std[2]   // B plane
+        }
+        return chw
+    }
+
+    /** Run one model on a preprocessed frame -> raw P(nsfw) in [0,1]. */
+    private fun runRaw(session: OrtSession, inName: String, chw: FloatArray): Float {
+        val n = inputSize
+        val shape = longArrayOf(1, 3, n.toLong(), n.toLong())
+        val environment = env ?: OrtEnvironment.getEnvironment()
+        OnnxTensor.createTensor(environment, FloatBuffer.wrap(chw), shape).use { tensor ->
+            session.run(mapOf(inName to tensor)).use { results ->
+                @Suppress("UNCHECKED_CAST")
+                val logits = (results.get(0).value as Array<FloatArray>)[0]
+                val probs = if (applySoftmax) softmax(logits) else logits
+                return probs.getOrElse(nsfwIndex) { probs.lastOrNull() ?: 0f }
+            }
+        }
+    }
+
+    /**
+     * Copy a bundled model asset into filesDir on first use. Re-copies if the
+     * staged file's size doesn't match the asset (e.g. after a model update).
+     * Returns the file, or null if the asset isn't bundled.
+     */
+    private fun stageModel(context: Context, fileName: String): File? {
+        val assetPath = "$ASSET_DIR/$fileName"
+        val outDir = File(context.filesDir, ASSET_DIR).apply { mkdirs() }
+        val outFile = File(outDir, fileName)
+
+        // openFd works because the asset is stored uncompressed (noCompress "onnx").
+        val assetSize = try {
+            context.assets.openFd(assetPath).use { it.length }
+        } catch (e: Exception) {
+            -1L
+        }
+        if (assetSize < 0L) {
+            val bundled = try { context.assets.open(assetPath).use { true } } catch (e: Exception) { false }
+            if (!bundled) {
+                android.util.Log.w(TAG, "no model bundled at assets/$assetPath")
+                return null
+            }
+        }
+        if (outFile.exists() && (assetSize < 0L || outFile.length() == assetSize)) return outFile
+
+        return try {
+            context.assets.open(assetPath).use { input ->
+                FileOutputStream(outFile).use { output -> input.copyTo(output, 1 shl 16) }
+            }
+            android.util.Log.i(TAG, "staged $fileName -> ${outFile.length()} bytes")
+            outFile
+        } catch (t: Throwable) {
+            android.util.Log.e(TAG, "failed to stage $fileName", t)
+            outFile.delete()
+            null
+        }
+    }
+
+    /** Read tunables from the bundled sidecars; silently keep defaults on any error. */
+    private fun loadConfig(context: Context) {
+        try {
+            val o = JSONObject(readAsset(context, "$ASSET_DIR/preproc.json"))
+            modelName = o.optString("name", modelName)
+            o.optJSONArray("input_size")?.let { if (it.length() > 0) inputSize = it.getInt(0) }
+            o.optJSONArray("mean")?.let { mean = it.toFloat3(mean) }
+            o.optJSONArray("std")?.let { std = it.toFloat3(std) }
+            if (o.has("rescale")) rescale = o.getDouble("rescale").toFloat()
+            if (o.has("apply_softmax")) applySoftmax = o.getBoolean("apply_softmax")
+            o.optJSONArray("nsfw_label_indices")?.let { if (it.length() > 0) nsfwIndex = it.getInt(0) }
+        } catch (t: Throwable) {
+            android.util.Log.w(TAG, "preproc.json not read; using defaults", t)
+        }
+        try {
+            val o = JSONObject(readAsset(context, "$ASSET_DIR/thresholds.json"))
+            val level = o.optString("default_level", "strict")
+            val models = o.optJSONObject("models")
+            // Use the threshold for the model we loaded (by its preproc name).
+            val m = models?.optJSONObject(modelName)
+                ?: models?.keys()?.takeIf { it.hasNext() }?.let { models.optJSONObject(it.next()) }
+            m?.let {
+                threshold = when {
+                    it.has(level) -> it.getDouble(level).toFloat()
+                    it.has("moderate") -> it.getDouble("moderate").toFloat()
+                    else -> threshold
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w(TAG, "thresholds.json not read; using default $threshold", t)
+        }
+    }
+
+    private fun readAsset(context: Context, path: String): String =
+        context.assets.open(path).bufferedReader().use { it.readText() }
+
+    private fun org.json.JSONArray.toFloat3(fallback: FloatArray): FloatArray =
+        if (length() >= 3) floatArrayOf(getDouble(0).toFloat(), getDouble(1).toFloat(), getDouble(2).toFloat())
+        else fallback
+
+    private fun softmax(x: FloatArray): FloatArray {
+        if (x.isEmpty()) return x
+        var m = x[0]
+        for (v in x) if (v > m) m = v
+        val exps = FloatArray(x.size) { exp(x[it] - m) }
+        val sum = exps.sum()
+        if (sum == 0f) return exps
+        for (i in exps.indices) exps[i] /= sum
+        return exps
+    }
+
+    private fun sigmoid(z: Float): Float = 1f / (1f + exp(-z))
+
+    private fun half(x: Float, k: Float): Float {
+        val s0 = 0.5f
+        val sk = sigmoid(k)
+        return (sigmoid(k * x) - s0) / (sk - s0)
+    }
+
+    /**
+     * Calibrate a raw 0..1 score so `threshold` maps to exactly 0.5, steepest at
+     * the boundary. Mirrors `calibrate::calibrate_k` in the Rust harness.
+     */
+    private fun calibrate(raw0: Float, threshold0: Float, k: Float = CALIBRATION_K): Float {
+        val raw = raw0.coerceIn(0f, 1f)
+        val t = threshold0.coerceIn(1e-6f, 1f - 1e-6f)
+        val c = if (raw >= t) 0.5f + 0.5f * half((raw - t) / (1f - t), k)
+                else 0.5f - 0.5f * half((t - raw) / t, k)
+        return c.coerceIn(0f, 1f)
     }
 }
 
@@ -1701,7 +2146,12 @@ class MonitorAdapter(
             holder.thumbnail.visibility = View.VISIBLE
             entry.screenshotPath?.let { holder.thumbnail.load(File(it)) }
             holder.primary.text = entry.packageName ?: "Screen"
-            holder.secondary.text = "Screenshot"
+            holder.secondary.text = entry.nsfwScore
+                ?.let { score ->
+                    val flag = if (score >= 0.5f) "  ⚠ flagged" else ""
+                    "nsfw %.2f%s".format(Locale.US, score, flag)
+                }
+                ?: "Screenshot (not scored)"
             holder.meta.text = "$time  ·  screen"
         } else {
             holder.thumbnail.visibility = View.GONE

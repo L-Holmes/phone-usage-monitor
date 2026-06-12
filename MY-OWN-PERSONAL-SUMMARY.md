@@ -1,4 +1,19 @@
 
+readme:
+
+
+Phone testing:
+# first build stages the 329 MB model (slower); later builds skip it
+./gradlew :app:assembleDebug   
+# or adb install -r the apk
+./deploy.sh                     
+# watch model load + any errors
+adb logcat -s NsfwClassifier ScreenCapture
+
+
+====================================
+
+
 # WHAT THE APP DOES
 - Monitors text: 
     - Monitors searches / screen textual content, regardless of the app
