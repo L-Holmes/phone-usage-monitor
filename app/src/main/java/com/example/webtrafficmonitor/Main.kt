@@ -35,9 +35,12 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -464,6 +467,10 @@ object MonitorStore {
 object ForegroundApp {
     @Volatile
     var packageName: String? = null
+
+    /** Current browser host (e.g. "en.wikipedia.org"), or null when not on the web. */
+    @Volatile
+    var host: String? = null
 }
 
 
@@ -540,6 +547,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var lastProcessedAt = 0L
     private var lastLogSignature: String? = null
     private var lastGoBackAt = 0L
+    private var appWarnCountdown: Runnable? = null
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
@@ -550,6 +558,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     // below: it is kept up / taken down based on what is actually in the
     // foreground, never by individual events (events flicker; window state doesn't).
     private var appBlockActive = false
+    // True while the NSFW-content cover (driven by screenshot scores) is showing.
+    // Owned here because dismissing it uses Back/Home, which need this service.
+    private var contentBlockActive = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var keyboardPackages: Set<String> = emptySet()
 
@@ -564,7 +575,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         override fun run() {
             if (!appBlockActive) return
             val pkg = currentForegroundPackage()
-            val blocked = AppBlocklist.blockedReason(pkg)
+            val blocked = appBlockReason(pkg)
             when {
                 blocked != null -> showAppBlock(blocked, pkg!!) // keeps cover + reposts
                 pkg != null -> {
@@ -601,6 +612,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         overlay = OverlayController(this)
         BlockRules.load(this)
         AppBlocklist.refresh(this)
@@ -631,7 +643,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // A plain set lookup is effectively free, and running it on the very first
         // window event of an app launch is what makes the cover appear instantly
         // (no waiting for rootInActiveWindow, no 700ms throttle).
-        val blockedApp = AppBlocklist.blockedReason(packageName)
+        val blockedApp = appBlockReason(packageName)
         if (blockedApp != null) {
             showAppBlock(blockedApp, packageName)
             return // No point reading or logging pages inside a blocked app.
@@ -674,6 +686,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (barText != null) lastUrl = barText
         readFocusedFullUrl(host)?.let { lastFullUrl = it }   // fills in path if user taps the bar
 
+        // Publish the host (browsers only) so each screenshot can be matched to the
+        // page it was taken on — that's how a content block knows the subdomain.
+        ForegroundApp.host = if (AppBlocklist.isBrowser(packageName)) lastHost else null
+
         // Content = the web page itself (WebView subtree), falling back to the whole
         // screen for non-browser apps.
         val text = readWebViewText() ?: sampleVisibleText(root)
@@ -714,8 +730,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         appBlockActive = true
         controller.show(
             reason = reason,
-            // Don't hide on Back: the recheck loop drops the cover only once an
-            // allowed app is actually in front. Debounced as before.
             onGoBack = {
                 val tapAt = System.currentTimeMillis()
                 if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
@@ -723,48 +737,239 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     performGlobalAction(GLOBAL_ACTION_BACK)
                 }
             },
-            // Don't hide on Home either; the loop hides it the moment the launcher
-            // is genuinely in front (so a failed Home press can't unblock).
-            onLeave = { performGlobalAction(GLOBAL_ACTION_HOME) },
+            onLeave = { exitToHome() },
             onReport = {
-                AppBlocklist.allowForSession(blockedPackage)
-                appBlockActive = false
-                mainHandler.removeCallbacks(recheck)
-                controller.hide()
+                // Intentionally does nothing — reporting an incorrect block must NOT
+                // unlock a blocked app.  Kept as a stub so the overlay button still
+                // appears, but the app stays covered.
             },
         )
         mainHandler.removeCallbacks(recheck)
         mainHandler.postDelayed(recheck, RECHECK_MS)
     }
 
-    /** Page-level (domain/keyword) blocking — unchanged behaviour. */
-    private fun evaluateBlock(packageName: String, host: String?, title: String?, content: String?) {
-        val controller = overlay ?: return
 
-        val matchedRule = if (host == null) {
-            // Off the web (settings screens, etc.): first the built-in guards, then
-            // keyword rules against the screen title — so tapping a non-web log row
-            // to block it actually works. Skip launchers so a stray keyword can't
-            // lock you out of your home screen.
-            appScreenBlock(packageName, title, content)
-                ?: if (packageName !in NOT_LOGGED_PACKAGES) BlockRules.matchedRule(null, title) else null
-        } else {
-            // Web pages: domain or keyword rules, as before.
-            BlockRules.matchedRule(host, title)
+    /** Reason an app should currently be covered: a blocked browser, or a timed content block. */
+    private fun appBlockReason(pkg: String?): String? {
+        AppBlocklist.blockedReason(pkg)?.let { return "Blocked app: $it" }
+        return AppTimedBlock.reasonIfBlocked(this, pkg)
+    }
+
+
+    private fun showContentBlock(reason: String, frames: List<NsfwBlockMonitor.BlockFrame>) {
+        val controller = overlay ?: return
+        val detectedPkg = frames.lastOrNull()?.appPackage ?: ForegroundApp.packageName
+        val capturedHost = frames.lastOrNull()?.host ?: lastHost
+
+        // Only ever cover the app the content was actually detected on. The score
+        // arrives a few seconds late, so the user may have switched apps — if the
+        // foreground no longer matches, drop it (scoring resumes; a fresh frame
+        // re-fires if they're still on bad content).
+        val foreground = currentForegroundPackage()
+        if (detectedPkg != null && foreground != detectedPkg) {
+            NsfwBlockMonitor.clear()
+            return
         }
 
-        if (matchedRule != null) {
+        contentBlockActive = true
+        controller.hide()
+        val durationMs = if (frames.size <= 1) 5_000L else 6_000L
+
+        // Too many blocks too fast -> hard 90-min block on THIS app, browser or not.
+        if (detectedPkg != null) {
+            RapidBlockMonitor.record(detectedPkg)?.let { penaltyMs ->
+                AppTimedBlock.blockFor(
+                    this, detectedPkg, penaltyMs,
+                    "App blocked for ${RapidBlockMonitor.PENALTY_LABEL} (too many blocks)",
+                )
+                contentBlockActive = false
+                NsfwBlockMonitor.clear()
+                controller.hide()
+                showAppBlock(AppTimedBlock.reasonIfBlocked(this, detectedPkg) ?: "App blocked", detectedPkg)
+                return
+            }
+        }
+
+        // WEB is decided by the APP being a browser — never by whether we read a URL.
+        // A browser is NOT timed-blocked here; we block the page instead.
+        if (AppBlocklist.isBrowser(detectedPkg)) {
+            // Block the exact subdomain right now (and strike the registrable domain;
+            // 3 strikes today -> whole domain). Returning to it just re-blocks.
+            capturedHost?.let { escalateWebBlock(it) }
             controller.show(
-                reason = matchedRule,
+                reason = if (capturedHost != null) "$reason\nBlocked page: $capturedHost" else reason,
                 onGoBack = {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
                         lastGoBackAt = tapAt
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
+                    clearContentBlock()
+                },
+                onLeave = { exitToHome(); clearContentBlock() },
+                onReport = { clearContentBlock() },
+            )
+            controller.showImages(frames, durationMs)
+            return
+        }
+
+        // NON-WEB APP we can't attribute: behave like a plain content cover.
+        if (detectedPkg == null || detectedPkg == packageName) {
+            controller.show(
+                reason = reason,
+                onGoBack = { performGlobalAction(GLOBAL_ACTION_BACK); clearContentBlock() },
+                onLeave = { exitToHome(); clearContentBlock() },
+                onReport = { clearContentBlock() },
+            )
+            controller.showImages(frames, durationMs)
+            return
+        }
+
+        // NON-WEB APP: 10s warning, then escalating timed block (5 min / tomorrow / forever).
+        startAppBlockWarning(controller, reason, frames, detectedPkg, durationMs)
+    }
+
+    private fun startAppBlockWarning(
+        controller: OverlayController,
+        baseReason: String,
+        frames: List<NsfwBlockMonitor.BlockFrame>,
+        pkg: String,
+        imagesMs: Long,
+    ) {
+        val label = AppTimedBlock.nextDurationLabel(this, pkg)
+
+        controller.show(
+            reason = baseReason,
+            onGoBack = {
+                val tapAt = System.currentTimeMillis()
+                if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
+                    lastGoBackAt = tapAt
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }
+                commitAppBlock(pkg)
+            },
+            onLeave = {
+                exitToHome()
+                commitAppBlock(pkg)
+            },
+            // Report = false positive: cancel, no block, no strike.
+            onReport = {
+                cancelAppBlockWarning()
+                clearContentBlock()
+            },
+        )
+        controller.showImages(frames, imagesMs)
+
+        cancelAppBlockWarning()
+        val countdown = object : Runnable {
+            var secondsLeft = APP_BLOCK_WARNING_SECONDS
+            override fun run() {
+                if (!contentBlockActive) return
+                controller.setReason(
+                    "$baseReason\n\nThis app will be blocked in ${secondsLeft}s — locked $label.",
+                )
+                if (secondsLeft <= 0) {
+                    commitAppBlock(pkg)
+                    return
+                }
+                secondsLeft -= 1
+                mainHandler.postDelayed(this, 1_000L)
+            }
+        }
+        appWarnCountdown = countdown
+        mainHandler.post(countdown)
+    }
+
+    private fun commitAppBlock(pkg: String) {
+        cancelAppBlockWarning()
+        if (!contentBlockActive) return   // already handled (e.g. via Report)
+        val info = AppTimedBlock.strike(this, pkg)
+        contentBlockActive = false
+        NsfwBlockMonitor.clear()
+        overlay?.hide()
+        if (currentForegroundPackage() == pkg) {
+            showAppBlock(info.reason, pkg)
+        }
+    }
+
+
+    private fun cancelAppBlockWarning() {
+        appWarnCountdown?.let { mainHandler.removeCallbacks(it) }
+        appWarnCountdown = null
+    }
+
+    /** Drop the content cover and let screenshot scoring resume. */
+    private fun clearContentBlock() {
+        cancelAppBlockWarning()
+        contentBlockActive = false
+        NsfwBlockMonitor.clear()
+        overlay?.hide()
+    }
+
+    /**
+     * A web block was dismissed (Go back / Leave). Permanently block this exact
+     * subdomain so the user can't just walk straight back onto it, and add a strike
+     * to its registrable domain; on the 3rd strike today, block the whole domain.
+     * Called only with a real host, so non-web (app/keyword-off-web) blocks are
+     * unaffected. NOT called from Report — that path stays a clean pass-through.
+     */
+    private fun escalateWebBlock(host: String) {
+        BlockRules.add(this, host)                            // exact subdomain -> permanent
+        BlockEscalation.recordWebBlock(this, host)?.let { domain ->
+            BlockRules.add(this, domain)                      // 3rd strike today -> whole domain
+        }
+    }
+
+    /**
+     * The "Leave" / exit-all button. A single HOME sometimes does nothing (the cover
+     * can immediately re-arm, or an app swallows it), so press Back twice to climb
+     * out of nested screens, then Home. Still cannot FORCE the app off recents —
+     * Android gives no accessibility API for that — but the re-cover-on-reopen
+     * blocking is what actually stops them coming back.
+     */
+    private fun exitToHome() {
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 200)
+        mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, 450)
+    }
+
+    /** Page-level (domain/keyword) blocking — unchanged behaviour. */
+    private fun evaluateBlock(packageName: String, host: String?, title: String?, content: String?) {
+        val controller = overlay ?: return
+
+        // While the NSFW-content cover is up it owns the screen; don't let page
+        // events show/hide a competing cover underneath it.
+        if (contentBlockActive) return
+
+        // A built-in app-screen guard returns a ready-made sentence; a BlockRules
+        // hit returns the raw rule (which we turn into "site"/"keyword" wording).
+        val appGuard = if (host == null) appScreenBlock(packageName, title, content) else null
+        val rule = if (appGuard == null) {
+            if (host == null) {
+                // Off the web: keyword rules vs the screen title (skip launchers).
+                if (packageName !in NOT_LOGGED_PACKAGES) BlockRules.matchedRule(null, title) else null
+            } else {
+                // Web pages: domain or keyword rules, as before.
+                BlockRules.matchedRule(host, title)
+            }
+        } else null
+
+        val reason = appGuard ?: rule?.let { describeRule(it) }
+
+        if (reason != null) {
+            controller.show(
+                reason = reason,
+                onGoBack = {
+                    val tapAt = System.currentTimeMillis()
+                    if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
+                        lastGoBackAt = tapAt
+                        host?.let { escalateWebBlock(it) }   // lock the subdomain + count the domain
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
                 },
                 onLeave = {
-                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    host?.let { escalateWebBlock(it) }   // leaving is not a free pass back in
+                    exitToHome()
                     controller.hide()
                 },
                 onReport = {
@@ -779,6 +984,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (!appBlockActive) controller.hide()
         }
     }
+
+    /** Turn a raw block rule into readable wording: a dot means a site, otherwise a keyword. */
+    private fun describeRule(rule: String): String =
+        if ('.' in rule) "Blocked site: $rule" else "Blocked keyword: \"$rule\""
 
     /** The package of the application window that is actually in front, or null. */
     private fun currentForegroundPackage(): String? {
@@ -998,7 +1207,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
+        NsfwBlockMonitor.clear()
         mainHandler.removeCallbacks(recheck)
+        cancelAppBlockWarning()
         overlay?.hide()
         super.onDestroy()
     }
@@ -1059,13 +1271,31 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        // The live service instance, so the capture service can ask us to show the
+        // NSFW-content cover (we own the overlay + can perform Back/Home). Cleared
+        // in onDestroy. Same process, so a plain reference is fine.
+        @Volatile
+        private var instance: PageMonitorAccessibilityService? = null
+
+        /**
+         * Ask the running accessibility service to show the NSFW-content cover.
+         * Returns false if the service isn't connected (so the caller knows the
+         * block can't be displayed and shouldn't latch).
+         */
+        fun requestContentBlock(reason: String, frames: List<NsfwBlockMonitor.BlockFrame>): Boolean {
+            val svc = instance ?: return false
+            svc.mainHandler.post { svc.showContentBlock(reason, frames) }
+            return true
+        }
+
         private const val MIN_INTERVAL_MS = 700L
         private const val RECHECK_MS = 400L
         private const val MAX_TEXT_CHARS = 1000
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40
         private const val ADDRESS_BAR_DEPTH = 25
-        private const val GO_BACK_DEBOUNCE_MS = 800L
+        private const val GO_BACK_DEBOUNCE_MS = 700L
+        private const val APP_BLOCK_WARNING_SECONDS = 10
 
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
 
@@ -1147,7 +1377,7 @@ class ScreenCaptureService : Service() {
     private var workerRunning = false
     private var droppedSinceProcessed = 0
 
-    private class Frame(val bitmap: Bitmap, val timestamp: Long, val appPackage: String?)
+    private class Frame(val bitmap: Bitmap, val timestamp: Long, val appPackage: String?, val host: String?)
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
@@ -1222,15 +1452,21 @@ class ScreenCaptureService : Service() {
 
             val appPackage = ForegroundApp.packageName
             // Skip our own UI and whitelisted system/launcher surfaces entirely:
-            // no screenshot, no scoring. Advance the clock so we re-check at the
-            // normal interval rather than on every single frame.
-            if (appPackage == packageName || CaptureWhitelist.contains(appPackage)) {
+            // no screenshot, no scoring. Also skip while an NSFW block cover is up —
+            // otherwise we'd just be scoring our own (benign) cover. Advance the clock
+            // so we re-check at the normal interval rather than on every single frame.
+            if (appPackage == packageName ||
+                CaptureWhitelist.contains(appPackage) ||
+                NsfwBlockMonitor.blocked ||
+                AppBlocklist.blockedReason(appPackage) != null ||
+                AppTimedBlock.reasonIfBlocked(applicationContext, appPackage) != null
+            ) {
                 lastSavedAt = now
                 return
             }
             lastSavedAt = now
 
-            submitFrame(Frame(image.toBitmap(), now, appPackage))
+            submitFrame(Frame(image.toBitmap(), now, appPackage, ForegroundApp.host))
         } finally {
             image.close()
         }
@@ -1300,6 +1536,17 @@ class ScreenCaptureService : Service() {
                 nsfwScore = nsfwScore,
             ),
         )
+
+        // Feed the score to the block-rule state machine; show the cover if a rule
+        // fires. Showing needs the accessibility service (for Back/Home); if it's
+        // off the block can't display, so don't latch (or we'd pause capture forever).
+        nsfwScore?.let { s ->
+            NsfwBlockMonitor.record(s, file.absolutePath, frame.appPackage, frame.host)?.let { result ->
+                val shown = PageMonitorAccessibilityService.requestContentBlock(result.reason, result.frames)
+                android.util.Log.i(CAPTURE_TAG, "NSFW block fired: \"${result.reason}\" (shown=$shown)")
+                if (!shown) NsfwBlockMonitor.clear()
+            }
+        }
 
         val totalMs = System.currentTimeMillis() - startedAt
         android.util.Log.i(
@@ -1838,6 +2085,221 @@ object BlockRules {
 }
 
 // --------------------------------------------------------------
+// BlockEscalation
+// --------------------------------------------------------------
+
+
+/**
+ * Per-day, per-domain strike counter. Each dismissed web block is one strike
+ * against that page's registrable domain; once a domain hits [THRESHOLD] strikes
+ * in a single day, the caller permanently blocks the whole domain.
+ *
+ * Counts reset at midnight (first call on a new calendar day wipes the store).
+ */
+object BlockEscalation {
+
+    private const val PREFS = "block_escalation"
+    private const val KEY_DAY = "day"
+    private const val THRESHOLD = 3   // strikes on one domain in a day -> permanent domain block
+
+    // Dedupe: repeated back-taps while stuck on the SAME host shouldn't inflate the
+    // count. Only a genuinely different host (or a long gap) counts again.
+    private var lastHost: String? = null
+    private var lastAt = 0L
+    private const val DEDUPE_MS = 8_000L
+
+    /**
+     * Record that [host] was just blocked-and-dismissed. Returns the registrable
+     * domain IF this strike promoted it to a permanent block (so the caller adds
+     * it to [BlockRules]); otherwise null.
+     */
+    @Synchronized
+    fun recordWebBlock(context: Context, host: String): String? {
+        val now = System.currentTimeMillis()
+        if (host == lastHost && now - lastAt < DEDUPE_MS) {
+            lastAt = now
+            return null
+        }
+        lastHost = host
+        lastAt = now
+
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        if (prefs.getString(KEY_DAY, null) != today) {
+            prefs.edit().clear().putString(KEY_DAY, today).apply()   // new day -> fresh counts
+        }
+
+        val domain = registrableDomain(host)
+        val key = "count:$domain"
+        val count = prefs.getInt(key, 0) + 1
+        prefs.edit().putInt(key, count).apply()
+        return if (count >= THRESHOLD) domain else null
+    }
+
+    /**
+     * Best-effort registrable domain ("en.wikipedia.org" -> "wikipedia.org").
+     * Handles the common two-level public suffixes below; it is a heuristic, NOT a
+     * full Public Suffix List, so an unusual suffix may resolve one label too high.
+     * Add to TWO_LEVEL_SUFFIXES if you hit one that matters.
+     */
+    fun registrableDomain(host: String): String {
+        val labels = host.lowercase().trim('.').split('.')
+        if (labels.size <= 2) return labels.joinToString(".")
+        val lastTwo = labels.takeLast(2).joinToString(".")
+        return if (lastTwo in TWO_LEVEL_SUFFIXES) labels.takeLast(3).joinToString(".")
+               else lastTwo
+    }
+
+    private val TWO_LEVEL_SUFFIXES = setOf(
+        "co.uk", "org.uk", "gov.uk", "ac.uk", "me.uk",
+        "co.jp", "co.kr", "co.nz", "co.za", "co.in",
+        "com.au", "net.au", "org.au", "com.br", "com.cn",
+        "com.mx", "com.tr", "com.sg", "com.hk",
+    )
+}
+
+// --------------------------------------------------------------
+// RapidBlockMonitor
+// --------------------------------------------------------------
+
+
+/**
+ * Counts block events per app in a rolling 10-minute window. Five blocks on the
+ * SAME app inside that window earns a hard 90-minute block — browser or not. Kept
+ * in memory (the window is short); a process restart forgives the count.
+ */
+object RapidBlockMonitor {
+
+    private const val WINDOW_MS = 10 * 60 * 1000L
+    private const val LIMIT = 5
+    const val PENALTY_MS = 90 * 60 * 1000L
+    const val PENALTY_LABEL = "90 minutes"
+
+    private val lock = Any()
+    private val events = HashMap<String, ArrayDeque<Long>>()
+
+    /** Record one block on [pkg]; returns PENALTY_MS if this one hit the limit, else null. */
+    fun record(pkg: String?): Long? {
+        if (pkg.isNullOrBlank()) return null
+        val key = pkg.lowercase()
+        val now = System.currentTimeMillis()
+        synchronized(lock) {
+            val dq = events.getOrPut(key) { ArrayDeque() }
+            dq.addLast(now)
+            while (dq.isNotEmpty() && now - dq.first() > WINDOW_MS) dq.removeFirst()
+            return if (dq.size >= LIMIT) { dq.clear(); PENALTY_MS } else null
+        }
+    }
+}
+
+// --------------------------------------------------------------
+// AppTimedBlock
+// --------------------------------------------------------------
+
+
+/**
+ * Per-app escalating block, driven by distracting *content* detected inside a
+ * NON-browser app. Each content strike raises the block:
+ *   strike 1 -> 5 minutes
+ *   strike 2 -> until tomorrow (local midnight)
+ *   strike 3+ -> permanently
+ * Strikes are cumulative and persist across days (so the ladder is reachable);
+ * only the active block window expires. Persisted in SharedPreferences, keyed by
+ * package name. Thread-safe: read from the capture thread, written from the main
+ * thread.
+ */
+object AppTimedBlock {
+
+    private const val PREFS = "app_timed_block"
+    private const val FIVE_MIN_MS = 5 * 60 * 1000L
+    private const val FOREVER = Long.MAX_VALUE
+
+    private val sessionAllow = mutableSetOf<String>()
+
+    data class Strike(val tier: Int, val reason: String, val durationLabel: String)
+
+    /** The block reason if [pkg] is currently timed-blocked, else null (clears expired windows). */
+    @Synchronized
+    fun reasonIfBlocked(context: Context, pkg: String?): String? {
+        if (pkg.isNullOrBlank()) return null
+        val key = pkg.lowercase()
+        if (key in sessionAllow) return null
+        val prefs = prefs(context)
+        val until = prefs.getLong("until:$key", 0L)
+        if (until == 0L) return null
+        if (until != FOREVER && System.currentTimeMillis() >= until) {
+            prefs.edit().remove("until:$key").remove("reason:$key").apply()  // window expired; strikes stay
+            return null
+        }
+        return prefs.getString("reason:$key", null) ?: reasonFor(prefs.getInt("strikes:$key", 1), until)
+    }
+
+    /** Record one content strike against [pkg], raise its block, and say how to show it. */
+    @Synchronized
+    fun strike(context: Context, pkg: String): Strike {
+        val key = pkg.lowercase()
+        val prefs = prefs(context)
+        val strikes = prefs.getInt("strikes:$key", 0) + 1
+        val until = when {
+            strikes <= 1 -> System.currentTimeMillis() + FIVE_MIN_MS
+            strikes == 2 -> nextMidnight()
+            else -> FOREVER
+        }
+        val reason = reasonFor(strikes, until)
+        prefs.edit().putInt("strikes:$key", strikes).putLong("until:$key", until)
+            .putString("reason:$key", reason).apply()
+        return Strike(strikes, reason, durationLabel(strikes))
+    }
+
+    /** Explicit, ladder-independent block (the 5-in-10-min rule). Never shortens an existing block. */
+    @Synchronized
+    fun blockFor(context: Context, pkg: String, durationMs: Long, reason: String) {
+        val key = pkg.lowercase()
+        val prefs = prefs(context)
+        val existing = prefs.getLong("until:$key", 0L)
+        if (existing == FOREVER) return
+        val until = maxOf(existing, System.currentTimeMillis() + durationMs)
+        prefs.edit().putLong("until:$key", until).putString("reason:$key", reason).apply()
+    }
+
+    /** Wording for the NEXT strike, WITHOUT recording it (used in the warning). */
+    @Synchronized
+    fun nextDurationLabel(context: Context, pkg: String): String =
+        durationLabel(prefs(context).getInt("strikes:${pkg.lowercase()}", 0) + 1)
+
+    /** "Report" lets the current block through until the process restarts. */
+    @Synchronized
+    fun allowForSession(pkg: String?) {
+        if (!pkg.isNullOrBlank()) sessionAllow.add(pkg.lowercase())
+    }
+
+    private fun durationLabel(strikes: Int): String = when {
+        strikes <= 1 -> "5 minutes"
+        strikes == 2 -> "until tomorrow"
+        else -> "permanently"
+    }
+
+    private fun reasonFor(strikes: Int, until: Long): String = when {
+        until == FOREVER || strikes >= 3 -> "App blocked permanently (repeated distracting content)"
+        strikes == 2 -> "App blocked until tomorrow (repeated distracting content)"
+        else -> "App blocked for 5 minutes (distracting content)"
+    }
+
+    private fun nextMidnight(): Long {
+        val c = java.util.Calendar.getInstance()
+        c.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        c.set(java.util.Calendar.MINUTE, 0)
+        c.set(java.util.Calendar.SECOND, 0)
+        c.set(java.util.Calendar.MILLISECOND, 0)
+        return c.timeInMillis
+    }
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+// --------------------------------------------------------------
 // AppBlocklist
 // --------------------------------------------------------------
 
@@ -1883,6 +2345,17 @@ object AppBlocklist {
         if (pkg in BLOCKED_BROWSERS) return packageName   // static list
         if (pkg in dynamicBrowsers) return packageName    // NEW: detected at runtime
         return null
+    }
+
+    /**
+     * True if [packageName] is ANY known browser — blocked, allowed (DuckDuckGo),
+     * or detected at runtime. This, not "did we read a URL", is what decides
+     * web-vs-app: a browser is never timed-blocked on content; the page is blocked.
+     */
+    fun isBrowser(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        val pkg = packageName.lowercase()
+        return pkg in ALLOWED_BROWSERS || pkg in BLOCKED_BROWSERS || pkg in dynamicBrowsers
     }
 
     /** Lets a blocked app through until the app process restarts ("report" button). */
@@ -2046,6 +2519,132 @@ object AppBlocklist {
 
 
 // --------------------------------------------------------------
+// NsfwBlockMonitor
+// --------------------------------------------------------------
+
+
+/**
+ * Turns the stream of per-screenshot NSFW scores into block decisions. Scores are
+ * the calibrated 0..1 confidence from [NsfwClassifier] (0.5 == on the model's
+ * cutoff). Three escalating rules, checked most-severe first:
+ *
+ *   - clear     (s > 0.75):            one frame blocks.
+ *   - probable  (0.6 < s <= 0.75):     two block — same outlier tolerance as
+ *       borderline: up to MAX_OUTLIERS non-probable frames between them are skipped.
+ *   - borderline (0.5 <= s <= 0.6):   five block — tolerating short gaps: up to
+ *       MAX_OUTLIERS consecutive non-borderline frames are skipped as outliers; a
+ *       longer gap resets the run. (e.g. 0.5, 0.4, 0.1, 0.54, 0.52, 0.1, 0.59, ...
+ *       keeps building toward five because the 1-2 stray frames are ignored.)
+ *
+ * While a block is active [blocked] is true and scores are ignored until [clear] is
+ * called (when the user dismisses the cover), so the cover — captured as a benign
+ * screenshot — can't re-trigger or flicker the block on itself.
+ */
+object NsfwBlockMonitor {
+
+    /** One screenshot that fed into a block: file path, score, the app it came from, and the host (if any) at capture time. */
+    data class BlockFrame(val path: String?, val score: Float, val appPackage: String?, val host: String?)
+
+    /** A fired block: why it fired, plus the screenshot(s) that triggered it. */
+    data class BlockResult(val reason: String, val frames: List<BlockFrame>)
+
+    private const val BORDERLINE_LO = 0.5f
+    private const val BORDERLINE_HI = 0.6f
+    private const val PROBABLE_HI = 0.75f
+    private const val BORDERLINE_NEEDED = 5
+    private const val PROBABLE_NEEDED = 2
+    private const val MAX_OUTLIERS = 2     // consecutive non-borderline frames we skip
+
+    private val lock = Any()
+
+    @Volatile
+    var blocked = false
+        private set
+
+    private var borderlineCount = 0
+    private var outlierRun = 0
+    private var probableStreak = 0
+    private var probableOutlierRun = 0    // consecutive non-probable frames we skip
+
+    // The actual frames (path + score) building each streak, kept in lock-step with
+    // the counters above so a fired block can show exactly what triggered it.
+    private val probableFrames = mutableListOf<BlockFrame>()
+    private val borderlineFrames = mutableListOf<BlockFrame>()
+
+    /**
+     * Feed one calibrated score (and the screenshot it came from). Returns a
+     * BlockResult — reason + the contributing frames — the instant a rule fires
+     * (and latches [blocked]), otherwise null. No-ops while already blocked.
+     */
+    fun record(score: Float, path: String?, appPackage: String?, host: String?): BlockResult? {
+        synchronized(lock) {
+            if (blocked) return null
+            val frame = BlockFrame(path, score, appPackage, host)
+
+            // 1. clear — a single frame is enough.
+            if (score > PROBABLE_HI) return fire("1 image deemed distracting", listOf(frame))
+
+            // 2. probable — two (0.6, 0.75] frames, tolerating <= MAX_OUTLIERS gaps.
+            if (score > BORDERLINE_HI) {
+                probableStreak += 1
+                probableOutlierRun = 0
+                probableFrames.add(frame)
+                if (probableStreak >= PROBABLE_NEEDED)
+                    return fire("$probableStreak images deemed distracting in short succession", probableFrames.toList())
+            } else {
+                probableOutlierRun += 1
+                if (probableOutlierRun > MAX_OUTLIERS) {
+                    probableStreak = 0
+                    probableOutlierRun = 0
+                    probableFrames.clear()
+                }
+            }
+
+            // 3. borderline — five [0.5, 0.6] frames, tolerating <= MAX_OUTLIERS gaps.
+            if (score in BORDERLINE_LO..BORDERLINE_HI) {
+                borderlineCount += 1
+                outlierRun = 0
+                borderlineFrames.add(frame)
+                if (borderlineCount >= BORDERLINE_NEEDED)
+                    return fire("$borderlineCount borderline images in short succession", borderlineFrames.toList())
+            } else {
+                outlierRun += 1
+                if (outlierRun > MAX_OUTLIERS) {
+                    borderlineCount = 0
+                    outlierRun = 0
+                    borderlineFrames.clear()
+                }
+            }
+            return null
+        }
+    }
+
+    /** Dismiss the active block and start accumulating fresh. */
+    fun clear() {
+        synchronized(lock) {
+            blocked = false
+            resetStreaks()
+        }
+    }
+
+    private fun fire(reason: String, frames: List<BlockFrame>): BlockResult {
+        blocked = true
+        resetStreaks()
+        return BlockResult(reason, frames)
+    }
+
+    private fun resetStreaks() {
+        borderlineCount = 0
+        outlierRun = 0
+        probableStreak = 0
+        probableOutlierRun = 0
+        probableFrames.clear()
+        borderlineFrames.clear()
+    }
+}
+
+
+// --------------------------------------------------------------
 // OverlayController
 // --------------------------------------------------------------
 
@@ -2062,6 +2661,11 @@ class OverlayController(private val context: Context) {
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var view: View? = null
 
+    // The transient image-reveal window (shown above the cover, auto-removed).
+    private var imagesView: View? = null
+    private val imagesHandler = Handler(Looper.getMainLooper())
+    private val removeImages = Runnable { hideImages() }
+
     val isShowing: Boolean get() = view != null
 
     fun show(reason: String, onGoBack: () -> Unit, onLeave: () -> Unit, onReport: () -> Unit) {
@@ -2076,6 +2680,19 @@ class OverlayController(private val context: Context) {
         overlay.findViewById<Button>(R.id.btn_leave).setOnClickListener { onLeave() }
         overlay.findViewById<Button>(R.id.btn_report).setOnClickListener { onReport() }
 
+        // Wrap the cover in a FrameLayout we control, so the temporary image layer
+        // can be laid ON TOP of the cover (and removed) without touching the XML.
+        // findViewById still reaches block_reason/buttons since they're descendants.
+        val container = FrameLayout(context).apply {
+            addView(
+                overlay,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -2084,14 +2701,153 @@ class OverlayController(private val context: Context) {
             PixelFormat.OPAQUE,
         )
 
-        windowManager.addView(overlay, params)
-        view = overlay
+        windowManager.addView(container, params)
+        view = container
     }
 
     fun hide() {
+        hideImages()
         view?.let {
             windowManager.removeView(it)
             view = null
+        }
+    }
+
+    /** Update just the cover's reason text (used by the live block countdown). */
+    fun setReason(reason: String) {
+        view?.findViewById<TextView>(R.id.block_reason)?.text = reason
+    }
+
+
+    /**
+     * Lays the triggering screenshot(s) ON TOP of the existing block cover: a dark
+     * panel, centred, with the 0.50 disclaimer and the image(s) as a collage (one
+     * image shown alone, several in a 2-wide grid), each labelled with its score.
+     * The cover's "Blocked" + reason header stays visible around the panel. After
+     * [durationMs] only this panel is removed — the cover (reason + buttons) stays.
+     */
+    fun showImages(frames: List<NsfwBlockMonitor.BlockFrame>, durationMs: Long) {
+        hideImages() // clear any previous reveal first
+
+        val container = view as? ViewGroup ?: return
+        val valid = frames.filter { !it.path.isNullOrBlank() && File(it.path!!).exists() }
+        if (valid.isEmpty()) return
+
+        val metrics = context.resources.displayMetrics
+        val density = metrics.density
+        fun dp(value: Int): Int = (value * density).toInt()
+
+        val panel = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            isClickable = true  // swallow taps so they don't hit the buttons behind
+            setBackgroundColor(0xEE000000.toInt())
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            addView(TextView(context).apply {
+                text = "Scores over 0.50 are treated as having a distracting nature. " +
+                    "The AI may categorize content incorrectly."
+                setTextColor(0xFFDDDDDD.toInt())
+                textSize = 12f
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, dp(10))
+            })
+            addView(buildCollage(valid, metrics))
+        }
+
+        // Transparent full-screen layer; only the centred panel is opaque, so the
+        // cover header shows around it and untouched areas fall through to buttons.
+        val layer = FrameLayout(context).apply {
+            addView(
+                panel,
+                FrameLayout.LayoutParams(
+                    (metrics.widthPixels * 0.9f).toInt(),
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { gravity = Gravity.CENTER },
+            )
+        }
+
+        container.addView(
+            layer,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        imagesView = layer
+
+        imagesHandler.removeCallbacks(removeImages)
+        imagesHandler.postDelayed(removeImages, durationMs)
+    }
+
+    /** One image alone, or several in a 2-wide collage; each captioned with its score. */
+    private fun buildCollage(frames: List<NsfwBlockMonitor.BlockFrame>, metrics: DisplayMetrics): View {
+        val density = metrics.density
+        fun dp(value: Int): Int = (value * density).toInt()
+
+        val cols = if (frames.size == 1) 1 else 2
+        val rows = (frames.size + cols - 1) / cols
+        // Cap each image's height so the whole collage fits over the cover.
+        val maxCellH = ((metrics.heightPixels * 0.5f) / rows).toInt().coerceAtLeast(dp(80))
+
+        val grid = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        var i = 0
+        while (i < frames.size) {
+            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            for (c in 0 until cols) {
+                val cellParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { setMargins(dp(3), dp(3), dp(3), dp(3)) }
+                if (i < frames.size) {
+                    val f = frames[i]
+                    val cell = LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(
+                            ImageView(context).apply {
+                                adjustViewBounds = true
+                                maxHeight = maxCellH
+                                scaleType = ImageView.ScaleType.FIT_CENTER
+                                load(File(f.path!!))
+                            },
+                            LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                            ),
+                        )
+                        addView(scoreLabel(f.score))
+                    }
+                    row.addView(cell, cellParams)
+                } else {
+                    // Empty filler keeps an odd last image aligned in its half.
+                    row.addView(View(context), cellParams)
+                }
+                i++
+            }
+            grid.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        return grid
+    }
+
+    /** Remove the image layer (if any). The block cover itself is left in place. */
+    fun hideImages() {
+        imagesHandler.removeCallbacks(removeImages)
+        imagesView?.let { layer ->
+            (layer.parent as? ViewGroup)?.removeView(layer)
+            imagesView = null
+        }
+    }
+
+    private fun scoreLabel(score: Float): TextView {
+        val density = context.resources.displayMetrics.density
+        return TextView(context).apply {
+            text = "nsfw %.2f".format(Locale.US, score)
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setPadding(0, (3 * density).toInt(), 0, (6 * density).toInt())
         }
     }
 

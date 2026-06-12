@@ -1,105 +1,140 @@
 
 
+Tell me what to do in an idiot proof way; before and after of the code that needs changing.
 
-okay, do you think perhaps we could use the faster version as well? alongside it? Like switch between
-  the fast one and the slow one?
++======
 
-And then perhaps if we are really getting rate hit, we can maybe do the fast one say up to every three screenshots? 
+NEXT TODO:
 
-Please feel free to do your own testing for the weights with this 'new' model that you speak of...
-
-
------------
-Is there any way we can process the images in parallel?
-    -> they take ages to come through.
-    -> Lets also decrease the frequency of the screenshots slighlty.
-        - I mean... obviously the image processing takes like just over a second (well with rust at least!)
-            - but the screenshots seem way behind in my testing...
-    - again, keep in modern smart phones in mind and think what they can handle...
-        - optimise, based on your own knowledge!
-    - i don't want to reduce the model itself as i need the accuracy...
-    - maybe we need some log or something to know how long its taking... so we can optimise how many screenshots we're taking...
-
-Lets also add a whitelist for apps to not screenshot on if possible...
-    - please be sensible:
-        - like:
-            - settings
-            - com.sec.android.app.launcher
-            - com.google.android.googlequicksearchbox
-            - etc.
+Ask claude to summarise in simple markdown bullet points all of the block conditions that we have discussed...
+literally super concise saying hwat the block condition is, and then the punishment..
+    - then like a nested bullet point for what happens if the user carries on going...
+And add any other things that claude as identified from the code as far as blocking conditions as well...
+group by images... 
+and then with just text etc... 
+and then with images.. group by whether its in a web browser or just a random app..
 
 
-here are my logs by the way:
-adb logcat -s NsfwClassifier
---------- beginning of main
-06-12 13:14:55.628 26666 26716 I NsfwClassifier: staged model -> /data/user/0/com.example.webtrafficmonitor/files/nsfw/model.onnx (344538902 bytes)
-06-12 13:14:56.952 26666 26716 I NsfwClassifier: model ready: model.onnx input=pixel_values size=384 threshold=0.11
+------
+THEN SORT THESE:
 
 
-===========
+when the user presses 'go back' after a website block of any kind
+    -> they need a clearer indication for when they've gone back, and they are still on a blocked page.
+        -> and then et another indication for when they are on a different blocked page th (not the exact same subdomain) and they are still blocked..
+            -> as they may be 20 pages deep in wikipedia, get blocked, then perpetually stuck in a state of not knowing what is going on...
+    -> like i know it changes the text from say saying 'dog' block to 'wikipedia.org', but prehaps an even more obvoius indication like gone back, but the page is still blocked, keep pressing back or exit the app'...
+    .. and again, some obvious indication that theyve gone to a different page...
 
-# THEN
-- now add Blocking rules:
-    - If we get 8 'close borderlines' in a row (anything between 0.5 and 0.6 inclusive), then we block with reason 'suspicious content detected.. precaution'...
-        - (if possible, if we get 1 or 2 dotted around as part of that, then we just ignore those...)
-        - e.g. 0.5, 0.4, 0.1, 0.54, 0.52, 0.1, 0.59 etc.. that would be picked up, as if we remove the groups of 1 or 2 'outliers' then we have our pattern.
-    - if we get 2 'probably not allowed' in a row (anything between 0.6 < x <= 0.7), then block, with reason 'probable distracting content detected'
-    - If we get 1 'clear not allowed' (anything over 0.7) then block. with reason 'clear distracting content detected'
 
+Also, in my testing, it will block the subdomain.. but then if i say exit the app / go back to start page, then type in that main domain again, it is not blocked..
+    - and it never seems to get blocked permanently even with repeated visits to the (banned dog subdomain)... it should ban the entire domain for like an hour  after like 3 times... 
+    ---> OOH! actually, maybe it does, but it only seems to appear once i go on a submain.. (e.g. wikipedia.org
+
+
+Also, the blocking and the association between the website and the blocked thing is a bit broken...
+    - it seemed to block google.com... even though it was wikipedia i was testing with...
+    -> please make whatever logic that is much less likely to block the wrong page... 
+    again, not sure what happened... but do extra verification checks and estimation etc. 
+    do not let the wrong website get blocked!
+    - perhaps the block was a bit late, and i went from wikipedia to google and then it blocked google??....
+
+In a similar way, if i was on google images, and searched something which brough up images which then got banned... 
+    - it banned the entirety of google.com!?!? 
+        (even though every google search has a different subdomain!?!?) and it wasn't like the subdomain got blocked first! it just went straight in with the block.
+... same on giphy.com... even though subdomain, the main domain got blocked instead..
+    but then i press go back, on the same domain, and its not blocked!
+
+
+Also, i got around 5 in a row of the 0.5 < x 0.6 scoring things.. and i didn't get blocked out!?!?
+    but then i tested and if i get 5 successive in a row it did work...
+    Lets cut it down to 3 in a row.
+    and also review whetever logic is checking for even if there are two image entires in between which aren't at that level... it needs to be 3 image entries in a row that are all <0.5 for it to break the streak! other wise the counter keeps increasing! and if it gets to 4, it does a block!
+
+Also, even though it said 'google.com domain blocked' after being on google images... i press ' go back', im on the same google image results, and yet i don't get blocked!?!? 
+
+
+Also i got multiple blocks all within like 20 mins and i didn't get blocked from the domain or the app! come On!!!! what is that logic doing!?!?!
+    please review all that logic!!!
+
+    You know what? Please add a scrollable section to the main app that records these things..
+        -> Like number of strikes for a given app, and for a given domain... and then identified banned subdomains... perhaps add a button like 'view ban list', which opens that page...
+
+
+again, it said app blocked, i keep scrolling and then the warning just disappears !?!?!? 
+
+so annoying how i keep getting blocked, press back, and then carry on on google images!?!?
+
+also again, if i ban the word 'dog', but then i'm able to type 'dog' into google images..
+    - evne though there is dog in the url, dog on the page titles, dog in the onscreen text which we should be scanning for the banned word...
+        and dog in all of the image results names??!??! 
+
+-------
+
+
+- integrate the whitelisting of common apps....
+    - Add more whitelisted apps - think of common ones that are deffo fine..
+    (google maps.. waze... messaging apps like whatsapp, facebook (but not ones with reels etc. like insta or snapchat... )) especially ones from 
+    (use your knowledge of common safe, non-social media apps and add more!)
+    (I think we possbly already do this, just want to extend)
+    ideally no screenshotting / processing if we know we're on a whitelist app.. 
+    (to save processing etc. for the user!)
+
+- stop screen capture from turning off..
+    TODO: I think maybe it happens if i lock my phone? 
+    it just seems to turn itself off randomly..
+        - i don't even notice it happen!
+    --> maybe prevent user from being able to view any app that isn't in the whiltelist 
+    - and be able to detect why! (i guess through the adb debugging?)
+    - yeah i think its if i turn the screen off (just to sleep, not off) then it turns it off..
+        - but i want it to restart! it needs to!
+
+
+---------
+
+maybe if its a non-web app..
+    - and they end up on the 'forever block'...
+    perhaps instead:
+maybe make it so if you press back a couple times... then it unblocks the app? (unless you manually add it to the permanat block list...) --> just in case like insta etc.. 
+
+
+        
 
 -----------------
 
 TODO AFTER THAT:
-- prevent 'report incorrect block' from allowing a blocked app to be unlocked...
-- Change the functionality of the report this thing... 
-    - just make it just do nothing for now... don't make it unblock an app...
 
 -------------------
 
-I reckon...
-- integrate the image adam cod processing...
+NEXT TODOS:
 - test issue with the screenshot taker turning off
     - ensure that always stays on!
 - Make it so that the app can't be deleted...(?)
-- Add my own custom words blocklist(?)
-    - for strict mode...
-    - like bkni etc.
+    - settings etc. and then toggling the settings
+    - will want a   toggle in our app though to turn this off optionally!
 - Load in an open source nsfw domains list (blacklist)
     - auto add them all to ban
 - Load in an open source nsfw words list (blacklist of words)
     - auto add them all to ban
 - Load in an open source nsfw app list 
-    - auto add them all to whitelist
+    - auto add them all to blacklist
+
+- integrate the whitelisting of trusted domains
+- integrate the whitelisting of trusted domains
+
 - Load in an open source trusted domains list (blacklist)
     - auto add them all to whitelist
 - Load in an open source trusted non-sexual app list 
     - auto add them all to whitelist
 
-- integrate the whitelisting....
-    - don't care about whats happening.. ideally no screenshotting / processing if we know we're on a whitelist app.. althgouh that may be difficult to determine
+
+- Add my own custom words blocklist(?)   (seperate from the main list.. somewhere obvious in the code for me to edit.. like a constant at the top...)
+    - for strict mode...
+    - like bkni etc.
 
 ------------------------------------------------------------------------------------
 
-Next steps:
-- App whitelist (spotify, google maps, etc)
-- ensure we are monitoring web traffic? 
 
-Then:
-- some way to actually block websites on the blacklist...
-    - load in some banned sexual content blacklist from somewhere...
-do i close the app? 
-do i do something like what 'stay focused' app does?
-
--------
-
-
-Clear history
-
-
-Start cutting down results 
-
-
-Add my guide pictures for setup. 
 
 ----------
 
@@ -139,39 +174,6 @@ perhaps we lock the user to using firefox focus??
 
 --------------------
 
-
-BACKUP:
--------
-OR detect if they open a private window, and block(!)
-if the screenshot is black...  (just use some pixel check rather than an api or image reader... which returns true or false..
-and we know they are using a web browser... (not sure how we'd determine this without a hardcoded whitelist!)
-and then the next screenshot is also total black ...
-But i guess maybe we are still getting the screen reader info through...
-then we assume that they are browsing in private mode, and then block saying 'private mode is disabled'..?
--------
-
-
---------------------
-
-NEXT TASK:
-- I've heard rumours that we can't reliably get the page content or url... but what about accessibility features that screen readers and things for blind people use?
-    (I don't want to use a vpn or rely on external things that might break...)
-    - or other apps like ever accountable etc? or stay focused... surely there is a way we can fetch things using that can't we? please investigate and update readme acordingly if not...
-
-please if you get the blind person screen reading url thing working, add those to our log list as well...
-
-think: 
-- for duckduckgo.
-- aim:
-    - get the url (ideal)
-    - or the page title
-    - or the page readable content... 
-    - or the image/video urls (again, optimistic, but would be great)
--... and add those entries to our log list...
-
-Just do what you can. 
-
-
 NEXT NEXT:
 also it seems screen capture keeps turning off after a while... not sure why..?
     -also sometime i click start, do share all... and then it doesn't even seem to start? but only sometimes?!? like it still says screen capture off..
@@ -189,14 +191,22 @@ want to improve the go back functionality.
     -> I don't know what page I'm going back to or even if like 
 
 
-    ------
+------
 
-    is there a test we can do on new apps, to check whether they are a web browser or not? because what ever current methods are in place in my app don't work.
-    e.g. seekly.
-    think what web browsers can do and what data our app wold have avaialble to it and what tests it could viabily perform in order to determine whether a new app was a web browser...
+is there a test we can do on new apps, to check whether they are a web browser or not? because what ever current methods are in place in my app don't work.
+e.g. seekly.
+think what web browsers can do and what data our app wold have avaialble to it and what tests it could viabily perform in order to determine whether a new app was a web browser...
 
 
 ----------
 Hmmmm
 Have a feature where if we feel that theyve been looking at borderline stuff for a while..
     - maybe kick them off...
+
+
+--------
+
+
+# way down the line:
+Add my guide pictures for setup.  (enabling things in the settings initially...)
+consider switching chrome as the main browser...
