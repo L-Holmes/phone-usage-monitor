@@ -1497,7 +1497,7 @@ object NsfwClassifier {
     private var rescale = 1f / 255f
     private var applySoftmax = true
     private var nsfwIndex = 1
-    private var threshold = 0.09f
+    private var threshold = 0.1f // THRESHOLD, DONT KNOW WHY ITS HERE SHOULD PROBABLY BE A CONSTANT AT THE TOP FOR EASE OF TUNING. PROBS THE SAME FOR MANY VARS TO BE HONEST...
 
     /** True once the model is ready. */
     val isReady: Boolean get() = session != null
