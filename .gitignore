@@ -6,3 +6,56 @@
 build/
 /captures
 *.apk
+
+
+# ALL OF THE IMAGES ANALYSER STUFF
+# =====================
+
+# Rust
+IMAGE_ANALYSER/target/
+IMAGE_ANALYSER/.cargo/
+IMAGE_ANALYSER/**/*.rs.bk
+
+# Python
+IMAGE_ANALYSER/.venv/
+IMAGE_ANALYSER/__pycache__/
+IMAGE_ANALYSER/*.py[cod]
+IMAGE_ANALYSER/*$py.class
+IMAGE_ANALYSER/.Python
+IMAGE_ANALYSER/.pytest_cache/
+IMAGE_ANALYSER/.mypy_cache/
+IMAGE_ANALYSER/.ruff_cache/
+IMAGE_ANALYSER/.ipynb_checkpoints
+IMAGE_ANALYSER/*.egg-info/
+IMAGE_ANALYSER/*.pyc
+
+# Models & runtimes - large files and regenerable
+IMAGE_ANALYSER/models/
+IMAGE_ANALYSER/onnxruntime/
+IMAGE_ANALYSER/*.onnx
+IMAGE_ANALYSER/*.pt
+IMAGE_ANALYSER/*.safetensors
+IMAGE_ANALYSER/*.bin
+# Converter scratch dir
+IMAGE_ANALYSER/models/_cfg_*/
+#...but keep the hand-edited thresholds and the dir placeholder
+!IMAGE_ANALYSER/models/thresholds.json
+!IMAGE_ANALYSER/models/.gitkeep
+
+# Local config / secrets
+IMAGE_ANALYSER/.env
+IMAGE_ANALYSER/*.env
+
+# OS / Editor
+IMAGE_ANALYSER/*.swp
+IMAGE_ANALYSER/*.swo
+IMAGE_ANALYSER/*~
+
+# Test images may contain explicit content - do NOT commit them to the repo.
+# The labels file (are-images-nsfw-ground-truth.json) is fine to keep; it only
+# stores filenames + booleans, not the images themselves.
+IMAGE_ANALYSER/test/static/testImages/*
+!IMAGE_ANALYSER/test/static/testImages/.gitkeep
+
+# Run output
+IMAGE_ANALYSER/test/results.json

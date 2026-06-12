@@ -1,10 +1,46 @@
 
+
+You are a top software engineer, extremely intelligent
+You are tasked with integrating Image categorisation into the apps 
+I have added my existing rust project in IMAGE_ANALYSER/
+    - please integrate it as possible into our code...
+        - we'll want to integrate this functionality:
+            cargo run --release -- --file test/static/testImages/<test-img>.jpeg
+            but of course pass in our screenshots instead... 
+    - obviously it has a setup script and what not...
+        - but obviously we are running an andoird app, so you'll have to think how to resolve that... 
+
+What it must do:
+- For each of the screenshots taken
+    - Run them against the classifier
+    - Get the score
+    --> write the score alongside the image in our logs
+
+ideally id want to keep the functionality running fast... (would i be able to stay with rust or whatever? or would w ehave to pre generate something at build time or whatever? don't know if we will but hopefully this classifying code won't change much... so happy if thats a manual option if needed.. but yeah i dont even know if that'll be needed)
+
+
+# THEN
+- now add Blocking rules:
+    - If we get 8 'close borderlines' in a row (anything between 0.5 and 0.6 inclusive), then we block with reason 'suspicious content detected.. precaution'...
+        - (if possible, if we get 1 or 2 dotted around as part of that, then we just ignore those...)
+        - e.g. 0.5, 0.4, 0.1, 0.54, 0.52, 0.1, 0.59 etc.. that would be picked up, as if we remove the groups of 1 or 2 'outliers' then we have our pattern.
+    - if we get 2 'probably not allowed' in a row (anything between 0.6 < x <= 0.7), then block, with reason 'probable distracting content detected'
+    - If we get 1 'clear not allowed' (anything over 0.7) then block. with reason 'clear distracting content detected'
+
+
+-----------------
+
+TODO AFTER THAT:
+- prevent 'report incorrect block' from allowing a blocked app to be unlocked...
+- Change the functionality of the report this thing... 
+    - just make it just do nothing for now... don't make it unblock an app...
+
+-------------------
+
 I reckon...
 - integrate the image adam cod processing...
 - test issue with the screenshot taker turning off
     - ensure that always stays on!
-- Change the functionality of the report this thing...
-    - just make it just do nothing for now... don't make it unblock an app...
 - Make it so that the app can't be deleted...(?)
 - Add my own custom words blocklist(?)
     - for strict mode...
@@ -139,3 +175,9 @@ want to improve the go back functionality.
     is there a test we can do on new apps, to check whether they are a web browser or not? because what ever current methods are in place in my app don't work.
     e.g. seekly.
     think what web browsers can do and what data our app wold have avaialble to it and what tests it could viabily perform in order to determine whether a new app was a web browser...
+
+
+----------
+Hmmmm
+Have a feature where if we feel that theyve been looking at borderline stuff for a while..
+    - maybe kick them off...

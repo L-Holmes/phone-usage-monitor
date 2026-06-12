@@ -1,0 +1,13 @@
+# One-time conversion / verification deps. Run on Debian, never ships.
+# A virtualenv is strongly recommended (setup.sh creates .venv automatically).
+
+# --- the AdamCodd ViT model + verify_onnx.py ---
+# It exports straight via torch.onnx (no `optimum` needed; optimum 2.x split the
+# ONNX exporter into a separate package and the old [exporters] extra was removed).
+torch>=2.2
+transformers>=4.44
+onnx>=1.16
+onnxscript>=0.1      # insurance for torch's onnx exporter on newer torch
+onnxruntime>=1.18    # CPU; used by verify_onnx.py
+pillow>=10.0
+numpy>=1.26

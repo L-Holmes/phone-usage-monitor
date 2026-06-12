@@ -1,0 +1,16 @@
+{
+  "test/static/testImages/allowed.jpg": false,
+  "test/static/testImages/allowed2.jpg": false,
+  "test/static/testImages/not-allowed1.jpg": true,
+  "test/static/testImages/not-allowed2.jpg": true,
+  "test/static/testImages/not-allowed3.jpeg": true,
+  "test/static/testImages/not-allowed4.jpg": true,
+  "test/static/testImages/not-allowed5.jpeg": true,
+  "test/static/testImages/not-allowed6.jpeg": true,
+  "test/static/testImages/not-allowed7.jpeg": true,
+  "test/static/testImages/not-allowed7.jpg": true,
+  "test/static/testImages/not-allowed8.jpeg": true,
+  "test/static/testImages/not-allowed9.jpg": true,
+  "test/static/testImages/not-allowed10.jpg": true,
+  "test/static/testImages/not-allowed11.jpg": true
+}

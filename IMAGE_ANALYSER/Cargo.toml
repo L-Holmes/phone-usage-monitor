@@ -1,0 +1,31 @@
+[package]
+name = "nsfw_test_harness"
+version = "0.1.0"
+edition = "2021"
+# ort-sys 2.0.0-rc.10 requires rustc >= 1.81. If your distro's `rustc` is older
+# than this, install a current stable toolchain with rustup instead.
+rust-version = "1.81"
+description = "Local test harness that runs multiple NSFW image-detection ONNX models against a labelled test set."
+
+# The Rust inference core.
+# We use ort's `load-dynamic` feature: instead of downloading a prebuilt ONNX
+# Runtime at build time (which pulls ureq -> native-tls -> openssl-sys and needs
+# system OpenSSL dev headers), ort loads libonnxruntime.so at *runtime* via the
+# ORT_DYLIB_PATH env var. setup.sh fetches that .so and wires the path up.
+# Bonus: this mirrors how you'll ship on Android (bundle libonnxruntime.so).
+[dependencies]
+# ort 2.0 is a release candidate (production-ready, not API-stable). Pinned exact
+# so the API in src/detector.rs matches. If a bump breaks compilation, the only
+# version-sensitive line is `try_extract_tensor` in src/detector.rs.
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic", "ndarray"] }
+
+# Only the codecs we actually need. default-features = false avoids the exr/hdr
+# chain, which otherwise pulls deps requiring a very new rustc.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+walkdir = "2"
+
+[profile.release]
+opt-level = 3
