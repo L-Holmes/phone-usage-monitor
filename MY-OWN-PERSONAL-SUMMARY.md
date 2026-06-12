@@ -11,6 +11,54 @@ Phone testing:
 adb logcat -s NsfwClassifier ScreenCapture
 
 
+
+
+===============================
+# blocking rules
+
+
+## 🖼️ Images (screenshot NSFW scoring)
+
+Scoring runs on screen captures (score 0–1; **0.50 = threshold**). Detection tiers:
+
+- **Clear** — one frame scores > 0.75 → **block**
+- **Probable** — two frames 0.6–0.75 (tolerating ≤2 stray frames) → **block**
+- **Borderline** — five frames 0.5–0.6 (tolerating ≤2 stray frames) → **block**
+
+What the block *does* depends on where you are:
+
+### …in a web browser
+- **Condition:** any image tier fires while in a browser → **block the exact subdomain** + strike the domain
+  - Keep going back / return to same subdomain → stays blocked (it's now permanent)
+  - 3 strikes on that domain in one day → **whole domain blocked**
+
+### …in a normal app
+- **Condition:** any image tier fires in a non-browser app → **10s warning, then app blocked 5 min**
+  - Re-enter & flagged again → **blocked until tomorrow**
+  - Flagged again after that → **blocked forever**
+- **Condition:** 5 blocks on the same app within 10 min → **90 min block** (browser or not, overrides ladder)
+
+## 🔤 Text / URL / keyword / app (no image)
+
+- **Domain rule** (entry contains a dot, e.g. `redgifs.com`) → blocks that site + subdomains
+  - Dismiss → that subdomain added permanently + domain strike (3/day → whole domain)
+- **Keyword rule** (no dot, e.g. `wolf`) → blocks pages whose **title** matches
+- **Blocked browser** (package in blocklist, e.g. Chrome/Firefox) → whole app covered; reopening re-covers instantly
+- **Runtime-detected browsers** → auto-added to that same browser block (DuckDuckGo & Firefox Focus stay allowed)
+- **App-screen guard** → Firefox Focus stealth/privacy settings blocked (can't screenshot-blind the app); **cannot** be "allowed for session"
+
+## ⚙️ Other behaviours Claude spotted in the code
+
+- **Whitelist never captured/scored:** system UI, settings, launchers, dialer, installers, your own app — and any app while a block cover is already showing
+- **"Report" button** = false-positive escape: dismisses with **no block and no strike** (the only safe valve)
+- **"Leave" button** = Back, Back, Home (can't force-swipe an app off — no Android API for it)
+- **Stale-detection guard:** if you've switched apps before the (delayed) score lands, the block is dropped rather than cover the wrong app
+- **Block only shows on the app it was detected on** (frames now carry their source app)
+- **Timed/midnight windows expire, but strikes never reset** — so "forever" stays reachable
+
+One inconsistency worth flagging: **dismissing a web image-block via Go back/Leave is permanent immediately**, but a **plain domain/keyword block** only escalates to permanent on dismiss *after* striking — slightly different strictness between the two web paths. Want me to align them?
+
+
 ====================================
 
 

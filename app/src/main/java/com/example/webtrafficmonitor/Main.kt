@@ -1,5 +1,6 @@
 package com.example.webtrafficmonitor
 
+import android.annotation.SuppressLint 
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.app.Activity
@@ -78,6 +79,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 import android.os.Looper
+import android.os.PowerManager
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.ScrollView
@@ -165,6 +169,35 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Scrollable summary of every ban: rules, timed domain bans, strikes per domain/app. */
+    private fun showBanList() {
+        val text = buildString {
+            append("PERMANENT RULES (sites / keywords)\n")
+            val perm = BlockRules.all().sorted()
+            append(if (perm.isEmpty()) "(none)\n" else perm.joinToString("\n") + "\n")
+            append("\nTIMED RULES (e.g. domains banned for 1h)\n")
+            val timed = BlockRules.allTimed()
+            append(if (timed.isEmpty()) "(none)\n" else timed.joinToString("\n") + "\n")
+            append("\nDOMAIN STRIKES (today — 3 bans the domain for 1h)\n")
+            val dom = BlockEscalation.summary(this@MainActivity)
+            append(if (dom.isEmpty()) "(none)\n" else dom.joinToString("\n") + "\n")
+            append("\nAPP STRIKES / TIMED APP BLOCKS\n")
+            val apps = AppTimedBlock.summary(this@MainActivity)
+            append(if (apps.isEmpty()) "(none)\n" else apps.joinToString("\n") + "\n")
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val tv = TextView(this).apply {
+            this.text = text
+            setTextIsSelectable(true)
+            setPadding(pad, pad, pad, pad)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Ban list")
+            .setView(ScrollView(this).apply { addView(tv) })
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -192,16 +225,64 @@ class MainActivity : AppCompatActivity() {
             BlockRules.clear(this)
             refreshBlockRules()
         }
+        findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
         findViewById<Button>(R.id.btn_clear_log).setOnClickListener { clearLog() }
+        findViewById<Button>(R.id.btn_battery).setOnClickListener { requestIgnoreBatteryOptimizations() }
 
         observeEntries()
         refreshBlockRules()
     }
 
+    /**
+     * Ask to exempt the app from battery optimisation. This is the single biggest
+     * factor in whether capture survives screen-off on OEMs like Samsung — without
+     * it, the system aggressively kills the foreground service and revokes the
+     * projection. Play permits this prompt for legitimately long-running services.
+     */
+    @SuppressLint("BatteryLife")
+    private fun requestIgnoreBatteryOptimizations() {
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) {
+            Toast.makeText(this, "Already allowed to run in the background", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+        } catch (_: Throwable) {
+            // Some OEMs block the direct request; fall back to the settings list.
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (_: Throwable) {
+                Toast.makeText(this, "Open Settings → Battery and allow this app", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private var autoResumeChecked = false
+
     override fun onResume() {
         super.onResume()
         refreshStatus()
         AppBlocklist.refresh(this)
+
+        // Clear the notification's action either way so it doesn't re-fire later.
+        if (intent?.action == ScreenCaptureService.ACTION_RESUME_CAPTURE) intent.action = null
+
+        // If the user had capture ON (never pressed Stop) but the system has since
+        // killed it, jump straight to the consent dialog — once per app open. This
+        // is the reliable recovery path even when the OEM eats the notification.
+        if (!autoResumeChecked &&
+            !ScreenCaptureService.isRunning &&
+            ScreenCaptureService.wasEnabledByUser(this)
+        ) {
+            autoResumeChecked = true
+            requestScreenCapture()
+        }
     }
 
     private fun observeEntries() {
@@ -310,6 +391,26 @@ class MainActivity : AppCompatActivity() {
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: return false
         return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+}
+
+
+// --------------------------------------------------------------
+// CaptureBootReceiver
+// --------------------------------------------------------------
+
+
+/**
+ * On boot (or app update), if the user had capture ON before, we CANNOT silently
+ * resume — MediaProjection needs a fresh user-granted token every time the system
+ * tears it down (including across reboots). There is no API to avoid that dialog;
+ * trying would risk a Play removal. So we just raise the one-tap "resume" prompt.
+ */
+class CaptureBootReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        if (ScreenCaptureService.wasEnabledByUser(context)) {
+            ScreenCaptureService.showResumePrompt(context.applicationContext)
+        }
     }
 }
 
@@ -548,6 +649,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var lastLogSignature: String? = null
     private var lastGoBackAt = 0L
     private var appWarnCountdown: Runnable? = null
+    // The host the current page-block cover is showing for (drives the
+    // "still blocked / different page" status lines and dismiss escalation).
+    private var shownBlockHost: String? = null
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
@@ -620,6 +724,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // A crash in here kills the whole service ("keeps stopping") and with it
+        // ALL blocking — never let one bad event take the service down.
+        try {
+            handleEvent(event)
+        } catch (t: Throwable) {
+            android.util.Log.e("PageMonitor", "event handling failed", t)
+        }
+    }
+
+    private fun handleEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
         val type = event.eventType
@@ -702,7 +816,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val title = cleanTitle(rawTitle)   // logged/displayed: "Dog"
 
         // Block on the RAW title so keyword rules (e.g. "wikipedia") still match.
-        evaluateBlock(packageName, host, rawTitle, text)
+        // Also passes the URL + on-screen text so "dog" in a search URL or all
+        // over an image-results page is caught, not just in the title.
+        evaluateBlock(packageName, host, rawTitle, text, lastFullUrl ?: lastUrl)
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
         if (packageName in NOT_LOGGED_PACKAGES) return
@@ -759,14 +875,24 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun showContentBlock(reason: String, frames: List<NsfwBlockMonitor.BlockFrame>) {
         val controller = overlay ?: return
         val detectedPkg = frames.lastOrNull()?.appPackage ?: ForegroundApp.packageName
-        val capturedHost = frames.lastOrNull()?.host ?: lastHost
+        // The host the flagged screenshot was ACTUALLY captured on. NEVER fall back
+        // to the current page (lastHost): scoring lags by seconds, the user may have
+        // navigated, and that fallback is exactly how the wrong site got blocked.
+        val capturedHost = frames.lastOrNull()?.host
 
-        // Only ever cover the app the content was actually detected on. The score
-        // arrives a few seconds late, so the user may have switched apps — if the
-        // foreground no longer matches, drop it (scoring resumes; a fresh frame
-        // re-fires if they're still on bad content).
+        // Only ever cover the app the content was detected on.
         val foreground = currentForegroundPackage()
         if (detectedPkg != null && foreground != detectedPkg) {
+            NsfwBlockMonitor.clear()
+            return
+        }
+
+        val isBrowser = AppBlocklist.isBrowser(detectedPkg)
+        // EXTRA VERIFICATION (browsers): if the screenshot's page and the current
+        // page disagree, attribution is ambiguous — block NOTHING rather than risk
+        // banning the wrong site. Scoring resumes; real content re-fires in seconds.
+        if (isBrowser && capturedHost != null && lastHost != null && capturedHost != lastHost) {
+            android.util.Log.i("PageMonitor", "content block dropped: captured=$capturedHost current=$lastHost")
             NsfwBlockMonitor.clear()
             return
         }
@@ -790,11 +916,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         }
 
-        // WEB is decided by the APP being a browser — never by whether we read a URL.
-        // A browser is NOT timed-blocked here; we block the page instead.
-        if (AppBlocklist.isBrowser(detectedPkg)) {
-            // Block the exact subdomain right now (and strike the registrable domain;
-            // 3 strikes today -> whole domain). Returning to it just re-blocks.
+        if (isBrowser) {
+            // Block the page the screenshot came from (verified above to still be
+            // the page we're on). If we couldn't read it, cover only — no rule.
             capturedHost?.let { escalateWebBlock(it) }
             controller.show(
                 reason = if (capturedHost != null) "$reason\nBlocked page: $capturedHost" else reason,
@@ -807,7 +931,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     clearContentBlock()
                 },
                 onLeave = { exitToHome(); clearContentBlock() },
-                onReport = { clearContentBlock() },
+                onReport = { //do nothing },
             )
             controller.showImages(frames, durationMs)
             return
@@ -819,13 +943,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 reason = reason,
                 onGoBack = { performGlobalAction(GLOBAL_ACTION_BACK); clearContentBlock() },
                 onLeave = { exitToHome(); clearContentBlock() },
-                onReport = { clearContentBlock() },
+                onReport = { // do nothing},
             )
             controller.showImages(frames, durationMs)
             return
         }
 
-        // NON-WEB APP: 10s warning, then escalating timed block (5 min / tomorrow / forever).
+        // NON-WEB APP: 10s warning, then escalating timed block.
         startAppBlockWarning(controller, reason, frames, detectedPkg, durationMs)
     }
 
@@ -854,8 +978,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             },
             // Report = false positive: cancel, no block, no strike.
             onReport = {
-                cancelAppBlockWarning()
-                clearContentBlock()
+                // do nothing
             },
         )
         controller.showImages(frames, imagesMs)
@@ -887,9 +1010,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         contentBlockActive = false
         NsfwBlockMonitor.clear()
         overlay?.hide()
-        if (currentForegroundPackage() == pkg) {
-            showAppBlock(info.reason, pkg)
-        }
+        // ALWAYS re-show as an app block. The old foreground check here failed
+        // mid-scroll/animation and silently dropped the cover ("the warning just
+        // disappears"). The recheck loop takes it down by itself if an allowed
+        // app genuinely is in front.
+        showAppBlock(info.reason, pkg)
     }
 
 
@@ -916,7 +1041,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun escalateWebBlock(host: String) {
         BlockRules.add(this, host)                            // exact subdomain -> permanent
         BlockEscalation.recordWebBlock(this, host)?.let { domain ->
-            BlockRules.add(this, domain)                      // 3rd strike today -> whole domain
+            BlockRules.addTimed(this, domain, DOMAIN_BLOCK_MS) // 3rd strike today -> domain for 1h
         }
     }
 
@@ -934,54 +1059,98 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /** Page-level (domain/keyword) blocking — unchanged behaviour. */
-    private fun evaluateBlock(packageName: String, host: String?, title: String?, content: String?) {
+    private fun evaluateBlock(
+        packageName: String,
+        rawHost: String?,
+        title: String?,
+        content: String?,
+        url: String?,
+    ) {
         val controller = overlay ?: return
 
-        // While the NSFW-content cover is up it owns the screen; don't let page
-        // events show/hide a competing cover underneath it.
+        // While the NSFW-content cover is up it owns the screen.
         if (contentBlockActive) return
 
-        // A built-in app-screen guard returns a ready-made sentence; a BlockRules
-        // hit returns the raw rule (which we turn into "site"/"keyword" wording).
+        // The address bar is often unreadable exactly when it matters (scrolled
+        // away, image viewer open). For browsers, fall back to the REMEMBERED host
+        // of the current page — this is the fix for "pressed back onto the same
+        // blocked page and nothing happened".
+        val host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
+
         val appGuard = if (host == null) appScreenBlock(packageName, title, content) else null
         val rule = if (appGuard == null) {
             if (host == null) {
-                // Off the web: keyword rules vs the screen title (skip launchers).
+                // Off the web: keyword rules vs the screen title only (deliberately
+                // NOT the text — two mentions of a keyword in a chat app shouldn't
+                // lock the app). Launchers skipped.
                 if (packageName !in NOT_LOGGED_PACKAGES) BlockRules.matchedRule(null, title) else null
             } else {
-                // Web pages: domain or keyword rules, as before.
-                BlockRules.matchedRule(host, title)
+                // Web pages: domain rules, plus keywords vs title / URL / page text.
+                BlockRules.matchedRule(host, title, url, content)
             }
         } else null
 
-        val reason = appGuard ?: rule?.let { describeRule(it) }
+        val baseReason = appGuard ?: rule?.let { describeRule(it) }
 
-        if (reason != null) {
+        if (baseReason != null) {
+            val freshShow = !controller.isShowing
+
+            // Live status so the user is never lost while mashing Back:
+            val status = when {
+                freshShow -> null
+                host != null && host == shownBlockHost ->
+                    "You went BACK — this is still the SAME blocked page.\nKeep pressing Back, or exit the app."
+                shownBlockHost != null ->
+                    "You're now on a DIFFERENT page — but it's blocked too.\nKeep pressing Back, or exit the app."
+                else -> null
+            }
+            shownBlockHost = host
+            val reason = if (status == null) baseReason else "$baseReason\n\n$status"
+
+            if (freshShow) {
+                // Every NEW block screen (page rules included, not just images) now
+                // counts toward the rapid limit: 5 in 10 min on one app -> 90 min.
+                RapidBlockMonitor.record(packageName)?.let { penaltyMs ->
+                    AppTimedBlock.blockFor(
+                        this, packageName, penaltyMs,
+                        "App blocked for ${RapidBlockMonitor.PENALTY_LABEL} (too many blocks)",
+                    )
+                    showAppBlock(
+                        AppTimedBlock.reasonIfBlocked(this, packageName) ?: "App blocked",
+                        packageName,
+                    )
+                    return
+                }
+            }
+
             controller.show(
                 reason = reason,
                 onGoBack = {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
                         lastGoBackAt = tapAt
-                        host?.let { escalateWebBlock(it) }   // lock the subdomain + count the domain
+                        shownBlockHost?.let { escalateWebBlock(it) }
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 },
                 onLeave = {
-                    host?.let { escalateWebBlock(it) }   // leaving is not a free pass back in
+                    shownBlockHost?.let { escalateWebBlock(it) }
                     exitToHome()
                     controller.hide()
+                    shownBlockHost = null
                 },
                 onReport = {
-                    // Web blocks can be let through for the session; the in-app
-                    // guard can't (host is null, so this is a no-op for guards).
-                    BlockRules.allowForSession(host)
-                    controller.hide()
+                    // do nothing
                 },
             )
+            // show() only sets the text on first display; keep the status line live.
+            if (!freshShow) controller.setReason(reason)
         } else {
             // Never hide an app-level (whole-browser) block from here.
-            if (!appBlockActive) controller.hide()
+            if (!appBlockActive) {
+                controller.hide()
+                shownBlockHost = null
+            }
         }
     }
 
@@ -1296,6 +1465,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 700L
         private const val APP_BLOCK_WARNING_SECONDS = 10
+        private const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
 
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
 
@@ -1367,6 +1537,21 @@ class ScreenCaptureService : Service() {
 
     private var lastSavedAt = 0L
 
+    // Held briefly so a screen-off doesn't immediately suspend our capture thread.
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    // Re-arm the mirror when the screen comes back, in case sleep dropped frames.
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF ->
+                    android.util.Log.i(CAPTURE_TAG, "screen OFF (capture continues; projection may be revoked by OS)")
+                Intent.ACTION_USER_PRESENT, Intent.ACTION_SCREEN_ON ->
+                    android.util.Log.i(CAPTURE_TAG, "screen ON")
+            }
+        }
+    }
+
     // Latest-frame-wins scoring pipeline. Scoring is far slower than capturing, so
     // rather than queue every frame (which makes the log fall further and further
     // behind), we keep only the most recent unprocessed frame and a single worker
@@ -1381,6 +1566,14 @@ class ScreenCaptureService : Service() {
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
+            // This is the "it turned itself off" moment. It fires when the OS
+            // revokes the projection — most often on screen-off on OEM builds like
+            // Samsung. We log it loudly (visible in: adb logcat -s ScreenCapture),
+            // mark that the user still WANTS capture, and raise a one-tap resume
+            // prompt. We cannot silently re-acquire the token — Android forbids it.
+            android.util.Log.w(CAPTURE_TAG, "MediaProjection STOPPED by system (likely screen-off/OEM). Will prompt to resume.")
+            stoppedBySystem = true
+            showResumePrompt(applicationContext)
             stopSelf()
         }
     }
@@ -1389,6 +1582,9 @@ class ScreenCaptureService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            // User chose to stop -> forget consent so we DON'T nag them to resume.
+            prefs().edit().putBoolean(KEY_USER_ENABLED, false).apply()
+            stoppedBySystem = false
             stopSelf()
             return START_NOT_STICKY
         }
@@ -1411,11 +1607,21 @@ class ScreenCaptureService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+
         projection = mp
         mp.registerCallback(projectionCallback, captureHandler)
 
+        // Persist that the USER turned this on (for boot/auto-resume prompts) and
+        // stash the exact result code + data so a one-tap notification can restart
+        // capture without re-opening the app. (Still a USER tap — no silent bypass.)
+        rememberConsent(resultCode, data)
+
+        acquireWakeLock()
+        registerScreenReceiver()
+
         startCapturing(mp)
         isRunning = true
+        stoppedBySystem = false
         return START_STICKY
     }
 
@@ -1603,6 +1809,8 @@ class ScreenCaptureService : Service() {
         }
     }
 
+    private fun prefs() = getSharedPreferences("screen_capture", Context.MODE_PRIVATE)
+
     /** Scales the longest side down to [MAX_DIMEN], keeping the aspect ratio. */
     private fun targetSize(width: Int, height: Int): Pair<Int, Int> {
         val longest = max(width, height)
@@ -1616,12 +1824,53 @@ class ScreenCaptureService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        try { unregisterReceiver(screenStateReceiver) } catch (_: Throwable) {}
+        releaseWakeLock()
         virtualDisplay?.release()
         imageReader?.close()
         projection?.unregisterCallback(projectionCallback)
         projection?.stop()
         captureThread.quitSafely()
         super.onDestroy()
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock != null) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        // PARTIAL = keep the CPU alive (does NOT turn the screen on). Time-boxed so
+        // a stuck service can't drain the battery forever; capture is best-effort
+        // while the screen sleeps anyway (the OS may still revoke projection).
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$CAPTURE_TAG:capture").apply {
+            setReferenceCounted(false)
+            acquire(30 * 60 * 1000L)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Throwable) {}
+        wakeLock = null
+    }
+
+    private fun registerScreenReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        try { registerReceiver(screenStateReceiver, filter) } catch (_: Throwable) {}
+    }
+
+    private fun rememberConsent(resultCode: Int, data: Intent) {
+        // Set the "user enabled" flag FIRST and on its own, so a failure serialising
+        // the token intent below can never swallow it (that was the no-prompt bug).
+        val editor = prefs().edit().putBoolean(KEY_USER_ENABLED, true)
+        try {
+            editor.putInt(KEY_RESULT_CODE, resultCode)
+                .putString(KEY_RESULT_DATA, data.toUri(Intent.URI_INTENT_SCHEME))
+        } catch (t: Throwable) {
+            android.util.Log.e(CAPTURE_TAG, "could not persist token intent (flag still set)", t)
+        }
+        editor.apply()
     }
 
     companion object {
@@ -1659,6 +1908,70 @@ class ScreenCaptureService : Service() {
             }
             context.startService(intent)
         }
+
+
+        // Did the user turn capture on? (Used by boot + the auto-resume prompt.)
+        // Reset only when the user explicitly presses Stop.
+        private const val PREFS = "screen_capture"
+        private const val KEY_USER_ENABLED = "user_enabled"
+        private const val KEY_RESULT_CODE = "result_code"
+        private const val KEY_RESULT_DATA = "result_data"
+        private const val RESUME_NOTIF_ID = 1002
+        private const val RESUME_CHANNEL = "capture_resume"
+
+        // True when the SYSTEM killed projection (vs the user pressing Stop). Lets
+        // the UI tell the difference if you want to surface it.
+        @Volatile
+        var stoppedBySystem = false
+            private set
+
+        fun wasEnabledByUser(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_USER_ENABLED, false)
+
+        /**
+         * Show a high-priority notification that, when tapped, launches the consent
+         * dialog and restarts capture. This is the closest thing to "auto restart"
+         * that is allowed: ONE tap, no digging through the app. It cannot be skipped
+         * — the OS requires a fresh user-approved projection token.
+         */
+        fun showResumePrompt(context: Context) {
+            // Logged so you can confirm in: adb logcat -s ScreenCapture
+            android.util.Log.w(CAPTURE_TAG, "resume prompt requested (enabled=${wasEnabledByUser(context)})")
+            if (!wasEnabledByUser(context)) return
+            val nm = context.getSystemService(NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        RESUME_CHANNEL,
+                        "Resume monitoring",
+                        NotificationManager.IMPORTANCE_HIGH,
+                    ),
+                )
+            }
+            // Routes through MainActivity, which re-requests projection on this flag.
+            val tapIntent = Intent(context, MainActivity::class.java).apply {
+                action = ACTION_RESUME_CAPTURE
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            val pending = PendingIntent.getActivity(
+                context, 0, tapIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val n = NotificationCompat.Builder(context, RESUME_CHANNEL)
+                .setContentTitle("Monitoring paused")
+                .setContentText("Your phone stopped screen monitoring. Tap to resume.")
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .build()
+            try { nm.notify(RESUME_NOTIF_ID, n) } catch (_: Throwable) {}
+        }
+
+        const val ACTION_RESUME_CAPTURE = "resume_capture"
+
     }
 }
 
@@ -2021,17 +2334,37 @@ object BlockRules {
 
     private const val PREFS = "block_rules"
     private const val KEY = "rules"
+    private const val KEY_TIMED = "timed_rules"
+
+    /** A keyword must appear this many times in on-screen TEXT to block (title/URL need only 1). */
+    private const val TEXT_HITS_NEEDED = 2
 
     private val rules = linkedSetOf<String>()
+    private val timedRules = HashMap<String, Long>()   // rule -> blocked-until (millis)
     private val sessionAllow = mutableSetOf<String>()
 
     fun load(context: Context) {
-        val saved = prefs(context).getStringSet(KEY, emptySet()) ?: emptySet()
+        val prefs = prefs(context)
         rules.clear()
-        rules.addAll(saved)
+        rules.addAll(prefs.getStringSet(KEY, emptySet()) ?: emptySet())
+        timedRules.clear()
+        (prefs.getStringSet(KEY_TIMED, emptySet()) ?: emptySet()).forEach { raw ->
+            val i = raw.lastIndexOf('|')
+            if (i > 0) {
+                val until = raw.substring(i + 1).toLongOrNull() ?: return@forEach
+                if (until > System.currentTimeMillis()) timedRules[raw.substring(0, i)] = until
+            }
+        }
     }
 
     fun all(): List<String> = rules.toList()
+
+    /** "rule — Xm left" lines for the ban-list screen (expired ones pruned). */
+    fun allTimed(): List<String> {
+        pruneExpired()
+        val now = System.currentTimeMillis()
+        return timedRules.entries.map { "${it.key}  —  ${(it.value - now) / 60_000} min left" }.sorted()
+    }
 
     fun add(context: Context, rule: String) {
         val cleaned = rule.trim().lowercase()
@@ -2040,8 +2373,18 @@ object BlockRules {
         persist(context)
     }
 
+    /** Block [rule] for [durationMs] (e.g. a domain for an hour). Never shortens an existing timer. */
+    fun addTimed(context: Context, rule: String, durationMs: Long) {
+        val cleaned = rule.trim().lowercase()
+        if (cleaned.isEmpty()) return
+        val until = System.currentTimeMillis() + durationMs
+        timedRules[cleaned] = maxOf(timedRules[cleaned] ?: 0L, until)
+        persist(context)
+    }
+
     fun clear(context: Context) {
         rules.clear()
+        timedRules.clear()
         persist(context)
     }
 
@@ -2051,33 +2394,58 @@ object BlockRules {
     }
 
     /**
-     * Returns the rule that blocks this page, or null if it is allowed. Matching
-     * uses only the page domain and title, so it is shown only for actual web
-     * pages (the caller passes a non-null domain only when an address bar is
-     * visible).
+     * The rule blocking this page, or null. Domain rules (contain a dot) match the
+     * host and its subdomains, permanent or timed. Keyword rules now match the
+     * TITLE or the URL once, or the on-screen TEXT at least [TEXT_HITS_NEEDED]
+     * times — so "dog" typed into Google Images is caught via the URL/results,
+     * but one stray mention of a keyword in an article can't block on its own.
      */
-    fun matchedRule(domain: String?, title: String?): String? {
-        if (rules.isEmpty()) return null
+    fun matchedRule(domain: String?, title: String?, url: String? = null, text: String? = null): String? {
+        pruneExpired()
+        if (rules.isEmpty() && timedRules.isEmpty()) return null
 
         val host = domain?.lowercase()
         if (host != null && host in sessionAllow) return null
 
         val titleText = title?.lowercase()
+        val urlText = url?.lowercase()
+        val bodyText = text?.lowercase()
 
-        return rules.firstOrNull { rule ->
+        fun matches(rule: String): Boolean =
             if ('.' in rule) {
-                // Domain rule: exact host or a subdomain of it.
                 host != null && (host == rule || host.endsWith(".$rule"))
             } else {
-                // Keyword rule: match the page title.
-                titleText?.contains(rule) == true
+                (titleText?.contains(rule) == true) ||
+                    (urlText?.contains(rule) == true) ||
+                    (bodyText != null && countHits(bodyText, rule) >= TEXT_HITS_NEEDED)
             }
+
+        rules.firstOrNull { matches(it) }?.let { return it }
+        return timedRules.keys.firstOrNull { matches(it) }
+    }
+
+    private fun countHits(haystack: String, needle: String): Int {
+        if (needle.isEmpty()) return 0
+        var count = 0
+        var i = haystack.indexOf(needle)
+        while (i >= 0) {
+            count++
+            if (count >= TEXT_HITS_NEEDED) return count
+            i = haystack.indexOf(needle, i + needle.length)
         }
+        return count
+    }
+
+    private fun pruneExpired() {
+        val now = System.currentTimeMillis()
+        timedRules.entries.removeAll { it.value <= now }
     }
 
     private fun persist(context: Context) {
-        // Store a copy; SharedPreferences must not be handed its own live set.
-        prefs(context).edit().putStringSet(KEY, HashSet(rules)).apply()
+        prefs(context).edit()
+            .putStringSet(KEY, HashSet(rules))
+            .putStringSet(KEY_TIMED, timedRules.entries.mapTo(HashSet()) { "${it.key}|${it.value}" })
+            .apply()
     }
 
     private fun prefs(context: Context) =
@@ -2116,10 +2484,11 @@ object BlockEscalation {
     @Synchronized
     fun recordWebBlock(context: Context, host: String): String? {
         val now = System.currentTimeMillis()
-        if (host == lastHost && now - lastAt < DEDUPE_MS) {
-            lastAt = now
-            return null
-        }
+
+        // Do NOT refresh lastAt inside the dedupe branch — that made it a SLIDING
+        // window, so continuous re-blocks on one host never counted past strike 1.
+        // Now at most one strike per DEDUPE_MS is swallowed, then the next counts.
+        if (host == lastHost && now - lastAt < DEDUPE_MS) return null
         lastHost = host
         lastAt = now
 
@@ -2134,6 +2503,16 @@ object BlockEscalation {
         val count = prefs.getInt(key, 0) + 1
         prefs.edit().putInt(key, count).apply()
         return if (count >= THRESHOLD) domain else null
+    }
+
+    /** "domain — N strike(s) today" lines for the ban-list screen. */
+    @Synchronized
+    fun summary(context: Context): List<String> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.all.entries
+            .filter { it.key.startsWith("count:") }
+            .map { "${it.key.removePrefix("count:")}  —  ${it.value} strike(s) today" }
+            .sorted()
     }
 
     /**
@@ -2271,6 +2650,30 @@ object AppTimedBlock {
     @Synchronized
     fun allowForSession(pkg: String?) {
         if (!pkg.isNullOrBlank()) sessionAllow.add(pkg.lowercase())
+    }
+
+    /** "package — strikes, status" lines for the ban-list screen. */
+    @Synchronized
+    fun summary(context: Context): List<String> {
+        val prefs = prefs(context)
+        val now = System.currentTimeMillis()
+        val pkgs = prefs.all.keys.mapNotNull { k ->
+            when {
+                k.startsWith("strikes:") -> k.removePrefix("strikes:")
+                k.startsWith("until:") -> k.removePrefix("until:")
+                else -> null
+            }
+        }.toSortedSet()
+        return pkgs.map { pkg ->
+            val strikes = prefs.getInt("strikes:$pkg", 0)
+            val until = prefs.getLong("until:$pkg", 0L)
+            val status = when {
+                until == FOREVER -> "blocked permanently"
+                until > now -> "blocked ${(until - now) / 60_000} min more"
+                else -> "not currently blocked"
+            }
+            "$pkg  —  $strikes strike(s), $status"
+        }
     }
 
     private fun durationLabel(strikes: Int): String = when {
@@ -2551,9 +2954,9 @@ object NsfwBlockMonitor {
     private const val BORDERLINE_LO = 0.5f
     private const val BORDERLINE_HI = 0.6f
     private const val PROBABLE_HI = 0.75f
-    private const val BORDERLINE_NEEDED = 5
+    private const val BORDERLINE_NEEDED = 3   // clean run blocks at 3; a run with dips blocks at 4
     private const val PROBABLE_NEEDED = 2
-    private const val MAX_OUTLIERS = 2     // consecutive non-borderline frames we skip
+    private const val MAX_OUTLIERS = 2     // sub-0.5 frames in a row we skip; a 3rd in a row breaks the run
 
     private val lock = Any()
 
@@ -2565,6 +2968,7 @@ object NsfwBlockMonitor {
     private var outlierRun = 0
     private var probableStreak = 0
     private var probableOutlierRun = 0    // consecutive non-probable frames we skip
+    private var hadOutliers = false       // did the current borderline run survive any dips?
 
     // The actual frames (path + score) building each streak, kept in lock-step with
     // the counters above so a fired block can show exactly what triggered it.
@@ -2600,19 +3004,26 @@ object NsfwBlockMonitor {
                 }
             }
 
-            // 3. borderline — five [0.5, 0.6] frames, tolerating <= MAX_OUTLIERS gaps.
-            if (score in BORDERLINE_LO..BORDERLINE_HI) {
+            // 3. borderline — ANY frame >= 0.5 builds the run (a 0.65 shouldn't
+            // break it — it's worse, not better). Only sub-0.5 frames count as
+            // dips, and only 3 dips IN A ROW break the run. A clean run blocks at
+            // 3; a run that survived dips blocks at 4.
+            if (score >= BORDERLINE_LO) {
                 borderlineCount += 1
                 outlierRun = 0
                 borderlineFrames.add(frame)
-                if (borderlineCount >= BORDERLINE_NEEDED)
+                val needed = if (hadOutliers) BORDERLINE_NEEDED + 1 else BORDERLINE_NEEDED
+                if (borderlineCount >= needed)
                     return fire("$borderlineCount borderline images in short succession", borderlineFrames.toList())
             } else {
                 outlierRun += 1
                 if (outlierRun > MAX_OUTLIERS) {
                     borderlineCount = 0
                     outlierRun = 0
+                    hadOutliers = false
                     borderlineFrames.clear()
+                } else if (borderlineCount > 0) {
+                    hadOutliers = true
                 }
             }
             return null
@@ -2638,6 +3049,7 @@ object NsfwBlockMonitor {
         outlierRun = 0
         probableStreak = 0
         probableOutlierRun = 0
+        hadOutliers = false
         probableFrames.clear()
         borderlineFrames.clear()
     }
@@ -2701,14 +3113,26 @@ class OverlayController(private val context: Context) {
             PixelFormat.OPAQUE,
         )
 
-        windowManager.addView(container, params)
-        view = container
+        try {
+            windowManager.addView(container, params)
+            view = container
+        } catch (t: Throwable) {
+            // Never crash the service over a cover; log it instead.
+            android.util.Log.e("OverlayController", "could not show block cover", t)
+            view = null
+        }
+
+
     }
 
     fun hide() {
         hideImages()
         view?.let {
-            windowManager.removeView(it)
+            try {
+                windowManager.removeView(it)
+            } catch (t: Throwable) {
+                android.util.Log.e("OverlayController", "could not remove cover", t)
+            }
             view = null
         }
     }
@@ -2852,8 +3276,11 @@ class OverlayController(private val context: Context) {
     }
 
     private fun overlayType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        // An accessibility service may draw TYPE_ACCESSIBILITY_OVERLAY windows
+        // WITHOUT the "display over other apps" permission — so a revoked overlay
+        // permission can no longer crash the service or silently kill blocking.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         } else {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
