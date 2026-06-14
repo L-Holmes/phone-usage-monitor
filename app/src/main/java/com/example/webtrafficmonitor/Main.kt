@@ -1,55 +1,28 @@
 package com.example.webtrafficmonitor
 
-import android.annotation.SuppressLint 
-import android.Manifest
+import android.graphics.PixelFormat
 import android.accessibilityservice.AccessibilityService
-import android.app.Activity
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.PixelFormat
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.media.Image
-import android.media.ImageReader
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.HandlerThread
-import android.os.IBinder
 import android.provider.Settings
-import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.IntentCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -65,13 +38,9 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import coil.load
-import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -79,23 +48,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 import android.os.Looper
-import android.os.PowerManager
-import android.content.BroadcastReceiver
-import android.content.IntentFilter
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.ScrollView
 import androidx.appcompat.app.AlertDialog
 
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import java.nio.FloatBuffer
-import java.util.concurrent.Callable
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import kotlin.math.exp
-import org.json.JSONObject
 
 // NOTE: This whole module is intentionally kept in ONE file.
 // These classes would normally live in separate files / sub-packages;
@@ -123,27 +80,11 @@ class MainActivity : AppCompatActivity() {
     )
 
     private lateinit var statusAccessibility: TextView
-    private lateinit var statusCapture: TextView
     private lateinit var statusOverlay: TextView
-    private lateinit var buttonCapture: Button
     private lateinit var blockRulesView: TextView
     private lateinit var blockInput: EditText
     private lateinit var emptyList: TextView
 
-    private val projectionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            ScreenCaptureService.start(this, result.resultCode, result.data!!)
-        }
-        refreshStatus()
-    }
-
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) {
-        requestScreenCapture()
-    }
 
     /** Long-press a row to read the whole entry — including the full NODE DUMP. */
     private fun showEntryDetails(entry: MonitorEntry) {
@@ -204,9 +145,7 @@ class MainActivity : AppCompatActivity() {
         BlockRules.load(this)
 
         statusAccessibility = findViewById(R.id.status_accessibility)
-        statusCapture = findViewById(R.id.status_capture)
         statusOverlay = findViewById(R.id.status_overlay)
-        buttonCapture = findViewById(R.id.btn_capture)
         blockRulesView = findViewById(R.id.block_rules)
         blockInput = findViewById(R.id.input_block)
         emptyList = findViewById(R.id.empty_list)
@@ -218,7 +157,6 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_accessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
-        buttonCapture.setOnClickListener { toggleCapture() }
         findViewById<Button>(R.id.btn_overlay).setOnClickListener { requestOverlayPermission() }
         findViewById<Button>(R.id.btn_block).setOnClickListener { addBlockFromInput() }
         findViewById<Button>(R.id.btn_clear_blocks).setOnClickListener {
@@ -227,62 +165,15 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
         findViewById<Button>(R.id.btn_clear_log).setOnClickListener { clearLog() }
-        findViewById<Button>(R.id.btn_battery).setOnClickListener { requestIgnoreBatteryOptimizations() }
 
         observeEntries()
         refreshBlockRules()
     }
 
-    /**
-     * Ask to exempt the app from battery optimisation. This is the single biggest
-     * factor in whether capture survives screen-off on OEMs like Samsung — without
-     * it, the system aggressively kills the foreground service and revokes the
-     * projection. Play permits this prompt for legitimately long-running services.
-     */
-    @SuppressLint("BatteryLife")
-    private fun requestIgnoreBatteryOptimizations() {
-        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
-        if (pm.isIgnoringBatteryOptimizations(packageName)) {
-            Toast.makeText(this, "Already allowed to run in the background", Toast.LENGTH_SHORT).show()
-            return
-        }
-        try {
-            startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:$packageName"),
-                ),
-            )
-        } catch (_: Throwable) {
-            // Some OEMs block the direct request; fall back to the settings list.
-            try {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (_: Throwable) {
-                Toast.makeText(this, "Open Settings → Battery and allow this app", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    private var autoResumeChecked = false
-
     override fun onResume() {
         super.onResume()
         refreshStatus()
         AppBlocklist.refresh(this)
-
-        // Clear the notification's action either way so it doesn't re-fire later.
-        if (intent?.action == ScreenCaptureService.ACTION_RESUME_CAPTURE) intent.action = null
-
-        // If the user had capture ON (never pressed Stop) but the system has since
-        // killed it, jump straight to the consent dialog — once per app open. This
-        // is the reliable recovery path even when the OEM eats the notification.
-        if (!autoResumeChecked &&
-            !ScreenCaptureService.isRunning &&
-            ScreenCaptureService.wasEnabledByUser(this)
-        ) {
-            autoResumeChecked = true
-            requestScreenCapture()
-        }
     }
 
     private fun observeEntries() {
@@ -294,30 +185,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    private fun toggleCapture() {
-        if (ScreenCaptureService.isRunning) {
-            ScreenCaptureService.stop(this)
-            buttonCapture.postDelayed({ refreshStatus() }, 300)
-        } else {
-            ensureNotificationsThenCapture()
-        }
-    }
-
-    private fun ensureNotificationsThenCapture() {
-        val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        if (needsPermission) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            requestScreenCapture()
-        }
-    }
-
-    private fun requestScreenCapture() {
-        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        projectionLauncher.launch(manager.createScreenCaptureIntent())
     }
 
     private fun requestOverlayPermission() {
@@ -356,7 +223,6 @@ class MainActivity : AppCompatActivity() {
     private fun clearLog() {
         lifecycleScope.launch(Dispatchers.IO) {
             val dao = database.dao()
-            dao.allScreenshotPaths().forEach { File(it).delete() }
             dao.clear()
         }
     }
@@ -369,15 +235,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshStatus() {
-        statusAccessibility.text =
-            getString(R.string.page_monitoring) + ":  " + onOff(isAccessibilityEnabled())
+        statusAccessibility.text = getString(R.string.page_monitoring) + ":  " + onOff(isAccessibilityEnabled())
 
-        val captureOn = ScreenCaptureService.isRunning
-        statusCapture.text = getString(R.string.screen_capture) + ":  " + onOff(captureOn)
-        buttonCapture.text = getString(if (captureOn) R.string.stop else R.string.start)
-
-        statusOverlay.text =
-            getString(R.string.overlay_permission) + ":  " + onOff(Settings.canDrawOverlays(this))
+        statusOverlay.text = getString(R.string.overlay_permission) + ":  " + onOff(Settings.canDrawOverlays(this))
     }
 
     private fun onOff(on: Boolean): String =
@@ -394,25 +254,6 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-
-// --------------------------------------------------------------
-// CaptureBootReceiver
-// --------------------------------------------------------------
-
-
-/**
- * On boot (or app update), if the user had capture ON before, we CANNOT silently
- * resume — MediaProjection needs a fresh user-granted token every time the system
- * tears it down (including across reboots). There is no API to avoid that dialog;
- * trying would risk a Play removal. So we just raise the one-tap "resume" prompt.
- */
-class CaptureBootReceiver : android.content.BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent?) {
-        if (ScreenCaptureService.wasEnabledByUser(context)) {
-            ScreenCaptureService.showResumePrompt(context.applicationContext)
-        }
-    }
-}
 
 // =====================================================================================
 // DATA
@@ -434,12 +275,6 @@ interface MonitorDao {
     @Query("SELECT * FROM monitor_entries ORDER BY timestamp DESC")
     fun observeAll(): Flow<List<MonitorEntry>>
 
-    @Query("SELECT screenshotPath FROM monitor_entries WHERE screenshotPath IS NOT NULL")
-    suspend fun allScreenshotPaths(): List<String>
-
-    @Query("SELECT screenshotPath FROM monitor_entries WHERE timestamp < :cutoff AND screenshotPath IS NOT NULL")
-    suspend fun screenshotPathsBefore(cutoff: Long): List<String>
-
     @Query("DELETE FROM monitor_entries WHERE timestamp < :cutoff")
     suspend fun deleteBefore(cutoff: Long)
 
@@ -452,7 +287,7 @@ interface MonitorDao {
 // --------------------------------------------------------------
 
 
-@Database(entities = [MonitorEntry::class], version = 3, exportSchema = false)
+@Database(entities = [MonitorEntry::class], version = 4, exportSchema = false)
 abstract class MonitorDatabase : RoomDatabase() {
 
     abstract fun dao(): MonitorDao
@@ -485,7 +320,6 @@ abstract class MonitorDatabase : RoomDatabase() {
 /**
  * One observed thing. Either:
  *  - a "page": website/app info read from the screen (Accessibility), or
- *  - a "screen": a captured screenshot saved to disk (MediaProjection).
  */
 @Entity(tableName = "monitor_entries")
 data class MonitorEntry(
@@ -497,17 +331,9 @@ data class MonitorEntry(
     val domain: String? = null,
     val url: String? = null,
     val text: String? = null,
-    val screenshotPath: String? = null,
-    /**
-     * Calibrated NSFW confidence in [0,1] for a screenshot (0.5 == exactly on the
-     * classifier's threshold; higher == more likely disallowed). Null for page
-     * entries, or for screens not (yet) scored / where the model was unavailable.
-     */
-    val nsfwScore: Float? = null,
 ) {
     companion object {
         const val KIND_PAGE = "page"
-        const val KIND_SCREEN = "screen"
     }
 }
 
@@ -545,7 +371,6 @@ object MonitorStore {
         lastCleanupAt = now
 
         val cutoff = now - RETENTION_MS
-        dao.screenshotPathsBefore(cutoff).forEach { File(it).delete() }
         dao.deleteBefore(cutoff)
     }
 }
@@ -553,72 +378,6 @@ object MonitorStore {
 // =====================================================================================
 // MONITOR
 // =====================================================================================
-
-
-// --------------------------------------------------------------
-// ForegroundApp
-// --------------------------------------------------------------
-
-
-/**
- * Shared, read-only link between the two services: the accessibility service
- * publishes the current foreground app here, and the screen-capture service
- * reads it so each screenshot can be tagged with the app it came from.
- */
-object ForegroundApp {
-    @Volatile
-    var packageName: String? = null
-
-    /** Current browser host (e.g. "en.wikipedia.org"), or null when not on the web. */
-    @Volatile
-    var host: String? = null
-}
-
-
-
-// --------------------------------------------------------------
-// CaptureWhitelist
-// --------------------------------------------------------------
-
-
-/**
- * Foreground apps we deliberately do NOT screenshot or score: system surfaces,
- * launchers, the dialer, the system search/Assistant, and the app's own UI
- * (checked separately by the capture service). Skipping them saves CPU/battery
- * and keeps benign system screens out of the log.
- *
- * This is the list to extend when you find an app you don't want captured.
- */
-object CaptureWhitelist {
-
-    private val PACKAGES = setOf(
-        "com.android.systemui",
-        "com.android.settings",
-        "com.google.android.googlequicksearchbox",  // Google app / Assistant / search bar
-        // launchers
-        "com.google.android.apps.nexuslauncher",
-        "com.sec.android.app.launcher",
-        "com.android.launcher",
-        "com.android.launcher3",
-        "com.microsoft.launcher",
-        "com.teslacoilsw.launcher",
-        // phone / dialer / in-call
-        "com.android.dialer",
-        "com.google.android.dialer",
-        "com.samsung.android.dialer",
-        "com.android.phone",
-        "com.android.incallui",
-        // installers / permission + share dialogs
-        "com.android.packageinstaller",
-        "com.google.android.packageinstaller",
-        "com.google.android.permissioncontroller",
-        "com.android.intentresolver",
-    )
-
-    fun contains(packageName: String?): Boolean =
-        packageName != null && packageName in PACKAGES
-}
-
 
 
 // --------------------------------------------------------------
@@ -648,7 +407,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var lastProcessedAt = 0L
     private var lastLogSignature: String? = null
     private var lastGoBackAt = 0L
-    private var appWarnCountdown: Runnable? = null
     // The host the current page-block cover is showing for (drives the
     // "still blocked / different page" status lines and dismiss escalation).
     private var shownBlockHost: String? = null
@@ -662,9 +420,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     // below: it is kept up / taken down based on what is actually in the
     // foreground, never by individual events (events flicker; window state doesn't).
     private var appBlockActive = false
-    // True while the NSFW-content cover (driven by screenshot scores) is showing.
-    // Owned here because dismissing it uses Back/Home, which need this service.
-    private var contentBlockActive = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var keyboardPackages: Set<String> = emptySet()
 
@@ -716,11 +471,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        instance = this
         overlay = OverlayController(this)
         BlockRules.load(this)
         AppBlocklist.refresh(this)
         loadKeyboardPackages()
+        WordLists.load(this)
+        DomainBlocklist.warmUp(this)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -750,8 +506,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // own package; treating that as "the foreground app changed" is what made
         // the cover flicker. Skip them completely.
         if (packageName.lowercase() in keyboardPackages || isKeyboardWindow(event)) return
-
-        ForegroundApp.packageName = packageName
 
         // ---- App-level block: FIRST, on every event, before any throttling. ----
         // A plain set lookup is effectively free, and running it on the very first
@@ -799,10 +553,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (host != null) lastHost = host
         if (barText != null) lastUrl = barText
         readFocusedFullUrl(host)?.let { lastFullUrl = it }   // fills in path if user taps the bar
-
-        // Publish the host (browsers only) so each screenshot can be matched to the
-        // page it was taken on — that's how a content block knows the subdomain.
-        ForegroundApp.host = if (AppBlocklist.isBrowser(packageName)) lastHost else null
 
         // Content = the web page itself (WebView subtree), falling back to the whole
         // screen for non-browser apps.
@@ -871,166 +621,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
 
-
-    private fun showContentBlock(reason: String, frames: List<NsfwBlockMonitor.BlockFrame>) {
-        val controller = overlay ?: return
-        val detectedPkg = frames.lastOrNull()?.appPackage ?: ForegroundApp.packageName
-        // The host the flagged screenshot was ACTUALLY captured on. NEVER fall back
-        // to the current page (lastHost): scoring lags by seconds, the user may have
-        // navigated, and that fallback is exactly how the wrong site got blocked.
-        val capturedHost = frames.lastOrNull()?.host
-
-        // Only ever cover the app the content was detected on.
-        val foreground = currentForegroundPackage()
-        if (detectedPkg != null && foreground != detectedPkg) {
-            NsfwBlockMonitor.clear()
-            return
-        }
-
-        val isBrowser = AppBlocklist.isBrowser(detectedPkg)
-        // EXTRA VERIFICATION (browsers): if the screenshot's page and the current
-        // page disagree, attribution is ambiguous — block NOTHING rather than risk
-        // banning the wrong site. Scoring resumes; real content re-fires in seconds.
-        if (isBrowser && capturedHost != null && lastHost != null && capturedHost != lastHost) {
-            android.util.Log.i("PageMonitor", "content block dropped: captured=$capturedHost current=$lastHost")
-            NsfwBlockMonitor.clear()
-            return
-        }
-
-        contentBlockActive = true
-        controller.hide()
-        val durationMs = if (frames.size <= 1) 5_000L else 6_000L
-
-        // Too many blocks too fast -> hard 90-min block on THIS app, browser or not.
-        if (detectedPkg != null) {
-            RapidBlockMonitor.record(detectedPkg)?.let { penaltyMs ->
-                AppTimedBlock.blockFor(
-                    this, detectedPkg, penaltyMs,
-                    "App blocked for ${RapidBlockMonitor.PENALTY_LABEL} (too many blocks)",
-                )
-                contentBlockActive = false
-                NsfwBlockMonitor.clear()
-                controller.hide()
-                showAppBlock(AppTimedBlock.reasonIfBlocked(this, detectedPkg) ?: "App blocked", detectedPkg)
-                return
-            }
-        }
-
-        if (isBrowser) {
-            // Block the page the screenshot came from (verified above to still be
-            // the page we're on). If we couldn't read it, cover only — no rule.
-            capturedHost?.let { escalateWebBlock(it) }
-            controller.show(
-                reason = if (capturedHost != null) "$reason\nBlocked page: $capturedHost" else reason,
-                onGoBack = {
-                    val tapAt = System.currentTimeMillis()
-                    if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
-                        lastGoBackAt = tapAt
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                    }
-                    clearContentBlock()
-                },
-                onLeave = { exitToHome(); clearContentBlock() },
-                onReport = { /* do nothing */ },
-            )
-            controller.showImages(frames, durationMs)
-            return
-        }
-
-        // NON-WEB APP we can't attribute: behave like a plain content cover.
-        if (detectedPkg == null || detectedPkg == packageName) {
-            controller.show(
-                reason = reason,
-                onGoBack = { performGlobalAction(GLOBAL_ACTION_BACK); clearContentBlock() },
-                onLeave = { exitToHome(); clearContentBlock() },
-                onReport = { /* do nothing */ },
-            )
-            controller.showImages(frames, durationMs)
-            return
-        }
-
-        // NON-WEB APP: 10s warning, then escalating timed block.
-        startAppBlockWarning(controller, reason, frames, detectedPkg, durationMs)
-    }
-
-    private fun startAppBlockWarning(
-        controller: OverlayController,
-        baseReason: String,
-        frames: List<NsfwBlockMonitor.BlockFrame>,
-        pkg: String,
-        imagesMs: Long,
-    ) {
-        val label = AppTimedBlock.nextDurationLabel(this, pkg)
-
-        controller.show(
-            reason = baseReason,
-            onGoBack = {
-                val tapAt = System.currentTimeMillis()
-                if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
-                    lastGoBackAt = tapAt
-                    performGlobalAction(GLOBAL_ACTION_BACK)
-                }
-                commitAppBlock(pkg)
-            },
-            onLeave = {
-                exitToHome()
-                commitAppBlock(pkg)
-            },
-            // Report = false positive: cancel, no block, no strike.
-            onReport = {
-                // do nothing
-            },
-        )
-        controller.showImages(frames, imagesMs)
-
-        cancelAppBlockWarning()
-        val countdown = object : Runnable {
-            var secondsLeft = APP_BLOCK_WARNING_SECONDS
-            override fun run() {
-                if (!contentBlockActive) return
-                controller.setReason(
-                    "$baseReason\n\nThis app will be blocked in ${secondsLeft}s — locked $label.",
-                )
-                if (secondsLeft <= 0) {
-                    commitAppBlock(pkg)
-                    return
-                }
-                secondsLeft -= 1
-                mainHandler.postDelayed(this, 1_000L)
-            }
-        }
-        appWarnCountdown = countdown
-        mainHandler.post(countdown)
-    }
-
-    private fun commitAppBlock(pkg: String) {
-        cancelAppBlockWarning()
-        if (!contentBlockActive) return   // already handled (e.g. via Report)
-        val info = AppTimedBlock.strike(this, pkg)
-        contentBlockActive = false
-        NsfwBlockMonitor.clear()
-        overlay?.hide()
-        // ALWAYS re-show as an app block. The old foreground check here failed
-        // mid-scroll/animation and silently dropped the cover ("the warning just
-        // disappears"). The recheck loop takes it down by itself if an allowed
-        // app genuinely is in front.
-        showAppBlock(info.reason, pkg)
-    }
-
-
-    private fun cancelAppBlockWarning() {
-        appWarnCountdown?.let { mainHandler.removeCallbacks(it) }
-        appWarnCountdown = null
-    }
-
-    /** Drop the content cover and let screenshot scoring resume. */
-    private fun clearContentBlock() {
-        cancelAppBlockWarning()
-        contentBlockActive = false
-        NsfwBlockMonitor.clear()
-        overlay?.hide()
-    }
-
     /**
      * A web block was dismissed (Go back / Leave). Permanently block this exact
      * subdomain so the user can't just walk straight back onto it, and add a strike
@@ -1068,9 +658,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     ) {
         val controller = overlay ?: return
 
-        // While the NSFW-content cover is up it owns the screen.
-        if (contentBlockActive) return
-
         // The address bar is often unreadable exactly when it matters (scrolled
         // away, image viewer open). For browsers, fall back to the REMEMBERED host
         // of the current page — this is the fix for "pressed back onto the same
@@ -1090,7 +677,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         } else null
 
-        val baseReason = appGuard ?: rule?.let { describeRule(it) }
+        val baseReason = when {
+               appGuard != null -> appGuard
+               host != null && DomainBlocklist.isBlocked(host) -> "Adult site (blocklist): $host"
+               rule != null -> describeRule(rule)
+               host != null -> BorderlineScorer.evaluate(title, url, content)?.reason
+               else -> null
+           }
 
         if (baseReason != null) {
             val freshShow = !controller.isShowing
@@ -1376,10 +969,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        if (instance === this) instance = null
-        NsfwBlockMonitor.clear()
         mainHandler.removeCallbacks(recheck)
-        cancelAppBlockWarning()
         overlay?.hide()
         super.onDestroy()
     }
@@ -1440,22 +1030,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        // The live service instance, so the capture service can ask us to show the
-        // NSFW-content cover (we own the overlay + can perform Back/Home). Cleared
-        // in onDestroy. Same process, so a plain reference is fine.
-        @Volatile
-        private var instance: PageMonitorAccessibilityService? = null
-
-        /**
-         * Ask the running accessibility service to show the NSFW-content cover.
-         * Returns false if the service isn't connected (so the caller knows the
-         * block can't be displayed and shouldn't latch).
-         */
-        fun requestContentBlock(reason: String, frames: List<NsfwBlockMonitor.BlockFrame>): Boolean {
-            val svc = instance ?: return false
-            svc.mainHandler.post { svc.showContentBlock(reason, frames) }
-            return true
-        }
 
         private const val MIN_INTERVAL_MS = 700L
         private const val RECHECK_MS = 400L
@@ -1464,7 +1038,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val MAX_DEPTH = 40
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 700L
-        private const val APP_BLOCK_WARNING_SECONDS = 10
         private const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
 
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
@@ -1512,796 +1085,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 }
 
-// --------------------------------------------------------------
-// ScreenCaptureService
-// --------------------------------------------------------------
-
-
-/**
- * Captures periodic, downscaled screenshots of the whole screen using
- * MediaProjection. Frames are drained continuously (cheap) but only saved once
- * every [CAPTURE_INTERVAL_MS], to keep battery, CPU and storage use sane.
- *
- * The user must grant the one-time "Start recording?" consent; we receive the
- * resulting permission token in the start intent.
- */
-class ScreenCaptureService : Service() {
-
-    private var projection: MediaProjection? = null
-    private var virtualDisplay: VirtualDisplay? = null
-    private var imageReader: ImageReader? = null
-
-    private val captureThread = HandlerThread("screen-capture").apply { start() }
-    private val captureHandler = Handler(captureThread.looper)
-    private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    private var lastSavedAt = 0L
-
-    // Held briefly so a screen-off doesn't immediately suspend our capture thread.
-    private var wakeLock: PowerManager.WakeLock? = null
-
-    // Re-arm the mirror when the screen comes back, in case sleep dropped frames.
-    private val screenStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_OFF ->
-                    android.util.Log.i(CAPTURE_TAG, "screen OFF (capture continues; projection may be revoked by OS)")
-                Intent.ACTION_USER_PRESENT, Intent.ACTION_SCREEN_ON ->
-                    android.util.Log.i(CAPTURE_TAG, "screen ON")
-            }
-        }
-    }
-
-    // Latest-frame-wins scoring pipeline. Scoring is far slower than capturing, so
-    // rather than queue every frame (which makes the log fall further and further
-    // behind), we keep only the most recent unprocessed frame and a single worker
-    // scores it, then picks up whatever is newest. Frames captured while the worker
-    // is busy are dropped — the log always reflects the most recent screen.
-    private val frameLock = Any()
-    private var pendingFrame: Frame? = null
-    private var workerRunning = false
-    private var droppedSinceProcessed = 0
-
-    private class Frame(val bitmap: Bitmap, val timestamp: Long, val appPackage: String?, val host: String?)
-
-    private val projectionCallback = object : MediaProjection.Callback() {
-        override fun onStop() {
-            // This is the "it turned itself off" moment. It fires when the OS
-            // revokes the projection — most often on screen-off on OEM builds like
-            // Samsung. We log it loudly (visible in: adb logcat -s ScreenCapture),
-            // mark that the user still WANTS capture, and raise a one-tap resume
-            // prompt. We cannot silently re-acquire the token — Android forbids it.
-            android.util.Log.w(CAPTURE_TAG, "MediaProjection STOPPED by system (likely screen-off/OEM). Will prompt to resume.")
-            stoppedBySystem = true
-            showResumePrompt(applicationContext)
-            stopSelf()
-        }
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            // User chose to stop -> forget consent so we DON'T nag them to resume.
-            prefs().edit().putBoolean(KEY_USER_ENABLED, false).apply()
-            stoppedBySystem = false
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, RESULT_INVALID) ?: RESULT_INVALID
-        val data: Intent? =
-            if (intent == null) null
-            else IntentCompat.getParcelableExtra(intent, EXTRA_DATA, Intent::class.java)
-        if (resultCode == RESULT_INVALID || data == null) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        // On Android 10+ the foreground service must be running before we get the projection.
-        startForeground()
-
-        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        val mp = manager.getMediaProjection(resultCode, data)
-        if (mp == null) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        projection = mp
-        mp.registerCallback(projectionCallback, captureHandler)
-
-        // Persist that the USER turned this on (for boot/auto-resume prompts) and
-        // stash the exact result code + data so a one-tap notification can restart
-        // capture without re-opening the app. (Still a USER tap — no silent bypass.)
-        rememberConsent(resultCode, data)
-
-        acquireWakeLock()
-        registerScreenReceiver()
-
-        startCapturing(mp)
-        isRunning = true
-        stoppedBySystem = false
-        return START_STICKY
-    }
-
-    private fun startCapturing(mp: MediaProjection) {
-        val (screenWidth, screenHeight, densityDpi) = screenMetrics()
-        val (width, height) = targetSize(screenWidth, screenHeight)
-
-        val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, MAX_BUFFERED_IMAGES)
-        reader.setOnImageAvailableListener({ onFrame(it) }, captureHandler)
-        imageReader = reader
-
-        virtualDisplay = mp.createVirtualDisplay(
-            "monitor-capture",
-            width,
-            height,
-            densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader.surface,
-            null,
-            captureHandler,
-        )
-
-        // Warm up the classifier so the first scored frame doesn't pay the
-        // (one-time, multi-second) model staging + load cost.
-        NsfwClassifier.warmUp(applicationContext)
-    }
-
-    /** Runs on the capture thread for every screen frame. Cheap unless it is time to save. */
-    private fun onFrame(reader: ImageReader) {
-        val image = reader.acquireLatestImage() ?: return
-        try {
-            val now = System.currentTimeMillis()
-            if (now - lastSavedAt < CAPTURE_INTERVAL_MS) return
-
-            val appPackage = ForegroundApp.packageName
-            // Skip our own UI and whitelisted system/launcher surfaces entirely:
-            // no screenshot, no scoring. Also skip while an NSFW block cover is up —
-            // otherwise we'd just be scoring our own (benign) cover. Advance the clock
-            // so we re-check at the normal interval rather than on every single frame.
-            if (appPackage == packageName ||
-                CaptureWhitelist.contains(appPackage) ||
-                NsfwBlockMonitor.blocked ||
-                AppBlocklist.blockedReason(appPackage) != null ||
-                AppTimedBlock.reasonIfBlocked(applicationContext, appPackage) != null
-            ) {
-                lastSavedAt = now
-                return
-            }
-            lastSavedAt = now
-
-            submitFrame(Frame(image.toBitmap(), now, appPackage, ForegroundApp.host))
-        } finally {
-            image.close()
-        }
-    }
-
-    /** Hand the newest frame to the worker, dropping (and freeing) any unprocessed one. */
-    private fun submitFrame(frame: Frame) {
-        val dropped: Frame?
-        synchronized(frameLock) {
-            dropped = pendingFrame
-            if (dropped != null) droppedSinceProcessed++
-            pendingFrame = frame
-        }
-        dropped?.bitmap?.recycle()
-        ensureWorker()
-    }
-
-    /** Start the single scoring worker if it isn't already running. */
-    private fun ensureWorker() {
-        synchronized(frameLock) {
-            if (workerRunning) return
-            workerRunning = true
-        }
-        saveScope.launch {
-            while (true) {
-                val next = synchronized(frameLock) {
-                    val f = pendingFrame
-                    pendingFrame = null
-                    if (f == null) {
-                        workerRunning = false
-                        null
-                    } else {
-                        val dropped = droppedSinceProcessed
-                        droppedSinceProcessed = 0
-                        Pair(f, dropped)
-                    }
-                } ?: break
-                processFrame(next.first, next.second)
-            }
-        }
-    }
-
-    /** Save the screenshot, score it, and record the row. Runs on the worker only. */
-    private fun processFrame(frame: Frame, droppedWhileBusy: Int) {
-        val startedAt = System.currentTimeMillis()
-        val dir = File(filesDir, CAPTURE_DIR).apply { mkdirs() }
-        val file = File(dir, "${frame.timestamp}.jpg")
-        var nsfwScore: Float?
-        try {
-            FileOutputStream(file).use { out ->
-                frame.bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-            }
-            // Score the frame while the bitmap is still alive (cheaper than
-            // re-decoding the JPEG). Best-effort: null if the model isn't ready.
-            nsfwScore = NsfwClassifier.score(applicationContext, frame.bitmap)
-        } finally {
-            frame.bitmap.recycle()
-        }
-
-        MonitorStore.record(
-            this,
-            MonitorEntry(
-                timestamp = frame.timestamp,
-                kind = MonitorEntry.KIND_SCREEN,
-                packageName = frame.appPackage,
-                screenshotPath = file.absolutePath,
-                nsfwScore = nsfwScore,
-            ),
-        )
-
-        // Feed the score to the block-rule state machine; show the cover if a rule
-        // fires. Showing needs the accessibility service (for Back/Home); if it's
-        // off the block can't display, so don't latch (or we'd pause capture forever).
-        nsfwScore?.let { s ->
-            NsfwBlockMonitor.record(s, file.absolutePath, frame.appPackage, frame.host)?.let { result ->
-                val shown = PageMonitorAccessibilityService.requestContentBlock(result.reason, result.frames)
-                android.util.Log.i(CAPTURE_TAG, "NSFW block fired: \"${result.reason}\" (shown=$shown)")
-                if (!shown) NsfwBlockMonitor.clear()
-            }
-        }
-
-        val totalMs = System.currentTimeMillis() - startedAt
-        android.util.Log.i(
-            CAPTURE_TAG,
-            "frame done in ${totalMs}ms (dropped $droppedWhileBusy while busy) " +
-                "pkg=${frame.appPackage} score=${nsfwScore?.let { "%.2f".format(Locale.US, it) } ?: "n/a"}",
-        )
-    }
-
-    private fun startForeground() {
-        val channelId = "screen_capture"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                getString(R.string.capture_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            )
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        }
-
-        val openApp = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle(getString(R.string.capture_notification_title))
-            .setContentText(getString(R.string.capture_notification_text))
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentIntent(openApp)
-            .setOngoing(true)
-            .build()
-
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-        } else {
-            0
-        }
-        ServiceCompat.startForeground(this, NOTIF_ID, notification, type)
-    }
-
-    private fun screenMetrics(): Triple<Int, Int, Int> {
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = wm.currentWindowMetrics.bounds
-            Triple(bounds.width(), bounds.height(), resources.configuration.densityDpi)
-        } else {
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(metrics)
-            Triple(metrics.widthPixels, metrics.heightPixels, metrics.densityDpi)
-        }
-    }
-
-    private fun prefs() = getSharedPreferences("screen_capture", Context.MODE_PRIVATE)
-
-    /** Scales the longest side down to [MAX_DIMEN], keeping the aspect ratio. */
-    private fun targetSize(width: Int, height: Int): Pair<Int, Int> {
-        val longest = max(width, height)
-        if (longest <= MAX_DIMEN) return evenPair(width, height)
-        val scale = MAX_DIMEN.toFloat() / longest
-        return evenPair((width * scale).toInt(), (height * scale).toInt())
-    }
-
-    private fun evenPair(width: Int, height: Int): Pair<Int, Int> =
-        Pair(width - (width % 2), height - (height % 2))
-
-    override fun onDestroy() {
-        isRunning = false
-        try { unregisterReceiver(screenStateReceiver) } catch (_: Throwable) {}
-        releaseWakeLock()
-        virtualDisplay?.release()
-        imageReader?.close()
-        projection?.unregisterCallback(projectionCallback)
-        projection?.stop()
-        captureThread.quitSafely()
-        super.onDestroy()
-    }
-
-    private fun acquireWakeLock() {
-        if (wakeLock != null) return
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        // PARTIAL = keep the CPU alive (does NOT turn the screen on). Time-boxed so
-        // a stuck service can't drain the battery forever; capture is best-effort
-        // while the screen sleeps anyway (the OS may still revoke projection).
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$CAPTURE_TAG:capture").apply {
-            setReferenceCounted(false)
-            acquire(30 * 60 * 1000L)
-        }
-    }
-
-    private fun releaseWakeLock() {
-        try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Throwable) {}
-        wakeLock = null
-    }
-
-    private fun registerScreenReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_USER_PRESENT)
-        }
-        try { registerReceiver(screenStateReceiver, filter) } catch (_: Throwable) {}
-    }
-
-    private fun rememberConsent(resultCode: Int, data: Intent) {
-        // Set the "user enabled" flag FIRST and on its own, so a failure serialising
-        // the token intent below can never swallow it (that was the no-prompt bug).
-        val editor = prefs().edit().putBoolean(KEY_USER_ENABLED, true)
-        try {
-            editor.putInt(KEY_RESULT_CODE, resultCode)
-                .putString(KEY_RESULT_DATA, data.toUri(Intent.URI_INTENT_SCHEME))
-        } catch (t: Throwable) {
-            android.util.Log.e(CAPTURE_TAG, "could not persist token intent (flag still set)", t)
-        }
-        editor.apply()
-    }
-
-    companion object {
-        @Volatile
-        var isRunning = false
-            private set
-
-        private const val CAPTURE_TAG = "ScreenCapture"
-        private const val NOTIF_ID = 1001
-        private const val RESULT_INVALID = 0
-        private const val CAPTURE_DIR = "captures"
-        // Minimum gap between captures. Scoring (the slow step) paces real throughput;
-        // this just bounds how often we sample. Raise it toward your measured
-        // per-frame time (see the ScreenCapture log) if you see frames being dropped.
-        private const val CAPTURE_INTERVAL_MS = 4000L
-        private const val MAX_DIMEN = 720
-        private const val MAX_BUFFERED_IMAGES = 2
-        private const val JPEG_QUALITY = 60
-
-        private const val EXTRA_RESULT_CODE = "result_code"
-        private const val EXTRA_DATA = "data"
-        private const val ACTION_STOP = "stop"
-
-        fun start(context: Context, resultCode: Int, data: Intent) {
-            val intent = Intent(context, ScreenCaptureService::class.java).apply {
-                putExtra(EXTRA_RESULT_CODE, resultCode)
-                putExtra(EXTRA_DATA, data)
-            }
-            ContextCompat.startForegroundService(context, intent)
-        }
-
-        fun stop(context: Context) {
-            val intent = Intent(context, ScreenCaptureService::class.java).apply {
-                action = ACTION_STOP
-            }
-            context.startService(intent)
-        }
-
-
-        // Did the user turn capture on? (Used by boot + the auto-resume prompt.)
-        // Reset only when the user explicitly presses Stop.
-        private const val PREFS = "screen_capture"
-        private const val KEY_USER_ENABLED = "user_enabled"
-        private const val KEY_RESULT_CODE = "result_code"
-        private const val KEY_RESULT_DATA = "result_data"
-        private const val RESUME_NOTIF_ID = 1002
-        private const val RESUME_CHANNEL = "capture_resume"
-
-        // True when the SYSTEM killed projection (vs the user pressing Stop). Lets
-        // the UI tell the difference if you want to surface it.
-        @Volatile
-        var stoppedBySystem = false
-            private set
-
-        fun wasEnabledByUser(context: Context): Boolean =
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_USER_ENABLED, false)
-
-        /**
-         * Show a high-priority notification that, when tapped, launches the consent
-         * dialog and restarts capture. This is the closest thing to "auto restart"
-         * that is allowed: ONE tap, no digging through the app. It cannot be skipped
-         * — the OS requires a fresh user-approved projection token.
-         */
-        fun showResumePrompt(context: Context) {
-            // Logged so you can confirm in: adb logcat -s ScreenCapture
-            android.util.Log.w(CAPTURE_TAG, "resume prompt requested (enabled=${wasEnabledByUser(context)})")
-            if (!wasEnabledByUser(context)) return
-            val nm = context.getSystemService(NotificationManager::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                nm.createNotificationChannel(
-                    NotificationChannel(
-                        RESUME_CHANNEL,
-                        "Resume monitoring",
-                        NotificationManager.IMPORTANCE_HIGH,
-                    ),
-                )
-            }
-            // Routes through MainActivity, which re-requests projection on this flag.
-            val tapIntent = Intent(context, MainActivity::class.java).apply {
-                action = ACTION_RESUME_CAPTURE
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            }
-            val pending = PendingIntent.getActivity(
-                context, 0, tapIntent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            val n = NotificationCompat.Builder(context, RESUME_CHANNEL)
-                .setContentTitle("Monitoring paused")
-                .setContentText("Your phone stopped screen monitoring. Tap to resume.")
-                .setSmallIcon(android.R.drawable.ic_menu_view)
-                .setContentIntent(pending)
-                .setAutoCancel(true)
-                .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_STATUS)
-                .build()
-            try { nm.notify(RESUME_NOTIF_ID, n) } catch (_: Throwable) {}
-        }
-
-        const val ACTION_RESUME_CAPTURE = "resume_capture"
-
-    }
-}
-
-/** Copies an RGBA screen frame into a Bitmap, handling row padding. */
-private fun Image.toBitmap(): Bitmap {
-    val plane = planes[0]
-    val pixelStride = plane.pixelStride
-    val rowStride = plane.rowStride
-    val rowPadding = rowStride - pixelStride * width
-
-    val bitmap = Bitmap.createBitmap(
-        width + rowPadding / pixelStride,
-        height,
-        Bitmap.Config.ARGB_8888,
-    )
-    bitmap.copyPixelsFromBuffer(plane.buffer)
-
-    return if (rowPadding == 0) {
-        bitmap
-    } else {
-        // Crop the padding columns off the right edge.
-        Bitmap.createBitmap(bitmap, 0, 0, width, height).also { bitmap.recycle() }
-    }
-}
-
-// --------------------------------------------------------------
-// NsfwClassifier
-// --------------------------------------------------------------
-
-
-/**
- * On-device NSFW image scorer — a direct Kotlin port of the IMAGE_ANALYSER Rust
- * harness's `--file` mode. It uses the SAME model (adamcodd-vit-nsfw ViT,
- * Apache-2.0), the SAME ONNX Runtime version (1.22.0), and the SAME calibration
- * math, so the 0..1 score it returns here matches what the desktop harness prints.
- *
- * Pipeline (every tunable comes from the bundled preproc.json / thresholds.json
- * assets, with hardcoded fallbacks that mirror those files):
- *
- *   bitmap -> resize 384x384 (stretch) -> (px/255 - 0.5)/0.5 -> NCHW RGB float[1,3,384,384]
- *          -> ViT -> softmax -> raw = P(nsfw) -> calibrate(raw, threshold) -> 0..1
- *
- * The quantized INT8 model + sidecars ship as APK assets (copied once to filesDir,
- * mmap'd by ORT so they don't sit on the Java heap). The full-precision model is
- * NOT shipped on-device: it ran 3-6x slower here (couldn't keep up while a browser
- * was busy), and on the test set INT8 matched it (0 verdict disagreements, scores
- * within 0.06, skewing slightly toward catching) — so INT8 alone is the engine.
- *
- * Everything is best-effort: any failure (no model bundled, load error, bad frame)
- * disables scoring and returns null rather than crashing the capture pipeline.
- */
-object NsfwClassifier {
-
-    private const val TAG = "NsfwClassifier"
-    private const val ASSET_DIR = "nsfw"
-    private const val MODEL_NAME = "model.onnx"
-
-    /** Calibration steepness — must match `calibrate::K` in the Rust harness. */
-    private const val CALIBRATION_K = 1.8f
-
-    // All ONNX work (session creation AND every inference) runs on this single
-    // thread, pinned to foreground priority so the OS schedules it on the fast
-    // "big" CPU cores instead of the throttled efficiency cores a background thread
-    // gets. ORT's own worker threads, spawned when a session is built here, inherit
-    // that scheduling — much of the gap between a ~1s run and a ~6s one. Single-
-    // threaded, so no extra locking is needed.
-    private val worker: ExecutorService = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "nsfw-infer")
-    }
-
-    @Volatile private var env: OrtEnvironment? = null
-    @Volatile private var session: OrtSession? = null
-    private var inputName: String = "pixel_values"
-    private var triedInit = false          // worker-thread only
-    @Volatile private var usingXnnpack = false
-
-    // Preproc + threshold (from the bundled sidecars; defaults mirror those files
-    // so scoring still works if a JSON read fails). Edit thresholds.json to retune.
-    private var modelName = "adamcodd-vit-nsfw-int8"
-    private var inputSize = 384
-    private var mean = floatArrayOf(0.5f, 0.5f, 0.5f)
-    private var std = floatArrayOf(0.5f, 0.5f, 0.5f)
-    private var rescale = 1f / 255f
-    private var applySoftmax = true
-    private var nsfwIndex = 1
-    private var threshold = 0.1f // THRESHOLD, DONT KNOW WHY ITS HERE SHOULD PROBABLY BE A CONSTANT AT THE TOP FOR EASE OF TUNING. PROBS THE SAME FOR MANY VARS TO BE HONEST...
-
-    /** True once the model is ready. */
-    val isReady: Boolean get() = session != null
-
-    /**
-     * Warm up the model on the inference thread (idempotent). Call when capture
-     * starts so the first scored frame doesn't pay the load cost.
-     */
-    fun warmUp(context: Context) {
-        val app = context.applicationContext
-        worker.execute { ensureSession(app) }
-    }
-
-    /**
-     * Score one screen frame -> calibrated NSFW confidence in [0,1] (0.5 == on the
-     * cutoff), or null if unavailable. Best-effort: never throws into the caller.
-     * The bitmap is not modified or recycled.
-     */
-    fun score(context: Context, bitmap: Bitmap): Float? {
-        val app = context.applicationContext
-        return try {
-            // Hop to the dedicated foreground-priority inference thread and wait.
-            worker.submit(Callable { scoreOnWorker(app, bitmap) }).get()
-        } catch (t: Throwable) {
-            android.util.Log.e(TAG, "scoring failed", t)
-            null
-        }
-    }
-
-    /** Runs on the inference thread only. */
-    private fun scoreOnWorker(context: Context, bitmap: Bitmap): Float? {
-        val s = ensureSession(context) ?: return null
-        val t0 = System.nanoTime()
-        val calibrated = calibrate(runRaw(s, inputName, preprocess(bitmap)), threshold)
-        val ms = (System.nanoTime() - t0) / 1_000_000.0
-        android.util.Log.i(TAG, "inference %.0f ms -> %.3f".format(Locale.US, ms, calibrated))
-        return calibrated
-    }
-
-    /**
-     * Load the model + config once (idempotent). Runs on the inference thread so
-     * ORT's spawned pool inherits its foreground scheduling. Returns the session,
-     * or null if it couldn't be loaded (not retried).
-     */
-    private fun ensureSession(context: Context): OrtSession? {
-        pinThread()
-        session?.let { return it }
-        if (triedInit) return null
-        triedInit = true
-        loadConfig(context)
-        return try {
-            val modelFile = stageModel(context, MODEL_NAME) ?: return null
-            val created = buildSession(modelFile)
-            inputName = created.inputNames.firstOrNull() ?: inputName
-            session = created
-            android.util.Log.i(
-                TAG,
-                "model ready: $modelName (${modelFile.name}) input=$inputName size=$inputSize " +
-                    "threshold=$threshold xnnpack=$usingXnnpack",
-            )
-            created
-        } catch (t: Throwable) {
-            android.util.Log.e(TAG, "model load failed; scoring disabled", t)
-            null
-        }
-    }
-
-    /** Build an ORT session for [modelFile] with tuned threads + XNNPACK. */
-    private fun buildSession(modelFile: File): OrtSession {
-        val environment = env ?: OrtEnvironment.getEnvironment().also { env = it }
-        // Parallelism WITHIN one inference. Target the big cores only — clamped to
-        // [2,4]; adding the slow "little" cores makes the run wait on the slowest.
-        val cores = Runtime.getRuntime().availableProcessors()
-        val threads = (cores / 2).coerceIn(2, 4)
-        val opts = OrtSession.SessionOptions().apply {
-            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-            setIntraOpNumThreads(threads)
-            // XNNPACK: optimized ARM kernels, same precision. Falls back to CPU.
-            try {
-                addXnnpack(mapOf("intra_op_num_threads" to threads.toString()))
-                usingXnnpack = true
-            } catch (t: Throwable) {
-                android.util.Log.w(TAG, "XNNPACK unavailable; using default CPU backend", t)
-            }
-        }
-        return environment.createSession(modelFile.absolutePath, opts)
-    }
-
-    /** Pin the inference thread to the fast cores (best-effort). */
-    private fun pinThread() {
-        try {
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_FOREGROUND)
-        } catch (_: Throwable) { /* best-effort */ }
-    }
-
-    /** bitmap -> normalized NCHW RGB float[1,3,n,n] (flat), matching preproc.json. */
-    private fun preprocess(bitmap: Bitmap): FloatArray {
-        val n = inputSize
-        // ResizeMode::Stretch — straight resize to NxN, aspect ratio ignored.
-        val resized = if (bitmap.width == n && bitmap.height == n) bitmap
-                      else Bitmap.createScaledBitmap(bitmap, n, n, true)
-        val pixels = IntArray(n * n)
-        resized.getPixels(pixels, 0, n, 0, 0, n, n)
-        if (resized !== bitmap) resized.recycle()
-
-        // Normalize + lay out as NCHW, RGB channel order (matches preproc.json).
-        val area = n * n
-        val chw = FloatArray(3 * area)
-        for (i in 0 until area) {
-            val p = pixels[i]
-            val r = (p ushr 16) and 0xFF
-            val g = (p ushr 8) and 0xFF
-            val b = p and 0xFF
-            chw[i]            = (r * rescale - mean[0]) / std[0]   // R plane
-            chw[area + i]     = (g * rescale - mean[1]) / std[1]   // G plane
-            chw[2 * area + i] = (b * rescale - mean[2]) / std[2]   // B plane
-        }
-        return chw
-    }
-
-    /** Run one model on a preprocessed frame -> raw P(nsfw) in [0,1]. */
-    private fun runRaw(session: OrtSession, inName: String, chw: FloatArray): Float {
-        val n = inputSize
-        val shape = longArrayOf(1, 3, n.toLong(), n.toLong())
-        val environment = env ?: OrtEnvironment.getEnvironment()
-        OnnxTensor.createTensor(environment, FloatBuffer.wrap(chw), shape).use { tensor ->
-            session.run(mapOf(inName to tensor)).use { results ->
-                @Suppress("UNCHECKED_CAST")
-                val logits = (results.get(0).value as Array<FloatArray>)[0]
-                val probs = if (applySoftmax) softmax(logits) else logits
-                return probs.getOrElse(nsfwIndex) { probs.lastOrNull() ?: 0f }
-            }
-        }
-    }
-
-    /**
-     * Copy a bundled model asset into filesDir on first use. Re-copies if the
-     * staged file's size doesn't match the asset (e.g. after a model update).
-     * Returns the file, or null if the asset isn't bundled.
-     */
-    private fun stageModel(context: Context, fileName: String): File? {
-        val assetPath = "$ASSET_DIR/$fileName"
-        val outDir = File(context.filesDir, ASSET_DIR).apply { mkdirs() }
-        val outFile = File(outDir, fileName)
-
-        // openFd works because the asset is stored uncompressed (noCompress "onnx").
-        val assetSize = try {
-            context.assets.openFd(assetPath).use { it.length }
-        } catch (e: Exception) {
-            -1L
-        }
-        if (assetSize < 0L) {
-            val bundled = try { context.assets.open(assetPath).use { true } } catch (e: Exception) { false }
-            if (!bundled) {
-                android.util.Log.w(TAG, "no model bundled at assets/$assetPath")
-                return null
-            }
-        }
-        if (outFile.exists() && (assetSize < 0L || outFile.length() == assetSize)) return outFile
-
-        return try {
-            context.assets.open(assetPath).use { input ->
-                FileOutputStream(outFile).use { output -> input.copyTo(output, 1 shl 16) }
-            }
-            android.util.Log.i(TAG, "staged $fileName -> ${outFile.length()} bytes")
-            outFile
-        } catch (t: Throwable) {
-            android.util.Log.e(TAG, "failed to stage $fileName", t)
-            outFile.delete()
-            null
-        }
-    }
-
-    /** Read tunables from the bundled sidecars; silently keep defaults on any error. */
-    private fun loadConfig(context: Context) {
-        try {
-            val o = JSONObject(readAsset(context, "$ASSET_DIR/preproc.json"))
-            modelName = o.optString("name", modelName)
-            o.optJSONArray("input_size")?.let { if (it.length() > 0) inputSize = it.getInt(0) }
-            o.optJSONArray("mean")?.let { mean = it.toFloat3(mean) }
-            o.optJSONArray("std")?.let { std = it.toFloat3(std) }
-            if (o.has("rescale")) rescale = o.getDouble("rescale").toFloat()
-            if (o.has("apply_softmax")) applySoftmax = o.getBoolean("apply_softmax")
-            o.optJSONArray("nsfw_label_indices")?.let { if (it.length() > 0) nsfwIndex = it.getInt(0) }
-        } catch (t: Throwable) {
-            android.util.Log.w(TAG, "preproc.json not read; using defaults", t)
-        }
-        try {
-            val o = JSONObject(readAsset(context, "$ASSET_DIR/thresholds.json"))
-            val level = o.optString("default_level", "strict")
-            val models = o.optJSONObject("models")
-            // Use the threshold for the model we loaded (by its preproc name).
-            val m = models?.optJSONObject(modelName)
-                ?: models?.keys()?.takeIf { it.hasNext() }?.let { models.optJSONObject(it.next()) }
-            m?.let {
-                threshold = when {
-                    it.has(level) -> it.getDouble(level).toFloat()
-                    it.has("moderate") -> it.getDouble("moderate").toFloat()
-                    else -> threshold
-                }
-            }
-        } catch (t: Throwable) {
-            android.util.Log.w(TAG, "thresholds.json not read; using default $threshold", t)
-        }
-    }
-
-    private fun readAsset(context: Context, path: String): String =
-        context.assets.open(path).bufferedReader().use { it.readText() }
-
-    private fun org.json.JSONArray.toFloat3(fallback: FloatArray): FloatArray =
-        if (length() >= 3) floatArrayOf(getDouble(0).toFloat(), getDouble(1).toFloat(), getDouble(2).toFloat())
-        else fallback
-
-    private fun softmax(x: FloatArray): FloatArray {
-        if (x.isEmpty()) return x
-        var m = x[0]
-        for (v in x) if (v > m) m = v
-        val exps = FloatArray(x.size) { exp(x[it] - m) }
-        val sum = exps.sum()
-        if (sum == 0f) return exps
-        for (i in exps.indices) exps[i] /= sum
-        return exps
-    }
-
-    private fun sigmoid(z: Float): Float = 1f / (1f + exp(-z))
-
-    private fun half(x: Float, k: Float): Float {
-        val s0 = 0.5f
-        val sk = sigmoid(k)
-        return (sigmoid(k * x) - s0) / (sk - s0)
-    }
-
-    /**
-     * Calibrate a raw 0..1 score so `threshold` maps to exactly 0.5, steepest at
-     * the boundary. Mirrors `calibrate::calibrate_k` in the Rust harness.
-     */
-    private fun calibrate(raw0: Float, threshold0: Float, k: Float = CALIBRATION_K): Float {
-        val raw = raw0.coerceIn(0f, 1f)
-        val t = threshold0.coerceIn(1e-6f, 1f - 1e-6f)
-        val c = if (raw >= t) 0.5f + 0.5f * half((raw - t) / (1f - t), k)
-                else 0.5f - 0.5f * half((t - raw) / t, k)
-        return c.coerceIn(0f, 1f)
-    }
-}
 
 // =====================================================================================
 // BLOCK
@@ -2590,12 +1373,9 @@ object RapidBlockMonitor {
 object AppTimedBlock {
 
     private const val PREFS = "app_timed_block"
-    private const val FIVE_MIN_MS = 5 * 60 * 1000L
     private const val FOREVER = Long.MAX_VALUE
 
     private val sessionAllow = mutableSetOf<String>()
-
-    data class Strike(val tier: Int, val reason: String, val durationLabel: String)
 
     /** The block reason if [pkg] is currently timed-blocked, else null (clears expired windows). */
     @Synchronized
@@ -2613,23 +1393,6 @@ object AppTimedBlock {
         return prefs.getString("reason:$key", null) ?: reasonFor(prefs.getInt("strikes:$key", 1), until)
     }
 
-    /** Record one content strike against [pkg], raise its block, and say how to show it. */
-    @Synchronized
-    fun strike(context: Context, pkg: String): Strike {
-        val key = pkg.lowercase()
-        val prefs = prefs(context)
-        val strikes = prefs.getInt("strikes:$key", 0) + 1
-        val until = when {
-            strikes <= 1 -> System.currentTimeMillis() + FIVE_MIN_MS
-            strikes == 2 -> nextMidnight()
-            else -> FOREVER
-        }
-        val reason = reasonFor(strikes, until)
-        prefs.edit().putInt("strikes:$key", strikes).putLong("until:$key", until)
-            .putString("reason:$key", reason).apply()
-        return Strike(strikes, reason, durationLabel(strikes))
-    }
-
     /** Explicit, ladder-independent block (the 5-in-10-min rule). Never shortens an existing block. */
     @Synchronized
     fun blockFor(context: Context, pkg: String, durationMs: Long, reason: String) {
@@ -2640,11 +1403,6 @@ object AppTimedBlock {
         val until = maxOf(existing, System.currentTimeMillis() + durationMs)
         prefs.edit().putLong("until:$key", until).putString("reason:$key", reason).apply()
     }
-
-    /** Wording for the NEXT strike, WITHOUT recording it (used in the warning). */
-    @Synchronized
-    fun nextDurationLabel(context: Context, pkg: String): String =
-        durationLabel(prefs(context).getInt("strikes:${pkg.lowercase()}", 0) + 1)
 
     /** "Report" lets the current block through until the process restarts. */
     @Synchronized
@@ -2676,26 +1434,10 @@ object AppTimedBlock {
         }
     }
 
-    private fun durationLabel(strikes: Int): String = when {
-        strikes <= 1 -> "5 minutes"
-        strikes == 2 -> "until tomorrow"
-        else -> "permanently"
-    }
-
     private fun reasonFor(strikes: Int, until: Long): String = when {
         until == FOREVER || strikes >= 3 -> "App blocked permanently (repeated distracting content)"
         strikes == 2 -> "App blocked until tomorrow (repeated distracting content)"
         else -> "App blocked for 5 minutes (distracting content)"
-    }
-
-    private fun nextMidnight(): Long {
-        val c = java.util.Calendar.getInstance()
-        c.add(java.util.Calendar.DAY_OF_YEAR, 1)
-        c.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        c.set(java.util.Calendar.MINUTE, 0)
-        c.set(java.util.Calendar.SECOND, 0)
-        c.set(java.util.Calendar.MILLISECOND, 0)
-        return c.timeInMillis
     }
 
     private fun prefs(context: Context) =
@@ -2921,139 +1663,6 @@ object AppBlocklist {
 }
 
 
-// --------------------------------------------------------------
-// NsfwBlockMonitor
-// --------------------------------------------------------------
-
-
-/**
- * Turns the stream of per-screenshot NSFW scores into block decisions. Scores are
- * the calibrated 0..1 confidence from [NsfwClassifier] (0.5 == on the model's
- * cutoff). Three escalating rules, checked most-severe first:
- *
- *   - clear     (s > 0.75):            one frame blocks.
- *   - probable  (0.6 < s <= 0.75):     two block — same outlier tolerance as
- *       borderline: up to MAX_OUTLIERS non-probable frames between them are skipped.
- *   - borderline (0.5 <= s <= 0.6):   five block — tolerating short gaps: up to
- *       MAX_OUTLIERS consecutive non-borderline frames are skipped as outliers; a
- *       longer gap resets the run. (e.g. 0.5, 0.4, 0.1, 0.54, 0.52, 0.1, 0.59, ...
- *       keeps building toward five because the 1-2 stray frames are ignored.)
- *
- * While a block is active [blocked] is true and scores are ignored until [clear] is
- * called (when the user dismisses the cover), so the cover — captured as a benign
- * screenshot — can't re-trigger or flicker the block on itself.
- */
-object NsfwBlockMonitor {
-
-    /** One screenshot that fed into a block: file path, score, the app it came from, and the host (if any) at capture time. */
-    data class BlockFrame(val path: String?, val score: Float, val appPackage: String?, val host: String?)
-
-    /** A fired block: why it fired, plus the screenshot(s) that triggered it. */
-    data class BlockResult(val reason: String, val frames: List<BlockFrame>)
-
-    private const val BORDERLINE_LO = 0.5f
-    private const val BORDERLINE_HI = 0.6f
-    private const val PROBABLE_HI = 0.75f
-    private const val BORDERLINE_NEEDED = 3   // clean run blocks at 3; a run with dips blocks at 4
-    private const val PROBABLE_NEEDED = 2
-    private const val MAX_OUTLIERS = 2     // sub-0.5 frames in a row we skip; a 3rd in a row breaks the run
-
-    private val lock = Any()
-
-    @Volatile
-    var blocked = false
-        private set
-
-    private var borderlineCount = 0
-    private var outlierRun = 0
-    private var probableStreak = 0
-    private var probableOutlierRun = 0    // consecutive non-probable frames we skip
-    private var hadOutliers = false       // did the current borderline run survive any dips?
-
-    // The actual frames (path + score) building each streak, kept in lock-step with
-    // the counters above so a fired block can show exactly what triggered it.
-    private val probableFrames = mutableListOf<BlockFrame>()
-    private val borderlineFrames = mutableListOf<BlockFrame>()
-
-    /**
-     * Feed one calibrated score (and the screenshot it came from). Returns a
-     * BlockResult — reason + the contributing frames — the instant a rule fires
-     * (and latches [blocked]), otherwise null. No-ops while already blocked.
-     */
-    fun record(score: Float, path: String?, appPackage: String?, host: String?): BlockResult? {
-        synchronized(lock) {
-            if (blocked) return null
-            val frame = BlockFrame(path, score, appPackage, host)
-
-            // 1. clear — a single frame is enough.
-            if (score > PROBABLE_HI) return fire("1 image deemed distracting", listOf(frame))
-
-            // 2. probable — two (0.6, 0.75] frames, tolerating <= MAX_OUTLIERS gaps.
-            if (score > BORDERLINE_HI) {
-                probableStreak += 1
-                probableOutlierRun = 0
-                probableFrames.add(frame)
-                if (probableStreak >= PROBABLE_NEEDED)
-                    return fire("$probableStreak images deemed distracting in short succession", probableFrames.toList())
-            } else {
-                probableOutlierRun += 1
-                if (probableOutlierRun > MAX_OUTLIERS) {
-                    probableStreak = 0
-                    probableOutlierRun = 0
-                    probableFrames.clear()
-                }
-            }
-
-            // 3. borderline — ANY frame >= 0.5 builds the run (a 0.65 shouldn't
-            // break it — it's worse, not better). Only sub-0.5 frames count as
-            // dips, and only 3 dips IN A ROW break the run. A clean run blocks at
-            // 3; a run that survived dips blocks at 4.
-            if (score >= BORDERLINE_LO) {
-                borderlineCount += 1
-                outlierRun = 0
-                borderlineFrames.add(frame)
-                val needed = if (hadOutliers) BORDERLINE_NEEDED + 1 else BORDERLINE_NEEDED
-                if (borderlineCount >= needed)
-                    return fire("$borderlineCount borderline images in short succession", borderlineFrames.toList())
-            } else {
-                outlierRun += 1
-                if (outlierRun > MAX_OUTLIERS) {
-                    borderlineCount = 0
-                    outlierRun = 0
-                    hadOutliers = false
-                    borderlineFrames.clear()
-                } else if (borderlineCount > 0) {
-                    hadOutliers = true
-                }
-            }
-            return null
-        }
-    }
-
-    /** Dismiss the active block and start accumulating fresh. */
-    fun clear() {
-        synchronized(lock) {
-            blocked = false
-            resetStreaks()
-        }
-    }
-
-    private fun fire(reason: String, frames: List<BlockFrame>): BlockResult {
-        blocked = true
-        resetStreaks()
-        return BlockResult(reason, frames)
-    }
-
-    private fun resetStreaks() {
-        borderlineCount = 0
-        outlierRun = 0
-        probableStreak = 0
-        probableOutlierRun = 0
-        hadOutliers = false
-        probableFrames.clear()
-        borderlineFrames.clear()
-    }
-}
 
 
 // --------------------------------------------------------------
@@ -3072,11 +1681,6 @@ class OverlayController(private val context: Context) {
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var view: View? = null
-
-    // The transient image-reveal window (shown above the cover, auto-removed).
-    private var imagesView: View? = null
-    private val imagesHandler = Handler(Looper.getMainLooper())
-    private val removeImages = Runnable { hideImages() }
 
     val isShowing: Boolean get() = view != null
 
@@ -3126,7 +1730,6 @@ class OverlayController(private val context: Context) {
     }
 
     fun hide() {
-        hideImages()
         view?.let {
             try {
                 windowManager.removeView(it)
@@ -3140,139 +1743,6 @@ class OverlayController(private val context: Context) {
     /** Update just the cover's reason text (used by the live block countdown). */
     fun setReason(reason: String) {
         view?.findViewById<TextView>(R.id.block_reason)?.text = reason
-    }
-
-
-    /**
-     * Lays the triggering screenshot(s) ON TOP of the existing block cover: a dark
-     * panel, centred, with the 0.50 disclaimer and the image(s) as a collage (one
-     * image shown alone, several in a 2-wide grid), each labelled with its score.
-     * The cover's "Blocked" + reason header stays visible around the panel. After
-     * [durationMs] only this panel is removed — the cover (reason + buttons) stays.
-     */
-    fun showImages(frames: List<NsfwBlockMonitor.BlockFrame>, durationMs: Long) {
-        hideImages() // clear any previous reveal first
-
-        val container = view as? ViewGroup ?: return
-        val valid = frames.filter { !it.path.isNullOrBlank() && File(it.path!!).exists() }
-        if (valid.isEmpty()) return
-
-        val metrics = context.resources.displayMetrics
-        val density = metrics.density
-        fun dp(value: Int): Int = (value * density).toInt()
-
-        val panel = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            isClickable = true  // swallow taps so they don't hit the buttons behind
-            setBackgroundColor(0xEE000000.toInt())
-            setPadding(dp(14), dp(14), dp(14), dp(14))
-            addView(TextView(context).apply {
-                text = "Scores over 0.50 are treated as having a distracting nature. " +
-                    "The AI may categorize content incorrectly."
-                setTextColor(0xFFDDDDDD.toInt())
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, dp(10))
-            })
-            addView(buildCollage(valid, metrics))
-        }
-
-        // Transparent full-screen layer; only the centred panel is opaque, so the
-        // cover header shows around it and untouched areas fall through to buttons.
-        val layer = FrameLayout(context).apply {
-            addView(
-                panel,
-                FrameLayout.LayoutParams(
-                    (metrics.widthPixels * 0.9f).toInt(),
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { gravity = Gravity.CENTER },
-            )
-        }
-
-        container.addView(
-            layer,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        imagesView = layer
-
-        imagesHandler.removeCallbacks(removeImages)
-        imagesHandler.postDelayed(removeImages, durationMs)
-    }
-
-    /** One image alone, or several in a 2-wide collage; each captioned with its score. */
-    private fun buildCollage(frames: List<NsfwBlockMonitor.BlockFrame>, metrics: DisplayMetrics): View {
-        val density = metrics.density
-        fun dp(value: Int): Int = (value * density).toInt()
-
-        val cols = if (frames.size == 1) 1 else 2
-        val rows = (frames.size + cols - 1) / cols
-        // Cap each image's height so the whole collage fits over the cover.
-        val maxCellH = ((metrics.heightPixels * 0.5f) / rows).toInt().coerceAtLeast(dp(80))
-
-        val grid = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        var i = 0
-        while (i < frames.size) {
-            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-            for (c in 0 until cols) {
-                val cellParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    .apply { setMargins(dp(3), dp(3), dp(3), dp(3)) }
-                if (i < frames.size) {
-                    val f = frames[i]
-                    val cell = LinearLayout(context).apply {
-                        orientation = LinearLayout.VERTICAL
-                        addView(
-                            ImageView(context).apply {
-                                adjustViewBounds = true
-                                maxHeight = maxCellH
-                                scaleType = ImageView.ScaleType.FIT_CENTER
-                                load(File(f.path!!))
-                            },
-                            LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                            ),
-                        )
-                        addView(scoreLabel(f.score))
-                    }
-                    row.addView(cell, cellParams)
-                } else {
-                    // Empty filler keeps an odd last image aligned in its half.
-                    row.addView(View(context), cellParams)
-                }
-                i++
-            }
-            grid.addView(
-                row,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ),
-            )
-        }
-        return grid
-    }
-
-    /** Remove the image layer (if any). The block cover itself is left in place. */
-    fun hideImages() {
-        imagesHandler.removeCallbacks(removeImages)
-        imagesView?.let { layer ->
-            (layer.parent as? ViewGroup)?.removeView(layer)
-            imagesView = null
-        }
-    }
-
-    private fun scoreLabel(score: Float): TextView {
-        val density = context.resources.displayMetrics.density
-        return TextView(context).apply {
-            text = "nsfw %.2f".format(Locale.US, score)
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setPadding(0, (3 * density).toInt(), 0, (6 * density).toInt())
-        }
     }
 
     private fun overlayType(): Int =
@@ -3306,7 +1776,6 @@ class MonitorAdapter(
     private val timeFormat = SimpleDateFormat("MMM d  HH:mm:ss", Locale.getDefault())
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val thumbnail: ImageView = view.findViewById(R.id.thumbnail)
         val primary: TextView = view.findViewById(R.id.primary)
         val secondary: TextView = view.findViewById(R.id.secondary)
         val meta: TextView = view.findViewById(R.id.meta)
@@ -3325,26 +1794,11 @@ class MonitorAdapter(
         holder.itemView.setOnClickListener { onEntryClick(entry) }
         holder.itemView.setOnLongClickListener { onEntryLongClick(entry); true }
 
-        if (entry.kind == MonitorEntry.KIND_SCREEN) {
-            holder.thumbnail.visibility = View.VISIBLE
-            entry.screenshotPath?.let { holder.thumbnail.load(File(it)) }
-            holder.primary.text = entry.packageName ?: "Screen"
-            holder.secondary.text = entry.nsfwScore
-                ?.let { score ->
-                    val flag = if (score >= 0.5f) "  ⚠ flagged" else ""
-                    "nsfw %.2f%s".format(Locale.US, score, flag)
-                }
-                ?: "Screenshot (not scored)"
-            holder.meta.text = "$time  ·  screen"
-        } else {
-            holder.thumbnail.visibility = View.GONE
-            holder.thumbnail.setImageDrawable(null)
-            holder.primary.text = entry.title?.takeIf { it.isNotBlank() }
-                ?: entry.url ?: entry.domain ?: entry.packageName ?: "Page"
-            holder.secondary.text = entry.url ?: entry.domain ?: entry.packageName.orEmpty()
-            val snippet = entry.text?.replace('\n', ' ')?.trim()?.take(40).orEmpty()
-            holder.meta.text = snippet.ifBlank { "(none)" } + "   ·   $time"
-        }
+        holder.primary.text = entry.title?.takeIf { it.isNotBlank() }
+            ?: entry.url ?: entry.domain ?: entry.packageName ?: "Page"
+        holder.secondary.text = entry.url ?: entry.domain ?: entry.packageName.orEmpty()
+        val snippet = entry.text?.replace('\n', ' ')?.trim()?.take(40).orEmpty()
+        holder.meta.text = snippet.ifBlank { "(none)" } + "   ·   $time"
     }
 
     companion object {

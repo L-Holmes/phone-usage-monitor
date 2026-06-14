@@ -19,6 +19,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+
+    androidResources { noCompress += "gz" }
+
     buildFeatures {
         buildConfig = true
     }

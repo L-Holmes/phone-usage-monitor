@@ -1,4 +1,12 @@
 
+
+
+screen capturing not possible on android..
+    on my samsung- it always resets...
+
+
+
+------------
 readme:
 
 
@@ -10,6 +18,7 @@ Phone testing:
 # watch model load + any errors
 adb logcat -s NsfwClassifier ScreenCapture
 
+./gradlew :app:assembleDebug && ./deploy.sh
 
 
 

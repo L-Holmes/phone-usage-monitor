@@ -40,19 +40,6 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/status_capture"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/screen_capture" />
-
-        <Button
-            android:id="@+id/btn_capture"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/start" />
     </LinearLayout>
 
     <LinearLayout
@@ -75,22 +62,6 @@
             android:layout_height="wrap_content"
             android:text="@string/grant" />
     </LinearLayout>
-
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <Button
-        android:id="@+id/btn_battery"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Allow background (battery)" />
-
-    </LinearLayout>
-
 
 
     <TextView

@@ -5,16 +5,6 @@
     android:orientation="horizontal"
     android:paddingVertical="8dp">
 
-    <ImageView
-        android:id="@+id/thumbnail"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_marginEnd="12dp"
-        android:adjustViewBounds="true"
-        android:contentDescription="@null"
-        android:scaleType="centerCrop"
-        android:visibility="gone" />
-
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"

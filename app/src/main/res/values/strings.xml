@@ -7,18 +7,11 @@
     <string name="disclosure">This app records what you view on this device for accountability: the website/app and on-screen text (Accessibility), and periodic screenshots of your screen (screen capture). Everything stays on this device. Turn it on only with the user\'s consent.</string>
 
     <string name="page_monitoring">Page monitoring (Accessibility)</string>
-    <string name="screen_capture">Screen capture</string>
     <string name="status_on">ON</string>
     <string name="status_off">OFF</string>
     <string name="enable">Enable</string>
-    <string name="start">Start</string>
-    <string name="stop">Stop</string>
     <string name="clear_list">Clear list</string>
     <string name="empty_list">Nothing recorded yet. Turn on monitoring above.</string>
-
-    <string name="capture_notification_title">Screen monitoring active</string>
-    <string name="capture_notification_text">Recording screen activity for accountability.</string>
-    <string name="capture_channel_name">Screen monitoring</string>
 
     <string name="overlay_permission">Block overlay permission</string>
     <string name="grant">Grant</string>

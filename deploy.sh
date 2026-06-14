@@ -3,6 +3,24 @@ set -euo pipefail
 
 echo "🚀 Starting Android App Deployment..."
 
+# 0. Refresh the BUNDLED adult-domain blocklist (NEW STEP) — runs on THIS machine.
+ASSET_DIR="app/src/main/assets/blocklist"
+ASSET="$ASSET_DIR/adult_hosts.txt.gz"
+echo "🧱 Refreshing bundled blocklist..."
+if command -v python3 &>/dev/null; then
+    if python3 tools/build_adult_blocklist.py --gz-only --out "$ASSET_DIR"; then
+        echo "✅ Blocklist refreshed: $ASSET ($(wc -c < "$ASSET") bytes)"
+    elif [[ -f "$ASSET" ]]; then
+        echo "⚠️  Refresh failed (offline?). Building with the existing $ASSET."
+    else
+        echo "❌ Refresh failed and no existing blocklist asset. Aborting."; exit 1
+    fi
+else
+    [[ -f "$ASSET" ]] && echo "⚠️  python3 missing; using existing $ASSET." \
+        || { echo "❌ python3 missing and no asset."; exit 1; }
+fi
+
+
 # 1. Verify adb is available
 if ! command -v adb &>/dev/null; then
     echo "❌ Error: 'adb' not found in PATH."

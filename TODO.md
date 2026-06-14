@@ -1,6 +1,19 @@
 
+- tell me how to fix the issue where a domain gets banned straight away...
+    - find out why it is in the first place-- it should be banning the subdomain initially...
+    - like https://www.google.com/search?client=firefox-b-e&hs=Ms4p&sca_esv=b91370699063d68b&channel=entpr&sxsrf=ANbL-n4fnG2OJWyk-NXhmqVc4QlBG6XmPQ:1781473280609&udm=2&fbs=ADc_l-aN0CWEZBOHjofHoaMMDiKp0UJuhqwKhR0QUhF54-6jIYFfWbU_Clyew-1Wh7zkL7GXEIyGmuNECR0N8Mieh0vrbko1hIXGpe6KXjyGEMS8qvYi8f9M7cXm4TWNUk9JLkeb5CxsOhFVBEL_bYxXqJdSCXdnPCdiIaUzaEQhM3pPfC3wari8Ygjr-S3LzPygkzj2nNindWho60NjB52eRhNaBNml5A&q=wolves&sa=X&ved=2ahUKEwjw2cSQ2YeVAxUoRkEAHUheOzgQtKgLegQIGBAB&biw=1920&bih=1087&dpr=1 ...
+        - it sohuldn't block google.com! it should block: https://www.google.com/search?client=firefox-b-e&hs=Ms4p&sca_esv=b91370699063d68b&channel=entpr&sxsrf=ANbL-n4fnG2OJWyk-NXhmqVc4QlBG6XmPQ:1781473280609&udm=2&fbs=ADc_l-aN0CWEZBOHjofHoaMMDiKp0UJuhqwKhR0QUhF54-6jIYFfWbU_Clyew-1Wh7zkL7GXEIyGmuNECR0N8Mieh0vrbko1hIXGpe6KXjyGEMS8qvYi8f9M7cXm4TWNUk9JLkeb5CxsOhFVBEL_bYxXqJdSCXdnPCdiIaUzaEQhM3pPfC3wari8Ygjr-S3LzPygkzj2nNindWho60NjB52eRhNaBNml5A&q=wolves&sa=X&ved=2ahUKEwjw2cSQ2YeVAxUoRkEAHUheOzgQtKgLegQIGBAB&biw=1920&bih=1087&dpr=1...
+    - same with other apps... still blocks the domain.. not the subdomain from the url...
+    and..
+        https://www.reddit.com/r/badminton/
+    if that page is detected... it should block https://www.reddit.com/r/badminton/, NOT reddit.com! 
+    (only after a few repeat issues on the same domain should the whole domain be banned!)
 
-Tell me what to do in an idiot proof way; before and after of the code that needs changing.
+
+# NEXT STEPS:
+- completely remove any image detection...
+- prevent app from being deleted
+
 
 +======
 
