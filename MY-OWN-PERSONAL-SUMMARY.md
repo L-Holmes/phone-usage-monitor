@@ -166,3 +166,21 @@ We have broke down the patterns of addiction...
 - And... they're useful!
     - We came back after admitting that they are useufl...
 - you can use your phone without being addicted!
+
+
+==========
+# DEV STUFF
+
+
+## -> updating the settings pages that are blocked;
+look here in Main.kt;
+
+```
+guardedSettingsPages
+```
+
+## -> Word blocking;
+Adult-domain list (DomainBlocklist): a big bundled list of known adult hosts; blocks if the page's host (or a parent domain) is on it.
+Sexual-content text scorer (BorderlineScorer + WordLists): tokenizes title + URL + visible text, adds weighted points for words from your assets/words/*.txt tiers (explicit 6, strong 4, subtle 2, dual 3; title/URL hits ×2), and blocks when the total hits THRESHOLD = 10. Dual words like "hot" only count when a sexual word is within 5 words.
+Your manual rules (BlockRules): the keywords/domains you add in-app.
+The catch: the domain list and the text scorer only run when a host was successfully read from the address bar (host != null). Look at lines 737 & 739 — both branches are guarded by host != null.

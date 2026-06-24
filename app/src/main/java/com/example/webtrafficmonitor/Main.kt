@@ -776,7 +776,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                appGuard != null -> appGuard
                host != null && DomainBlocklist.isBlocked(host) -> "Adult site (blocklist): $host"
                rule != null -> describeRule(rule)
-               host != null -> BorderlineScorer.evaluate(title, url, content)?.reason
+               (host != null || AppBlocklist.isBrowser(packageName)) ->
+                   BorderlineScorer.evaluate(title, url, content)?.reason
                else -> null
            }
 
@@ -934,17 +935,31 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val raw = node.text?.toString()?.trim()?.takeIf { it.isNotBlank() }
             ?: node.contentDescription?.toString()?.trim()?.takeIf { it.isNotBlank() }
             ?: return null
-        // Don't capture hint text like "Search or type URL" as if it were the page.
+        // Some browsers (Firefox's Compose toolbar) put the address in the CONTENT
+        // DESCRIPTION with the placeholder glued on:
+        //   "example.com/page. Search or enter address"
+        // So rather than discarding the whole string when a hint shows up, cut it
+        // off at the first hint phrase and keep the real address in front of it.
         val lower = raw.lowercase()
-        if (ADDRESS_BAR_HINTS.any { it in lower }) return null
-        return raw.take(MAX_URL_CHARS)
+        var end = raw.length
+        for (hint in ADDRESS_BAR_HINTS) {
+            val i = lower.indexOf(hint)
+            if (i in 0 until end) end = i
+        }
+        val cleaned = raw.substring(0, end).trim().trim('.', ',', '-', '·').trim()
+        if (cleaned.isBlank()) return null   // it really was only a placeholder
+        return cleaned.take(MAX_URL_CHARS)
     }
 
     private fun isAddressBar(node: AccessibilityNodeInfo): Boolean {
-        // Most reliable: the browser's own view id for its URL bar (see ADDRESS_BAR_IDS).
         val viewId = node.viewIdResourceName?.lowercase()
-        if (viewId != null && ADDRESS_BAR_IDS.any { viewId.endsWith(it) }) return true
-        // Fallback: an editable field, or a toolbar with an address-bar hint.
+        if (viewId != null) {
+            if (ADDRESS_BAR_IDS.any { viewId.endsWith(it) }) return true
+            // Generic backup (the "looks like a url bar" catch-all): any id that
+            // contains url / address / location / omnibar. Catches browsers we
+            // haven't enumerated — e.g. Firefox's "ADDRESSBAR_URL_BOX".
+            if (ADDRESS_BAR_ID_HINTS.any { it in viewId }) return true
+        }
         if (node.isEditable || node.className == "android.widget.EditText") return true
         val description = node.contentDescription?.toString()?.lowercase() ?: return false
         return ADDRESS_BAR_HINTS.any { it in description }
@@ -1167,17 +1182,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private val ADDRESS_BAR_IDS = listOf(
             ":id/url_bar",                        // Chrome, Edge, Brave, most Chromium
             ":id/url_field",                      // Opera
-            ":id/mozac_browser_toolbar_url_view", // Firefox / Fenix / Focus
+            ":id/mozac_browser_toolbar_url_view", // Firefox (old toolbar)
             ":id/location_bar_edit_text",         // Samsung Internet
-            ":id/omnibartextinput",               // DuckDuckGo (classic omnibar)
-            ":id/omnibartextinput",               // DuckDuckGo (casing variant)
+            ":id/omnibartextinput",               // DuckDuckGo
+            "addressbar_url_box",                 // Firefox (new Compose toolbar — no :id/ prefix)
         )
+
+        // Generic "looks like an address bar" id fragments, used as a backup in
+        // isAddressBar. Paired with the host-shaped check in hostInText, this is the
+        // URL-detection safety net.
+        private val ADDRESS_BAR_ID_HINTS = listOf("url", "address", "location", "omnibar")
 
         // Diagnostics: true logs a "NODE DUMP" row for the browsers below. Turn OFF
         // once you've found the URL node.
         private const val DEBUG_DUMP_NODES = false
         private const val DUMP_INTERVAL_MS = 1500L
-        private val BROWSER_DEBUG_PACKAGES = setOf("com.duckduckgo.mobile.android")
+        private val BROWSER_DEBUG_PACKAGES = setOf("org.mozilla.firefox")
 
     }
 }
@@ -1450,6 +1470,12 @@ object BlockEscalation {
  */
 object RapidBlockMonitor {
 
+    /**
+     * Master switch for the "5 blocks in 10 min on one app -> 90-minute block".
+     * false = off (all logic kept; flip to true to fully re-enable).
+     */
+    const val ENABLED = false
+
     private const val WINDOW_MS = 10 * 60 * 1000L
     private const val LIMIT = 5
     const val PENALTY_MS = 90 * 60 * 1000L
@@ -1460,6 +1486,7 @@ object RapidBlockMonitor {
 
     /** Record one block on [pkg]; returns PENALTY_MS if this one hit the limit, else null. */
     fun record(pkg: String?): Long? {
+        if (!ENABLED) return null            // feature off: never trigger a 90-min block
         if (pkg.isNullOrBlank()) return null
         val key = pkg.lowercase()
         val now = System.currentTimeMillis()
@@ -1508,7 +1535,16 @@ object AppTimedBlock {
             prefs.edit().remove("until:$key").remove("reason:$key").apply()  // window expired; strikes stay
             return null
         }
-        return prefs.getString("reason:$key", null) ?: reasonFor(prefs.getInt("strikes:$key", 1), until)
+        val reason = prefs.getString("reason:$key", null)
+            ?: reasonFor(prefs.getInt("strikes:$key", 1), until)
+        // Rapid 90-min block disabled? Clear any lingering one and let the app
+        // through. (The content-strike ladder — 5 min / tomorrow / permanent — is
+        // unaffected; this only targets the "too many blocks" reason.)
+        if (!RapidBlockMonitor.ENABLED && reason.endsWith("(too many blocks)")) {
+            prefs.edit().remove("until:$key").remove("reason:$key").apply()
+            return null
+        }
+        return reason
     }
 
     /** Explicit, ladder-independent block (the 5-in-10-min rule). Never shortens an existing block. */
@@ -1683,6 +1719,7 @@ object AppBlocklist {
     // Add a package name here to whitelist a browser.
     private val ALLOWED_BROWSERS = setOf(
         "org.mozilla.fenix",
+        "org.mozilla.firefox",
     )
 
     // ================================================================
@@ -1698,7 +1735,6 @@ object AppBlocklist {
         "com.chrome.canary",
 
         // --- Firefox / Gecko family ---
-        "org.mozilla.firefox",
         "org.mozilla.firefox_beta",
         "org.mozilla.fennec_fdroid",
         "org.mozilla.focus",
