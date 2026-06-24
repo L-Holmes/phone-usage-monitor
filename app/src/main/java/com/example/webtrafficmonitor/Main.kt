@@ -499,28 +499,64 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return null
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    //  UNINSTALL-LOCK GUARDED PAGES  ──  FUTURE DEVS: READ THIS  ──
+    // ════════════════════════════════════════════════════════════════════════
+    //  While the uninstall lock is ON, the accessibility guard sends the user
+    //  back to the home screen the moment they open any Settings page listed
+    //  below. These are the "escape routes" that would let someone unlock or
+    //  break the lock:
+    //    1. Device admin page       – deactivating admin re-enables uninstall.
+    //    2. App-info / uninstall     – the Uninstall & Force-stop buttons.
+    //    3. Page monitoring (a11y)   – disabling this service KILLS the guard.
+    //    4. Appear on top (overlay)  – turning this off breaks the block screen.
+    //
+    //  Each page is identified ONLY by text that appears on it. A page matches
+    //  when EVERY string in `mustContain` is present on screen (case-insensitive
+    //  substring). The strings were copied verbatim from this app's own page
+    //  monitor on a Samsung device.
+    //
+    //  ⚠️ IF A PAGE STOPS BEING BLOCKED after an Android / OEM update:
+    //     open that page on the phone, find its entry in this app's monitor log,
+    //     copy the on-screen text, and update the strings below. That is the
+    //     ONLY maintenance this feature needs.
+    // ════════════════════════════════════════════════════════════════════════
 
-    /**
-     * True when the Settings screen in front is our App-info, uninstall, or
-     * device-admin deactivation page. Heuristic: we look for our own app name plus a
-     * remove/uninstall/deactivate word on the same screen.
-     */
+    private data class GuardedPage(val label: String, val mustContain: List<String>)
+
+    private val guardedSettingsPages = listOf(
+        // 1. Device-admin deactivation page.
+        //    Seen: "Device admin app" / "Web Traffic Monitor" / "This admin app is active"
+        GuardedPage("Device admin", listOf("Web Traffic Monitor", "admin app")),
+
+        // 2. App-info page (Uninstall / Force stop live here).
+        GuardedPage("App info – uninstall", listOf("Web Traffic Monitor", "uninstall")),
+        GuardedPage("App info – force stop", listOf("Web Traffic Monitor", "force stop")),
+
+        // 3. Page-monitoring accessibility page AND the accessibility list that
+        //    contains it. "page monitoring" is THIS app's accessibility label.
+        //    Seen: "Web Traffic Monitor — page monitoring" / "Lets the app read..."
+        GuardedPage("Page monitoring (accessibility)", listOf("page monitoring")),
+
+        // 4. "Appear on top" overlay-permission area. Our app's row may be scrolled
+        //    off-screen, so we match the page title alone.
+        //    NOTE: this blocks the WHOLE overlay list while locked, not just our
+        //    app — acceptable: only reachable in Settings, only while locked.
+        //    Seen: title "Appear on top"
+        GuardedPage("Overlay – Appear on top", listOf("Appear on top")),
+    )
+
+    /** True when the Settings screen in front matches any guarded page above. */
     private fun isOurUninstallScreen(): Boolean {
         val root = rootInActiveWindow ?: return false
-        val label = applicationInfo.loadLabel(packageManager).toString()
-
-        // Must mention US — this is what keeps normal Settings use (wifi, display,
-        // etc.) untouched. We only ever act on pages showing our own app name.
-        val mentionsUs = root.findAccessibilityNodeInfosByText(label).isNotEmpty() ||
-            root.findAccessibilityNodeInfosByText(packageName).isNotEmpty()
-        if (!mentionsUs) return false
-
-        return listOf(
-            "device admin", "admin app",   // the deactivation page (from your dump)
-            "uninstall", "force stop",      // the app-info / uninstall page
-            "deactivate", "disable",
-        ).any { root.findAccessibilityNodeInfosByText(it).isNotEmpty() }
+        return guardedSettingsPages.any { page ->
+            page.mustContain.all { needle ->
+                root.findAccessibilityNodeInfosByText(needle).isNotEmpty()
+            }
+        }
     }
+
+
 
     override fun onServiceConnected() {
         super.onServiceConnected()
