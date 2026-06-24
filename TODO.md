@@ -2,6 +2,18 @@
 - prevent app from being deleted
 
 
+============
+
+at 4:40pm;
+
+ I STILL have the issue where if im on google images, doing some tests... that it will block google.com/search... 
+ and not say 'https://www.google.com/search?client=firefox-b-e&hs=wU8p&sca_esv=a05e7dbab888ec56&channel=entpr&udm=2&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cY2oODYyTyZk24Xz37_7FQ0Kuh3jfnRqiKzI7KrGsO-ahMiVxElJGh2HXmqeqNBF0sjyahG6kvUa5yLH4jLOpyZbGHpL6ex2VVg6AhGZcG3iBdrFviWpobLDLhHbWEcSglFrVDA5dWc9mFAWZ_0p9MksOPIVKixjMfWhrccjHpOzMNI7HD7jJUbjwhhO_2OfmNRO62g&q=wolves&sa=X&ved=2ahUKEwjY6Ne1gaCVAxVwT0EAHbasEhEQtKgLegQIGBAB&biw=1920&bih=1088&dpr=1'...
+ Like I get it... if we're on a different website, we don't want the '?' params changing to result in the user being to able to have access to the page.. we would want say.. reddit.com/nsfw?sort=high to be banned and reddit.com/nsfw?sort=low to also... 
+But well.. can we at the very least hardcode some whitelists for certain really popular websites that for some reason make the search term a param? 
+(obviously google in this case... but if you know of any others... please add them as well!)
+
+
+
 +======
 
 NEXT TODO:
