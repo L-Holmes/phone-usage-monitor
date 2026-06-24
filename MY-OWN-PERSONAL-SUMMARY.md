@@ -1,4 +1,9 @@
 
+RUN:
+./deploy.sh
+
+DEBUG:
+adb logcat -s NsfwClassifier ScreenCapture
 
 
 screen capturing not possible on android..
@@ -142,3 +147,22 @@ One inconsistency worth flagging: **dismissing a web image-block via Go back/Lea
         - expose full urls & page content
     - user can enable 'stealth' mode, which prevents screenshots
     - but we've hardcoded a block to prevent people from accessing that setting...
+
+
+
+============
+
+# Breaking the patterns
+We have broke down the patterns of addiction...
+- Want a Quick dopamine hit...
+    - Slow you down...
+    - Give alternate, low dopamine hits?!?!?
+
+
+
+# what makes us different;
+- Let you use your smartphone...
+    - You sort of need one in this modern day and age...
+- And... they're useful!
+    - We came back after admitting that they are useufl...
+- you can use your phone without being addicted!

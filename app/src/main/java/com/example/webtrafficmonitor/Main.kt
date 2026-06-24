@@ -54,6 +54,10 @@ import android.widget.ScrollView
 import androidx.appcompat.app.AlertDialog
 
 
+import android.app.admin.DeviceAdminReceiver
+import android.app.admin.DevicePolicyManager
+
+
 // NOTE: This whole module is intentionally kept in ONE file.
 // These classes would normally live in separate files / sub-packages;
 // they are consolidated here on purpose to make development easier.
@@ -84,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var blockRulesView: TextView
     private lateinit var blockInput: EditText
     private lateinit var emptyList: TextView
+    private lateinit var btnUninstallGuard: Button
 
 
     /** Long-press a row to read the whole entry — including the full NODE DUMP. */
@@ -142,6 +147,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        Toast.makeText(this, "✅ New build loaded", Toast.LENGTH_LONG).show()
         BlockRules.load(this)
 
         statusAccessibility = findViewById(R.id.status_accessibility)
@@ -166,6 +172,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
         findViewById<Button>(R.id.btn_clear_log).setOnClickListener { clearLog() }
 
+        btnUninstallGuard = findViewById(R.id.btn_uninstall_guard)
+        btnUninstallGuard.setOnClickListener { toggleUninstallGuard() }
+        updateGuardButton()
+
         observeEntries()
         refreshBlockRules()
     }
@@ -174,6 +184,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshStatus()
         AppBlocklist.refresh(this)
+        updateGuardButton()
     }
 
     private fun observeEntries() {
@@ -238,6 +249,24 @@ class MainActivity : AppCompatActivity() {
         statusAccessibility.text = getString(R.string.page_monitoring) + ":  " + onOff(isAccessibilityEnabled())
 
         statusOverlay.text = getString(R.string.overlay_permission) + ":  " + onOff(Settings.canDrawOverlays(this))
+    }
+
+    private fun toggleUninstallGuard() {
+        if (UninstallGuard.isAdminActive(this)) {
+            // Currently locked -> turn it off (this also removes the admin lock).
+            UninstallGuard.setEnabled(this, false)
+            Toast.makeText(this, "Uninstall lock OFF", Toast.LENGTH_SHORT).show()
+        } else {
+            // Not locked yet -> request admin. Guard stays quiet until admin is active.
+            UninstallGuard.setEnabled(this, true)
+            startActivity(UninstallGuard.activationIntent(this))
+        }
+        updateGuardButton()
+    }
+
+    private fun updateGuardButton() {
+        val on = UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)
+        btnUninstallGuard.text = if (on) "Uninstall lock: ON" else "Uninstall lock: OFF"
     }
 
     private fun onOff(on: Boolean): String =
@@ -410,6 +439,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     // The host the current page-block cover is showing for (drives the
     // "still blocked / different page" status lines and dismiss escalation).
     private var shownBlockHost: String? = null
+    private var shownBlockUrl: String? = null       
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
@@ -469,6 +499,29 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return null
     }
 
+
+    /**
+     * True when the Settings screen in front is our App-info, uninstall, or
+     * device-admin deactivation page. Heuristic: we look for our own app name plus a
+     * remove/uninstall/deactivate word on the same screen.
+     */
+    private fun isOurUninstallScreen(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val label = applicationInfo.loadLabel(packageManager).toString()
+
+        // Must mention US — this is what keeps normal Settings use (wifi, display,
+        // etc.) untouched. We only ever act on pages showing our own app name.
+        val mentionsUs = root.findAccessibilityNodeInfosByText(label).isNotEmpty() ||
+            root.findAccessibilityNodeInfosByText(packageName).isNotEmpty()
+        if (!mentionsUs) return false
+
+        return listOf(
+            "device admin", "admin app",   // the deactivation page (from your dump)
+            "uninstall", "force stop",      // the app-info / uninstall page
+            "deactivate", "disable",
+        ).any { root.findAccessibilityNodeInfosByText(it).isNotEmpty() }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = OverlayController(this)
@@ -501,6 +554,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
+        // Uninstall guard: while the lock is on, bounce out of our own
+        // App-info / uninstall / "deactivate admin" pages in Settings.
+        if (UninstallGuard.isAdminActive(this) && packageName == "com.android.settings") {
+            if (isOurUninstallScreen()) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                return
+            }
+        }
         if (packageName in IGNORED_PACKAGES) return
         // Keyboards pop their own window over the app and fire events under their
         // own package; treating that as "the foreground app changed" is what made
@@ -621,17 +682,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
 
-    /**
-     * A web block was dismissed (Go back / Leave). Permanently block this exact
-     * subdomain so the user can't just walk straight back onto it, and add a strike
-     * to its registrable domain; on the 3rd strike today, block the whole domain.
-     * Called only with a real host, so non-web (app/keyword-off-web) blocks are
-     * unaffected. NOT called from Report — that path stays a clean pass-through.
-     */
-    private fun escalateWebBlock(host: String) {
-        BlockRules.add(this, host)                            // exact subdomain -> permanent
+    private fun escalateWebBlock(host: String, pageUrl: String?) {
+        // Block just THIS page, not the whole host.
+        val pageRule = BlockRules.pageRuleFor(pageUrl)
+        BlockRules.add(this, pageRule ?: host)   // no path readable -> fall back to host
+
+        // Strikes still accrue against the registrable DOMAIN; the 3rd today
+        // promotes the whole domain to a 1-hour block.
         BlockEscalation.recordWebBlock(this, host)?.let { domain ->
-            BlockRules.addTimed(this, domain, DOMAIN_BLOCK_MS) // 3rd strike today -> domain for 1h
+            BlockRules.addTimed(this, domain, DOMAIN_BLOCK_MS)
         }
     }
 
@@ -698,6 +757,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 else -> null
             }
             shownBlockHost = host
+            shownBlockUrl = url        
             val reason = if (status == null) baseReason else "$baseReason\n\n$status"
 
             if (freshShow) {
@@ -722,15 +782,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
                         lastGoBackAt = tapAt
-                        shownBlockHost?.let { escalateWebBlock(it) }
+                        shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }   // CHANGED
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 },
                 onLeave = {
-                    shownBlockHost?.let { escalateWebBlock(it) }
+                    shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }       // CHANGED
                     exitToHome()
                     controller.hide()
                     shownBlockHost = null
+                    shownBlockUrl = null                                              // ADD
                 },
                 onReport = {
                     // do nothing
@@ -739,10 +800,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             // show() only sets the text on first display; keep the status line live.
             if (!freshShow) controller.setReason(reason)
         } else {
-            // Never hide an app-level (whole-browser) block from here.
             if (!appBlockActive) {
                 controller.hide()
                 shownBlockHost = null
+                shownBlockUrl = null        // ADD
             }
         }
     }
@@ -1193,15 +1254,18 @@ object BlockRules {
         val titleText = title?.lowercase()
         val urlText = url?.lowercase()
         val bodyText = text?.lowercase()
+        val normalizedUrl = normalizeUrl(url)        // ADD
 
-        fun matches(rule: String): Boolean =
-            if ('.' in rule) {
+        fun matches(rule: String): Boolean = when {
+            '/' in rule ->                            // PAGE rule: this exact page (and deeper paths)
+                normalizedUrl != null && normalizedUrl.startsWith(rule)
+            '.' in rule ->                            // DOMAIN rule: host + subdomains
                 host != null && (host == rule || host.endsWith(".$rule"))
-            } else {
+            else ->                                   // KEYWORD rule
                 (titleText?.contains(rule) == true) ||
                     (urlText?.contains(rule) == true) ||
                     (bodyText != null && countHits(bodyText, rule) >= TEXT_HITS_NEEDED)
-            }
+        }
 
         rules.firstOrNull { matches(it) }?.let { return it }
         return timedRules.keys.firstOrNull { matches(it) }
@@ -1218,6 +1282,24 @@ object BlockRules {
         }
         return count
     }
+
+    /**
+     * Normalize a URL for matching/storing: drop scheme + fragment, lowercase,
+     * strip trailing slash. Keeps the path and query.
+     */
+    private fun normalizeUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        var s = url.trim().lowercase()
+        s = s.substringAfter("://", s)   // drop scheme
+        s = s.substringBefore('#')       // drop fragment
+        return s.trimEnd('/')
+    }
+
+    fun pageRuleFor(url: String?): String? {
+        val s = normalizeUrl(url)?.substringBefore('?') ?: return null   // drop query too
+        return if ('/' in s) s else null
+    }
+
 
     private fun pruneExpired() {
         val now = System.currentTimeMillis()
@@ -1806,5 +1888,48 @@ class MonitorAdapter(
             override fun areItemsTheSame(old: MonitorEntry, new: MonitorEntry) = old.id == new.id
             override fun areContentsTheSame(old: MonitorEntry, new: MonitorEntry) = old == new
         }
+    }
+}
+
+
+// =====================================================================================
+// Uninstall prevention
+// =====================================================================================
+class UninstallGuardAdminReceiver : DeviceAdminReceiver() {
+    // You can't *stop* deactivation, but you get the last word on the system screen.
+    override fun onDisableRequested(context: Context, intent: Intent): CharSequence =
+        "Turn off the lock inside the app first. Remove protection anyway?"
+}
+
+object UninstallGuard {
+    private const val PREFS = "uninstall_guard"
+    private const val KEY = "enabled"
+
+    fun admin(ctx: Context) = ComponentName(ctx, UninstallGuardAdminReceiver::class.java)
+
+    private fun dpm(ctx: Context) =
+        ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+
+    fun isAdminActive(ctx: Context) = dpm(ctx).isAdminActive(admin(ctx))
+
+    /** The user-facing toggle (persisted). This is what the accessibility guard checks. */
+    fun isEnabled(ctx: Context) =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
+
+    fun setEnabled(ctx: Context, on: Boolean) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
+        if (!on) deactivateAdmin(ctx)   // turning the toggle OFF lifts the block immediately
+    }
+
+    /** System "activate device admin?" prompt. */
+    fun activationIntent(ctx: Context): Intent =
+        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(ctx))
+            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "Lets the app keep you from uninstalling it while the lock is on.")
+        }
+
+    fun deactivateAdmin(ctx: Context) {
+        if (dpm(ctx).isAdminActive(admin(ctx))) dpm(ctx).removeActiveAdmin(admin(ctx))
     }
 }

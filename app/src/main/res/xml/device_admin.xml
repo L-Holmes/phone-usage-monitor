@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <!-- We don't need real policy powers. Being an *active* admin is what
+             blocks uninstall; force-lock is the most harmless one to declare. -->
+        <force-lock />
+    </uses-policies>
+</device-admin>
