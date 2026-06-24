@@ -1646,7 +1646,7 @@ object AppBlocklist {
     // NEW: browsers that must stay allowed even if detected at runtime.
     // Add a package name here to whitelist a browser.
     private val ALLOWED_BROWSERS = setOf(
-        "org.mozilla.focus",
+        "org.mozilla.fenix",
     )
 
     // ================================================================
@@ -1664,8 +1664,8 @@ object AppBlocklist {
         // --- Firefox / Gecko family ---
         "org.mozilla.firefox",
         "org.mozilla.firefox_beta",
-        "org.mozilla.fenix",
         "org.mozilla.fennec_fdroid",
+        "org.mozilla.focus",
         "org.mozilla.klar",
         "org.mozilla.rocket",
         "org.mozilla.reference.browser",
