@@ -167,6 +167,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_block).setOnClickListener { addBlockFromInput() }
         findViewById<Button>(R.id.btn_clear_blocks).setOnClickListener {
             BlockRules.clear(this)
+            BlockEscalation.clear(this)   // also wipe domain strikes (e.g. google.com)
+            AppTimedBlock.clear(this)     // and any timed app blocks
             refreshBlockRules()
         }
         findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
@@ -440,6 +442,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     // "still blocked / different page" status lines and dismiss escalation).
     private var shownBlockHost: String? = null
     private var shownBlockUrl: String? = null       
+    private var armedAt = 0L   // when the current blocked page first armed; used to "settle" before banning
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
@@ -718,15 +721,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
 
-    private fun escalateWebBlock(host: String, pageUrl: String?) {
-        // Block just THIS page, not the whole host.
-        val pageRule = BlockRules.pageRuleFor(pageUrl)
-        BlockRules.add(this, pageRule ?: host)   // no path readable -> fall back to host
+    private fun blockSettled(): Boolean =
+        System.currentTimeMillis() - armedAt >= BAN_SETTLE_MS
 
-        // Strikes still accrue against the registrable DOMAIN; the 3rd today
-        // promotes the whole domain to a 1-hour block.
-        BlockEscalation.recordWebBlock(this, host)?.let { domain ->
-            BlockRules.addTimed(this, domain, DOMAIN_BLOCK_MS)
+    private fun escalateWebBlock(host: String, pageUrl: String?) {
+        val isSearch = BlockRules.isSearchEngineHost(host)
+        val pageRule = BlockRules.pageRuleFor(pageUrl)
+        when {
+            pageRule != null -> BlockRules.add(this, pageRule)   // block this exact page / search term
+            !isSearch        -> BlockRules.add(this, host)       // non-search, no path -> block host
+            // search engine with no term -> add nothing (never ban a whole search engine)
+        }
+        // Domain strikes never accrue for search engines.
+        if (!isSearch) {
+            BlockEscalation.recordWebBlock(this, host)?.let { domain ->
+                BlockRules.addTimed(this, domain, DOMAIN_BLOCK_MS)
+            }
         }
     }
 
@@ -793,8 +803,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     "You're now on a DIFFERENT page — but it's blocked too.\nKeep pressing Back, or exit the app."
                 else -> null
             }
+            // A DIFFERENT page just became the blocked one -> restart the settle timer.
+            if (url != shownBlockUrl) armedAt = System.currentTimeMillis()
             shownBlockHost = host
-            shownBlockUrl = url        
+            shownBlockUrl = url
             val reason = if (status == null) baseReason else "$baseReason\n\n$status"
 
             if (freshShow) {
@@ -819,16 +831,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
                         lastGoBackAt = tapAt
-                        shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }   // CHANGED
+                        // Only ban a page that has STAYED blocked (real), not one that
+                        // merely flickered mid-transition.
+                        if (blockSettled()) shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 },
                 onLeave = {
-                    shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }       // CHANGED
+                    if (blockSettled()) shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }
                     exitToHome()
                     controller.hide()
                     shownBlockHost = null
-                    shownBlockUrl = null                                              // ADD
+                    shownBlockUrl = null
                 },
                 onReport = {
                     // do nothing
@@ -1150,6 +1164,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val MAX_DEPTH = 40
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 700L
+        // A page must stay blocked this long before Back/Leave writes a PERMANENT
+        // ban for it — long enough to outlast the stale-content flicker while
+        // navigating back through history, so innocent previous pages aren't banned.
+        private const val BAN_SETTLE_MS = 1500L
         private const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
 
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
@@ -1313,8 +1331,11 @@ object BlockRules {
         val normalizedUrl = normalizeUrl(url)        // ADD
 
         fun matches(rule: String): Boolean = when {
-            '/' in rule ->                            // PAGE rule: this exact page (and deeper paths)
-                normalizedUrl != null && normalizedUrl.startsWith(rule)
+            '/' in rule ->                            // PAGE rule
+                if ('?' in rule)                      // search-term rule: only the SAME term
+                    normalizedUrl != null && searchKeyOf(normalizedUrl) == rule
+                else                                  // plain page rule: this page + deeper paths
+                    normalizedUrl != null && normalizedUrl.startsWith(rule)
             '.' in rule ->                            // DOMAIN rule: host + subdomains
                 host != null && (host == rule || host.endsWith(".$rule"))
             else ->                                   // KEYWORD rule
@@ -1351,9 +1372,82 @@ object BlockRules {
         return s.trimEnd('/')
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  SEARCH-ENGINE WHITELIST — sites that put the search term in a query param
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Normally a blocked page becomes a PATH rule with the query dropped, so
+    //  "reddit.com/nsfw?sort=high" and "...?sort=low" are both caught by the rule
+    //  "reddit.com/nsfw". But on a search engine the path is generic ("/search")
+    //  and the real content is the "?q=..." term — dropping the query there would
+    //  collapse EVERY search into one rule (blocking "q=porn" would also block
+    //  "q=wolves"). For the engines below we key the rule to the TERM instead, so
+    //  each search blocks independently. Only their SEARCH PATH is treated this
+    //  way, so other paths on the same site (e.g. reddit subreddits) still behave
+    //  normally.
+    //
+    //  Add one: domain (no "www."; a trailing "." matches any TLD, so "google."
+    //  covers google.com / google.co.uk), the results path ("" = site root), and
+    //  the term param(s), best first.
+    private data class SearchEngine(val domain: String, val path: String, val params: List<String>)
+
+    private val SEARCH_ENGINES = listOf(
+        SearchEngine("google.",          "/search",        listOf("q")),   // incl. Images (udm=2)
+        SearchEngine("duckduckgo.com",   "",               listOf("q")),
+        SearchEngine("search.brave.com", "/search",        listOf("q")),
+        SearchEngine("ecosia.org",       "/search",        listOf("q")),
+        SearchEngine("youtube.com",      "/results",       listOf("search_query")),
+        SearchEngine("amazon.",          "/s",             listOf("k")),
+        SearchEngine("ebay.",            "/sch",           listOf("_nkw")),
+    )
+
+    private fun hostMatches(host: String, domain: String): Boolean {
+        val h = host.removePrefix("www.")
+        return if (domain.endsWith(".")) h.startsWith(domain) || h.contains(".$domain")
+               else h == domain || h.endsWith(".$domain")
+    }
+
+    private fun engineFor(host: String, path: String): SearchEngine? =
+        SEARCH_ENGINES.firstOrNull { e ->
+            hostMatches(host, e.domain) &&
+                (e.path.isEmpty() || path == e.path || path.startsWith("${e.path}/"))
+        }
+
+
+    /** True if [host] is any of the SEARCH_ENGINES (any path). Keeps search engines
+     *  out of domain-strike escalation so they can't be banned whole-site. */
+    fun isSearchEngineHost(host: String?): Boolean =
+        host != null && SEARCH_ENGINES.any { hostMatches(host, it.domain) }
+
+    /**
+     * For a search-engine URL, a canonical "host/path?param=term" key (term-specific);
+     * null otherwise. Used for BOTH storing the rule and matching live pages, so the
+     * two always line up regardless of param order or unrelated params.
+     */
+    private fun searchKeyOf(normalizedUrl: String?): String? {
+        if (normalizedUrl.isNullOrBlank()) return null
+        val q = normalizedUrl.indexOf('?')
+        if (q < 0) return null
+        val hostPath = normalizedUrl.substring(0, q)
+        val host = hostPath.substringBefore('/')
+        val path = hostPath.substringAfter('/', "").let { if (it.isEmpty()) "" else "/$it" }
+        val engine = engineFor(host, path) ?: return null
+        val params = normalizedUrl.substring(q + 1).split('&').mapNotNull {
+            val eq = it.indexOf('=')
+            if (eq <= 0) null else it.substring(0, eq) to it.substring(eq + 1)
+        }.toMap()
+        val term = engine.params.firstNotNullOfOrNull { p -> params[p]?.takeIf { it.isNotBlank() } }
+            ?: return null
+        return "${host.removePrefix("www.")}$path?${engine.params.first()}=$term"
+    }
+
     fun pageRuleFor(url: String?): String? {
-        val s = normalizeUrl(url)?.substringBefore('?') ?: return null   // drop query too
-        return if ('/' in s) s else null
+        val n = normalizeUrl(url) ?: return null
+        searchKeyOf(n)?.let { return it }                 // engine + term -> term-specific rule
+        val hostPath = n.substringBefore('?')
+        val host = hostPath.substringBefore('/')
+        val path = hostPath.substringAfter('/', "").let { if (it.isEmpty()) "" else "/$it" }
+        if (engineFor(host, path) != null) return null    // engine search page, no term -> no rule
+        return if ('/' in hostPath) hostPath else null     // other sites: path rule, query dropped
     }
 
 
@@ -1434,6 +1528,13 @@ object BlockEscalation {
             .filter { it.key.startsWith("count:") }
             .map { "${it.key.removePrefix("count:")}  —  ${it.value} strike(s) today" }
             .sorted()
+    }
+
+    @Synchronized
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        lastHost = null
+        lastAt = 0L
     }
 
     /**
@@ -1562,6 +1663,12 @@ object AppTimedBlock {
     @Synchronized
     fun allowForSession(pkg: String?) {
         if (!pkg.isNullOrBlank()) sessionAllow.add(pkg.lowercase())
+    }
+
+    @Synchronized
+    fun clear(context: Context) {
+        prefs(context).edit().clear().apply()
+        sessionAllow.clear()
     }
 
     /** "package — strikes, status" lines for the ban-list screen. */
