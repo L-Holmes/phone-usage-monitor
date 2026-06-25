@@ -168,6 +168,27 @@ We have broke down the patterns of addiction...
 - you can use your phone without being addicted!
 
 
+===========
+# RESEARCH 1111111111111111111)
+breaking addiction...
+
+
+rght Im thining we apply the learnings from scientific research on breaking addicition to our app wihch is meant to break pron addiction.
+Please create me a bullet point list, sorted most to least effective tihngs we could add..
+Here is the list so far;
+- Delaying the response (making them wait a bit, so its not fast dopamine..) 
+
+some thoughts from me;
+
+- replacing the dopamine? (like via something else..? - or is the problem that we're giving them too much stimulation and wnat hem off their phone?)
+- encourage them to do other things... just guideance on changing locatoin etc... 
+- letting them try [doing the thing they used to do...] but don't give them any pleasure.. (e.g. they can search for things... but it just results in nothing.. no pictures.. time wasted..) -- a bit like a fake cigarrete that has no nicontine??!?
+
+
+
+# RESEARCH 2222222222222222222)
+
+
 ==========
 # DEV STUFF
 
@@ -184,3 +205,7 @@ Adult-domain list (DomainBlocklist): a big bundled list of known adult hosts; bl
 Sexual-content text scorer (BorderlineScorer + WordLists): tokenizes title + URL + visible text, adds weighted points for words from your assets/words/*.txt tiers (explicit 6, strong 4, subtle 2, dual 3; title/URL hits ×2), and blocks when the total hits THRESHOLD = 10. Dual words like "hot" only count when a sexual word is within 5 words.
 Your manual rules (BlockRules): the keywords/domains you add in-app.
 The catch: the domain list and the text scorer only run when a host was successfully read from the address bar (host != null). Look at lines 737 & 739 — both branches are guarded by host != null.
+
+
+
+====================
