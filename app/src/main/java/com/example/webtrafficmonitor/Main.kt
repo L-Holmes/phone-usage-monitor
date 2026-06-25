@@ -61,6 +61,23 @@ import androidx.appcompat.app.AlertDialog
 import android.app.admin.DeviceAdminReceiver
 import android.app.admin.DevicePolicyManager
 
+// stuff for the breating
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ValueAnimator
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.LinearLayout
+import android.graphics.Typeface
+import android.view.ViewTreeObserver
+import android.view.animation.PathInterpolator
+
 
 // NOTE: This whole module is intentionally kept in ONE file.
 // These classes would normally live in separate files / sub-packages;
@@ -594,6 +611,10 @@ object MonitorStore {
 class PageMonitorAccessibilityService : AccessibilityService() {
 
     private var overlay: OverlayController? = null
+
+    private var breathing: BreathingOverlay? = null
+    private var lastForegroundPkgForBreathing: String? = null
+
     private var lastProcessedAt = 0L
     private var lastLogSignature: String? = null
     private var lastGoBackAt = 0L
@@ -723,6 +744,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = OverlayController(this)
+        breathing = BreathingOverlay(this)
         BlockRules.load(this)
         AppBlocklist.refresh(this)
         loadKeyboardPackages()
@@ -775,6 +797,26 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             showAppBlock(blockedApp, packageName)
             return // No point reading or logging pages inside a blocked app.
         }
+
+        // ---- Breathing gate: a calming pause each time a chosen app opens ----
+        // Fire only when the foreground app actually changes, so it triggers on a
+        // fresh open but never while you're already inside the app.
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            packageName != lastForegroundPkgForBreathing
+        ) {
+            if (breathing?.isShowing == true) breathing?.hide()   // left the gated app: drop it
+            lastForegroundPkgForBreathing = packageName
+            if (packageName in BREATHING_APPS && overlay?.isShowing != true) {
+                val label = appLabelFor(packageName)
+                breathing?.show(
+                    appLabel = label,
+                    onContinue = { breathing?.hide() },
+                    onDontWant = { breathing?.hide(); exitToHome() },
+                )
+                return
+            }
+        }
+
 
         // An allowed app fired a real window change while an app block is up
         // (e.g. user pressed Home): verify against actual window state right away.
@@ -905,6 +947,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         }
     }
+
+    private fun appLabelFor(pkg: String): String =
+        try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        } catch (t: Throwable) {
+            pkg
+        }
 
     /**
      * The "Leave" / exit-all button. A single HOME sometimes does nothing (the cover
@@ -1345,6 +1394,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
 
         private val IGNORED_PACKAGES = setOf("com.android.systemui")
+
+        // Apps that get a calming breathing pause each time they're opened.
+        private val BREATHING_APPS = setOf(
+            "org.mozilla.firefox",          // Firefox
+            "org.mozilla.fenix",            // Firefox Beta
+            "com.google.android.youtube",   // YouTube
+            "com.android.vending",          // Google Play Store
+        )
 
         private val NOT_LOGGED_PACKAGES = setOf(
             "com.sec.android.app.launcher",
@@ -2191,6 +2248,230 @@ class OverlayController(private val context: Context) {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 }
+
+
+// =====================================================================================
+// BreathingOverlay — a calming "take a breath" gate shown before chosen apps open
+// =====================================================================================
+
+class BreathingOverlay(private val context: Context) {
+
+    private val windowManager =
+        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private var view: View? = null
+    private var animator: AnimatorSet? = null
+    private var pulse: ValueAnimator? = null
+    private var controlsActive = false
+
+    val isShowing: Boolean get() = view != null
+
+    private val accent = 0xFF3E9C8E.toInt()
+    private val accentMuted = 0xFF2A5E55.toInt()
+    private val bg = 0xFF0A0B0D.toInt()
+    private val softText = 0xFFCFEDE7.toInt()
+
+    fun show(appLabel: String, onContinue: () -> Unit, onDontWant: () -> Unit) {
+        if (view != null) return
+        controlsActive = false
+        val dm = context.resources.displayMetrics
+        fun dp(v: Int) = (v * dm.density).toInt()
+
+        val root = FrameLayout(context).apply { setBackgroundColor(bg) }
+
+        val orb = BreathOrbView(context, accent)
+        root.addView(orb, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        val phase = TextView(context).apply {
+            textSize = 16f
+            setTextColor(softText)
+            alpha = 0.9f
+            gravity = Gravity.CENTER
+            text = "Breathe in"
+        }
+        root.addView(phase, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+                topMargin = (dm.heightPixels * 0.17f).toInt()
+            })
+
+        // Bottom block: lifted ~14% off the bottom (was ~20%, now down ~6vh).
+        val controls = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            alpha = 0f
+            visibility = View.INVISIBLE
+            setPadding(dp(20), 0, dp(20), (dm.heightPixels * 0.14f).toInt())
+        }
+        val dontWant = Button(context).apply {
+            text = "I don't want to access $appLabel"
+            isAllCaps = false
+            textSize = 19f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF06201B.toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = dp(34).toFloat()
+                setColor(accentMuted)
+            }
+            setPadding(dp(16), dp(6), dp(16), dp(6))
+            setOnClickListener { if (controlsActive) onDontWant() }
+        }
+        controls.addView(dontWant, LinearLayout.LayoutParams(
+            (dm.widthPixels * 0.88f).toInt(), (dm.heightPixels * 0.21f).toInt()))
+
+        val cont = TextView(context).apply {
+            text = "Continue to open $appLabel"
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(0xFF8FC2BA.toInt())
+            gravity = Gravity.CENTER
+            // More gap above the "continue" line so it sits a bit lower.
+            setPadding(dp(16), dp(28), dp(16), dp(4))
+            setOnClickListener { if (controlsActive) onContinue() }
+        }
+        controls.addView(cont, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        root.addView(controls, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM))
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.OPAQUE)
+
+        try {
+            windowManager.addView(root, params)
+            view = root
+        } catch (t: Throwable) {
+            android.util.Log.e("BreathingOverlay", "could not show", t)
+            view = null
+            return
+        }
+
+        root.viewTreeObserver.addOnGlobalLayoutListener(
+            object : ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    root.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    startBreathing(orb, phase, controls, dontWant)
+                }
+            },
+        )
+    }
+
+    private fun startBreathing(
+        orb: BreathOrbView, phase: TextView, controls: View, dontWant: Button,
+    ) {
+        val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
+        val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
+
+        val inhale = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 3000
+            interpolator = inhaleEase
+            addUpdateListener { orb.progress = it.animatedValue as Float }
+        }
+        val exhale = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = 6300
+            interpolator = exhaleEase
+            addUpdateListener { orb.progress = it.animatedValue as Float }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationStart(a: Animator) {
+                    phase.text = "Breathe out"
+                    controls.visibility = View.VISIBLE
+                    controls.animate().alpha(0.55f).setDuration(3600).start()
+                }
+            })
+        }
+
+        pulse = ValueAnimator.ofFloat(0.95f, 0.6f).apply {
+            duration = 1300
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { phase.alpha = it.animatedValue as Float }
+            start()
+        }
+
+        animator = AnimatorSet().apply {
+            playSequentially(inhale, exhale)
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) {
+                    pulse?.cancel(); pulse = null
+                    phase.alpha = 0f
+                    orb.progress = 0f
+                    controls.alpha = 1f
+                    controlsActive = true
+                    ValueAnimator.ofObject(android.animation.ArgbEvaluator(), accentMuted, accent)
+                        .apply {
+                            duration = 200
+                            addUpdateListener { va ->
+                                (dontWant.background as? GradientDrawable)
+                                    ?.setColor(va.animatedValue as Int)
+                            }
+                            start()
+                        }
+                }
+            })
+            start()
+        }
+    }
+
+    fun hide() {
+        pulse?.cancel(); pulse = null
+        animator?.cancel(); animator = null
+        controlsActive = false
+        view?.let {
+            try { windowManager.removeView(it) } catch (_: Throwable) {}
+            view = null
+        }
+    }
+
+    private fun overlayType(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1)
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        else
+            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+}
+
+/** A soft dim orb that grows on the in-breath and shrinks on the out-breath. */
+class BreathOrbView(context: Context, private val accent: Int) : View(context) {
+
+    var progress = 0f
+        set(value) { field = value; invalidate() }
+
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        color = accent
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val cx = width / 2f
+        val cy = height / 2f
+        val maxR = kotlin.math.hypot(width.toFloat(), height.toFloat()) / 2f * 1.08f
+        val minR = maxR * 0.04f
+        val r = minR + (maxR - minR) * progress
+        val a = (progress / 0.14f).coerceIn(0f, 1f)
+
+        fill.shader = RadialGradient(
+            cx, cy, r,
+            intArrayOf(withAlpha(accent, (165 * a).toInt()),
+                       withAlpha(accent, (80 * a).toInt()),
+                       withAlpha(accent, 0)),
+            floatArrayOf(0f, 0.62f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawCircle(cx, cy, r, fill)
+        ring.alpha = (70 * a).toInt()
+        canvas.drawCircle(cx, cy, r, ring)
+    }
+
+    private fun withAlpha(color: Int, alpha: Int) =
+        (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
+}
+
 
 // =====================================================================================
 // UI
