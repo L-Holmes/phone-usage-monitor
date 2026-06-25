@@ -1,18 +1,6 @@
-# NEXT STEPS:
-- prevent app from being deleted
 
 
 ============
-
-at 4:40pm;
-
-+======
-
-NEXT TODO:
-
-
-------
-THEN SORT THESE:
 
 -------
 
