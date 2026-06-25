@@ -141,7 +141,7 @@ object WordLists {
 object BorderlineScorer {
 
     // ── TUNABLES ───────────────────────────────────────────────────────────────
-    const val THRESHOLD = 10
+    const val THRESHOLD = 40                // calculated score at which we decide to block a webpage
     const val EXPLICIT_WEIGHT = 6
     const val STRONG_WEIGHT = 4
     const val SUBTLE_WEIGHT = 2

@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var statusAccessibility: TextView
     private lateinit var statusOverlay: TextView
+    private lateinit var statusLock: TextView
     private lateinit var blockRulesView: TextView
     private lateinit var blockInput: EditText
     private lateinit var emptyList: TextView
@@ -144,14 +145,119 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private var entriesJob: kotlinx.coroutines.Job? = null
+    private var shownStep: Step? = null
+
+    private enum class Step { MONITORING, OVERLAY, LOCK, READY }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        Toast.makeText(this, "✅ New build loaded", Toast.LENGTH_LONG).show()
         BlockRules.load(this)
+        updateScreen()
+    }
 
-        statusAccessibility = findViewById(R.id.status_accessibility)
+    override fun onResume() {
+        super.onResume()
+        AppBlocklist.refresh(this)
+        updateScreen()   // re-checks prerequisites every time the app is foregrounded
+    }
+
+    // ── Setup gate ────────────────────────────────────────────────────────────
+    // Shows the prerequisites in order (monitoring -> overlay -> uninstall lock).
+    // The first two are required; until both are on you can't reach the main
+    // screen, and disabling either later sends you straight back here.
+
+    private fun currentStep(): Step = when {
+        !isAccessibilityEnabled()       -> Step.MONITORING
+        !Settings.canDrawOverlays(this) -> Step.OVERLAY
+        !lockIntroShown() && !UninstallGuard.isAdminActive(this) -> Step.LOCK
+        else                            -> Step.READY
+    }
+
+    private fun setupPrefs() = getSharedPreferences("app_setup", Context.MODE_PRIVATE)
+    private fun lockIntroShown() = setupPrefs().getBoolean("lock_intro_shown", false)
+    private fun setLockIntroShown(v: Boolean) =
+        setupPrefs().edit().putBoolean("lock_intro_shown", v).apply()
+
+    private fun updateScreen() {
+        val step = currentStep()
+        if (step == Step.READY && shownStep == Step.READY) {
+            renderStatus()   // already on the main screen — just refresh the dots
+            return
+        }
+        shownStep = step
+        when (step) {
+            Step.MONITORING -> showPrereq(
+                "Step 1 of 3\nTurn on page monitoring",
+                "This lets the app see which website or app is on screen, so it can block " +
+                    "what it should.\n\nWhen you tap Continue you'll land in Accessibility " +
+                    "settings:\n\n" +
+                    "1.  Tap \u201CInstalled apps\u201D (some phones say \u201CDownloaded apps\u201D).\n" +
+                    "2.  Tap \u201CWeb Traffic Monitor\u201D.\n" +
+                    "3.  Turn the toggle ON and accept.\n\nThen come back to this app.",
+                "Continue to Accessibility",
+                { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+            )
+            Step.OVERLAY -> showPrereq(
+                "Step 2 of 3\nAllow the block screen",
+                "This lets the app draw the blocking screen on top of other apps.\n\n" +
+                    "When you tap Continue, find \u201CWeb Traffic Monitor\u201D in the list and " +
+                    "turn its toggle ON.\n\nThen come back to this app.",
+                "Continue to \u201CAppear on top\u201D",
+                { requestOverlayPermission() },
+            )
+            Step.LOCK -> showPrereq(
+                "Step 3 of 3\nUninstall lock",
+                "Page monitoring and the block screen are on, so you can now enable the " +
+                    "uninstall lock.\n\nWhile it's on, the app can't be uninstalled and the " +
+                    "settings pages that would switch it off are blocked.\n\nYou can turn it " +
+                    "off any time from the main screen (useful while testing).",
+                "Enable uninstall lock",
+                {
+                    setLockIntroShown(true)
+                    UninstallGuard.setEnabled(this, true)
+                    startActivity(UninstallGuard.activationIntent(this))
+                },
+                "Skip for now",
+                { setLockIntroShown(true); updateScreen() },
+            )
+            Step.READY -> setupMainScreen()
+        }
+    }
+
+    private fun showPrereq(
+        title: String,
+        body: String,
+        buttonText: String,
+        onContinue: () -> Unit,
+        secondaryText: String? = null,
+        onSecondary: (() -> Unit)? = null,
+    ) {
+        entriesJob?.cancel()
+        setContentView(R.layout.screen_prereq)
+        findViewById<TextView>(R.id.prereq_title).text = title
+        findViewById<TextView>(R.id.prereq_body).text = body
+        findViewById<Button>(R.id.prereq_primary).apply {
+            text = buttonText
+            setOnClickListener { onContinue() }
+        }
+        findViewById<Button>(R.id.prereq_secondary).apply {
+            if (secondaryText == null) {
+                visibility = View.GONE
+            } else {
+                visibility = View.VISIBLE
+                text = secondaryText
+                setOnClickListener { onSecondary?.invoke() }
+            }
+        }
+    }
+
+    private fun setupMainScreen() {
+        setContentView(R.layout.activity_main)
+
         statusOverlay = findViewById(R.id.status_overlay)
+        statusAccessibility = findViewById(R.id.status_accessibility)
+        statusLock = findViewById(R.id.status_lock)
         blockRulesView = findViewById(R.id.block_rules)
         blockInput = findViewById(R.id.input_block)
         emptyList = findViewById(R.id.empty_list)
@@ -160,41 +266,50 @@ class MainActivity : AppCompatActivity() {
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
 
-        findViewById<Button>(R.id.btn_accessibility).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        findViewById<Button>(R.id.btn_overlay).setOnClickListener { requestOverlayPermission() }
         findViewById<Button>(R.id.btn_block).setOnClickListener { addBlockFromInput() }
         findViewById<Button>(R.id.btn_clear_blocks).setOnClickListener {
             BlockRules.clear(this)
-            BlockEscalation.clear(this)   // also wipe domain strikes (e.g. google.com)
-            AppTimedBlock.clear(this)     // and any timed app blocks
+            BlockEscalation.clear(this)
+            AppTimedBlock.clear(this)
             refreshBlockRules()
         }
         findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
         findViewById<Button>(R.id.btn_clear_log).setOnClickListener { clearLog() }
 
-        btnUninstallGuard = findViewById(R.id.btn_uninstall_guard)
-        btnUninstallGuard.setOnClickListener { toggleUninstallGuard() }
-        updateGuardButton()
+        // Status rows double as controls.
+        statusOverlay.setOnClickListener { requestOverlayPermission() }
+        statusAccessibility.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        statusLock.setOnClickListener { toggleUninstallGuard() }
 
         observeEntries()
         refreshBlockRules()
+        renderStatus()
     }
 
-    override fun onResume() {
-        super.onResume()
-        refreshStatus()
-        AppBlocklist.refresh(this)
-        updateGuardButton()
+    private fun renderStatus() {
+        if (!::statusOverlay.isInitialized) return
+        setDot(statusOverlay, "Block overlay permission", Settings.canDrawOverlays(this))
+        setDot(statusAccessibility, "Page monitoring", isAccessibilityEnabled())
+        setDot(statusLock, "Uninstall lock",
+            UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))
+    }
+
+    private fun setDot(view: TextView, label: String, on: Boolean) {
+        view.text = "${if (on) "\u25CF" else "\u25CB"}  $label \u2014 ${if (on) "On" else "Off"}"
+        view.setTextColor(if (on) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
     }
 
     private fun observeEntries() {
-        lifecycleScope.launch {
+        entriesJob?.cancel()
+        entriesJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 database.dao().observeAll().collect { entries ->
                     adapter.submitList(entries)
-                    emptyList.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
+                    if (::emptyList.isInitialized) {
+                        emptyList.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
+                    }
                 }
             }
         }
@@ -247,28 +362,26 @@ class MainActivity : AppCompatActivity() {
         blockRulesView.text = "$label  $value"
     }
 
-    private fun refreshStatus() {
-        statusAccessibility.text = getString(R.string.page_monitoring) + ":  " + onOff(isAccessibilityEnabled())
-
-        statusOverlay.text = getString(R.string.overlay_permission) + ":  " + onOff(Settings.canDrawOverlays(this))
-    }
-
     private fun toggleUninstallGuard() {
         if (UninstallGuard.isAdminActive(this)) {
-            // Currently locked -> turn it off (this also removes the admin lock).
-            UninstallGuard.setEnabled(this, false)
-            Toast.makeText(this, "Uninstall lock OFF", Toast.LENGTH_SHORT).show()
+            AlertDialog.Builder(this)
+                .setTitle("Turn off uninstall lock?")
+                .setMessage("The app will become uninstallable again.")
+                .setPositiveButton("Turn off") { _, _ ->
+                    UninstallGuard.setEnabled(this, false)
+                    renderStatus()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         } else {
-            // Not locked yet -> request admin. Guard stays quiet until admin is active.
+            if (!isAccessibilityEnabled() || !Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "Turn on page monitoring and the block screen first.",
+                    Toast.LENGTH_SHORT).show()
+                return
+            }
             UninstallGuard.setEnabled(this, true)
             startActivity(UninstallGuard.activationIntent(this))
         }
-        updateGuardButton()
-    }
-
-    private fun updateGuardButton() {
-        val on = UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)
-        btnUninstallGuard.text = if (on) "Uninstall lock: ON" else "Uninstall lock: OFF"
     }
 
     private fun onOff(on: Boolean): String =
@@ -767,7 +880,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // away, image viewer open). For browsers, fall back to the REMEMBERED host
         // of the current page — this is the fix for "pressed back onto the same
         // blocked page and nothing happened".
-        val host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
+        var host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
+
+        // Tab switcher / "jump back in" previews expose a tab's URL but no readable
+        // PAGE TEXT — you're looking at a thumbnail, not visiting the page. So when a
+        // browser gives us a host with no page content, suppress web blocking; a real
+        // visit always has text. (Fixes Firefox blocking you on the open-tabs grid.)
+        if (host != null && AppBlocklist.isBrowser(packageName) && content.isNullOrBlank()) {
+            host = null
+        }
 
         val appGuard = if (host == null) appScreenBlock(packageName, title, content) else null
         val rule = if (appGuard == null) {

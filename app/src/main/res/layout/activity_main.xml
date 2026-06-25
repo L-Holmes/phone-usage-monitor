@@ -13,73 +13,48 @@
         android:text="@string/disclosure"
         android:textSize="11sp" />
 
-    <!-- Uninstall lock toggle. Own full-width row at the top so it's always visible.
-         The text is set from code (updateGuardButton): ON / OFF. -->
-    <Button
-        android:id="@+id/btn_uninstall_guard"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="8dp"
-        android:text="Uninstall lock: OFF"
-        android:textStyle="bold" />
-
+    <!-- Status console. Each row's text + colour is set in code (renderStatus):
+         green = on, grey = off. Tapping a row manages that item. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/status_accessibility"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/page_monitoring" />
-
-        <Button
-            android:id="@+id/btn_accessibility"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/enable" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="vertical"
+        android:background="#0D000000"
+        android:padding="12dp"
+        android:layout_marginBottom="12dp">
 
         <TextView
             android:id="@+id/status_overlay"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/overlay_permission" />
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingVertical="8dp"
+            android:textSize="15sp" />
 
-        <Button
-            android:id="@+id/btn_overlay"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
+        <TextView
+            android:id="@+id/status_accessibility"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/grant" />
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingVertical="8dp"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/status_lock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingVertical="8dp"
+            android:textSize="15sp" />
     </LinearLayout>
-
 
     <TextView
         android:id="@+id/block_rules"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:text="@string/blocking_label"
         android:textSize="12sp" />
 
@@ -132,7 +107,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/clear_log" />
-
     </LinearLayout>
 
     <TextView
