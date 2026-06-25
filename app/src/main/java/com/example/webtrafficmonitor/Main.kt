@@ -19,6 +19,10 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.EditText
+import android.text.Editable
+import android.text.InputFilter
+import android.text.InputType
+import android.text.TextWatcher
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -162,22 +166,26 @@ class MainActivity : AppCompatActivity() {
         updateScreen()   // re-checks prerequisites every time the app is foregrounded
     }
 
+    override fun onStop() {
+        super.onStop()
+        lockPromptHandled = false   // show the uninstall-lock page again on next reopen
+    }
+
     // ── Setup gate ────────────────────────────────────────────────────────────
     // Shows the prerequisites in order (monitoring -> overlay -> uninstall lock).
     // The first two are required; until both are on you can't reach the main
     // screen, and disabling either later sends you straight back here.
 
+    // Reset on every reopen (see onStop) so the uninstall-lock page shows each time,
+    // not just the first.
+    private var lockPromptHandled = false
+
     private fun currentStep(): Step = when {
         !isAccessibilityEnabled()       -> Step.MONITORING
         !Settings.canDrawOverlays(this) -> Step.OVERLAY
-        !lockIntroShown() && !UninstallGuard.isAdminActive(this) -> Step.LOCK
+        !lockPromptHandled              -> Step.LOCK
         else                            -> Step.READY
     }
-
-    private fun setupPrefs() = getSharedPreferences("app_setup", Context.MODE_PRIVATE)
-    private fun lockIntroShown() = setupPrefs().getBoolean("lock_intro_shown", false)
-    private fun setLockIntroShown(v: Boolean) =
-        setupPrefs().edit().putBoolean("lock_intro_shown", v).apply()
 
     private fun updateScreen() {
         val step = currentStep()
@@ -206,21 +214,31 @@ class MainActivity : AppCompatActivity() {
                 "Continue to \u201CAppear on top\u201D",
                 { requestOverlayPermission() },
             )
-            Step.LOCK -> showPrereq(
-                "Step 3 of 3\nUninstall lock",
-                "Page monitoring and the block screen are on, so you can now enable the " +
-                    "uninstall lock.\n\nWhile it's on, the app can't be uninstalled and the " +
-                    "settings pages that would switch it off are blocked.\n\nYou can turn it " +
-                    "off any time from the main screen (useful while testing).",
-                "Enable uninstall lock",
-                {
-                    setLockIntroShown(true)
-                    UninstallGuard.setEnabled(this, true)
-                    startActivity(UninstallGuard.activationIntent(this))
-                },
-                "Skip for now",
-                { setLockIntroShown(true); updateScreen() },
-            )
+            Step.LOCK -> if (UninstallGuard.isAdminActive(this)) {
+                showPrereq(
+                    "Uninstall lock — ON",
+                    "Protection is active: the app can't be uninstalled, and the settings " +
+                        "pages that would switch it off are blocked.\n\nYou can turn it off " +
+                        "from the main screen (you'll need the passcode).",
+                    "Continue",
+                    { lockPromptHandled = true; updateScreen() },
+                )
+            } else {
+                showPrereq(
+                    "Uninstall lock",
+                    "Page monitoring and the block screen are on, so you can now enable the " +
+                        "uninstall lock. While it's on, the app can't be uninstalled and the " +
+                        "settings pages that would switch it off are blocked.",
+                    "Enable uninstall lock",
+                    {
+                        lockPromptHandled = true
+                        UninstallGuard.setEnabled(this, true)
+                        startActivity(UninstallGuard.activationIntent(this))
+                    },
+                    "Skip for now",
+                    { lockPromptHandled = true; updateScreen() },
+                )
+            }
             Step.READY -> setupMainScreen()
         }
     }
@@ -364,15 +382,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleUninstallGuard() {
         if (UninstallGuard.isAdminActive(this)) {
-            AlertDialog.Builder(this)
-                .setTitle("Turn off uninstall lock?")
-                .setMessage("The app will become uninstallable again.")
-                .setPositiveButton("Turn off") { _, _ ->
-                    UninstallGuard.setEnabled(this, false)
-                    renderStatus()
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
+            promptDisableLock()              // turning OFF now requires the passcode
         } else {
             if (!isAccessibilityEnabled() || !Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "Turn on page monitoring and the block screen first.",
@@ -382,6 +392,42 @@ class MainActivity : AppCompatActivity() {
             UninstallGuard.setEnabled(this, true)
             startActivity(UninstallGuard.activationIntent(this))
         }
+    }
+
+    // Hardcoded for now. Auto-verifies on the 6th digit — no Enter needed.
+    private val uninstallPasscode = "666666"
+
+    private fun promptDisableLock() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER 
+            filters = arrayOf(InputFilter.LengthFilter(6))
+            hint = "6-digit code"
+            val p = (20 * resources.displayMetrics.density).toInt()
+            setPadding(p, p, p, p)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Enter passcode to turn off")
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if ((s?.length ?: 0) < 6) return          // wait for the 6th char
+                if (s.toString() == uninstallPasscode) {
+                    dialog.dismiss()
+                    UninstallGuard.setEnabled(this@MainActivity, false)
+                    renderStatus()
+                    Toast.makeText(this@MainActivity, "Uninstall lock off", Toast.LENGTH_SHORT).show()
+                } else {
+                    s?.clear()                              // wrong: reset and let them retry
+                    Toast.makeText(this@MainActivity, "Wrong code", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
+        dialog.show()
+        input.requestFocus()
     }
 
     private fun onOff(on: Boolean): String =
@@ -789,15 +835,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (signature == lastLogSignature) return
         lastLogSignature = signature
 
+        // Log the content score on every web page so we can see what each one scored
+        // while tuning — shows as a prefix on the log row, e.g. "[score 18] cute puppies".
+        val pageScore = if (host != null)
+            BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text)?.score else null
+        val loggedTitle = if (pageScore != null) "[score $pageScore]  ${title.orEmpty()}".trim()
+                          else title
+
         MonitorStore.record(
             this,
             MonitorEntry(
                 timestamp = now,
                 kind = MonitorEntry.KIND_PAGE,
                 packageName = packageName,
-                title = title,
+                title = loggedTitle,
                 domain = lastHost,
-                url = lastFullUrl ?: lastUrl,   
+                url = lastFullUrl ?: lastUrl,
                 text = text,
             ),
         )

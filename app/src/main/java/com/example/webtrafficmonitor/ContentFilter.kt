@@ -141,7 +141,7 @@ object WordLists {
 object BorderlineScorer {
 
     // ── TUNABLES ───────────────────────────────────────────────────────────────
-    const val THRESHOLD = 40                // calculated score at which we decide to block a webpage
+    const val THRESHOLD = 30                // calculated score at which we decide to block a webpage
     const val EXPLICIT_WEIGHT = 6
     const val STRONG_WEIGHT = 4
     const val SUBTLE_WEIGHT = 2
@@ -153,7 +153,12 @@ object BorderlineScorer {
 
     data class Result(val score: Int, val reason: String)
 
-    fun evaluate(title: String?, url: String?, text: String?): Result? {
+    /**
+     * Full content score for a page, with NO threshold applied. Returns null only
+     * when the word lists aren't loaded or there's no text at all. Use this for
+     * logging/tuning; use [evaluate] for the actual block decision.
+     */
+    fun score(title: String?, url: String?, text: String?): Result? {
         if (!WordLists.isReady) return null
 
         val bodyTokens = tokenize(text)
@@ -192,7 +197,6 @@ object BorderlineScorer {
             score += fExplicit.values.sum() * EXPLICIT_WEIGHT * TITLE_URL_MULTIPLIER
             score += fStrong.values.sum() * STRONG_WEIGHT * TITLE_URL_MULTIPLIER
             score += fSubtle.values.sum() * SUBTLE_WEIGHT * TITLE_URL_MULTIPLIER
-            // In short fields, a dual word counts if ANY indicator is present in the field.
             if (fieldTokens.any { it in WordLists.indicators }) {
                 for ((word, n) in countMembers(fieldTokens, WordLists.dual)) {
                     dualWordsSeen += word
@@ -201,9 +205,12 @@ object BorderlineScorer {
             }
         }
 
-        if (score < THRESHOLD) return null
         return Result(score, buildReason(score, explicitHits, strongHits, subtleHits, dualWordsSeen))
     }
+
+    /** Block decision: a Result only when the score meets THRESHOLD. */
+    fun evaluate(title: String?, url: String?, text: String?): Result? =
+        score(title, url, text)?.takeIf { it.score >= THRESHOLD }
 
     /** Per matched word, how many times it appears in [tokens], capped at PER_WORD_CAP. */
     private fun countMembers(tokens: List<String>, set: Set<String>): Map<String, Int> {
