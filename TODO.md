@@ -1,69 +1,88 @@
 
 
+**1. Build the tracking system / event log first — everything reads from this.**
+   - One on-device store. Quietly records: blocked URLs, logged urges, logged relapses, and for each one the time, day of week, and what apps were open just before.
+   - Auto-recorded wherever possible. No typing unless it has to be. Smooth = used.
+   - Auto-relapse logic: one blocked URL on its own = treat as an outlier/misfire, log it quietly, don't count it, don't trigger any "you failed" feeling. Two or more within ~an hour = count it as a likely relapse and fold it into the pattern data. User can mark anything false if they want, but you never *require* them to confirm.
+   - After ~3 months, bin the raw events but keep a summary first — just grouped averages (e.g. "clusters around ~5pm and ~11pm", "Sundays run high"). Keeps the pattern, kills the storage.
 
-# SCRAMBLED NEW TODO THOUGHTS;
+**2. Build strictness levels next — the loosen-flow and the timing engine both need these to exist.**
+   - Define modes the rest of the app reads: e.g. normal / strict / super-strict, each doing progressively more (slower image loads → greylist pauses → block unverified apps → no images at all). Your existing slowed-image-loading folds in here as a low rung.
+   - Include a one-tap "lock me in strict for a week" mode (you need this for the holiday plan in #9 — once it's on, it shouldn't be easy to flip off).
+   - You said you'll define exactly what each level blocks yourself — leaving that to you.
 
-- Add the non-pron monitoring things...
-    - things like gameifying the 'escape from doomscroll' thing...?
-- Design an app logo...
-- Add the recommendations page... (or somewhere)
-    - Buy cheap equivalents to replace phone...
-    - Go on detox holiday [ ]
-        - Put phone in lockdown mode?
-            (only essentail apps like maps... spotify... things on dumbphones etc...?)
-        -> whilst on holiday... do the cbt type things...
-            - could we do scenarios where they imagine themselves in a difficult situation???
-        -> then when they get back...
-            - try and be out of the house as much as possible...
-                - spend their money if they have to.. on things that aren't addictive...
-                - on seeing friends especially... or at social clubs...
-            - have their phone be on super strict mode for just a week...
-            - 
-- post relapse check in + prevent for next time..?
-- yeah... maybe we do add the intentional disable app thing...
-    - where the user admits what they're doing...
-    - says how long they'll be... what they'll look at...
-    - and says that they won't do it next time...
-    -----
-    - or maybe they'll wait 2 hours... or till tomorrow...
-    - but don't make it easy to skip through the windows... as it means nothing... its then an automatic thing their brain tries to solve to bypass..
-    - problem is... ideally they NEED to go cold turkey!
-        - so do we prioritise cold turkey... or stopping them from bypassing!?!? 
-            ahhhh
-- victory tree?
-    - so milestones... like the first holiday passed...
-    - but if they miss a milestone.. the tree doesn't die...
-    - but they are close to completion...
+**3. Build the Report screen — this is the core loop. Button on the main screen → screen split into 3 panes, each a big clickable third:**
+   - **(a) Report relapse** — quick form: "on this device? y/n", a *private* note on what happened (stays on device, never shown back as judgement), tap-to-pick panels in a scroll list so it's fast. After logging, walk them back through what led to it — where, what time, what they were doing/feeling just before. Logging honestly *earns* progress; it's never punished.
+   - **(b) I feel temptation** — one tap, rate the urge, then the app just helps them ride it out (urges come in 15–30 min waves — the job is to give the wave somewhere to break, not to kill it). Needs zero visibility into their screen, which is why it's your cheapest high-value feature.
+   - **(c) I'm going to look anyway** (the renamed loosen flow) — full mechanics:
+     - Forces them through the app, not another device.
+     - First they answer a couple of evidence-based (CBT/ACT) questions — pick from options.
+     - Anti-mash: they have to pick the *same option twice in a row* to confirm it, so they can't just hammer random answers to speed through.
+     - Anti-muscle-memory: the option buttons change position each time, so they can't autopilot the sequence.
+     - Capped number of attempts per day.
+     - Then an automatic 5-minute wait before anything unlocks. Offer an *optional* extend — 10 min, an hour, till tomorrow — and make the longer wait the easy, low-effort, encouraged choice (one tap, no friction), while the short path stays the slightly more deliberate one.
+     - Then they pick a duration from a short list: 1 / 2 / 5 minutes, with **2 as the default middle option** to nudge them toward the low end.
+     - During that window: blocklist (hardcore) stays fully up, greylist pause lifts, image friction stays on as best-effort. Auto re-locks the second the timer's up.
+     - The panic button lives in here too — lock screen + a physical action (breathing / cold / sharp sensory). No separate feature.
+     - ...
+     - + ), you said they admit what they're doing, say "what they'll look at", and say "that they won't do it next time". 
 
-- mabe as soon as there is temptation...
-    - they have somewhere to report it... not to block themselves out...
-    - just to recognise it...
-    - like a sort of secret vault... ?
-    - (as a long term solution)
-    
-- detect timing???
-    - 11pm - 1am, highest risk zone
-        - perhaps at 11pm... we lock down super hard-- no images at all... restricted usage for non-verified apps...
-    - morning; 9am, 10am...
-    - work day slump; 3pm, 4pm (will get worse with more work from home!)
-- +
-    - learn peaks from user's personal logged episodes...
-    - add them as the highest priority times...
-    - +sundays aparently worst? (and work from home days)
-    - Sex-related searches peak in Dec–Jan and Jun–Jul, with Christmas week the annual high.
+**4. Add a 4th option to that screen: "Report an app/site."**
+   - Guided: pick the app from a dropdown or paste the URL 
+        → mark it greylist or blocklist.
+   - User sets this when calm; the app just honours it later. 
+   No content detection, no screenshots. 
+   Greylist = apply a pause when opened; blocklist = block outright.
+
+**5. Auto-raise strictness at high-risk times, then learn their personal ones.**
+   - Defaults from the research: 
+        - hard at 11pm–1am, bumps at 9–10am and the 3–4pm slump, plus Sundays and work-from-home days. 
+   - Then the actual product: learn *their* real peaks from their own logged events (#1) 
+   and override the generic times, once we have a certain amount of data...
+   - Fire the coping prompt *before* the window opens, not after. 
+   - Driven off their reported relapses — which is exactly why #1 is first.
+
+**6. Build the progress view — non-resetting, and this is where the reward actually lives.**
+   - It's a streak counter that *doesn't* drop to zero. Track rolling consistency (clean days out of the last 30),
+       with a "lapse day" buffer so one slip nudges the number down a little instead of wiping it.
+       The 30→0 reset is the exact thing that makes people go "well I've blown it" and binge — that's why you avoid it.
+   - The reward is real stats they care about, not a tree or a smiley (you're right, those won't move anyone): 
+        - time reclaimed, a trend line heading the right way, estimated hours/£ saved per year. 
+        - That doubles as your productivity hook.
+   - Light milestone text is fine (first week, first holiday survived) *as long as* missing one never resets or "kills" anything.
+
+**7. Build the productivity surface + short-form blocking — the public face and the sell.**
+   - Reels/shorts/feed blocking is just another category inside the strictness system from #2.
+   - Put the "time wasted per year" stat front and centre. This is what makes it a believable productivity / anti-doomscroll app with the porn side quieter underneath.
+   - Your "design a logo" task belongs here — make it look like a normal focus app. Discreet icon, non-triggering notifications. Do it anytime.
+
+**8. Keep onboarding smooth — default to strict, let them change it after.**
+   - No screener quiz, per your call. Drop straight in on strict; they can dial it down later if they want.
+   - One thing that costs you nothing: keep the supportive content (urge-surf, the acceptance-style stuff) always non-shaming and available, so the people whose problem is shame rather than loss-of-control aren't made worse by the default strictness. That handles the moral-incongruence concern without an annoying quiz.
+
+**9. Recommendations / guidance page — content, slots in last.**
+   - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place). Coping-rehearsal scenarios can live here too.
+   - No tracking needed on this — they'll know where they're at.
 
 
 
+-------
 
-hmmm so...
-- if they're tempted..
-    - have to go through our app first...
-    - (this discourages them from just giving up and going to another device...)
-    - but first.. they answer questions..
-        - choose from options to make things easier for them... (maybe click the same one twice, needs to be the same one... to stop them from just clicking random options to bypass it fast..)
-        - they can only do this a certain number of times...
-        - use CBT or whatever the recommended things are...
-    - ??? then they say how long they're going to use it for... then choose from a list of things to allow? (softcore...?)
+recommendations for the step by step todo:
+- go on holiday
+- buy things to replace your phone... so you don't need it...
+- super strict lock for a week after holiday..
+- try and be out of the house as much as possible...
+    - spend their money if they have to.. on things that aren't addictive...
+    - on seeing friends especially... or at social clubs...
+
+DONT DO SOFTCORE mode...
+    - thats just wrong..
+    - if they're about to go.. 
+    - just only block super strict things.. but maybe turn off certain things so that they can access stuff?!?!?!
+
+
+MAKE THEM WAIT 5 MINUTES! (OR 10... or 20... or 30! and then ask again- like food eating addiction theory...)
 
 
 
