@@ -34,6 +34,9 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -111,6 +114,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var blockInput: EditText
     private lateinit var emptyList: TextView
     private lateinit var btnUninstallGuard: Button
+    private lateinit var spinnerMode: Spinner
 
 
     /** Long-press a row to read the whole entry — including the full NODE DUMP. */
@@ -165,6 +169,99 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
+
+private fun showRecentBlocks() {
+    val pad = (12 * resources.displayMetrics.density).toInt()
+    val container = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(pad, pad, pad, pad)
+    }
+    val scroll = ScrollView(this).apply { addView(container) }
+    val dialog = AlertDialog.Builder(this)
+        .setTitle("Recent blocks (past hour)")
+        .setView(scroll)
+        .setPositiveButton(android.R.string.ok, null)
+        .create()
+
+    val stamp = SimpleDateFormat("dd/MM/yyyy  HH:mm:ss", Locale.getDefault())
+    val dividerColor = 0x14000000                                  // ~8% black, very subtle
+    val dividerH = (1 * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+
+    fun reload() {
+        lifecycleScope.launch {
+            val items = BlockEventLog.recent(this@MainActivity, 60 * 60 * 1000L)
+            container.removeAllViews()
+            if (items.isEmpty()) {
+                container.addView(TextView(this@MainActivity).apply {
+                    text = "(nothing in the last hour)"
+                })
+                return@launch
+            }
+            items.forEachIndexed { index, e ->
+                val row = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, pad / 2, 0, pad / 2)
+                }
+                val target = e.url ?: e.host ?: e.packageName ?: "(unknown)"
+                val shortTarget = if (target.length > 40) target.take(40) + "\u2026" else target
+                val scoreTag = e.score?.let { "[score $it]  " } ?: ""
+                val before = e.recentAppsList().joinToString(", ").ifBlank { "\u2014" }
+                row.addView(TextView(this@MainActivity).apply {
+                    text = "${stamp.format(Date(e.timestamp))}\n$scoreTag$shortTarget\nbefore: $before"
+                    textSize = 13f
+                    layoutParams =
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                row.addView(Button(this@MainActivity).apply {
+                    text = "Remove"
+                    setOnClickListener { BlockEventLog.remove(this@MainActivity, e.id); reload() }
+                })
+                container.addView(row)
+                if (index < items.lastIndex) {
+                    container.addView(View(this@MainActivity).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, dividerH)
+                        setBackgroundColor(dividerColor)
+                    })
+                }
+            }
+        }
+    }
+    reload()
+    dialog.show()
+}
+
+private fun refreshModeUi() {
+    if (!::spinnerMode.isInitialized) return
+    val wantPos = if (Mode.isStrict(this)) 1 else 0
+    if (spinnerMode.selectedItemPosition != wantPos) spinnerMode.setSelection(wantPos)
+
+    val locked = Mode.isLocked(this)
+    spinnerMode.isEnabled = !locked
+    val btn = findViewById<Button>(R.id.btn_strict_week)
+    if (locked) {
+        btn.isEnabled = false
+        btn.text = "Strict locked (${Mode.daysLeft(this)})"
+    } else {
+        btn.isEnabled = true
+        btn.text = "Start week-long strict mode"
+    }
+}
+
+private fun startWeekStrict() {
+    if (Mode.isLocked(this)) return
+    AlertDialog.Builder(this)
+        .setTitle("Start week-long strict mode?")
+        .setMessage("Strict mode will stay on for 7 days. You won't be able to switch back to Relaxed until it ends.")
+        .setPositiveButton("Start") { _, _ ->
+            Mode.startWeekStrict(this)
+            refreshModeUi()
+            Toast.makeText(this, "Strict mode on for 7 days", Toast.LENGTH_SHORT).show()
+        }
+        .setNegativeButton(android.R.string.cancel, null)
+        .show()
+}
+
 
     private var entriesJob: kotlinx.coroutines.Job? = null
     private var shownStep: Step? = null
@@ -309,6 +406,31 @@ class MainActivity : AppCompatActivity() {
             refreshBlockRules()
         }
         findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
+        findViewById<Button>(R.id.btn_recent_blocks).setOnClickListener { showRecentBlocks() }
+
+        spinnerMode = findViewById(R.id.spinner_mode)
+        val modeAdapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_item, listOf("Relaxed", "Strict"))
+        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerMode.adapter = modeAdapter
+        spinnerMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                val chosen = if (pos == 0) Mode.RELAXED else Mode.STRICT
+                if (chosen == Mode.current(this@MainActivity)) return   // no real change (incl. first load)
+                if (Mode.setMode(this@MainActivity, chosen)) {
+                    Toast.makeText(this@MainActivity,
+                        if (chosen == Mode.STRICT) "Strict mode on" else "Relaxed mode on",
+                        Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity,
+                        "Strict mode is locked \u2014 can't switch back yet", Toast.LENGTH_SHORT).show()
+                }
+                refreshModeUi()
+            }
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
+        findViewById<Button>(R.id.btn_strict_week).setOnClickListener { startWeekStrict() }
+        refreshModeUi()
         findViewById<Button>(R.id.btn_clear_log).setOnClickListener { clearLog() }
 
         // Status rows double as controls.
@@ -788,6 +910,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // the cover flicker. Skip them completely.
         if (packageName.lowercase() in keyboardPackages || isKeyboardWindow(event)) return
 
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            RecentAppsTracker.onForeground(packageName)
+        }
+
         // ---- App-level block: FIRST, on every event, before any throttling. ----
         // A plain set lookup is effectively free, and running it on the very first
         // window event of an app launch is what makes the cover appear instantly
@@ -806,7 +932,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         ) {
             if (breathing?.isShowing == true) breathing?.hide()   // left the gated app: drop it
             lastForegroundPkgForBreathing = packageName
-            if (packageName in BREATHING_APPS && overlay?.isShowing != true) {
+            if (packageName in BREATHING_APPS && overlay?.isShowing != true && !Mode.isRelaxed(this)) {
                 val label = appLabelFor(packageName)
                 breathing?.show(
                     appLabel = label,
@@ -901,7 +1027,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     /** Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop. */
     private fun showAppBlock(reason: String, blockedPackage: String) {
         val controller = overlay ?: return
+        val freshAppBlock = !appBlockActive          // ADD
         appBlockActive = true
+        if (freshAppBlock) BlockEventLog.recordApp(this, blockedPackage, reason)   // ADD
         controller.show(
             reason = reason,
             onGoBack = {
@@ -1016,6 +1144,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         if (baseReason != null) {
             val freshShow = !controller.isShowing
+            if (freshShow) {
+                val blockScore = if (host != null)
+                    BorderlineScorer.score(title, url, content)?.score else null
+                BlockEventLog.recordWeb(this, packageName, host, url, baseReason, blockScore)
+            }
 
             // Live status so the user is never lost while mashing Back:
             val status = when {
@@ -2565,5 +2698,77 @@ object UninstallGuard {
 
     fun deactivateAdmin(ctx: Context) {
         if (dpm(ctx).isAdminActive(admin(ctx))) dpm(ctx).removeActiveAdmin(admin(ctx))
+    }
+}
+
+// =====================================================================================
+// Mode  (relaxed vs strict; optional week-long strict lock)
+// =====================================================================================
+/**
+ * Two modes:
+ *   RELAXED - the calming "breathing" pause is suppressed for every app.
+ *   STRICT  - normal behaviour (the breathing pause shows for the chosen apps).
+ *
+ * "Start week-long strict mode" sets STRICT and locks it for 7 days: until the timer
+ * runs out the mode can't be switched back to RELAXED. Stored in SharedPreferences,
+ * same best-effort durability as the other locks in this app.
+ */
+object Mode {
+    private const val PREFS = "app_mode"
+    private const val KEY_MODE = "mode"
+    private const val KEY_LOCK_UNTIL = "strict_locked_until"
+    private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
+
+    const val RELAXED = "relaxed"
+    const val STRICT = "strict"
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** Current mode. A live strict lock forces STRICT regardless of the stored value. */
+    fun current(ctx: Context): String {
+        if (isLocked(ctx)) return STRICT
+        return prefs(ctx).getString(KEY_MODE, RELAXED) ?: RELAXED
+    }
+
+    fun isRelaxed(ctx: Context) = current(ctx) == RELAXED
+    fun isStrict(ctx: Context) = current(ctx) == STRICT
+
+    /** True while the week-long strict lock is still running. */
+    fun isLocked(ctx: Context): Boolean =
+        prefs(ctx).getLong(KEY_LOCK_UNTIL, 0L) > System.currentTimeMillis()
+
+    /** ms left on the lock (0 if not locked). */
+    fun lockRemaining(ctx: Context): Long =
+        (prefs(ctx).getLong(KEY_LOCK_UNTIL, 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+
+    /** A short "3d 4h left" style label for the lock. */
+    fun daysLeft(ctx: Context): String {
+        val hours = lockRemaining(ctx) / (60 * 60 * 1000)
+        val d = hours / 24
+        val h = hours % 24
+        return when {
+            d > 0 -> "${d}d ${h}h left"
+            h > 0 -> "${h}h left"
+            else -> "<1h left"
+        }
+    }
+
+    /**
+     * Change the mode. Refused (returns false) if the strict lock is active and you're
+     * trying to go back to RELAXED. Switching TO strict is always allowed.
+     */
+    fun setMode(ctx: Context, mode: String): Boolean {
+        if (isLocked(ctx) && mode == RELAXED) return false
+        prefs(ctx).edit().putString(KEY_MODE, mode).apply()
+        return true
+    }
+
+    /** Force STRICT and lock it for 7 days. */
+    fun startWeekStrict(ctx: Context) {
+        prefs(ctx).edit()
+            .putString(KEY_MODE, STRICT)
+            .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + WEEK_MS)
+            .apply()
     }
 }

@@ -82,6 +82,7 @@
             android:text="@string/block" />
     </LinearLayout>
 
+    <!-- Row 1: list / ban actions -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -97,9 +98,19 @@
 
         <Button
             android:id="@+id/btn_ban_list"
+            style="?android:attr/buttonStyleSmall"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="View ban list" />
+
+    </LinearLayout>
+
+    <!-- Row 2: recent blocks (own row so the label isn't squished) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal">
 
         <Button
             android:id="@+id/btn_clear_log"
@@ -107,6 +118,49 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/clear_log" />
+
+        <Button
+            android:id="@+id/btn_recent_blocks"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Recent blocks" />
+    </LinearLayout>
+
+    <!-- Row 3: mode picker -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingEnd="8dp"
+            android:text="Mode:"
+            android:textSize="15sp" />
+
+        <Spinner
+            android:id="@+id/spinner_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- Row 4: week-long strict -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_strict_week"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="7 day strict mode" />
     </LinearLayout>
 
     <TextView

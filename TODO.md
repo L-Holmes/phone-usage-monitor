@@ -1,12 +1,14 @@
 
 
-**1. Build the tracking system / event log first — everything reads from this.**
-   - One on-device store. Quietly records: blocked URLs, logged urges, logged relapses, and for each one the time, day of week, and what apps were open just before.
-   - Auto-recorded wherever possible. No typing unless it has to be. Smooth = used.
-   - Auto-relapse logic: one blocked URL on its own = treat as an outlier/misfire, log it quietly, don't count it, don't trigger any "you failed" feeling. Two or more within ~an hour = count it as a likely relapse and fold it into the pattern data. User can mark anything false if they want, but you never *require* them to confirm.
-   - After ~3 months, bin the raw events but keep a summary first — just grouped averages (e.g. "clusters around ~5pm and ~11pm", "Sundays run high"). Keeps the pattern, kills the storage.
+At some point:
+- for relaxed vs strict mode..
+    - have some obvious map somewhere.. of all the things our app does in text form... and then each mapped to like a number... 1 or 2 representing relaxed and strict...
+    - so then i can easily change just that map, and know what will activate in each mode (we may add more modes in future which is why we are doing this!)
 
-**2. Build strictness levels next — the loosen-flow and the timing engine both need these to exist.**
+
+
+
+**2. update the strictness levels next — the loosen-flow and the timing engine both need these to exist.**
    - Define modes the rest of the app reads: e.g. normal / strict / super-strict, each doing progressively more (slower image loads → greylist pauses → block unverified apps → no images at all). Your existing slowed-image-loading folds in here as a low rung.
    - Include a one-tap "lock me in strict for a week" mode (you need this for the holiday plan in #9 — once it's on, it shouldn't be easy to flip off).
    - You said you'll define exactly what each level blocks yourself — leaving that to you.
