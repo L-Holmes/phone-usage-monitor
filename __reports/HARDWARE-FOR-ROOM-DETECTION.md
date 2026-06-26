@@ -1,4 +1,24 @@
 
+FROM ALIBABA:
+
+- K11 (nRF52, programmable, MOQ 2). The "K11 Cheapest Smart Small Beacons... Programmable" or "K11 KKM Wearable Beacon" listing — both MOQ 2, ~£2–6/unit. This is exactly the unit recommended before. Buy 2–3.
+    - https://www.alibaba.com/product-detail/cheapest-Ble-IBeacon-K11-tag-ble_1600982113956.html?spm=a2700.galleryofferlist.normal_offer.d_image.1dac13a0ZWB8SS&priceId=f64bfa36f069464cb752f1ab84fca152
+- KKM K4 (the dedicated K4 listing). Sturdier, IP67, programmable, ~£6–7.66/unit at sample/low qty. Your "solid" pick — good for the one that lives long-term in the bedroom.
+    - https://www.alibaba.com/product-detail/KKM-K4-BLE-Beacons-Tag-Accelerometer_1600566935676.html?spm=a2700.galleryofferlist.normal_offer.d_title.771613a0IQQpU9&priceId=ffa35e8c0f1749b59713733dd3c5ebaa
+- "Cheap Nordic 52810/52832 Small Size" (MOQ 2). Generic nRF52 backup if the K11 sellers are slow to respond. -- £6.13
+    - https://www.alibaba.com/product-detail/Cheap-Nordic-52810-52832-Small-Size_1600251290935.html?spm=a2700.shop_plgr.41413.15.a3933b7b7L87ZR
+
+Hi,
+Couple of questions:
+1) Is this unit programmable with the KBeacon or KBeaconPro app?
+2) And will it let us set UUID/Major/Minor and TX power?
+Thank you
+
+
+
+
+
+================================
 
 Evaluated beacon options against use case priorities and white-label strategy
 
