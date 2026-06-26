@@ -1,22 +1,30 @@
 
 
-At some point:
-- for relaxed vs strict mode..
-    - have some obvious map somewhere.. of all the things our app does in text form... and then each mapped to like a number... 1 or 2 representing relaxed and strict...
-    - so then i can easily change just that map, and know what will activate in each mode (we may add more modes in future which is why we are doing this!)
 
+TODO:
+- haven't made the mos trecent claude code changes yet...
+Next: add the functoinality;
 
-
-
-**2. update the strictness levels next — the loosen-flow and the timing engine both need these to exist.**
-   - Define modes the rest of the app reads: e.g. normal / strict / super-strict, each doing progressively more (slower image loads → greylist pauses → block unverified apps → no images at all). Your existing slowed-image-loading folds in here as a low rung.
-   - Include a one-tap "lock me in strict for a week" mode (you need this for the holiday plan in #9 — once it's on, it shouldn't be easy to flip off).
-   - You said you'll define exactly what each level blocks yourself — leaving that to you.
-
-**3. Build the Report screen — this is the core loop. Button on the main screen → screen split into 3 panes, each a big clickable third:**
-   - **(a) Report relapse** — quick form: "on this device? y/n", a *private* note on what happened (stays on device, never shown back as judgement), tap-to-pick panels in a scroll list so it's fast. After logging, walk them back through what led to it — where, what time, what they were doing/feeling just before. Logging honestly *earns* progress; it's never punished.
-   - **(b) I feel temptation** — one tap, rate the urge, then the app just helps them ride it out (urges come in 15–30 min waves — the job is to give the wave somewhere to break, not to kill it). Needs zero visibility into their screen, which is why it's your cheapest high-value feature.
-   - **(c) I'm going to look anyway** (the renamed loosen flow) — full mechanics:
+   - **(a) Report relapse** 
+   — quick form: "on this device? y/n",  (clickable 'yes, on this device'.. or 'no, on a different device'
+                  a *private* note on what happened (stays on device, never shown back as judgement), 
+                  tap-to-pick panels in a scroll list so it's fast. 
+                  After logging, 
+                  Where you at home?
+                  (if yes) What room where you in?
+                        (bedroom, bathroom, other [manual entry-- show these manual entries on future reports as additional options.. make it scroll in case they add multiple.. have asensible limit of like 20 though...)
+                  walk them back through what led to it — where, what time, what they were doing/feeling just before. Logging honestly *earns* progress; it's never punished.
+                        (time of course is auto captured... log these alongside our auto captured logs... and group data with their data...
+                    e.g.
+                        It happened at [4pm], this is the same time period (i.e. within +- 2 hours) of x% of your other reports.
+                        It happened on [day of the week] this is the same as x% of your other reports..
+                        your feeling was best described as: [bored] / [anxious] / [depressed] / [happy] / [neutral] <other *sensible* common things from the research>
+                    then say like, you did hte right thing by reporting... you are now one step closer to figuring out your habits and defeating once and for all.... or something...
+   - **(b) I feel temptation** 
+   — one tap, rate the urge, then the app just helps them ride it out (urges come in 15–30 min waves — the job is to give the wave somewhere to break, not to kill it). Needs zero visibility into their screen, which is why it's your cheapest high-value feature.
+        - asks them to 'lock down' all none whitelisted apps. If the user clicks it.. it will begin the lockdown for 30 mins...
+   - **(c) I'm going to look anyway** 
+   (the renamed loosen flow) — full mechanics:
      - Forces them through the app, not another device.
      - First they answer a couple of evidence-based (CBT/ACT) questions — pick from options.
      - Anti-mash: they have to pick the *same option twice in a row* to confirm it, so they can't just hammer random answers to speed through.
@@ -30,11 +38,11 @@ At some point:
      - + ), you said they admit what they're doing, say "what they'll look at", and say "that they won't do it next time". 
 
 **4. Add a 4th option to that screen: "Report an app/site."**
-   - Guided: pick the app from a dropdown or paste the URL 
+   - Guided: pick the app from a dropdown (containing all apps on the device) or paste the URL 
         → mark it greylist or blocklist.
    - User sets this when calm; the app just honours it later. 
    No content detection, no screenshots. 
-   Greylist = apply a pause when opened; blocklist = block outright.
+   Greylist = apply a pause when opened?!?!?!!?; blocklist = block outright.
 
 **5. Auto-raise strictness at high-risk times, then learn their personal ones.**
    - Defaults from the research: 
@@ -66,6 +74,11 @@ At some point:
    - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place). Coping-rehearsal scenarios can live here too.
    - No tracking needed on this — they'll know where they're at.
 
+
+At some point:
+- for relaxed vs strict mode..
+    - have some obvious map somewhere.. of all the things our app does in text form... and then each mapped to like a number... 1 or 2 representing relaxed and strict...
+    - so then i can easily change just that map, and know what will activate in each mode (we may add more modes in future which is why we are doing this!)
 
 
 -------

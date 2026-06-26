@@ -51,37 +51,6 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/block_rules"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/blocking_label"
-        android:textSize="12sp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <EditText
-            android:id="@+id/input_block"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="@string/block_hint"
-            android:imeOptions="actionDone"
-            android:inputType="textNoSuggestions"
-            android:maxLines="1" />
-
-        <Button
-            android:id="@+id/btn_block"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/block" />
-    </LinearLayout>
-
     <!-- Row 1: list / ban actions -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -147,6 +116,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
     </LinearLayout>
+
+    <!-- Report (opens the 4-pane report screen) -->
+    <Button
+        android:id="@+id/btn_report"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Report" />
 
     <!-- Row 4: week-long strict -->
     <LinearLayout

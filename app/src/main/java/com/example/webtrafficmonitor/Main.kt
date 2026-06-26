@@ -110,8 +110,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusAccessibility: TextView
     private lateinit var statusOverlay: TextView
     private lateinit var statusLock: TextView
-    private lateinit var blockRulesView: TextView
-    private lateinit var blockInput: EditText
     private lateinit var emptyList: TextView
     private lateinit var btnUninstallGuard: Button
     private lateinit var spinnerMode: Spinner
@@ -231,6 +229,52 @@ private fun showRecentBlocks() {
     dialog.show()
 }
 
+// ── Report screen: 4 equal full-width panes ────────────────────────────────
+private fun showReportScreen() {
+    onReportScreen = true
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    // Colours are easy to change — just edit these four.
+    root.addView(reportPane("Report an app/site", 0xFF34464E.toInt()) { onReportAppSite() })
+    root.addView(reportPane("I feel temptation", 0xFF3E535C.toInt()) { onFeelTemptation() })
+    root.addView(reportPane("I'm going to look anyway", 0xFF48606A.toInt()) { onLookAnyway() })
+    root.addView(reportPane("Report relapse", 0xFF526D78.toInt()) { onReportRelapse() })
+    setContentView(root)
+}
+
+/** One full-width quarter-height clickable pane. */
+private fun reportPane(label: String, bg: Int, onClick: () -> Unit): TextView =
+    TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        textSize = 22f
+        setTextColor(0xFFFFFFFF.toInt())
+        setBackgroundColor(bg)
+        isClickable = true
+        isFocusable = true
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)   // weight 1 -> equal quarters
+        setOnClickListener { onClick() }
+    }
+
+// ── Pane actions (stubs — fill these in later) ─────────────────────────────
+private fun onReportAppSite() {
+    Toast.makeText(this, "Report an app/site \u2014 coming soon", Toast.LENGTH_SHORT).show()
+}
+private fun onFeelTemptation() {
+    Toast.makeText(this, "I feel temptation \u2014 coming soon", Toast.LENGTH_SHORT).show()
+}
+private fun onLookAnyway() {
+    Toast.makeText(this, "I'm going to look anyway \u2014 coming soon", Toast.LENGTH_SHORT).show()
+}
+private fun onReportRelapse() {
+    Toast.makeText(this, "Report relapse \u2014 coming soon", Toast.LENGTH_SHORT).show()
+}
+
+
 private fun refreshModeUi() {
     if (!::spinnerMode.isInitialized) return
     val wantPos = if (Mode.isStrict(this)) 1 else 0
@@ -285,6 +329,16 @@ private fun startWeekStrict() {
         lockPromptHandled = false   // show the uninstall-lock page again on next reopen
     }
 
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (onReportScreen) {
+            onReportScreen = false
+            setupMainScreen()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
     // ── Setup gate ────────────────────────────────────────────────────────────
     // Shows the prerequisites in order (monitoring -> overlay -> uninstall lock).
     // The first two are required; until both are on you can't reach the main
@@ -293,6 +347,7 @@ private fun startWeekStrict() {
     // Reset on every reopen (see onStop) so the uninstall-lock page shows each time,
     // not just the first.
     private var lockPromptHandled = false
+    private var onReportScreen = false
 
     private fun currentStep(): Step = when {
         !isAccessibilityEnabled()       -> Step.MONITORING
@@ -366,6 +421,7 @@ private fun startWeekStrict() {
         onSecondary: (() -> Unit)? = null,
     ) {
         entriesJob?.cancel()
+        onReportScreen = false
         setContentView(R.layout.screen_prereq)
         findViewById<TextView>(R.id.prereq_title).text = title
         findViewById<TextView>(R.id.prereq_body).text = body
@@ -390,23 +446,20 @@ private fun startWeekStrict() {
         statusOverlay = findViewById(R.id.status_overlay)
         statusAccessibility = findViewById(R.id.status_accessibility)
         statusLock = findViewById(R.id.status_lock)
-        blockRulesView = findViewById(R.id.block_rules)
-        blockInput = findViewById(R.id.input_block)
         emptyList = findViewById(R.id.empty_list)
 
         val list = findViewById<RecyclerView>(R.id.list)
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
 
-        findViewById<Button>(R.id.btn_block).setOnClickListener { addBlockFromInput() }
         findViewById<Button>(R.id.btn_clear_blocks).setOnClickListener {
             BlockRules.clear(this)
             BlockEscalation.clear(this)
             AppTimedBlock.clear(this)
-            refreshBlockRules()
         }
         findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
         findViewById<Button>(R.id.btn_recent_blocks).setOnClickListener { showRecentBlocks() }
+        findViewById<Button>(R.id.btn_report).setOnClickListener { showReportScreen() }
 
         spinnerMode = findViewById(R.id.spinner_mode)
         val modeAdapter = ArrayAdapter(
@@ -440,8 +493,8 @@ private fun startWeekStrict() {
         }
         statusLock.setOnClickListener { toggleUninstallGuard() }
 
+        onReportScreen = false
         observeEntries()
-        refreshBlockRules()
         renderStatus()
     }
 
@@ -481,15 +534,6 @@ private fun startWeekStrict() {
         )
     }
 
-    private fun addBlockFromInput() {
-        val rule = blockInput.text.toString().trim()
-        if (rule.isEmpty()) return
-        BlockRules.add(this, rule)
-        blockInput.text.clear()
-        refreshBlockRules()
-        Toast.makeText(this, getString(R.string.toast_blocking, rule), Toast.LENGTH_SHORT).show()
-    }
-
     /**
      * Tapping a row blocks that specific page by its title (so other pages on the
      * same site stay allowed). Falls back to the domain or app if there is no title.
@@ -501,7 +545,6 @@ private fun startWeekStrict() {
             ?: entry.packageName
             ?: return
         BlockRules.add(this, rule)
-        refreshBlockRules()
         Toast.makeText(this, getString(R.string.toast_blocking, rule), Toast.LENGTH_SHORT).show()
     }
 
@@ -510,13 +553,6 @@ private fun startWeekStrict() {
             val dao = database.dao()
             dao.clear()
         }
-    }
-
-    private fun refreshBlockRules() {
-        val rules = BlockRules.all()
-        val label = getString(R.string.blocking_label)
-        val value = if (rules.isEmpty()) getString(R.string.blocking_none) else rules.joinToString(", ")
-        blockRulesView.text = "$label  $value"
     }
 
     private fun toggleUninstallGuard() {
