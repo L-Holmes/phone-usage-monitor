@@ -1,4 +1,12 @@
 
+TODO:
+- claude not finished yet.
+- ask to fix current issue
+- then ask it to do the final things...
+i.e. 
+"""
+The remaining open thread from the audit is a manage/remove screen for the app + greylist rules (only URL-blocklist shows in the ban list today) — want that next, or is there something else you've spotted in testing?
+"""
 
 
 TODO:

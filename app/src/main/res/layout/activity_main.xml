@@ -1,160 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/disclosure"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
-        android:text="@string/disclosure"
-        android:textSize="11sp" />
-
-    <!-- Status console. Each row's text + colour is set in code (renderStatus):
-         green = on, grey = off. Tapping a row manages that item. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#0D000000"
-        android:padding="12dp"
-        android:layout_marginBottom="12dp">
+        android:padding="16dp">
 
-        <TextView
-            android:id="@+id/status_overlay"
+        <!-- Permissions / status console (text + colour set in renderStatus) -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingVertical="8dp"
-            android:textSize="15sp" />
+            android:orientation="vertical"
+            android:background="#0D000000"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp">
 
-        <TextView
-            android:id="@+id/status_accessibility"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingVertical="8dp"
-            android:textSize="15sp" />
+            <TextView android:id="@+id/status_overlay"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:clickable="true" android:focusable="true"
+                android:paddingVertical="8dp" android:textSize="15sp" />
+            <TextView android:id="@+id/status_accessibility"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:clickable="true" android:focusable="true"
+                android:paddingVertical="8dp" android:textSize="15sp" />
+            <TextView android:id="@+id/status_lock"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:clickable="true" android:focusable="true"
+                android:paddingVertical="8dp" android:textSize="15sp" />
+        </LinearLayout>
 
-        <TextView
-            android:id="@+id/status_lock"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingVertical="8dp"
-            android:textSize="15sp" />
-    </LinearLayout>
+        <!-- Active timers (lockdown / unlock window / strict week) -->
+        <TextView android:id="@+id/status_active"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="12sp" android:layout_marginBottom="8dp"
+            android:visibility="gone" />
 
-    <!-- Row 1: list / ban actions -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end"
-        android:orientation="horizontal">
+        <!-- Mode dropdown, directly under permissions -->
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Mode:" android:textSize="15sp" android:paddingEnd="8dp" />
+            <Spinner android:id="@+id/spinner_mode"
+                android:layout_width="wrap_content" android:layout_height="wrap_content" />
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_clear_blocks"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/clear_blocks" />
-
-        <Button
-            android:id="@+id/btn_ban_list"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="View ban list" />
-
-    </LinearLayout>
-
-    <!-- Row 2: recent blocks (own row so the label isn't squished) -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/btn_clear_log"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/clear_log" />
-
-        <Button
-            android:id="@+id/btn_recent_blocks"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <!-- Buttons, Report first -->
+        <Button android:id="@+id/btn_report"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Report" />
+        <Button android:id="@+id/btn_recent_blocks"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Recent blocks" />
+        <Button android:id="@+id/btn_strict_week"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Start week-long strict mode" />
+        <Button android:id="@+id/btn_clear_blocks"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/clear_blocks" />
+        <Button android:id="@+id/btn_ban_list"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="View ban list" />
+        <Button android:id="@+id/btn_view_log"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="View log" />
+        <Button android:id="@+id/btn_about"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="About &amp; privacy" />
     </LinearLayout>
-
-    <!-- Row 3: mode picker -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingTop="4dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="8dp"
-            android:text="Mode:"
-            android:textSize="15sp" />
-
-        <Spinner
-            android:id="@+id/spinner_mode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-    </LinearLayout>
-
-    <!-- Report (opens the 4-pane report screen) -->
-    <Button
-        android:id="@+id/btn_report"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Report" />
-
-    <!-- Row 4: week-long strict -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/btn_strict_week"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="7 day strict mode" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/empty_list"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingVertical="24dp"
-        android:text="@string/empty_list"
-        android:textAlignment="center"
-        android:visibility="gone" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/list"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingTop="8dp" />
-
-</LinearLayout>
+</ScrollView>
