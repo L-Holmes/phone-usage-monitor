@@ -2,35 +2,6 @@
 
 
 TODO:
-Next: add the functoinality;
-
-
-   - **(c) I'm going to look anyway** 
-   (the renamed loosen flow) — full mechanics:
-     - Forces them through the app, not another device.
-     - First they answer a couple of evidence-based (CBT/ACT) questions , ones that are actually useful.. not just scale 1-7 type silliness..
-        make them thing and discover about themselves...
-     - Anti-mash: they have to pick the *same option twice in a row* to confirm it, so they can't just hammer random answers to speed through.
-        - will of course need to change order or whatever.. just reset to that quesetion if they get it wrong.
-     - Anti-muscle-memory: the option buttons change position each time, so they can't autopilot the sequence.
-     - Capped number of attempts per day. - just one, of course.
-        - capped number all time... like say we'll go with 5 for now. (let them know this)
-     - Then an automatic 5-minute wait before anything unlocks. Offer an *optional* extend — 10 min, an hour, till tomorrow — and make the longer wait the easy, low-effort, encouraged choice (one tap, no friction), while the short path stays the slightly more deliberate one.
-     - Then they pick a duration from a short list: 1 / 2 / 5 minutes, with **2 as the default middle option** to nudge them toward the low end.
-     - During that window: goes to the most relaxed setting, orb thing turns on.., image friction stays on as best-effort. Auto re-locks the second the timer's up. etc... 
-     - The panic button lives in here too — lock screen + a physical action (breathing / cold / sharp sensory). No separate feature.
-        - ideally show that straight away as an obvious bolded main option...
-     - ...
-     - they enter detail about what they'll do, and for how long form a preset (1 min, 2 min, or 5 mins...)
-        - after that we return back to whatever..
-     - + you said they admit what they're doing, say "what they'll look at", and say "that they won't do it next time". 
-
-**4. Add a 4th option to that screen: "Report an app/site."**
-   - Guided: pick the app from a dropdown (containing all apps on the device) or paste the URL 
-        → mark it greylist or blocklist.
-   - User sets this when calm; the app just honours it later. 
-   No content detection, no screenshots. 
-   Greylist = apply a pause when opened?!?!?!!?; blocklist = block outright.
 
 **5. Auto-raise strictness at high-risk times, then learn their personal ones.**
    - Defaults from the research: 
@@ -38,7 +9,7 @@ Next: add the functoinality;
    - Then the actual product: learn *their* real peaks from their own logged events (#1) 
    and override the generic times, once we have a certain amount of data...
    - Fire the coping prompt *before* the window opens, not after. 
-   - Driven off their reported relapses — which is exactly why #1 is first.
+   - Driven off their reported relapses ... and our auto recorded ones.. data pool.
 
 **6. Build the progress view — non-resetting, and this is where the reward actually lives.**
    - It's a streak counter that *doesn't* drop to zero. Track rolling consistency (clean days out of the last 30),

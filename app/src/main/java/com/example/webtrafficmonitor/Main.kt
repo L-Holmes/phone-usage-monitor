@@ -168,6 +168,176 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+
+    // ── "Report an app/site" flow ──────────────────────────────────────────────
+    private var inAppSiteFlow = false
+    private var appSiteApps: List<Pair<String, String>> = emptyList()   // label -> package
+
+    private fun startAppSiteFlow() {
+        onReportScreen = true
+        inAppSiteFlow = true
+        appSiteChooseKind()
+    }
+
+    private fun appSiteBack() {
+        inAppSiteFlow = false
+        showReportScreen()
+    }
+
+    private fun appSiteChooseKind() {
+        inAppSiteFlow = true
+        val dp = resources.displayMetrics.density
+        val pad = (16 * dp).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        root.addView(backText { appSiteBack() })
+        root.addView(titleText("What do you want to limit?"))
+        root.addView(TextView(this).apply {
+            text = "Set this now, while you're calm \u2014 the app just honours it later. " +
+                "No content scanning, no screenshots."
+            textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            setPadding(0, 0, 0, (16 * dp).toInt())
+        })
+        root.addView(bigChoice("An app on this phone", 0xFF3E535C.toInt()) { appSiteChooseApp() })
+        root.addView(bigChoice("A website", 0xFF3E535C.toInt()) { appSiteChooseSite() })
+        setContentView(root)
+    }
+
+    private fun appSiteChooseApp() {
+        val dp = resources.displayMetrics.density
+        val pad = (16 * dp).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        root.addView(backText { appSiteChooseKind() })
+        root.addView(titleText("Pick an app"))
+        val spinner = Spinner(this)
+        root.addView(spinner)
+        root.addView(tierNote())
+        val spacer = View(this)
+        root.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        val greyBtn = bigChoice("Greylist it \u2014 ${GreyUsage.LIMIT_MIN} min / hour", 0xFF3E535C.toInt()) {}
+        val blockBtn = bigChoice("Blocklist it \u2014 block outright", 0xFFB00020.toInt()) {}
+        greyBtn.isEnabled = false; blockBtn.isEnabled = false
+        root.addView(greyBtn); root.addView(blockBtn)
+        setContentView(root)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val apps = loadLaunchableApps()
+            runOnUiThread {
+                appSiteApps = apps
+                val adapter = ArrayAdapter(this@MainActivity,
+                    android.R.layout.simple_spinner_item, apps.map { it.first })
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                spinner.adapter = adapter
+                greyBtn.isEnabled = true; blockBtn.isEnabled = true
+                greyBtn.setOnClickListener { saveAppRule(spinner.selectedItemPosition, AppRules.GREY) }
+                blockBtn.setOnClickListener { saveAppRule(spinner.selectedItemPosition, AppRules.BLOCK) }
+            }
+        }
+    }
+
+private fun saveAppRule(pos: Int, tier: String) {
+    val entry = appSiteApps.getOrNull(pos) ?: return
+    AppRules.setApp(this, entry.second, tier)
+    appSiteSaved(entry.first, tier)
+}
+
+private fun appSiteChooseSite() {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(backText { appSiteChooseKind() })
+    root.addView(titleText("Add a website"))
+    val urlInput = EditText(this).apply {
+        hint = "paste or type a web address"
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        maxLines = 1
+    }
+    root.addView(urlInput)
+    root.addView(tierNote())
+    val spacer = View(this)
+    root.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(bigChoice("Greylist it \u2014 ${GreyUsage.LIMIT_MIN} min / hour", 0xFF3E535C.toInt()) {
+        saveSiteRule(urlInput, AppRules.GREY)
+    })
+    root.addView(bigChoice("Blocklist it \u2014 block outright", 0xFFB00020.toInt()) {
+        saveSiteRule(urlInput, AppRules.BLOCK)
+    })
+    setContentView(root)
+}
+
+private fun saveSiteRule(input: EditText, tier: String) {
+    val host = hostOf(input.text.toString())
+    if (host == null) {
+        Toast.makeText(this, "Couldn't read a web address.", Toast.LENGTH_SHORT).show()
+        return
+    }
+    if (tier == AppRules.BLOCK) BlockRules.add(this, host)        // reuse the existing block engine
+    else AppRules.setHost(this, host, AppRules.GREY)
+    appSiteSaved(host, tier)
+}
+
+private fun appSiteSaved(target: String, tier: String) {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(titleText("Saved"))
+    root.addView(TextView(this).apply {
+        text = "$target is now " +
+            (if (tier == AppRules.GREY) "greylisted \u2014 ${GreyUsage.LIMIT_MIN} minutes each hour"
+             else "blocklisted \u2014 blocked outright") +
+            ". It's in effect right away."
+        textSize = 16f; setPadding(0, (12 * dp).toInt(), 0, 0)
+    })
+    val spacer = View(this)
+    root.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(Button(this).apply { text = "Add another"; setOnClickListener { appSiteChooseKind() } })
+    root.addView(Button(this).apply { text = "Done"; setOnClickListener { setupMainScreen() } })
+    setContentView(root)
+}
+
+private fun tierNote(): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = "Greylist = ${GreyUsage.LIMIT_MIN} minutes each hour, then paused.\n" +
+            "Blocklist = blocked completely."
+        textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
+    }
+}
+
+private fun loadLaunchableApps(): List<Pair<String, String>> {
+    val pm = packageManager
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    return pm.queryIntentActivities(intent, 0).mapNotNull { ri ->
+        val p = ri.activityInfo?.packageName ?: return@mapNotNull null
+        if (p == packageName) return@mapNotNull null
+        ri.loadLabel(pm).toString() to p
+    }.distinctBy { it.second }.sortedBy { it.first.lowercase() }
+}
+
+private fun hostOf(input: String): String? {
+    var s = input.trim().lowercase()
+    if (s.isEmpty()) return null
+    if (!s.contains("://")) s = "https://$s"
+    val h = try { Uri.parse(s).host } catch (t: Throwable) { null } ?: return null
+    return h.removePrefix("www.").ifBlank { null }
+}
+
 private fun showRecentBlocks() {
     val pad = (12 * resources.displayMetrics.density).toInt()
     val container = LinearLayout(this).apply {
@@ -235,6 +405,7 @@ private fun showReportScreen() {
     inRelapseFlow = false
     inTemptationFlow = false
     inLoosenFlow = false
+    inAppSiteFlow = false
     stopLoosenTimer()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -266,7 +437,7 @@ private fun reportPane(label: String, bg: Int, onClick: () -> Unit): TextView =
 
 // ── Pane actions (stubs — fill these in later) ─────────────────────────────
 private fun onReportAppSite() {
-    Toast.makeText(this, "Report an app/site \u2014 coming soon", Toast.LENGTH_SHORT).show()
+    startAppSiteFlow()
 }
 private fun onFeelTemptation() {
     startTemptationFlow()
@@ -1413,6 +1584,7 @@ private fun startWeekStrict() {
             inRelapseFlow -> relapseBack()
             inTemptationFlow -> temptationBack()
             inLoosenFlow -> loosenBack()
+            inAppSiteFlow -> appSiteBack()
             onReportScreen -> setupMainScreen()
             else -> super.onBackPressed()
         }
@@ -1575,6 +1747,7 @@ private fun startWeekStrict() {
         onReportScreen = false
         inTemptationFlow = false
         inLoosenFlow = false
+        inAppSiteFlow = false
         stopRideTimer()
         stopLoosenTimer()
         observeEntries()
@@ -1902,6 +2075,45 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
+    // ── Greylist foreground-time tracking (2-min/hour limit) ───────────────────
+    private var greyTarget: String? = null
+    private var greyIsApp = false
+    private var greySince = 0L
+    private val GREY_TICK_MS = 10_000L
+    private val GREY_MAX_DELTA = 15_000L      // cap a single gap so screen-off can't over-count wildly
+
+    private fun updateGreyTracking(target: String?, isApp: Boolean) {
+        if (target == greyTarget) return
+        flushGrey()
+        greyTarget = target; greyIsApp = isApp; greySince = System.currentTimeMillis()
+        mainHandler.removeCallbacks(greyTick)
+        if (target != null) mainHandler.postDelayed(greyTick, GREY_TICK_MS)
+    }
+
+    private fun flushGrey() {
+        val t = greyTarget ?: return
+        val now = System.currentTimeMillis()
+        val delta = now - greySince
+        greySince = now
+        if (delta in 1..GREY_MAX_DELTA) GreyUsage.addUsage(this, t, delta)
+    }
+
+    private val greyTick = object : Runnable {
+        override fun run() {
+            flushGrey()
+            val t = greyTarget
+            if (t != null) {
+                // Enforce even while the app sits idle with no events.
+                if (greyIsApp && GreyUsage.isOverLimit(this@PageMonitorAccessibilityService, t)) {
+                    showAppBlock(
+                        "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 it'll open again soon", t)
+                }
+                mainHandler.postDelayed(this, GREY_TICK_MS)
+            }
+        }
+    }
+
+
     /**
      * Built-in guards for in-app screens we never want reachable. Currently:
      * Firefox Focus's privacy settings, where the "stealth" option blocks
@@ -2176,6 +2388,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
             return "Locked down \u2014 ride out the urge"
         }
+        when (AppRules.appTier(this, pkg)) {                   // user "Report an app" rules
+            AppRules.BLOCK -> return "Blocked app"
+            AppRules.GREY ->
+                if (pkg != null && GreyUsage.isOverLimit(this, pkg.lowercase()))
+                    return "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 it'll open again soon"
+        }
         AppBlocklist.blockedReason(pkg)?.let { return "Blocked app: $it" }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
@@ -2254,6 +2472,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             host = null
         }
 
+        // Greylist time-tracking: accumulate foreground time for a greylisted app or
+        // host so the per-hour limit can be enforced.
+        val greyTarget = when {
+            host != null && AppRules.hostTier(this, host) == AppRules.GREY -> host
+            host == null && AppRules.appTier(this, packageName) == AppRules.GREY -> packageName.lowercase()
+            else -> null
+        }
+        updateGreyTracking(greyTarget, isApp = greyTarget != null && host == null)
+
         val appGuard = if (host == null) appScreenBlock(packageName, title, content) else null
         val rule = if (appGuard == null) {
             if (host == null) {
@@ -2271,6 +2498,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                appGuard != null -> appGuard
                host != null && DomainBlocklist.isBlocked(host) -> "Adult site (blocklist): $host"
                rule != null -> describeRule(rule)
+               host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
+                   GreyUsage.isOverLimit(this, host) ->
+                       "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 $host opens again soon"
                (host != null || AppBlocklist.isBrowser(packageName)) ->
                    BorderlineScorer.evaluate(title, url, content)?.reason
                else -> null
@@ -3905,6 +4135,98 @@ object Mode {
             .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + WEEK_MS)
             .apply()
     }
+}
+
+// =====================================================================================
+// AppRules  (user "Report an app/site" rules: block outright, or greylist)
+// =====================================================================================
+// App blocklist/greylist live here (AppBlocklist is browser-only). URL *blocklist* uses
+// the existing BlockRules engine instead; only URL *greylist* is stored here as a host.
+object AppRules {
+    const val BLOCK = "B"
+    const val GREY = "G"
+    private const val PREFS = "app_rules"
+    private const val KEY_APPS = "apps"     // entries: "B|pkg" / "G|pkg"
+    private const val KEY_HOSTS = "hosts"   // entries: "G|host"
+
+    fun setApp(context: Context, pkg: String, tier: String) {
+        val key = pkg.trim().lowercase(); if (key.isEmpty()) return
+        val set = readApps(context).filterNot { it.substringAfter('|') == key }.toMutableSet()
+        set.add("$tier|$key"); writeApps(context, set)
+    }
+
+    fun setHost(context: Context, host: String, tier: String) {
+        val key = host.trim().lowercase().removePrefix("www."); if (key.isEmpty()) return
+        val set = readHosts(context).filterNot { it.substringAfter('|') == key }.toMutableSet()
+        set.add("$tier|$key"); writeHosts(context, set)
+    }
+
+    fun appTier(context: Context, pkg: String?): String? {
+        if (pkg.isNullOrBlank()) return null
+        val key = pkg.lowercase()
+        return readApps(context).firstOrNull { it.substringAfter('|') == key }?.substringBefore('|')
+    }
+
+    fun hostTier(context: Context, host: String?): String? {
+        if (host.isNullOrBlank()) return null
+        val h = host.lowercase()
+        for (e in readHosts(context)) {
+            val stored = e.substringAfter('|')
+            if (h == stored || h.endsWith(".$stored")) return e.substringBefore('|')
+        }
+        return null
+    }
+
+    fun remove(context: Context, isApp: Boolean, target: String) {
+        val key = target.lowercase()
+        if (isApp) writeApps(context, readApps(context).filterNot { it.substringAfter('|') == key }.toMutableSet())
+        else writeHosts(context, readHosts(context).filterNot { it.substringAfter('|') == key }.toMutableSet())
+    }
+
+    private fun readApps(c: Context) = prefs(c).getStringSet(KEY_APPS, emptySet())!!.toSet()
+    private fun readHosts(c: Context) = prefs(c).getStringSet(KEY_HOSTS, emptySet())!!.toSet()
+    private fun writeApps(c: Context, s: Set<String>) = prefs(c).edit().putStringSet(KEY_APPS, s).apply()
+    private fun writeHosts(c: Context, s: Set<String>) = prefs(c).edit().putStringSet(KEY_HOSTS, s).apply()
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+// =====================================================================================
+// GreyUsage  (per-target foreground time, capped per rolling hour)
+// =====================================================================================
+object GreyUsage {
+    const val LIMIT_MIN = 2
+    private const val LIMIT_MS = LIMIT_MIN * 60 * 1000L
+    private const val WINDOW_MS = 60L * 60 * 1000
+    private const val PREFS = "grey_usage"
+
+    fun addUsage(context: Context, target: String, deltaMs: Long) {
+        if (deltaMs <= 0) return
+        val key = target.lowercase()
+        val p = prefs(context); val now = System.currentTimeMillis()
+        var start = p.getLong("start:$key", 0L)
+        var used = p.getLong("used:$key", 0L)
+        if (now - start >= WINDOW_MS) { start = now; used = 0L }   // hour rolled over
+        used += deltaMs
+        p.edit().putLong("start:$key", start).putLong("used:$key", used).apply()
+    }
+
+    fun isOverLimit(context: Context, target: String): Boolean {
+        val key = target.lowercase()
+        val p = prefs(context)
+        val start = p.getLong("start:$key", 0L)
+        if (System.currentTimeMillis() - start >= WINDOW_MS) return false
+        return p.getLong("used:$key", 0L) >= LIMIT_MS
+    }
+
+    fun remainingMs(context: Context, target: String): Long {
+        val key = target.lowercase()
+        val p = prefs(context)
+        val start = p.getLong("start:$key", 0L)
+        if (System.currentTimeMillis() - start >= WINDOW_MS) return LIMIT_MS
+        return (LIMIT_MS - p.getLong("used:$key", 0L)).coerceAtLeast(0L)
+    }
+
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
 
