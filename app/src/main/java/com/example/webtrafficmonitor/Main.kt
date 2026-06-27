@@ -233,6 +233,9 @@ private fun showRecentBlocks() {
 private fun showReportScreen() {
     onReportScreen = true
     inRelapseFlow = false
+    inTemptationFlow = false
+    inLoosenFlow = false
+    stopLoosenTimer()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = ViewGroup.LayoutParams(
@@ -266,10 +269,775 @@ private fun onReportAppSite() {
     Toast.makeText(this, "Report an app/site \u2014 coming soon", Toast.LENGTH_SHORT).show()
 }
 private fun onFeelTemptation() {
-    Toast.makeText(this, "I feel temptation \u2014 coming soon", Toast.LENGTH_SHORT).show()
+    startTemptationFlow()
 }
+
+// ── "I feel temptation" flow ───────────────────────────────────────────────
+private enum class TStep { TRIGGER, SAW, URGE, RIDE, RERATE }
+
+private var inTemptationFlow = false
+private var temptationStep = 0
+private var tTrigger: String? = null
+private var tSaw: String? = null
+private var tUrgeStart: Int? = null
+private var tUrgeEnd: Int? = null
+
+private var rideHandler: Handler? = null
+private var rideRunnable: Runnable? = null
+private var rideEndAt = 0L
+
+private val DEFAULT_TRIGGERS = listOf(
+    "Social media",
+    "Saw something suggestive",
+    "Bored / restless",
+    "Stressed or overwhelmed",
+    "Lonely",
+    "Tired / can't sleep",
+    "Lying in bed",
+    "A thought or memory popped up",
+    "Habit / autopilot",
+    "Upset after something",
+)
+private val SAW_OPTIONS = listOf(
+    "Nothing yet \u2014 just the urge",
+    "Suggestive / partial (swimwear, lingerie\u2026)",
+    "Explicit nudity",
+    "Sexual or pornographic content",
+    "A suggestive message or chat",
+    "Someone in person",
+    "A memory or fantasy",
+)
+
+private fun startTemptationFlow() {
+    onReportScreen = true
+    inTemptationFlow = true
+    tTrigger = null; tSaw = null; tUrgeStart = null; tUrgeEnd = null
+    temptationStep = 0
+    renderTemptationStep()
+}
+
+private fun temptationAdvance() { stopRideTimer(); temptationStep++; renderTemptationStep() }
+
+private fun temptationBack() {
+    stopRideTimer()
+    if (temptationStep <= 0) { inTemptationFlow = false; showReportScreen(); return }
+    temptationStep--
+    renderTemptationStep()
+}
+
+private fun renderTemptationStep() {
+    stopRideTimer()
+    temptationStep = temptationStep.coerceIn(0, TStep.values().lastIndex)
+    when (TStep.values()[temptationStep]) {
+        TStep.TRIGGER -> temptationTriggerStep()
+
+        TStep.SAW -> reportChoiceScreen(
+            "What did you see?", SAW_OPTIONS, onBack = ::temptationBack,
+        ) { tSaw = it; temptationAdvance() }
+
+        TStep.URGE -> urgeScaleScreen(
+            "How strong is the urge right now?",
+            "1 = barely there   \u00b7   10 = overwhelming",
+            onBack = ::temptationBack,
+        ) { tUrgeStart = it; temptationAdvance() }
+
+        TStep.RIDE -> temptationRideScreen()
+
+        TStep.RERATE -> urgeScaleScreen(
+            "How strong is the urge now?",
+            "Be honest \u2014 there's no wrong answer.",
+            onBack = ::temptationBack,
+        ) { tUrgeEnd = it; renderTemptationFeedback() }
+    }
+}
+
+private fun temptationTriggerStep() {
+    val opts = (DEFAULT_TRIGGERS + TriggerOptions.all(this)).distinct() + "Enter new\u2026"
+    reportChoiceScreen("What set it off?", opts, onBack = ::temptationBack) { choice ->
+        if (choice == "Enter new\u2026") promptCustomTrigger()
+        else { tTrigger = choice; temptationAdvance() }
+    }
+}
+
+private fun promptCustomTrigger() {
+    val input = EditText(this).apply {
+        hint = "What set it off?"
+        inputType = InputType.TYPE_CLASS_TEXT
+        val p = (20 * resources.displayMetrics.density).toInt(); setPadding(p, p, p, p)
+    }
+    AlertDialog.Builder(this)
+        .setTitle("Add a trigger")
+        .setView(input)
+        .setPositiveButton("Add") { _, _ ->
+            val name = input.text.toString().trim().replace("\n", " ")
+            if (name.isNotEmpty()) {
+                TriggerOptions.add(this, name)   // remembered for next time (max 20)
+                tTrigger = name
+                temptationAdvance()
+            }
+        }
+        .setNegativeButton(android.R.string.cancel, null)
+        .show()
+}
+
+private fun urgeScaleScreen(
+    title: String, subtitle: String, onBack: (() -> Unit)?, onPick: (Int) -> Unit,
+) {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    if (onBack != null) root.addView(backText(onBack))
+    root.addView(titleText(title))
+    root.addView(TextView(this).apply {
+        text = subtitle; textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (20 * dp).toInt())
+    })
+    fun rowOf(range: IntRange): LinearLayout {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (n in range) row.addView(Button(this).apply {
+            text = "$n"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener { onPick(n) }
+        })
+        return row
+    }
+    root.addView(rowOf(1..5))
+    root.addView(rowOf(6..10))
+    setContentView(root)
+}
+
+private fun temptationRideScreen() {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(backText(::temptationBack))
+    root.addView(titleText("Ride the wave"))
+
+    val countdown = TextView(this).apply {
+        textSize = 44f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setPadding(0, (8 * dp).toInt(), 0, (4 * dp).toInt())
+    }
+    val status = TextView(this).apply {
+        text = "An urge is a wave: it rises, peaks, and fades \u2014 usually within 15\u201330 " +
+            "minutes. You don't have to fight it. Just let it pass."
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    }
+    root.addView(countdown); root.addView(status)
+
+    val steps = listOf(
+        "Name it: \u201cThis is an urge. It's a wave, not a command.\u201d",
+        "Breathe slowly \u2014 in for 4, hold 4, out for 6. Five times.",
+        "Notice where you feel it. Watch it like a wave from the shore; don't fight it, don't feed it.",
+        "Change your surroundings: stand up, get water, splash your face, step outside.",
+        "Put the phone down \u2014 or lock the apps away below.",
+        "If you can, message someone you trust. You don't have to say why.",
+        "Let the timer run. You only have to get through this one wave.",
+    )
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    steps.forEachIndexed { i, s ->
+        list.addView(TextView(this).apply {
+            text = "${i + 1}.  $s"; textSize = 15f
+            setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+        })
+    }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(list)
+    })
+
+    val lockBtn = Button(this)
+    lockBtn.text = if (Lockdown.isActive(this)) "Apps already locked down"
+                   else "Lock down distracting apps (30 min)"
+    lockBtn.isEnabled = !Lockdown.isActive(this)
+    lockBtn.setOnClickListener {
+        confirmLockdown {
+            lockBtn.text = "Distracting apps locked down"
+            lockBtn.isEnabled = false
+        }
+    }
+    root.addView(lockBtn)
+
+    root.addView(Button(this).apply {
+        text = "The urge has passed \u2014 I'm okay"
+        setOnClickListener { stopRideTimer(); temptationAdvance() }   // -> RERATE
+    })
+
+    setContentView(root)
+    startRideTimer(countdown, status, 15L * 60 * 1000)   // 15-min wave; counts down on screen
+}
+
+private fun confirmLockdown(onStarted: () -> Unit) {
+    AlertDialog.Builder(this)
+        .setTitle("Lock down apps for 30 minutes?")
+        .setMessage("Everything except the essentials \u2014 calls, texts, alarms, your home " +
+            "screen \u2014 gets blocked for 30 minutes, so the urge has time to pass. " +
+            "This can't be cancelled early.")
+        .setPositiveButton("Lock down") { _, _ ->
+            Lockdown.start(this)
+            Toast.makeText(this, "Locked down for 30 minutes. Essentials still work.",
+                Toast.LENGTH_LONG).show()
+            onStarted()
+        }
+        .setNegativeButton(android.R.string.cancel, null)
+        .show()
+}
+
+private fun renderTemptationFeedback() {
+    stopRideTimer()
+    inTemptationFlow = false
+    onReportScreen = true
+    val start = tUrgeStart; val end = tUrgeEnd
+    val msg = when {
+        start != null && end != null && end < start ->
+            "Your urge went from $start to $end. That's the wave breaking \u2014 and you did it by " +
+                "riding it out, not by fighting it. Remember this next time: it really does pass."
+        start != null && end != null && end == start ->
+            "It's holding at $end for now \u2014 that's okay. Waves sometimes take longer than one " +
+                "sitting. Keep screens away and let the next stretch of time pass. You haven't acted " +
+                "on it, and that's the win."
+        start != null && end != null ->
+            "It's risen a little, to $end. That happens, and it doesn't mean you're failing. Step " +
+                "further from screens, and if you haven't yet, lock the apps down below. The peak is " +
+                "usually close \u2014 and after the peak, it falls."
+        else ->
+            "You took a moment instead of acting on autopilot. That's the whole game, and you just " +
+                "won a round of it."
+    }
+    val dp = resources.displayMetrics.density
+    val pad = (20 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    content.addView(TextView(this).apply {
+        text = "Nice work"; textSize = 24f; setTypeface(typeface, Typeface.BOLD)
+    })
+    content.addView(TextView(this).apply {
+        text = msg; textSize = 16f; setPadding(0, (12 * dp).toInt(), 0, 0)
+    })
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(content)
+    })
+    root.addView(Button(this).apply {
+        text = "Done"; setOnClickListener { setupMainScreen() }
+    })
+    setContentView(root)
+}
+
+// ========================
+// ── "I'm going to look anyway" (supervised loosen) flow ─────────────────────
+private data class LQ(val q: String, val options: List<String>)
+
+private val LOOSEN_QUESTIONS = listOf(
+    LQ("Be honest \u2014 in an hour, how will you feel about this?",
+        listOf("Glad I did it", "I'll regret it", "Numb / nothing", "I already know I'll regret it")),
+    LQ("What are you actually trying to change right now?",
+        listOf("I'm bored", "I'm stressed or anxious", "I'm lonely", "It's just autopilot")),
+    LQ("The urge is here. Can you let it be here without obeying it?",
+        listOf("I can try", "Not right now", "I don't want to")),
+)
+
+private var inLoosenFlow = false
+private var loosenInQuestions = false
+private var lqIndex = 0
+private var lqPending: String? = null
+private val lqAnswers = mutableListOf<String>()
+private var loosenWaitEndAt = 0L
+private var loosenNote: String? = null
+private var loosenAdmit = false
+private var loosenWontRepeat = false
+private var loosenDuration = 2          // default middle option, nudges low
+
+private var loosenHandler: Handler? = null
+private var loosenRunnable: Runnable? = null
+
+private fun startLoosenFlow() {
+    onReportScreen = true
+    inLoosenFlow = true
+    loosenInQuestions = false
+    lqIndex = 0; lqPending = null; lqAnswers.clear()
+    loosenWaitEndAt = 0L
+    loosenNote = null; loosenAdmit = false; loosenWontRepeat = false; loosenDuration = 2
+    if (!LoosenLimit.canUse(this)) { loosenBlockedScreen() } else { loosenIntroScreen() }
+}
+
+private fun loosenBack() {
+    if (loosenInQuestions && lqPending != null) { lqPending = null; renderLoosenQuestion(); return }
+    stopLoosenTimer()
+    inLoosenFlow = false; loosenInQuestions = false
+    showReportScreen()
+}
+
+private fun loosenBlockedScreen() {
+    stopLoosenTimer(); loosenInQuestions = false
+    val today = LoosenLimit.usedToday(this)
+    val msg = if (today)
+        "You've already used your one unlock for today. It resets tomorrow \u2014 and that wait is " +
+            "doing its job. The urge will pass."
+    else
+        "You've used all ${LoosenLimit.LIFETIME_MAX} of your lifetime unlocks, by your own earlier " +
+            "choice. There are no more. You've got this without it."
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(panicButton())
+    root.addView(titleText("Not available right now"))
+    root.addView(TextView(this).apply { text = msg; textSize = 16f })
+    val spacer = View(this); root.addView(spacer, LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(Button(this).apply { text = "Back"; setOnClickListener { setupMainScreen() } })
+    setContentView(root)
+}
+
+private fun loosenIntroScreen() {
+    stopLoosenTimer(); loosenInQuestions = false
+    val remaining = LoosenLimit.remaining(this)
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(panicButton())
+    root.addView(backText { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() })
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    content.addView(titleText("Before you unlock"))
+    content.addView(TextView(this).apply {
+        text = "This is a slow, supervised unlock \u2014 not a free pass, and only on this device.\n\n" +
+            "You have $remaining of ${LoosenLimit.LIFETIME_MAX} unlocks left for life, and one a day.\n\n" +
+            "A few honest questions first, then a 5-minute wait. If the urge passes before then \u2014 " +
+            "and it often does \u2014 even better."
+        textSize = 15f
+    })
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(content)
+    })
+    root.addView(Button(this).apply {
+        text = "Continue"
+        setOnClickListener { lqIndex = 0; lqPending = null; lqAnswers.clear(); renderLoosenQuestion() }
+    })
+    setContentView(root)
+}
+
+private fun renderLoosenQuestion() {
+    loosenInQuestions = true
+    stopLoosenTimer()
+    if (lqIndex >= LOOSEN_QUESTIONS.size) { loosenInQuestions = false; loosenWaitScreen(); return }
+    val q = LOOSEN_QUESTIONS[lqIndex]
+    val confirming = lqPending != null
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(panicButton())
+    root.addView(backText { loosenBack() })
+    root.addView(titleText(q.q))
+    root.addView(TextView(this).apply {
+        text = if (confirming) "Tap the SAME answer again to lock it in."
+               else "Question ${lqIndex + 1} of ${LOOSEN_QUESTIONS.size}"
+        textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    q.options.shuffled().forEach { opt -> list.addView(pickCard(opt) { onLoosenAnswer(opt) }) }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(list)
+    })
+    setContentView(root)
+}
+
+private fun onLoosenAnswer(opt: String) {
+    val pending = lqPending
+    when {
+        pending == null -> { lqPending = opt; renderLoosenQuestion() }            // select -> confirm
+        opt == pending -> {                                                       // confirmed
+            lqAnswers.add(opt); lqPending = null; lqIndex++; renderLoosenQuestion()
+        }
+        else -> {                                                                 // mismatch -> restart this Q
+            lqPending = null
+            Toast.makeText(this, "Not the same answer \u2014 starting this one again.",
+                Toast.LENGTH_SHORT).show()
+            renderLoosenQuestion()
+        }
+    }
+}
+
+private fun loosenWaitScreen() {
+    loosenInQuestions = false
+    if (loosenWaitEndAt <= System.currentTimeMillis()) {
+        loosenWaitEndAt = System.currentTimeMillis() + 5L * 60 * 1000             // 5-min minimum
+    }
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(panicButton())
+    root.addView(titleText("A short wait first"))
+    val countdown = TextView(this).apply {
+        textSize = 44f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setPadding(0, (8 * dp).toInt(), 0, (4 * dp).toInt())
+    }
+    root.addView(countdown)
+    root.addView(TextView(this).apply {
+        text = "Most urges fade in this time. Giving yourself more space is the kinder choice \u2014 " +
+            "and it's just one tap."
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (16 * dp).toInt())
+    })
+    // The easy, encouraged, one-tap longer waits:
+    root.addView(bigChoice("Wait an hour \u2014 recommended", 0xFF2E7D32.toInt()) {
+        loosenWaitEndAt = System.currentTimeMillis() + 60L * 60 * 1000; loosenWaitScreen()
+    })
+    root.addView(bigChoice("Leave it till tomorrow", 0xFF2E7D32.toInt()) { loosenTillTomorrow() })
+    root.addView(bigChoice("+ 10 more minutes", 0xFF3E535C.toInt()) {
+        loosenWaitEndAt += 10L * 60 * 1000; loosenWaitScreen()
+    })
+    // The short path: plain, and only after the minimum wait is up.
+    val continueBtn = Button(this).apply {
+        text = "No thanks \u2014 continue now"; visibility = View.GONE
+        setOnClickListener { loosenCommitScreen() }
+    }
+    root.addView(continueBtn)
+    setContentView(root)
+    runLoosenCountdown(countdown, loosenWaitEndAt) { continueBtn.visibility = View.VISIBLE }
+}
+
+private fun loosenTillTomorrow() {
+    stopLoosenTimer(); inLoosenFlow = false; loosenInQuestions = false   // nothing consumed
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(titleText("Good call."))
+    root.addView(TextView(this).apply {
+        text = "You chose to wait it out. By tomorrow this urge will be long gone \u2014 and you " +
+            "still have your unlocks. That took strength."
+        textSize = 16f; setPadding(0, (12 * dp).toInt(), 0, 0)
+    })
+    val spacer = View(this); root.addView(spacer, LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(Button(this).apply { text = "Done"; setOnClickListener { setupMainScreen() } })
+    setContentView(root)
+}
+
+private fun loosenCommitScreen() {
+    stopLoosenTimer(); loosenInQuestions = false
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(panicButton())
+    root.addView(backText { loosenWaitScreen() })
+
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    content.addView(titleText("Last step"))
+    val admitBtn = checkButton()
+    content.addView(admitBtn)
+    content.addView(TextView(this).apply {
+        text = "What will you look at? (private \u2014 just for your own honesty)"
+        textSize = 14f; setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
+    })
+    val noteInput = EditText(this).apply {
+        hint = "Name it plainly\u2026"
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        gravity = Gravity.TOP or Gravity.START; minLines = 2
+        setText(loosenNote ?: "")
+    }
+    content.addView(noteInput)
+    val wontBtn = checkButton()
+    content.addView(wontBtn)
+    content.addView(TextView(this).apply {
+        text = "For how long?"; textSize = 14f
+        setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
+    })
+    val durRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    val durBtns = linkedMapOf<Int, Button>()
+    listOf(1, 2, 5).forEach { mins ->
+        val b = Button(this).apply {
+            text = "$mins min"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        durBtns[mins] = b; durRow.addView(b)
+    }
+    content.addView(durRow)
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(content)
+    })
+
+    val unlockBtn = Button(this)
+    root.addView(unlockBtn)
+
+    val refresh = {
+        admitBtn.text = (if (loosenAdmit) "\u2611  " else "\u2610  ") +
+            "I'm choosing this, knowing how I'll feel after."
+        wontBtn.text = (if (loosenWontRepeat) "\u2611  " else "\u2610  ") + "I won't do this next time."
+        durBtns.forEach { (m, b) -> b.setTypeface(typeface, if (m == loosenDuration) Typeface.BOLD else Typeface.NORMAL) }
+        unlockBtn.text = "Unlock for $loosenDuration min"
+        unlockBtn.isEnabled = loosenAdmit && loosenWontRepeat
+    }
+    admitBtn.setOnClickListener { loosenAdmit = !loosenAdmit; refresh() }
+    wontBtn.setOnClickListener { loosenWontRepeat = !loosenWontRepeat; refresh() }
+    durBtns.forEach { (m, b) -> b.setOnClickListener { loosenDuration = m; refresh() } }
+    unlockBtn.setOnClickListener {
+        loosenNote = noteInput.text.toString().trim().ifBlank { null }
+        loosenUnlock()
+    }
+    refresh()
+    setContentView(root)
+}
+
+private fun loosenUnlock() {
+    LoosenLimit.consume(this)                                   // one daily + one lifetime, now
+    LoosenWindow.start(this, loosenDuration * 60 * 1000L)
+    loosenUnlockedScreen()
+}
+
+private fun loosenUnlockedScreen() {
+    inLoosenFlow = false; loosenInQuestions = false; onReportScreen = true
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(panicButton())
+    root.addView(titleText("Unlocked for $loosenDuration min"))
+    val countdown = TextView(this).apply {
+        textSize = 44f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+    }
+    root.addView(countdown)
+    root.addView(TextView(this).apply {
+        text = "The breathing orb and image friction stay on. Everything re-locks the moment the " +
+            "timer ends \u2014 you don't have to do anything."
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+    })
+    val spacer = View(this); root.addView(spacer, LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(bigChoice("Go", 0xFF3E535C.toInt()) { moveTaskToBack(true) })
+    root.addView(Button(this).apply { text = "Done"; setOnClickListener { setupMainScreen() } })
+    setContentView(root)
+    runLoosenCountdown(countdown, System.currentTimeMillis() + LoosenWindow.remaining(this)) {
+        countdown.text = "Re-locked"
+    }
+}
+
+// ── Panic (lives here, no separate feature) ────────────────────────────────
+private fun openPanic() {
+    stopLoosenTimer()
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(titleText("Panic \u2014 let's break the loop"))
+    val pacer = TextView(this).apply {
+        textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+    }
+    root.addView(pacer)
+    root.addView(TextView(this).apply {
+        text = "Follow the words. In through the nose, out through the mouth."
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+    val grounding = listOf(
+        "Plant both feet on the floor and sit up straight.",
+        "Name 5 things you can see, 4 you can hear, 3 you can touch.",
+        "Stand up and walk into a different room.",
+        "Pour a glass of water and drink it slowly.",
+        "If you can, text someone \u2014 you don't have to say why.",
+    )
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    grounding.forEachIndexed { i, s ->
+        list.addView(TextView(this).apply {
+            text = "${i + 1}.  $s"; textSize = 15f
+            setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+        })
+    }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(list)
+    })
+    val lockApps = bigChoice("Lock apps for 30 minutes", 0xFF2E7D32.toInt()) {}
+    lockApps.setOnClickListener {
+        Lockdown.start(this)
+        lockApps.text = "Apps locked for 30 min"; lockApps.isEnabled = false
+        Toast.makeText(this, "Locked down. Essentials still work.", Toast.LENGTH_LONG).show()
+    }
+    root.addView(lockApps)
+    root.addView(bigChoice("Lock my phone screen now", 0xFF3E535C.toInt()) { lockPhoneNow() })
+    root.addView(Button(this).apply {
+        text = "I'm okay now"
+        setOnClickListener {
+            stopLoosenTimer()
+            if (inLoosenFlow) loosenIntroScreen() else setupMainScreen()
+        }
+    })
+    setContentView(root)
+    startBoxBreathing(pacer)
+}
+
+private fun lockPhoneNow() {
+    if (UninstallGuard.isAdminActive(this)) {
+        try {
+            (getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).lockNow()
+        } catch (t: Throwable) {
+            Toast.makeText(this, "Couldn't lock the screen.", Toast.LENGTH_SHORT).show()
+        }
+    } else {
+        Toast.makeText(this, "Turn on the lock feature first to use this.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+// ── shared bits for this flow ──────────────────────────────────────────────
+private fun panicButton(): Button = bigChoice("PANIC \u2014 I need to stop", 0xFFB00020.toInt()) { openPanic() }
+
+private fun bigChoice(label: String, color: Int, onClick: () -> Unit): Button {
+    val dp = resources.displayMetrics.density
+    return Button(this).apply {
+        text = label; setAllCaps(false)
+        setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, Typeface.BOLD)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * dp; setColor(color)
+        }
+        val p = (14 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (8 * dp).toInt() }
+        setOnClickListener { onClick() }
+    }
+}
+
+private fun checkButton(): Button {
+    val dp = resources.displayMetrics.density
+    return Button(this).apply {
+        setAllCaps(false)
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (8 * dp).toInt() }
+    }
+}
+
+private fun startBoxBreathing(label: TextView) {
+    stopLoosenTimer()
+    val phases = listOf("Breathe in\u2026", "Hold\u2026", "Breathe out\u2026", "Hold\u2026")
+    loosenHandler = Handler(Looper.getMainLooper())
+    var i = 0
+    loosenRunnable = object : Runnable {
+        override fun run() {
+            label.text = phases[i % phases.size]; i++
+            loosenHandler?.postDelayed(this, 4000)
+        }
+    }
+    loosenRunnable?.run()
+}
+
+private fun runLoosenCountdown(label: TextView, endAt: Long, onDone: () -> Unit) {
+    stopLoosenTimer()
+    loosenHandler = Handler(Looper.getMainLooper())
+    loosenRunnable = object : Runnable {
+        override fun run() {
+            val remaining = (endAt - System.currentTimeMillis()).coerceAtLeast(0)
+            val m = (remaining / 1000) / 60; val s = (remaining / 1000) % 60
+            label.text = String.format("%02d:%02d", m, s)
+            if (remaining <= 0) onDone() else loosenHandler?.postDelayed(this, 1000)
+        }
+    }
+    loosenRunnable?.run()
+}
+
+private fun stopLoosenTimer() {
+    loosenRunnable?.let { loosenHandler?.removeCallbacks(it) }
+    loosenRunnable = null; loosenHandler = null
+}
+
+
+// ── shared little view helpers ─────────────────────────────────────────────
+private fun backText(onBack: () -> Unit): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = "\u2190 Back"; textSize = 15f
+        setPadding(0, 0, 0, (8 * dp).toInt())
+        isClickable = true; isFocusable = true
+        setOnClickListener { onBack() }
+    }
+}
+
+private fun titleText(t: String): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = t; textSize = 21f; setTypeface(typeface, Typeface.BOLD)
+        setPadding(0, 0, 0, (8 * dp).toInt())
+    }
+}
+
+// ── ride-it-out countdown ──────────────────────────────────────────────────
+private fun startRideTimer(label: TextView, status: TextView, durationMs: Long) {
+    stopRideTimer()
+    rideEndAt = System.currentTimeMillis() + durationMs
+    rideHandler = Handler(Looper.getMainLooper())
+    rideRunnable = object : Runnable {
+        override fun run() {
+            val remaining = (rideEndAt - System.currentTimeMillis()).coerceAtLeast(0)
+            val m = (remaining / 1000) / 60
+            val s = (remaining / 1000) % 60
+            label.text = String.format("%02d:%02d", m, s)
+            if (remaining <= 0) {
+                status.text = "The wave has likely passed its peak. You rode it out. \u2713"
+            } else {
+                rideHandler?.postDelayed(this, 1000)
+            }
+        }
+    }
+    rideRunnable?.run()
+}
+
+private fun stopRideTimer() {
+    rideRunnable?.let { rideHandler?.removeCallbacks(it) }
+    rideRunnable = null
+    rideHandler = null
+}
+
+
 private fun onLookAnyway() {
-    Toast.makeText(this, "I'm going to look anyway \u2014 coming soon", Toast.LENGTH_SHORT).show()
+    startLoosenFlow()
 }
 private fun onReportRelapse() {
     startRelapseFlow()
@@ -642,8 +1410,10 @@ private fun startWeekStrict() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         when {
-            inRelapseFlow -> relapseBack()       // step back through the relapse questions
-            onReportScreen -> setupMainScreen()  // panes or feedback -> main
+            inRelapseFlow -> relapseBack()
+            inTemptationFlow -> temptationBack()
+            inLoosenFlow -> loosenBack()
+            onReportScreen -> setupMainScreen()
             else -> super.onBackPressed()
         }
     }
@@ -803,8 +1573,11 @@ private fun startWeekStrict() {
         statusLock.setOnClickListener { toggleUninstallGuard() }
 
         onReportScreen = false
+        inTemptationFlow = false
+        inLoosenFlow = false
+        stopRideTimer()
+        stopLoosenTimer()
         observeEntries()
-        renderStatus()
     }
 
     private fun renderStatus() {
@@ -1277,7 +2050,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         ) {
             if (breathing?.isShowing == true) breathing?.hide()   // left the gated app: drop it
             lastForegroundPkgForBreathing = packageName
-            if (packageName in BREATHING_APPS && overlay?.isShowing != true && !Mode.isRelaxed(this)) {
+            if (packageName in BREATHING_APPS && overlay?.isShowing != true &&
+                (!Mode.isRelaxed(this) || LoosenWindow.isActive(this))) {
                 val label = appLabelFor(packageName)
                 breathing?.show(
                     appLabel = label,
@@ -1398,6 +2172,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /** Reason an app should currently be covered: a blocked browser, or a timed content block. */
     private fun appBlockReason(pkg: String?): String? {
+        if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
+        if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
+            return "Locked down \u2014 ride out the urge"
+        }
         AppBlocklist.blockedReason(pkg)?.let { return "Blocked app: $it" }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
@@ -1450,6 +2228,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         url: String?,
     ) {
         val controller = overlay ?: return
+
+        // Loosen window: content/page blocks are suspended (the orb + image friction
+        // still apply). Re-locks automatically the moment the window expires.
+        if (LoosenWindow.isActive(this)) {
+            if (!appBlockActive) {
+                controller.hide(); shownBlockHost = null; shownBlockUrl = null
+            }
+            return
+        }
+
+        // The address bar is often unreadable
 
         // The address bar is often unreadable exactly when it matters (scrolled
         // away, image viewer open). For browsers, fall back to the REMEMBERED host
@@ -3116,4 +3905,131 @@ object Mode {
             .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + WEEK_MS)
             .apply()
     }
+}
+
+
+
+// =====================================================================================
+// LoosenWindow  (the temporary relaxed window after a supervised unlock)
+// =====================================================================================
+object LoosenWindow {
+    private const val PREFS = "loosen_window"
+    private const val KEY_UNTIL = "until"
+
+    fun start(context: Context, durationMs: Long) {
+        prefs(context).edit().putLong(KEY_UNTIL, System.currentTimeMillis() + durationMs).apply()
+    }
+    fun isActive(context: Context) = remaining(context) > 0
+    fun remaining(context: Context) =
+        (prefs(context).getLong(KEY_UNTIL, 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+    fun end(context: Context) = prefs(context).edit().remove(KEY_UNTIL).apply()
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+// =====================================================================================
+// LoosenLimit  (one unlock per day, five for life)
+// =====================================================================================
+object LoosenLimit {
+    const val LIFETIME_MAX = 5
+    private const val PREFS = "loosen_limit"
+    private const val KEY_TOTAL = "total"
+    private const val KEY_DAY = "last_day"
+
+    fun lifetimeUsed(context: Context) = prefs(context).getInt(KEY_TOTAL, 0)
+    fun remaining(context: Context) = (LIFETIME_MAX - lifetimeUsed(context)).coerceAtLeast(0)
+    fun usedToday(context: Context) = prefs(context).getInt(KEY_DAY, 0) == today()
+    fun canUse(context: Context) = remaining(context) > 0 && !usedToday(context)
+
+    /** Consumed only when a window actually opens, so backing out is rewarded, not punished. */
+    fun consume(context: Context) {
+        prefs(context).edit()
+            .putInt(KEY_TOTAL, lifetimeUsed(context) + 1)
+            .putInt(KEY_DAY, today())
+            .apply()
+    }
+
+    private fun today(): Int = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date()).toInt()
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// TriggerOptions  (custom temptation triggers the user typed; reused next time)
+// =====================================================================================
+object TriggerOptions {
+    private const val PREFS = "temptation_triggers"
+    private const val KEY = "triggers"
+    private const val MAX = 20
+
+    fun all(context: Context): List<String> = read(context)
+
+    fun add(context: Context, name: String) {
+        val clean = name.trim().replace("\n", " ")
+        if (clean.isEmpty()) return
+        val list = read(context).toMutableList()
+        if (list.any { it.equals(clean, ignoreCase = true) }) return
+        list.add(clean)
+        while (list.size > MAX) list.removeAt(0)      // keep newest 20
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY, list.joinToString("\n")).apply()
+    }
+
+    private fun read(context: Context): List<String> =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY, "").orEmpty()
+            .split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+}
+
+// =====================================================================================
+// Lockdown  (temporary 30-min "allow-list only" mode)
+// =====================================================================================
+/**
+ * While active, the accessibility service covers every app EXCEPT the essentials below.
+ * Browsers, social, games — all off the table — so an urge has nowhere to go. Calls,
+ * texts, alarms, contacts and the home screen still work, so the phone isn't bricked.
+ * (systemui, keyboards and this app itself are already let through upstream.)
+ *
+ * Can't be cancelled early on purpose — that's the commitment. It just expires after
+ * 30 minutes. Same best-effort durability as the app's other locks.
+ *
+ * Note: Settings is NOT on the allow-list, so the service can't be switched off mid-
+ * lockdown to escape it. If that feels too strict, add "settings" to ALLOW_SUBSTRINGS.
+ */
+object Lockdown {
+    private const val PREFS = "lockdown"
+    private const val KEY_UNTIL = "until"
+    const val DURATION_MS = 30L * 60 * 1000
+
+    private val ALLOW_SUBSTRINGS = listOf(
+        "launcher", "trebuchet",                  // home screens
+        "dialer", "incallui", "telecom", "phone", // calls
+        "contacts",
+        "messaging", "mms",                       // texts
+        "deskclock", "clock", "alarm",            // alarms / timers
+    )
+
+    fun start(context: Context) {
+        prefs(context).edit()
+            .putLong(KEY_UNTIL, System.currentTimeMillis() + DURATION_MS).apply()
+    }
+
+    fun isActive(context: Context): Boolean = remaining(context) > 0
+
+    fun remaining(context: Context): Long =
+        (prefs(context).getLong(KEY_UNTIL, 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
+
+    fun end(context: Context) = prefs(context).edit().remove(KEY_UNTIL).apply()  // testing/dev only
+
+    /** Allowed to stay open during a lockdown? */
+    fun isAllowed(pkg: String?): Boolean {
+        if (pkg == null) return true
+        val p = pkg.lowercase()
+        return ALLOW_SUBSTRINGS.any { p.contains(it) }
+    }
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

@@ -2,40 +2,28 @@
 
 
 TODO:
-- haven't made the mos trecent claude code changes yet...
 Next: add the functoinality;
 
-   - **(a) Report relapse** 
-   — quick form: "on this device? y/n",  (clickable 'yes, on this device'.. or 'no, on a different device'
-                  a *private* note on what happened (stays on device, never shown back as judgement), 
-                  tap-to-pick panels in a scroll list so it's fast. 
-                  After logging, 
-                  Where you at home?
-                  (if yes) What room where you in?
-                        (bedroom, bathroom, other [manual entry-- show these manual entries on future reports as additional options.. make it scroll in case they add multiple.. have asensible limit of like 20 though...)
-                  walk them back through what led to it — where, what time, what they were doing/feeling just before. Logging honestly *earns* progress; it's never punished.
-                        (time of course is auto captured... log these alongside our auto captured logs... and group data with their data...
-                    e.g.
-                        It happened at [4pm], this is the same time period (i.e. within +- 2 hours) of x% of your other reports.
-                        It happened on [day of the week] this is the same as x% of your other reports..
-                        your feeling was best described as: [bored] / [anxious] / [depressed] / [happy] / [neutral] <other *sensible* common things from the research>
-                    then say like, you did hte right thing by reporting... you are now one step closer to figuring out your habits and defeating once and for all.... or something...
-   - **(b) I feel temptation** 
-   — one tap, rate the urge, then the app just helps them ride it out (urges come in 15–30 min waves — the job is to give the wave somewhere to break, not to kill it). Needs zero visibility into their screen, which is why it's your cheapest high-value feature.
-        - asks them to 'lock down' all none whitelisted apps. If the user clicks it.. it will begin the lockdown for 30 mins...
+
    - **(c) I'm going to look anyway** 
    (the renamed loosen flow) — full mechanics:
      - Forces them through the app, not another device.
-     - First they answer a couple of evidence-based (CBT/ACT) questions — pick from options.
+     - First they answer a couple of evidence-based (CBT/ACT) questions , ones that are actually useful.. not just scale 1-7 type silliness..
+        make them thing and discover about themselves...
      - Anti-mash: they have to pick the *same option twice in a row* to confirm it, so they can't just hammer random answers to speed through.
+        - will of course need to change order or whatever.. just reset to that quesetion if they get it wrong.
      - Anti-muscle-memory: the option buttons change position each time, so they can't autopilot the sequence.
-     - Capped number of attempts per day.
+     - Capped number of attempts per day. - just one, of course.
+        - capped number all time... like say we'll go with 5 for now. (let them know this)
      - Then an automatic 5-minute wait before anything unlocks. Offer an *optional* extend — 10 min, an hour, till tomorrow — and make the longer wait the easy, low-effort, encouraged choice (one tap, no friction), while the short path stays the slightly more deliberate one.
      - Then they pick a duration from a short list: 1 / 2 / 5 minutes, with **2 as the default middle option** to nudge them toward the low end.
-     - During that window: blocklist (hardcore) stays fully up, greylist pause lifts, image friction stays on as best-effort. Auto re-locks the second the timer's up.
+     - During that window: goes to the most relaxed setting, orb thing turns on.., image friction stays on as best-effort. Auto re-locks the second the timer's up. etc... 
      - The panic button lives in here too — lock screen + a physical action (breathing / cold / sharp sensory). No separate feature.
+        - ideally show that straight away as an obvious bolded main option...
      - ...
-     - + ), you said they admit what they're doing, say "what they'll look at", and say "that they won't do it next time". 
+     - they enter detail about what they'll do, and for how long form a preset (1 min, 2 min, or 5 mins...)
+        - after that we return back to whatever..
+     - + you said they admit what they're doing, say "what they'll look at", and say "that they won't do it next time". 
 
 **4. Add a 4th option to that screen: "Report an app/site."**
    - Guided: pick the app from a dropdown (containing all apps on the device) or paste the URL 
