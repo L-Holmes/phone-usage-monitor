@@ -232,6 +232,7 @@ private fun showRecentBlocks() {
 // ── Report screen: 4 equal full-width panes ────────────────────────────────
 private fun showReportScreen() {
     onReportScreen = true
+    inRelapseFlow = false
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = ViewGroup.LayoutParams(
@@ -271,7 +272,316 @@ private fun onLookAnyway() {
     Toast.makeText(this, "I'm going to look anyway \u2014 coming soon", Toast.LENGTH_SHORT).show()
 }
 private fun onReportRelapse() {
-    Toast.makeText(this, "Report relapse \u2014 coming soon", Toast.LENGTH_SHORT).show()
+    startRelapseFlow()
+}
+
+// ── Relapse report flow ────────────────────────────────────────────────────
+private enum class RStep { DEVICE, HOME, ROOM, ALONE, ACTIVITY, FEELING, URGE, NOTE }
+
+private var inRelapseFlow = false
+private var relapseStep = 0
+private var draft = RelapseDraft()
+
+private val DEFAULT_ROOMS = listOf("Bedroom", "Bathroom", "Living room", "Office / desk", "Kitchen")
+private val ACTIVITIES = listOf(
+    "In bed / trying to sleep",
+    "Just woke up",
+    "Scrolling social media",
+    "Watching videos or TV",
+    "Browsing the web",
+    "Putting off something I should do",
+    "Just finished work or study",
+    "Bored with nothing to do",
+    "After something stressful",
+    "Winding down at night",
+)
+private val FEELINGS = listOf(
+    "Bored", "Anxious / on edge", "Stressed", "Low / down",
+    "Lonely", "Tired", "Frustrated / angry", "Happy / excited", "Neutral",
+)
+
+private fun startRelapseFlow() {
+    onReportScreen = true
+    inRelapseFlow = true
+    draft = RelapseDraft()
+    relapseStep = 0
+    renderRelapseStep()
+}
+
+/** The steps in order; ROOM only appears once "At home" is chosen. */
+private fun activeSteps(): List<RStep> {
+    val s = mutableListOf(RStep.DEVICE, RStep.HOME)
+    if (draft.atHome == true) s.add(RStep.ROOM)
+    s.add(RStep.ALONE); s.add(RStep.ACTIVITY); s.add(RStep.FEELING); s.add(RStep.URGE); s.add(RStep.NOTE)
+    return s
+}
+
+private fun relapseAdvance() { relapseStep++; renderRelapseStep() }
+
+private fun relapseBack() {
+    if (relapseStep <= 0) { inRelapseFlow = false; showReportScreen(); return }
+    relapseStep--
+    renderRelapseStep()
+}
+
+private fun renderRelapseStep() {
+    val steps = activeSteps()
+    relapseStep = relapseStep.coerceIn(0, steps.lastIndex)
+    when (steps[relapseStep]) {
+        RStep.DEVICE -> reportChoiceScreen(
+            "Where did it happen?",
+            listOf("Yes, on this device", "No, a different device"),
+            onBack = ::relapseBack,
+        ) { draft.onThisDevice = it.startsWith("Yes"); relapseAdvance() }
+
+        RStep.HOME -> reportChoiceScreen(
+            "Were you at home?",
+            listOf("At home", "Out / somewhere else"),
+            onBack = ::relapseBack,
+        ) {
+            draft.atHome = (it == "At home")
+            if (draft.atHome != true) draft.room = null
+            relapseAdvance()
+        }
+
+        RStep.ROOM -> roomStep()
+
+        RStep.ALONE -> reportChoiceScreen(
+            "Were you alone?",
+            listOf("I was alone", "Other people were around"),
+            onBack = ::relapseBack,
+        ) { draft.alone = it.startsWith("I was"); relapseAdvance() }
+
+        RStep.ACTIVITY -> reportChoiceScreen(
+            "What were you doing just before?",
+            ACTIVITIES,
+            onBack = ::relapseBack,
+        ) { draft.activity = it; relapseAdvance() }
+
+        RStep.FEELING -> reportChoiceScreen(
+            "How were you feeling?",
+            FEELINGS,
+            onBack = ::relapseBack,
+        ) { draft.feeling = it; relapseAdvance() }
+
+        RStep.URGE -> reportChoiceScreen(
+            "How strong was the urge?",
+            listOf("Mild", "Strong", "Overwhelming"),
+            allowSkip = true, skipLabel = "Skip this", onSkip = ::relapseAdvance,
+            onBack = ::relapseBack,
+        ) { draft.urge = it; relapseAdvance() }
+
+        RStep.NOTE -> noteStep()
+    }
+}
+
+private fun roomStep() {
+    val opts = (DEFAULT_ROOMS + RoomOptions.all(this)).distinct() + "Other\u2026"
+    reportChoiceScreen("Which room?", opts, onBack = ::relapseBack) { choice ->
+        if (choice == "Other\u2026") promptCustomRoom()
+        else { draft.room = choice; relapseAdvance() }
+    }
+}
+
+private fun promptCustomRoom() {
+    val input = EditText(this).apply {
+        hint = "Room name"
+        inputType = InputType.TYPE_CLASS_TEXT
+        val p = (20 * resources.displayMetrics.density).toInt()
+        setPadding(p, p, p, p)
+    }
+    AlertDialog.Builder(this)
+        .setTitle("Add a room")
+        .setView(input)
+        .setPositiveButton("Add") { _, _ ->
+            val name = input.text.toString().trim().replace("\n", " ")
+            if (name.isNotEmpty()) {
+                RoomOptions.add(this, name)   // remembered for future reports (max 20)
+                draft.room = name
+                relapseAdvance()
+            }
+        }
+        .setNegativeButton(android.R.string.cancel, null)
+        .show()
+}
+
+private fun noteStep() {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(TextView(this).apply {
+        text = "\u2190 Back"; textSize = 15f
+        setPadding(0, 0, 0, (8 * dp).toInt())
+        isClickable = true; isFocusable = true
+        setOnClickListener { relapseBack() }
+    })
+    root.addView(TextView(this).apply {
+        text = "Anything you want to note?"
+        textSize = 21f; setTypeface(typeface, Typeface.BOLD)
+        setPadding(0, 0, 0, (4 * dp).toInt())
+    })
+    root.addView(TextView(this).apply {
+        text = "Private. It stays on this device and is never shown back to you as judgement."
+        textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val input = EditText(this).apply {
+        hint = "What happened, what set it off\u2026 (optional)"
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        gravity = Gravity.TOP or Gravity.START
+        minLines = 4
+        setText(draft.note ?: "")
+    }
+    root.addView(input, LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    val btns = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END
+        setPadding(0, (8 * dp).toInt(), 0, 0)
+    }
+    btns.addView(Button(this).apply {
+        text = "Skip"
+        setOnClickListener { draft.note = null; saveRelapse() }
+    })
+    btns.addView(Button(this).apply {
+        text = "Save report"
+        setOnClickListener {
+            draft.note = input.text.toString().trim().ifBlank { null }
+            saveRelapse()
+        }
+    })
+    root.addView(btns)
+    setContentView(root)
+}
+
+private fun saveRelapse() {
+    lifecycleScope.launch {
+        val priors = RelapseLog.all(this@MainActivity)   // their earlier reports (excludes this one)
+        val report = draft.toReport()
+        RelapseLog.record(this@MainActivity, report)
+        val feedback = RelapseLog.analyze(report, priors)
+        renderRelapseFeedback(feedback)
+    }
+}
+
+private fun renderRelapseFeedback(fb: RelapseFeedback) {
+    inRelapseFlow = false
+    onReportScreen = true
+    val dp = resources.displayMetrics.density
+    val pad = (20 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    content.addView(TextView(this).apply {
+        text = "Report saved \u2713"
+        textSize = 24f; setTypeface(typeface, Typeface.BOLD)
+    })
+    content.addView(TextView(this).apply {
+        text = fb.encouragement
+        textSize = 16f
+        setPadding(0, (12 * dp).toInt(), 0, (8 * dp).toInt())
+    })
+    if (fb.lines.isNotEmpty()) {
+        content.addView(TextView(this).apply {
+            text = "What we noticed"
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
+        })
+        fb.lines.forEach { line ->
+            content.addView(TextView(this).apply {
+                text = "\u2022  $line"
+                textSize = 15f
+                setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
+            })
+        }
+    }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(content)
+    })
+    root.addView(Button(this).apply {
+        text = "Done"
+        setOnClickListener { setupMainScreen() }
+    })
+    setContentView(root)
+}
+
+/** A title + a scroll list of big tappable "panels", optional Back / Skip. */
+private fun reportChoiceScreen(
+    title: String,
+    options: List<String>,
+    allowSkip: Boolean = false,
+    skipLabel: String = "Skip",
+    onSkip: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+    onPick: (String) -> Unit,
+) {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    if (onBack != null) {
+        root.addView(TextView(this).apply {
+            text = "\u2190 Back"; textSize = 15f
+            setPadding(0, 0, 0, (8 * dp).toInt())
+            isClickable = true; isFocusable = true
+            setOnClickListener { onBack() }
+        })
+    }
+    root.addView(TextView(this).apply {
+        text = title
+        textSize = 21f; setTypeface(typeface, Typeface.BOLD)
+        setPadding(0, 0, 0, (4 * dp).toInt())
+    })
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    options.forEach { opt -> list.addView(pickCard(opt) { onPick(opt) }) }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(list)
+    })
+    if (allowSkip && onSkip != null) {
+        root.addView(Button(this).apply {
+            text = skipLabel
+            setOnClickListener { onSkip() }
+        })
+    }
+    setContentView(root)
+}
+
+/** One rounded, full-width tappable option card. */
+private fun pickCard(label: String, onClick: () -> Unit): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = label
+        textSize = 17f
+        setTextColor(0xFF1A1A1A.toInt())
+        gravity = Gravity.CENTER_VERTICAL
+        val p = (18 * dp).toInt()
+        setPadding(p, p, p, p)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * dp
+            setColor(0xFFF1F3F4.toInt())
+        }
+        isClickable = true; isFocusable = true
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (8 * dp).toInt() }
+        setOnClickListener { onClick() }
+    }
 }
 
 
@@ -331,11 +641,10 @@ private fun startWeekStrict() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        if (onReportScreen) {
-            onReportScreen = false
-            setupMainScreen()
-        } else {
-            super.onBackPressed()
+        when {
+            inRelapseFlow -> relapseBack()       // step back through the relapse questions
+            onReportScreen -> setupMainScreen()  // panes or feedback -> main
+            else -> super.onBackPressed()
         }
     }
 
