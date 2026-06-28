@@ -64,10 +64,13 @@
             android:text="@string/clear_blocks" />
         <Button android:id="@+id/btn_ban_list"
             android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="View ban list" />
+            android:text="Manage blocks" />
         <Button android:id="@+id/btn_view_log"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="View log" />
+        <Button android:id="@+id/btn_stats"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="View statistics" />
         <Button android:id="@+id/btn_about"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="About &amp; privacy" />

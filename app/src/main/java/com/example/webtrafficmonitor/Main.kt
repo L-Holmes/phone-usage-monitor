@@ -84,8 +84,6 @@ import android.view.animation.PathInterpolator
 //other
 
 import android.widget.ImageView
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.Path
 
 
@@ -290,6 +288,287 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showManageRules() {
+        inSubPage = true
+        val dp = resources.displayMetrics.density
+        val pad = (16 * dp).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        root.addView(backText { setupMainScreen() })
+        root.addView(titleText("Manage blocks"))
+        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            addView(container)
+        })
+        setContentView(root)
+
+        fun header(t: String): TextView = TextView(this).apply {
+            text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
+            setPadding(0, (16 * dp).toInt(), 0, (4 * dp).toInt())
+        }
+        fun row(label: String, onRemove: () -> Unit): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+            addView(TextView(this@MainActivity).apply {
+                text = label; textSize = 15f
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(Button(this@MainActivity).apply { text = "Remove"; setOnClickListener { onRemove() } })
+        }
+
+        fun reload() {
+            container.removeAllViews()
+            var any = false
+            val blockedApps = AppRules.apps(this).filter { it.first == AppRules.BLOCK }
+            if (blockedApps.isNotEmpty()) {
+                any = true; container.addView(header("Blocked apps"))
+                blockedApps.forEach { (_, pkg) ->
+                    container.addView(row(appLabel(pkg)) { AppRules.remove(this, true, pkg); reload() })
+                }
+            }
+            val greyApps = AppRules.apps(this).filter { it.first == AppRules.GREY }
+            if (greyApps.isNotEmpty()) {
+                any = true; container.addView(header("Greylisted apps (${GreyUsage.LIMIT_MIN} min/hour)"))
+                greyApps.forEach { (_, pkg) ->
+                    container.addView(row(appLabel(pkg)) { AppRules.remove(this, true, pkg); reload() })
+                }
+            }
+            val siteRules = BlockRules.all()
+            if (siteRules.isNotEmpty()) {
+                any = true; container.addView(header("Blocked sites & pages"))
+                siteRules.forEach { r -> container.addView(row(r) { BlockRules.remove(this, r); reload() }) }
+            }
+            val greyHosts = AppRules.hosts(this)
+            if (greyHosts.isNotEmpty()) {
+                any = true; container.addView(header("Greylisted sites (${GreyUsage.LIMIT_MIN} min/hour)"))
+                greyHosts.forEach { (_, host) ->
+                    container.addView(row(host) { AppRules.remove(this, false, host); reload() })
+                }
+            }
+            if (!any) container.addView(TextView(this).apply {
+                text = "Nothing blocked yet."; setPadding(0, (16 * dp).toInt(), 0, 0)
+            })
+        }
+        reload()
+    }
+
+private fun appLabel(pkg: String): String = try {
+    packageManager.getApplicationInfo(pkg, 0).loadLabel(packageManager).toString()
+} catch (t: Throwable) { pkg }
+
+// ── Statistics ─────────────────────────────────────────────────────────────
+private val DOW_ORDER = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+private fun hourOf(ts: Long) = SimpleDateFormat("H", Locale.US).format(Date(ts)).toIntOrNull() ?: 0
+private fun dowName(ts: Long) = SimpleDateFormat("EEE", Locale.US).format(Date(ts))
+private fun topCounts(items: List<String>, limit: Int = 8): List<Pair<String, Int>> =
+    items.filter { it.isNotBlank() }.groupingBy { it }.eachCount()
+        .entries.sortedByDescending { it.value }.take(limit).map { it.key to it.value }
+private val HOUR_LABELS = mapOf(0 to "12a", 6 to "6a", 12 to "12p", 18 to "6p", 23 to "11p")
+
+private fun showStatsMenu() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { setupMainScreen() })
+    root.addView(titleText("Statistics"))
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    list.addView(pickCard("Temptation patterns") { showTemptationStats() })
+    list.addView(pickCard("Relapse patterns") { showRelapseStats() })
+    list.addView(pickCard("Unlock attempts") { showLoosenStats() })
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+    })
+    setContentView(root)
+}
+
+private fun statsPage(title: String, back: () -> Unit, build: (LinearLayout) -> Unit) {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { back() })
+    root.addView(titleText(title))
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(content)
+    })
+    setContentView(root)
+    build(content)
+}
+
+private fun showTemptationStats() {
+    val events = TemptationLog.all(this)
+    statsPage("Temptation patterns", { showStatsMenu() }) { c ->
+        if (events.isEmpty()) { c.addView(emptyStat()); return@statsPage }
+        c.addView(summaryLine("${events.size} urges ridden out"))
+        c.addView(sectionTitle("Time of day"))
+        val hours = IntArray(24); events.forEach { hours[hourOf(it.ts).coerceIn(0, 23)]++ }
+        c.addView(vBars(hours, HOUR_LABELS))
+        c.addView(sectionTitle("Day of week"))
+        c.addView(hBars(DOW_ORDER.map { d -> d to events.count { dowName(it.ts) == d } }))
+        c.addView(sectionTitle("Where"))
+        c.addView(hBars(topCounts(events.mapNotNull { it.location })))
+        c.addView(sectionTitle("What you saw"))
+        c.addView(hBars(topCounts(events.mapNotNull { it.screen })))
+        c.addView(sectionTitle("How you felt"))
+        c.addView(hBars(topCounts(events.mapNotNull { it.feeling })))
+        c.addView(sectionTitle("Urge strength"))
+        c.addView(hBars(Opts.URGE_LEVELS.map { lvl -> lvl to events.count { it.urge == lvl } }))
+        c.addView(sectionTitle("Last 14 days"))
+        c.addView(vBars(TemptationLog.dailyCounts(this, 14), mapOf(0 to "-13", 13 to "now")))
+    }
+}
+
+private fun showRelapseStats() {
+    statsPage("Relapse patterns", { showStatsMenu() }) { c ->
+        c.addView(summaryLine("Loading\u2026"))
+        lifecycleScope.launch {
+            val list = RelapseLog.all(this@MainActivity)
+            c.removeAllViews()
+            if (list.isEmpty()) { c.addView(emptyStat()); return@launch }
+            c.addView(summaryLine("${list.size} reports"))
+            c.addView(sectionTitle("Time of day"))
+            val hours = IntArray(24); list.forEach { if (it.hourOfDay in 0..23) hours[it.hourOfDay]++ }
+            c.addView(vBars(hours, HOUR_LABELS))
+            c.addView(sectionTitle("Day of week"))
+            val cal = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+            c.addView(hBars(DOW_ORDER.map { d -> d to list.count { cal.getOrElse(it.dayOfWeek - 1) { "" } == d } }))
+            c.addView(sectionTitle("Where"))
+            c.addView(hBars(topCounts(list.mapNotNull { it.room })))
+            c.addView(sectionTitle("How you felt"))
+            c.addView(hBars(topCounts(list.mapNotNull { it.feeling })))
+            c.addView(sectionTitle("What led in"))
+            c.addView(hBars(topCounts(list.mapNotNull { it.activity })))
+        }
+    }
+}
+
+private fun showLoosenStats() {
+    val events = LoosenLog.all(this)
+    statsPage("Unlock attempts", { showStatsMenu() }) { c ->
+        if (events.isEmpty()) { c.addView(emptyStat()); return@statsPage }
+        c.addView(summaryLine("${events.size} attempts"))
+        c.addView(sectionTitle("How they ended"))
+        val names = mapOf("stopped" to "Stopped", "tomorrow" to "Left till tomorrow", "looked" to "Looked")
+        c.addView(hBars(listOf("stopped", "tomorrow", "looked")
+            .map { (names[it] ?: it) to events.count { e -> e.outcome == it } }))
+        c.addView(sectionTitle("What they hoped to quiet"))
+        c.addView(hBars(topCounts(events.mapNotNull { it.feeling })))
+        c.addView(sectionTitle("Time of day"))
+        val hours = IntArray(24); events.forEach { hours[hourOf(it.ts).coerceIn(0, 23)]++ }
+        c.addView(vBars(hours, HOUR_LABELS))
+    }
+}
+
+// ── chart building blocks ──────────────────────────────────────────────────
+private fun emptyStat(): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = "Nothing logged yet."; textSize = 15f; setTextColor(0xFF9AA0A6.toInt())
+        setPadding(0, (16 * dp).toInt(), 0, 0)
+    }
+}
+private fun summaryLine(t: String): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = t; textSize = 15f; setTypeface(typeface, Typeface.BOLD)
+        setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
+    }
+}
+private fun sectionTitle(t: String): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
+        setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
+    }
+}
+
+private fun hBars(pairs: List<Pair<String, Int>>): View {
+    val dp = resources.displayMetrics.density
+    val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    if (pairs.isEmpty()) {
+        col.addView(TextView(this).apply { text = "No data yet."; textSize = 13f; setTextColor(0xFF9AA0A6.toInt()) })
+        return col
+    }
+    val max = (pairs.maxOfOrNull { it.second } ?: 0).coerceAtLeast(1)
+    pairs.forEach { (label, value) ->
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
+        }
+        row.addView(TextView(this).apply {
+            text = label; textSize = 13f; maxLines = 1
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 3.2f)
+        })
+        val track = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(0, (16 * dp).toInt(), 5f)
+        }
+        track.addView(View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 3 * dp; setColor(0xFF6FA8DC.toInt())
+            }
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, value.toFloat().coerceAtLeast(0.001f))
+        })
+        track.addView(View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (max - value).toFloat().coerceAtLeast(0.001f))
+        })
+        row.addView(track)
+        row.addView(TextView(this).apply {
+            text = "  $value"; textSize = 13f; gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f)
+        })
+        col.addView(row)
+    }
+    return col
+}
+
+private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
+    val dp = resources.displayMetrics.density
+    val max = (values.maxOrNull() ?: 0).coerceAtLeast(1)
+    val wrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (90 * dp).toInt())
+    }
+    values.forEachIndexed { _, v ->
+        val colv = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            val m = (1 * dp).toInt(); setPadding(m, 0, m, 0)
+        }
+        colv.addView(View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, (max - v).toFloat().coerceAtLeast(0.001f))
+        })
+        colv.addView(View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 2 * dp; setColor(if (v > 0) 0xFF6FA8DC.toInt() else 0x22000000)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, v.toFloat().coerceAtLeast(0.04f))
+        })
+        row.addView(colv)
+    }
+    wrap.addView(row)
+    if (sparseLabels.isNotEmpty()) {
+        val lrow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        values.indices.forEach { i ->
+            lrow.addView(TextView(this).apply {
+                text = sparseLabels[i] ?: ""; textSize = 9f; gravity = Gravity.CENTER
+                setTextColor(0xFF9AA0A6.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+        }
+        wrap.addView(lrow)
+    }
+    return wrap
+}
+
+
     // ── ride the wave: click-through, one idea per screen ──────────────────────
     private fun startRideWave() {
         waveStartAt = System.currentTimeMillis()
@@ -339,7 +618,14 @@ class MainActivity : AppCompatActivity() {
     private fun waveSuccess() {
         stopRideTimer()
         inTemptationFlow = false; onReportScreen = true; tBack = null
-        TemptationLog.record(this, tUrgeIndex)
+        TemptationLog.record(
+                this,
+                urge = Opts.URGE_LEVELS.getOrElse(tUrgeIndex) { "" },
+                screen = tAnswers[TGroup.SCREEN],
+                location = tAnswers[TGroup.PLACE],
+                feeling = tAnswers[TGroup.FEELING],
+                doing = tAnswers[TGroup.DOING],
+        )
         val total = TemptationLog.total(this)
         val week = TemptationLog.dailyCounts(this, 7).sum()
         val dp = resources.displayMetrics.density
@@ -538,41 +824,32 @@ private fun progressChart(counts: IntArray): View {
         setContentView(root)
     }
 
-    private fun appSiteChooseApp() {
-        val dp = resources.displayMetrics.density
-        val pad = (16 * dp).toInt()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        }
-        root.addView(backText { appSiteChooseKind() })
-        root.addView(titleText("Pick an app"))
-        val spinner = Spinner(this)
-        root.addView(spinner)
-        root.addView(tierNote())
-        val spacer = View(this)
-        root.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        val greyBtn = bigChoice("Greylist it \u2014 ${GreyUsage.LIMIT_MIN} min / hour", 0xFF3E535C.toInt()) {}
-        val blockBtn = bigChoice("Blocklist it \u2014 block outright", 0xFFB00020.toInt()) {}
-        greyBtn.isEnabled = false; blockBtn.isEnabled = false
-        root.addView(greyBtn); root.addView(blockBtn)
-        setContentView(root)
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            val apps = loadLaunchableApps()
-            runOnUiThread {
-                appSiteApps = apps
-                val adapter = ArrayAdapter(this@MainActivity,
-                    android.R.layout.simple_spinner_item, apps.map { it.first })
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                spinner.adapter = adapter
-                greyBtn.isEnabled = true; blockBtn.isEnabled = true
-                greyBtn.setOnClickListener { saveAppRule(spinner.selectedItemPosition, AppRules.GREY) }
-                blockBtn.setOnClickListener { saveAppRule(spinner.selectedItemPosition, AppRules.BLOCK) }
-            }
-        }
+private fun appSiteChooseSite() {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
+    root.addView(backText { appSiteChooseKind() })
+    root.addView(titleText("Add a website"))
+    val urlInput = EditText(this).apply {
+        hint = "paste or type a web address"
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        maxLines = 1
+    }
+    root.addView(urlInput)
+    root.addView(tierNote())
+    root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(bigChoice("Greylist it \u2014 ${GreyUsage.LIMIT_MIN} min / hour", 0xFF3E535C.toInt()) {
+        saveSiteRule(urlInput, AppRules.GREY)
+    })
+    root.addView(bigChoice("Blocklist it \u2014 block outright", 0xFFB00020.toInt()) {
+        saveSiteRule(urlInput, AppRules.BLOCK)
+    })
+    setContentView(root)
+}
 
 
 private data class AppRow(val label: String, val pkg: String, val icon: android.graphics.drawable.Drawable?)
@@ -894,21 +1171,6 @@ private var rideHandler: Handler? = null
 private var rideRunnable: Runnable? = null
 private var rideEndAt = 0L
 
-private fun startTemptationFlow() {
-    onReportScreen = true
-    inTemptationFlow = true
-    tTrigger = null; tSaw = null; tUrgeStart = null; tUrgeEnd = null
-    temptationStep = 0
-    renderTemptationStep()
-}
-
-private fun temptationBack() {
-    stopRideTimer()
-    if (temptationStep <= 0) { inTemptationFlow = false; showReportScreen(); return }
-    temptationStep--
-    renderTemptationStep()
-}
-
 // ========================
 // ── "I'm going to look anyway" (supervised loosen) flow ─────────────────────
 
@@ -1097,6 +1359,7 @@ private fun loosenReflectScreen() {
     root.addView(body(loosenReflectText()))
     root.addView(grow())
     root.addView(bigChoice("I NEED TO STOP", 0xFF2E7D32.toInt()) {
+        LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)   // ADD
         loosenStop("That was the hardest choice, and you made it. The urge passes; the pride stays. Nothing's been used up.")
     })
     root.addView(Button(this).apply { text = "Continue anyway"; setOnClickListener { loosenWaitScreen() } })
@@ -1149,6 +1412,7 @@ private fun loosenWaitScreen() {
         LoosenWait.start(this, 30L * 60 * 1000); loosenWaitScreen()
     })
     content.addView(bigChoice("Leave it till tomorrow", 0xFF2E7D32.toInt()) {
+        LoosenLog.record(this, "tomorrow", loosenRegret, loosenFix, 0)   // ADD
         loosenStop("You chose to wait it out. By tomorrow it's long gone \u2014 and you kept your unlocks. Strong move.")
     })
     content.addView(bigChoice("+ 10 more minutes", 0xFF3E535C.toInt()) {
@@ -1253,7 +1517,7 @@ private fun commitDurationScreen(step: String) {
     root.addView(grow())
     val cont = Button(this)
     val refresh = {
-        btns.forEach { (m, b) -> b.setTypeface(typeface, if (m == loosenDuration) Typeface.BOLD else Typeface.NORMAL) }
+        btns.forEach { (m, b) -> b.setTypeface(Typeface.DEFAULT, if (m == loosenDuration) Typeface.BOLD else Typeface.NORMAL) }
         cont.text = "Unlock for $loosenDuration min"
     }
     btns.forEach { (m, b) -> b.setOnClickListener { loosenDuration = m; refresh() } }
@@ -1264,6 +1528,7 @@ private fun commitDurationScreen(step: String) {
 }
 
 private fun loosenUnlock() {
+    LoosenLog.record(this, "looked", loosenRegret, loosenFix, loosenDuration)   // ADD
     LoosenLimit.consume(this)
     LoosenWait.end(this)
     LoosenWindow.start(this, loosenDuration * 60 * 1000L)
@@ -2004,8 +2269,9 @@ private fun startWeekStrict() {
             BlockRules.clear(this); BlockEscalation.clear(this); AppTimedBlock.clear(this)
             Toast.makeText(this, "Block rules cleared", Toast.LENGTH_SHORT).show()
         }
-        findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showBanList() }
+        findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showManageRules() }
         findViewById<Button>(R.id.btn_view_log).setOnClickListener { showLogPage() }
+        findViewById<Button>(R.id.btn_stats).setOnClickListener { showStatsMenu() }
         findViewById<Button>(R.id.btn_about).setOnClickListener { showAboutPage() }
 
         refreshModeUi()
@@ -3299,6 +3565,11 @@ object BlockRules {
         persist(context)
     }
 
+    fun remove(context: Context, rule: String) {
+        rules.remove(rule.trim().lowercase())
+        persist(context)
+    }
+
     /** Block [rule] for [durationMs] (e.g. a domain for an hour). Never shortens an existing timer. */
     fun addTimed(context: Context, rule: String, durationMs: Long) {
         val cleaned = rule.trim().lowercase()
@@ -4428,22 +4699,31 @@ object Opts {
 }
 
 // Logs each urge ridden out, for the "progress" graph. Lightweight (SharedPreferences).
+// Full temptation records (time, what-you-saw, where, feeling, habit, urge) for stats.
 object TemptationLog {
     private const val PREFS = "temptation_log"
     private const val KEY = "events"
-    private const val MAX = 2000
+    private const val MAX = 5000
+    private const val SEP = "\u001F"
 
-    fun record(context: Context, urgeIndex: Int) {
+    data class Event(
+        val ts: Long, val urge: String,
+        val screen: String?, val location: String?, val feeling: String?, val doing: String?,
+    )
+
+    fun record(context: Context, urge: String, screen: String?, location: String?, feeling: String?, doing: String?) {
+        val line = listOf(System.currentTimeMillis().toString(), urge,
+            screen.orEmpty(), location.orEmpty(), feeling.orEmpty(), doing.orEmpty())
+            .joinToString(SEP) { it.replace(SEP, " ").replace("\n", " ") }
         val list = read(context).toMutableList()
-        list.add("${System.currentTimeMillis()}|$urgeIndex")
+        list.add(line)
         while (list.size > MAX) list.removeAt(0)
         prefs(context).edit().putString(KEY, list.joinToString("\n")).apply()
     }
 
+    fun all(context: Context): List<Event> = read(context).mapNotNull { parse(it) }
     fun total(context: Context) = read(context).size
-
-    fun timestamps(context: Context) =
-        read(context).mapNotNull { it.substringBefore('|').toLongOrNull() }
+    fun timestamps(context: Context) = all(context).map { it.ts }
 
     fun dailyCounts(context: Context, days: Int): IntArray {
         val counts = IntArray(days)
@@ -4455,29 +4735,46 @@ object TemptationLog {
         return counts
     }
 
+    private fun parse(line: String): Event? {
+        val p = line.split(SEP)
+        val ts = p.getOrNull(0)?.toLongOrNull() ?: return null
+        return Event(ts, p.getOrElse(1) { "" },
+            p.getOrNull(2)?.ifBlank { null }, p.getOrNull(3)?.ifBlank { null },
+            p.getOrNull(4)?.ifBlank { null }, p.getOrNull(5)?.ifBlank { null })
+    }
     private fun dayIndex(ms: Long): Long {
         val off = java.util.TimeZone.getDefault().getOffset(ms)
         return (ms + off) / 86_400_000L
     }
-    private fun read(c: Context) =
-        prefs(c).getString(KEY, "").orEmpty().split("\n").filter { it.isNotEmpty() }
+    private fun read(c: Context) = prefs(c).getString(KEY, "").orEmpty().split("\n").filter { it.isNotEmpty() }
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
-// One generic store for user-added custom options, keyed by category (capped at 20 each).
-object CustomOptions {
-    private const val PREFS = "custom_options"
-    private const val MAX = 20
-    fun all(context: Context, category: String): List<String> =
-        prefs(context).getString(category, "").orEmpty()
-            .split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-    fun add(context: Context, category: String, name: String) {
-        val clean = name.trim().replace("\n", " "); if (clean.isEmpty()) return
-        val list = all(context, category).toMutableList()
-        if (list.any { it.equals(clean, ignoreCase = true) }) return
-        list.add(clean); while (list.size > MAX) list.removeAt(0)
-        prefs(context).edit().putString(category, list.joinToString("\n")).apply()
+// Records each "look anyway" attempt and how it ended (stopped / tomorrow / looked).
+object LoosenLog {
+    private const val PREFS = "loosen_log"
+    private const val KEY = "events"
+    private const val MAX = 2000
+    private const val SEP = "\u001F"
+
+    data class Event(val ts: Long, val outcome: String, val regret: String?, val feeling: String?, val durationMin: Int)
+
+    fun record(context: Context, outcome: String, regret: String?, feeling: String?, durationMin: Int) {
+        val line = listOf(System.currentTimeMillis().toString(), outcome,
+            regret.orEmpty(), feeling.orEmpty(), durationMin.toString())
+            .joinToString(SEP) { it.replace(SEP, " ").replace("\n", " ") }
+        val list = read(context).toMutableList()
+        list.add(line)
+        while (list.size > MAX) list.removeAt(0)
+        prefs(context).edit().putString(KEY, list.joinToString("\n")).apply()
     }
+
+    fun all(context: Context): List<Event> = read(context).mapNotNull { l ->
+        val p = l.split(SEP); val ts = p.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+        Event(ts, p.getOrElse(1) { "" }, p.getOrNull(2)?.ifBlank { null },
+            p.getOrNull(3)?.ifBlank { null }, p.getOrNull(4)?.toIntOrNull() ?: 0)
+    }
+    private fun read(c: Context) = prefs(c).getString(KEY, "").orEmpty().split("\n").filter { it.isNotEmpty() }
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
@@ -4526,6 +4823,12 @@ object AppRules {
         if (isApp) writeApps(context, readApps(context).filterNot { it.substringAfter('|') == key }.toMutableSet())
         else writeHosts(context, readHosts(context).filterNot { it.substringAfter('|') == key }.toMutableSet())
     }
+
+    fun apps(context: Context): List<Pair<String, String>> =     // (tier, pkg)
+        readApps(context).map { it.substringBefore('|') to it.substringAfter('|') }
+
+    fun hosts(context: Context): List<Pair<String, String>> =    // (tier, host) — always GREY
+        readHosts(context).map { it.substringBefore('|') to it.substringAfter('|') }
 
     private fun readApps(c: Context) = prefs(c).getStringSet(KEY_APPS, emptySet())!!.toSet()
     private fun readHosts(c: Context) = prefs(c).getStringSet(KEY_HOSTS, emptySet())!!.toSet()
