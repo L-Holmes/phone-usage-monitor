@@ -1,12 +1,6 @@
 
 TODO:
-- claude not finished yet.
-- ask to fix current issue
-- then ask it to do the final things...
-i.e. 
-"""
-The remaining open thread from the audit is a manage/remove screen for the app + greylist rules (only URL-blocklist shows in the ban list today) — want that next, or is there something else you've spotted in testing?
-"""
+- give feedback on improvements to make...
 
 
 TODO:
@@ -46,6 +40,36 @@ At some point:
 - for relaxed vs strict mode..
     - have some obvious map somewhere.. of all the things our app does in text form... and then each mapped to like a number... 1 or 2 representing relaxed and strict...
     - so then i can easily change just that map, and know what will activate in each mode (we may add more modes in future which is why we are doing this!)
+
+
+------------------------------
+
+TODO LATER:
+- dopamine baseline masurement
+    - user sees scale over time
+    - can click to see how to lower the threshold.
+- represent time wasted in other ways
+    - money made in that time..
+    - social connections...
+    - health etc...
+    (and vice versa- if they are improving, show what they are ptoentially gaining back (although of course will be more time focused...))
+
+
+- in order to change;
+    - change habits... and daily schedule..
+    - understand how habits lead to downfall
+    - in the moment you're a different person- third person principle
+    - need to stop as soon as the first trigger occurs- don't let it go too late
+    - a slip isn't just a one off..
+        --> have make the brain forget about it... 
+    - encourage to get past 'just this day'...
+    - gameify like duoloingo..
+        - like daily things?
+        - how to get statistics where they;ll want to _keep_ coming back??!?!
+    - do we let them help others?? Or have a button on main screen for that which... does something??
+
+
+
 
 
 -------

@@ -4984,6 +4984,37 @@ object TriggerOptions {
 }
 
 // =====================================================================================
+// CustomOptions  (user-typed options per category — feeling / location / activity / screen)
+// =====================================================================================
+object CustomOptions {
+    private const val PREFS = "custom_options"
+    private const val MAX = 20
+
+    /** Custom options the user has added for this category, oldest -> newest. */
+    fun all(context: Context, category: String): List<String> = read(context, category)
+
+    fun add(context: Context, category: String, name: String) {
+        val clean = name.trim().replace("\n", " ")
+        if (clean.isEmpty()) return
+        val list = read(context, category).toMutableList()
+        if (list.any { it.equals(clean, ignoreCase = true) }) return
+        list.add(clean)
+        while (list.size > MAX) list.removeAt(0)      // keep newest MAX
+        prefs(context).edit().putString(key(category), list.joinToString("\n")).apply()
+    }
+
+    private fun read(context: Context, category: String): List<String> =
+        prefs(context).getString(key(category), "").orEmpty()
+            .split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun key(category: String) = "opts:${category.lowercase()}"
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
 // Lockdown  (temporary 30-min "allow-list only" mode)
 // =====================================================================================
 /**
