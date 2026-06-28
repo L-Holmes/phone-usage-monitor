@@ -139,6 +139,7 @@ lterally just bullet point.. no fluff.. no explanatoin. just the points, nothing
 * **Sensory Counter-Conditioning:** Merging a wearable tracking band with aversion therapy, where a user can manually trigger a small haptic vibration, a temperature drop, or a minor sensory disruption when a visual cue triggers an intense craving, helping to separate the trigger from the expectation of comfort.
 * **Sensory Fatigue Redirection:** Providing specialized high-stimulus, non-explicit alternatives (e.g., high-intensity, fast-paced spatial audio, interactive 3D geometry puzzles, or intense visual pattern tracking apps) designed to exhaust the visual novelty-seeking drive and lower mental tension without utilizing explicit content.
 
+
 # =============
 # SMOKING
 # ============
@@ -297,3 +298,74 @@ lterally just bullet point.. no fluff.. no explanatoin. just the points, nothing
 18. Portion friction, smaller plates, packaging constraints, serving limits
 19. Sleep and stress regulation, hormonal appetite control support
 20. Pharmacological support, appetite suppressants, metabolic assistance tools
+
+
+# 
+# DOG TRAINING / CHILD TRAINING
+
+-   Differential Reinforcement of Alternative Behavior (DRA)
+    -   Reinforcing a specific desired behavior while withholding reinforcement for the unwanted behavior
+-   Premack Principle (Grandma’s Law)
+    -   Using a high-probability behavior as a reinforcer for a low-probability behavior
+-   Shaping via Successive Approximations
+    -   Reinforcing incremental steps toward a target behavior rather than waiting for the final result
+-   Antecedent Arrangement (Environmental Management)
+    -   Modifying the environment to make desired behaviors easier and undesired behaviors harder before they occur
+-   Capture and Mark (Marker Training)
+    -   Using a distinct signal to pinpoint the exact moment a spontaneous desired behavior occurs followed by immediate reinforcement
+-   Negative Punishment (Removal of Desired Stimulus)
+    -   Removing a valued stimulus immediately following an unwanted behavior to decrease its future frequency
+-   Extinction (Withholding Reinforcement)
+    -   Completely ceasing reinforcement for a previously reinforced behavior to reduce its occurrence over time
+-   Response Cost (Token Economy Deduction)
+    -   Removing earned tokens or privileges contingent upon unwanted behavior within a structured reinforcement system
+-   Positive Punishment (Aversive Addition)
+    -   Adding an aversive stimulus immediately following an unwanted behavior to suppress it
+
+
+
+**Dog training - most to least effective per behavioral research:**
+
+- **Positive reinforcement**: Add reward immediately after desired behavior - treats, praise, play, clicker marks exact moment
+- **Differential reinforcement of alternative behavior**: Reward incompatible behavior - sit instead of jumping, chew toy instead of furniture
+- **Premack principle**: Use high-probability behavior to reinforce low-probability - "sit, then ball" 
+- **Negative punishment**: Remove desired thing when undesired behavior occurs - walk stops when leash pulls, play stops when mouthing
+- **Response cost**: Remove earned reward after infraction - lose access to couch after growling
+- **Extinction**: Ignore behavior so it gets no reinforcement - turn away from attention-barking
+- **Negative reinforcement**: Remove aversive when behavior occurs - pressure on harness stops when dog walks loose leash
+- **Positive punishment**: Add aversive after undesired behavior - leash pop, yell, shock - high fallout risk, low long-term reliability
+
+**Small child/baby habit change - most to least effective per developmental research:**
+
+- **Positive reinforcement**: Immediate praise, stickers, tokens for target behavior - "caught being good" 
+- **Differential reinforcement**: Reinforce behavior that can't occur with problem behavior - hands busy with toy vs. hitting
+- **Premack principle**: First non-preferred task, then preferred - "first 2 bites broccoli, then iPad"
+- **Shaping**: Reinforce successive approximations - praise for touching toothbrush, then holding, then brushing
+- **Negative punishment**: Time-out, toy removal, privilege loss contingent on behavior
+- **Antecedent control**: Change environment/cues - child-proof, set routines, visual schedules to prevent trigger
+- **Response cost**: Lose tokens/points already earned for infractions
+- **Extinction**: Planned ignoring of minor attention-seeking behavior - only if safe
+- **Positive punishment**: Scolding, spanking - high side effects, poor long-term efficacy, not recommended
+
+**Building new habits - most to least effective per behavior science:**
+
+- **Implementation intentions**: If-then plans tied to existing cues - "If I finish coffee, then I do 5 push-ups"
+- **Habit stacking**: Anchor new habit to established habit - "After I brush teeth, I floss 1 tooth"
+- **Environment design**: Make desired behavior easy/default - lay out gym clothes, put fruit on counter, remove friction
+- **Immediate positive reinforcement**: Add artificial reward right after - checkmark, app badge, music only during task
+- **Temptation bundling**: Pair want with should - only listen to podcast while on treadmill
+- **Commitment devices**: Ulysses contracts - money on the line, app that charges you, public declaration
+- **Response cost**: Remove reward for skipping - auto-donate $5 if no gym check-in
+- **Negative punishment**: Remove phone/TV until habit done - no Netflix till walk complete
+- **Tracking + streaks**: Visual record, don't break the chain - calendar X's, app streaks
+- **Identity-based cues**: Reinforce identity language - "I am a runner" vs. "I run"
+- **Negative reinforcement**: End discomfort by doing habit - anxiety stops once you send the email
+- **Positive punishment**: Self-scolding, guilt - low efficacy, high dropout
+
+
+* **Positive Reinforcement (Adding a Reward):** Providing an immediate, high-value incentive (a piece of chicken for a dog, a sticker or high-five for a child) the exact second the desired behavior occurs. Highly effective because it explicitly teaches *what to do* rather than just stopping an action, actively building a permanent neurological habit loop.
+* **Differential Reinforcement of an Incompatible Behavior (DRI):** Actively rewarding a positive behavior that makes the negative habit physically impossible to perform simultaneously. For example, training a dog to hold a ball in its mouth so it cannot bark, or giving a toddler a fidget toy so they cannot suck their thumb.
+* **Negative Punishment (Removing a Reward):** Withdrawing an asset, attention, or a privilege immediately following an unwanted behavior to reduce its frequency. For instance, turning your back and ignoring a puppy when it jumps on you, or putting a toy in "time out" when a toddler throws it. Highly effective for attention-seeking habits because it removes the environmental payoff.
+* **Environmental Engineering (Stimulus Control / Antecedent Arrangement):** Changing the physical layout of the environment so the bad habit cannot be triggered or practiced. Examples include putting shoes in a closed closet so a puppy can't chew them, or moving a step-stool out of reach so a toddler cannot access the cookie jar. This bypasses the need for discipline by preventing the choice entirely.
+* **Negative Reinforcement (Removing Discomfort):** Forcing compliance by introducing a mild, continuous, unpleasant stimulus that only stops the moment the correct behavior is performed. Examples include applying constant upwards leash pressure that clicks off only when the dog sits, or keeping a child at the dinner table until they eat one vegetable. Effective for physical compliance, but carries a higher risk of frustration, power struggles, or avoidance behaviors.
+* **Positive Punishment (Adding Discomfort / Aversives):** Introducing an unpleasant or painful consequence immediately following a bad habit to suppress it (yelling "NO", a leash pop, or a physical swat). While it can stop a behavior instantly out of fear, behavioral research ranks it as the least effective long-term strategy because it fails to teach an alternative behavior, damages trust, increases cortisol (stress), and frequently triggers underlying anxiety or sneaky, hidden aggression.
