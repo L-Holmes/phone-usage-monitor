@@ -1,6 +1,13 @@
 
 TODO:
-- give feedback on improvements to make...
+- there is a claude in progress. make that continue
+- then got some notes on phone
+- then continue go through the 'report' pages,optimising them
+- then;
+    - go through my research on 'what if we can't stop them'..
+    - thikn whta to add from that
+- then;
+    - continue with the rest of the TODOs below...
 
 
 TODO:
