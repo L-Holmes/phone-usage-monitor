@@ -197,12 +197,79 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null).show()
     }
 
+    /**
+     * Like [pickWithCustomScreen] but lets the user tick several options ("select all
+     * that apply") and hands back the full list. "Add your own" still works and the
+     * freshly-added option is auto-ticked.
+     */
+    private fun pickMultiWithCustomScreen(
+        title: String, base: List<String>, category: String?,
+        onBack: (() -> Unit)?, onPick: (List<String>) -> Unit,
+    ) {
+        val selected = linkedSetOf<String>()
+        fun build() {
+            val opts = (base + (category?.let { CustomOptions.all(this, it) } ?: emptyList())).distinct()
+            val dp = resources.displayMetrics.density
+            val pad = (16 * dp).toInt()
+            val root = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            }
+            if (onBack != null) root.addView(backText { onBack() })
+            root.addView(titleText(title))
+            root.addView(TextView(this).apply {
+                text = "Select all that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
+                setPadding(0, 0, 0, (8 * dp).toInt())
+            })
+            val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            opts.forEach { opt ->
+                val b = checkButton()
+                fun render() { b.text = (if (opt in selected) "\u2611  " else "\u2610  ") + opt }
+                b.setOnClickListener {
+                    if (opt in selected) selected.remove(opt) else selected.add(opt); render()
+                }
+                render(); list.addView(b)
+            }
+            if (category != null) {
+                list.addView(Button(this).apply {
+                    text = "Add your own\u2026"; setAllCaps(false)
+                    setOnClickListener { promptCustom(category) { added -> selected.add(added); build() } }
+                })
+            }
+            root.addView(ScrollView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+                addView(list)
+            })
+            root.addView(Button(this).apply {
+                text = "Continue"
+                setOnClickListener {
+                    if (selected.isEmpty()) {
+                        Toast.makeText(this@MainActivity, "Pick at least one.", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    onPick(selected.toList())
+                }
+            })
+            setContentView(root)
+        }
+        build()
+    }
+
     // ── "I feel temptation" flow (groups -> sub-picks -> ride the wave) ─────────
     private enum class TGroup(val label: String, val title: String, val category: String) {
-        SCREEN("I saw something on a screen", "What kind of screen?", "screen"),
-        PLACE("I'm in a certain place", "Where are you?", "location"),
-        FEELING("I'm feeling a certain way", "How are you feeling?", "feeling"),
-        DOING("I'm doing something out of habit", "What were you doing?", "activity"),
+        SCREEN(
+            "Something on a screen triggered the feeling (e.g. my phone, my computer, the TV\u2026)",
+            "What kind of screen?", "screen"),
+        PLACE(
+            "It may be linked to my location (e.g. bedroom, bathroom, in the house\u2026)",
+            "Where are you?", "location"),
+        FEELING(
+            "My emotional state / how I feel may be impacting it (e.g. anxious, feeling negative\u2026)",
+            "How are you feeling?", "feeling"),
+        DOING(
+            "I feel it's happening out of habit\u2026",
+            "What were you doing?", "activity"),
     }
     private fun baseFor(g: TGroup): List<String> = when (g) {
         TGroup.SCREEN -> Opts.SCREEN_TYPES
@@ -275,14 +342,20 @@ class MainActivity : AppCompatActivity() {
         if (tSubIndex >= tSubQueue.size) { temptationUrgeScreen(); return }
         val g = tSubQueue[tSubIndex]
         tBack = { if (tSubIndex == 0) temptationGroupsScreen() else { tSubIndex--; renderNextSub() } }
-        pickWithCustomScreen(g.title, baseFor(g), g.category, onBack = { temptationBack() }) {
-            tAnswers[g] = it; tSubIndex++; renderNextSub()
+        if (g == TGroup.FEELING || g == TGroup.DOING) {
+            pickMultiWithCustomScreen(g.title, baseFor(g), g.category, onBack = { temptationBack() }) {
+                tAnswers[g] = it.joinToString(", "); tSubIndex++; renderNextSub()
+            }
+        } else {
+            pickWithCustomScreen(g.title, baseFor(g), g.category, onBack = { temptationBack() }) {
+                tAnswers[g] = it; tSubIndex++; renderNextSub()
+            }
         }
     }
 
     private fun temptationUrgeScreen() {
         tBack = { if (tSubQueue.isEmpty()) temptationGroupsScreen() else { tSubIndex = tSubQueue.lastIndex; renderNextSub() } }
-        reportChoiceScreen("How strong is the urge?", Opts.URGE_LEVELS, onBack = { temptationBack() }) {
+        urgeScaleScreen("How strong is the urge?", onBack = { temptationBack() }) {
             tUrgeIndex = Opts.URGE_LEVELS.indexOf(it).coerceAtLeast(0)
             startRideWave()
         }
@@ -586,6 +659,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             "Fresh air and movement break the wave fastest.",
             "Yes \u2014 I'll go now", { waveSuccess() },
             "Not right now", { waveMove() },
+            "I'm going to look anyway \u2014 lock it down first", { waveLockdownOffRamp() },
         )
     }
     private fun waveMove() {
@@ -595,6 +669,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             "Changing your surroundings resets the moment.",
             "Done \u2014 I've moved", { waveSuccess() },
             "Can't right now", { wavePhysical() },
+            "I'm going to look anyway \u2014 lock it down first", { waveLockdownOffRamp() },
         )
     }
     private fun wavePhysical() {
@@ -604,7 +679,15 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             "Even 60 seconds of movement helps. A glass of water helps too.",
             "Yes \u2014 doing it", { waveSuccess() },
             "I can't do any of these", { waveStuck() },
+            "I'm going to look anyway \u2014 lock it down first", { waveLockdownOffRamp() },
         )
+    }
+
+    /** Same lockdown controls the panic screen offers — reused, not duplicated. */
+    private fun waveLockdownOffRamp() {
+        stopRideTimer()
+        inTemptationFlow = false
+        openPanic()
     }
     private fun waveStuck() {
         tBack = { wavePhysical() }
@@ -654,6 +737,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
 private fun waveBreatheScreen(title: String, side: String, continueLabel: String, onContinue: () -> Unit) {
     val dp = resources.displayMetrics.density
     val pad = (16 * dp).toInt()
+    val totalBreaths = 3
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         gravity = Gravity.CENTER_HORIZONTAL
@@ -663,12 +747,34 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     root.addView(backText { temptationBack() })
     root.addView(titleText(title))
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val circle = breathingCircle()
-    root.addView(circle)
+
+    // Same orb as the app-open gate, on a dark card so it reads identically.
+    val orbAccent = 0xFF3E9C8E.toInt()
+    val orb = BreathOrbView(this, orbAccent)
+    val orbBox = FrameLayout(this).apply {
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 24 * dp
+            setColor(0xFF0A0B0D.toInt())
+        }
+        clipToOutline = true
+        layoutParams = LinearLayout.LayoutParams((220 * dp).toInt(), (220 * dp).toInt()).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        addView(orb, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+    root.addView(orbBox)
+
     val breatheLabel = TextView(this).apply {
-        text = "in\u2026"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (16 * dp).toInt(), 0, 0)
+        text = "Breathe in"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (16 * dp).toInt(), 0, 0)
     }
     root.addView(breatheLabel)
+    val counter = TextView(this).apply {
+        text = "Follow the orb \u2014 $totalBreaths slow breaths"
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, (8 * dp).toInt(), 0, 0)
+    }
+    root.addView(counter)
     root.addView(TextView(this).apply {
         text = side; textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
         setPadding((8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), 0)
@@ -678,15 +784,37 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     }
     root.addView(milestone)
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(Button(this).apply { text = continueLabel; setOnClickListener { onContinue() } })
+
+    // Continue stays disabled until the 3 breaths are done, so it doesn't run forever.
+    val continueBtn = Button(this).apply {
+        text = continueLabel; isEnabled = false; alpha = 0.5f
+        setOnClickListener { onContinue() }
+    }
+    root.addView(continueBtn)
     setContentView(root)
-    animateBreathing(circle, breatheLabel)
+
+    stopRideTimer()   // cancels any orb/timer left over from a previous wave screen
+    waveOrb = BreathOrbAnimator(orb, breatheLabel).also { a ->
+        a.start(
+            cycles = totalBreaths,
+            onCycle = { done, total ->
+                if (done >= total) {
+                    counter.text = "Done \u2014 nicely paced"
+                    breatheLabel.text = ""
+                    continueBtn.isEnabled = true; continueBtn.alpha = 1f
+                } else {
+                    counter.text = "$done of $total done"
+                }
+            },
+        )
+    }
     attachWaveTimer(milestone)
 }
 
 private fun waveActionScreen(
     prompt: String, sideTip: String?,
     yesLabel: String, onYes: () -> Unit, noLabel: String, onNo: () -> Unit,
+    tertiaryLabel: String? = null, onTertiary: (() -> Unit)? = null,
 ) {
     val dp = resources.displayMetrics.density
     val pad = (16 * dp).toInt()
@@ -708,33 +836,17 @@ private fun waveActionScreen(
     root.addView(milestone)
     root.addView(bigChoice(yesLabel, 0xFF2E7D32.toInt()) { onYes() })
     root.addView(Button(this).apply { text = noLabel; setOnClickListener { onNo() } })
+    if (tertiaryLabel != null && onTertiary != null) {
+        root.addView(TextView(this).apply {
+            text = tertiaryLabel; textSize = 14f; gravity = Gravity.CENTER
+            setTextColor(0xFF48606A.toInt())
+            setPadding(0, (10 * dp).toInt(), 0, (4 * dp).toInt())
+            isClickable = true; isFocusable = true
+            setOnClickListener { onTertiary() }
+        })
+    }
     setContentView(root)
     attachWaveTimer(milestone)
-}
-
-private fun breathingCircle(): View {
-    val dp = resources.displayMetrics.density
-    return View(this).apply {
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(0xFF6FA8DC.toInt())
-        }
-        layoutParams = LinearLayout.LayoutParams((130 * dp).toInt(), (130 * dp).toInt()).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-    }
-}
-
-private fun animateBreathing(v: View, label: TextView?) {
-    breatheOn = true
-    v.scaleX = 0.85f; v.scaleY = 0.85f
-    fun step(inhale: Boolean) {
-        if (!breatheOn) return
-        label?.text = if (inhale) "in\u2026" else "out\u2026"
-        val s = if (inhale) 1.4f else 0.85f
-        v.animate().scaleX(s).scaleY(s).setDuration(4000).withEndAction { step(!inhale) }.start()
-    }
-    step(true)
 }
 
 // Quiet milestone line — only speaks at 30s / 1m / 2m / 10m, nothing after.
@@ -1170,6 +1282,7 @@ private var inTemptationFlow = false
 private var rideHandler: Handler? = null
 private var rideRunnable: Runnable? = null
 private var rideEndAt = 0L
+private var waveOrb: BreathOrbAnimator? = null
 
 // ========================
 // ── "I'm going to look anyway" (supervised loosen) flow ─────────────────────
@@ -1178,15 +1291,12 @@ private var inLoosenFlow = false
 
 private var loosenHandler: Handler? = null
 private var loosenRunnable: Runnable? = null
+private var loosenOrb: BreathOrbAnimator? = null
 
 // ── "I'm going to look anyway" (supervised loosen) — rebuilt ────────────────
-private val REGRET_Q = "Be honest \u2014 in an hour, how will you feel?"
-private val REGRET_OPTS = listOf("Glad I did it", "I'll regret it", "Numb / nothing", "I already know I'll regret it")
-
 private var loosenBackAction: (() -> Unit)? = null
 private var loosenRegret: String? = null
 private var loosenFix: String? = null
-private var lqPending: String? = null
 private var commitStep = 0
 private var loosenNote: String? = null
 private var loosenAdmit = false
@@ -1197,12 +1307,11 @@ private fun startLoosenFlow() {
     onReportScreen = true; inLoosenFlow = true; loosenBackAction = null
     if (LoosenWait.isActive(this)) { loosenWaitScreen(); return }          // resume a wait in progress
     if (!LoosenLimit.canUse(this)) { loosenBlockedScreen(); return }
-    loosenRegret = null; loosenFix = null; lqPending = null
+    loosenRegret = null; loosenFix = null
     loosenIntro1()
 }
 
 private fun loosenBack() {
-    if (lqPending != null) { lqPending = null; loosenRegretScreen(); return }
     (loosenBackAction ?: { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() }).invoke()
 }
 
@@ -1240,87 +1349,177 @@ private fun loosenIntro1() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
     root.addView(bigPanic())
-    root.addView(titleText("Before you unlock"))
-    root.addView(body("This is a slow, supervised unlock \u2014 not a free pass, and only on this device. " +
-        "You have ${LoosenLimit.remaining(this)} of ${LoosenLimit.LIFETIME_MAX} left for life, and one a day."))
+    root.addView(body("This is a supervised unlock, only for times of desperation."))
+    root.addView(TextView(this).apply {
+        text = "\u2022  ${LoosenLimit.remaining(this@MainActivity)} of ${LoosenLimit.LIFETIME_MAX} unlocks left for life\n" +
+               "\u2022  one a day\n" +
+               "\u2022  this device only"
+        textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (10 * dp).toInt(), 0, 0)
+    })
     root.addView(grow())
-    root.addView(Button(this).apply { text = "I understand"; setOnClickListener { loosenIntro2() } })
+    root.addView(Button(this).apply { text = "I understand"; setOnClickListener { loosenFaceActScreen() } })
     setContentView(root)
 }
 
-private fun loosenIntro2() {
+private val NEG_FEELINGS = listOf("Regret", "Numb", "Empty", "Ashamed")
+private val POS_FEELINGS = listOf("Proud", "Relieved", "Clear", "In control")
+
+// ── Screen A: where you land if you unlock (negative feelings, drag the face) ─
+private fun loosenFaceActScreen() {
     loosenBackAction = { loosenIntro1() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(bigPanic())
-    root.addView(titleText("How this goes"))
-    root.addView(body("A couple of honest questions, then a wait. If the urge passes before then \u2014 and it usually does \u2014 even better."))
-    root.addView(grow())
-    root.addView(Button(this).apply {
-        text = "Start"; setOnClickListener { lqPending = null; loosenRegretScreen() }
-    })
-    setContentView(root)
-}
-
-// ── the regret question, with the improved confirm UI ──────────────────────
-private fun loosenRegretScreen() {
-    loosenBackAction = { loosenIntro2() }
-    val confirming = lqPending != null
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
-    val root = vbox(pad)
     root.addView(backText { loosenBack() })
-    if (confirming) {
-        root.addView(TextView(this).apply {
-            text = REGRET_Q; textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
-            setPadding(0, 0, 0, (6 * dp).toInt())
-        })
-        val instr = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, (12 * dp).toInt())
-        }
-        instr.addView(TextView(this).apply {
-            text = "Tap the same answer again to confirm"; textSize = 18f
-            setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        instr.addView(TextView(this).apply {
-            text = "  ?  "; textSize = 18f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF6FA8DC.toInt()); isClickable = true; isFocusable = true
-            setOnClickListener {
-                AlertDialog.Builder(this@MainActivity)
-                    .setMessage("Why twice? Tapping the same answer twice stops you \u2014 and the you of five minutes ago \u2014 from panic-tapping straight through. It's a speed bump, on purpose.")
-                    .setPositiveButton("Got it", null).show()
-            }
-        })
-        root.addView(instr)
-    } else {
-        root.addView(titleText(REGRET_Q))
+    root.addView(titleText("If you unlock \u2014 where do you land?"))
+    root.addView(TextView(this).apply {
+        text = "Drag the face to where you'll honestly be a few minutes after."
+        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
+    })
+    val face = FeelingFaceView(this, NEG_FEELINGS, 0xFFB0453B.toInt(), positiveInside = false)
+    root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    val readout = TextView(this).apply {
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+        text = "Drag it where it's headed\u2026"
     }
-    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    REGRET_OPTS.shuffled().forEach { opt -> list.addView(pickCard(opt) { onLoosenRegret(opt) }) }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+    root.addView(readout)
+    face.onMoodChange = { m ->
+        readout.text = if (m < 0.45f) "That's what the urge is steering you toward."
+                       else "Notice you had to pull away from it to feel that."
+    }
+    root.addView(Button(this).apply {
+        text = "Continue"
+        setOnClickListener { loosenRegret = face.nearestLabel() ?: loosenRegret; loosenFaceRideScreen() }
     })
     root.addView(panicBar())
     setContentView(root)
 }
 
-private fun onLoosenRegret(opt: String) {
-    val pending = lqPending
-    when {
-        pending == null -> { lqPending = opt; loosenRegretScreen() }
-        opt == pending -> { loosenRegret = opt; lqPending = null; loosenFixScreen() }
-        else -> {
-            lqPending = null
-            Toast.makeText(this, "Not the same \u2014 start this one again.", Toast.LENGTH_SHORT).show()
-            loosenRegretScreen()
-        }
+// ── Screen B: where you'll be if you ride out the next 30 mins (+ countdown) ─
+private fun loosenFaceRideScreen() {
+    loosenBackAction = { stopLoosenTimer(); loosenFaceActScreen() }
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { loosenBack() })
+    root.addView(titleText("Now \u2014 ride out the next 30 minutes"))
+    root.addView(TextView(this).apply {
+        text = "Same drag. Where are you in 30 minutes if you DON'T unlock?"
+        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+    })
+    val timer = TextView(this).apply {
+        textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setTextColor(0xFF2E7D32.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
     }
+    root.addView(timer)
+    val face = FeelingFaceView(this, POS_FEELINGS, 0xFF2E7D32.toInt(), positiveInside = true)
+    root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    val readout = TextView(this).apply {
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+        text = "Drag it to where waiting takes you\u2026"
+    }
+    root.addView(readout)
+    face.onMoodChange = { m ->
+        readout.text = if (m > 0.55f) "That's 30 minutes away \u2014 and free." else "Worth more than the unlock, isn't it?"
+    }
+    root.addView(Button(this).apply {
+        text = "Continue"; setOnClickListener { stopLoosenTimer(); loosenDelayChanceScreen() }
+    })
+    root.addView(panicBar())
+    setContentView(root)
+    runLoosenCountdown(timer, System.currentTimeMillis() + 30L * 60 * 1000) { timer.text = "0:00" }
+}
+
+// ── Screen C: how likely can you DELAY 30 mins? (slider, mirrors urge bands) ─
+private fun loosenDelayChanceScreen() {
+    loosenBackAction = { loosenFaceRideScreen() }
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { loosenBack() })
+    root.addView(titleText("A 30-minute challenge"))
+    root.addView(body("Beat the urge by doing nothing but waiting it out. Almost no one who rides out 30 minutes still acts after. Can you become one of them?"))
+    root.addView(TextView(this).apply {
+        text = "Right now, how likely is it you can hold off for 30 minutes?"
+        textSize = 15f; setPadding(0, (16 * dp).toInt(), 0, (8 * dp).toInt())
+    })
+    val label = TextView(this).apply {
+        textSize = 19f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setTextColor(0xFF2E7D32.toInt()); setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+    }
+    root.addView(label)
+    val seek = android.widget.SeekBar(this).apply { max = 100; progress = 50 }
+    root.addView(seek)
+    val ends = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    ends.addView(TextView(this).apply {
+        text = "no chance"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    })
+    ends.addView(TextView(this).apply {
+        text = "I've got this"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); gravity = Gravity.END
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    })
+    root.addView(ends)
+    label.text = delayBand(seek.progress)
+    seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(s: android.widget.SeekBar, p: Int, fromUser: Boolean) { label.text = delayBand(p) }
+        override fun onStartTrackingTouch(s: android.widget.SeekBar) {}
+        override fun onStopTrackingTouch(s: android.widget.SeekBar) {}
+    })
+    root.addView(grow())
+    root.addView(Button(this).apply { text = "Take the challenge"; setOnClickListener { loosenOneOffScreen() } })
+    root.addView(panicBar())
+    setContentView(root)
+}
+
+// Mirrors the "how strong is the urge" wording, flipped to "can I hold off?"
+private fun delayBand(p: Int): String = when {
+    p < 20 -> "Feels impossible right now"
+    p < 40 -> "Very hard \u2014 but not impossible"
+    p < 60 -> "Could honestly go either way"
+    p < 80 -> "I think I can hold off"
+    else -> "I've got this \u2014 30 minutes is nothing"
+}
+
+// ── Screen D: is this a one-off? how it shapes the future ───────────────────
+private fun loosenOneOffScreen() {
+    loosenBackAction = { loosenDelayChanceScreen() }
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { loosenBack() })
+    root.addView(titleText("Is this really a one-off?"))
+    root.addView(body("Each unlock makes the next one easier to talk yourself into. \u201cJust this once\u201d is exactly how the pattern keeps itself alive."))
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    list.addView(pickCard("Yes \u2014 genuinely a one-off") { loosenOneOffFollow(true) })
+    list.addView(pickCard("Honestly, it's becoming a habit") { loosenOneOffFollow(false) })
+    root.addView(list)
+    root.addView(grow())
+    root.addView(panicBar())
+    setContentView(root)
+}
+
+private fun loosenOneOffFollow(oneOff: Boolean) {
+    loosenBackAction = { loosenOneOffScreen() }
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { loosenBack() })
+    root.addView(titleText(if (oneOff) "Then waiting costs you nothing" else "Then let this be where it breaks"))
+    root.addView(body(if (oneOff)
+        "If it's truly just once, 30 minutes won't change that \u2014 except you'll have it behind you, clean, with every unlock still in the bank."
+    else
+        "Patterns break at one ordinary moment that looks exactly like this one. The future you is asking you to make it this one."))
+    root.addView(grow())
+    root.addView(bigChoice("I'll wait it out", 0xFF2E7D32.toInt()) {
+        LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
+        loosenStop("That was the hard choice, made well. The urge passes; this stays with you. Nothing's been used up.")
+    })
+    root.addView(Button(this).apply { text = "Continue anyway"; setOnClickListener { loosenFixScreen() } })
+    root.addView(panicBar())
+    setContentView(root)
 }
 
 // ── reuse the shared feeling picker for "what are you hoping this quiets" ────
 private fun loosenFixScreen() {
-    loosenBackAction = { loosenRegretScreen() }
+    loosenBackAction = { loosenOneOffScreen() }
     pickWithCustomScreen("What are you hoping this will quiet?", Opts.FEELINGS, "feeling",
         onBack = { loosenBack() }) { loosenFix = it; loosenUrgeGraphScreen() }
 }
@@ -1397,10 +1596,22 @@ private fun loosenWaitScreen() {
         setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
     }
     content.addView(countdown)
-    val circle = breathingCircle()
-    content.addView(circle)
+    val orbAccent = 0xFF3E9C8E.toInt()
+    val orb = BreathOrbView(this, orbAccent)
+    val orbBox = FrameLayout(this).apply {
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 22 * dp; setColor(0xFF0A0B0D.toInt())
+        }
+        clipToOutline = true
+        layoutParams = LinearLayout.LayoutParams((180 * dp).toInt(), (180 * dp).toInt()).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        addView(orb, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+    content.addView(orbBox)
     val breatheLabel = TextView(this).apply {
-        text = "in\u2026"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (12 * dp).toInt(), 0, (12 * dp).toInt())
+        text = "Breathe in"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (12 * dp).toInt(), 0, (12 * dp).toInt())
     }
     content.addView(breatheLabel)
     content.addView(TextView(this).apply {
@@ -1431,8 +1642,8 @@ private fun loosenWaitScreen() {
         addView(content)
     }
     setContentView(root)
-    animateBreathing(circle, breatheLabel)
     runLoosenCountdown(countdown, endAt) { continueBtn.visibility = View.VISIBLE }
+    loosenOrb = BreathOrbAnimator(orb, breatheLabel).also { it.start(cycles = null) }
 }
 
 // ── commit, one step at a time, all gated ──────────────────────────────────
@@ -1750,6 +1961,7 @@ private fun stopLoosenTimer() {
     loosenRunnable?.let { loosenHandler?.removeCallbacks(it) }
     loosenRunnable = null; loosenHandler = null
     breatheOn = false
+    loosenOrb?.stop(); loosenOrb = null
 }
 
 
@@ -1778,6 +1990,7 @@ private fun stopRideTimer() {
     rideRunnable = null
     rideHandler = null
     breatheOn = false
+    waveOrb?.stop(); waveOrb = null
 }
 
 
@@ -1816,18 +2029,18 @@ private fun renderRelapseStep() {
             draft.room = it; relapseAdvance()
         }
 
-        RStep.ACTIVITY -> pickWithCustomScreen(
+        RStep.ACTIVITY -> pickMultiWithCustomScreen(
             "What were you doing just before?", ACTIVITIES, "activity", onBack = ::relapseBack) {
-            draft.activity = it; relapseAdvance()
+            draft.activity = it.joinToString(", "); relapseAdvance()
         }
 
-        RStep.FEELING -> pickWithCustomScreen(
+        RStep.FEELING -> pickMultiWithCustomScreen(
             "How were you feeling?", Opts.FEELINGS, "feeling", onBack = ::relapseBack) {
-            draft.feeling = it; relapseAdvance()
+            draft.feeling = it.joinToString(", "); relapseAdvance()
         }
 
-        RStep.URGE -> reportChoiceScreen(
-            "How strong was the urge?", Opts.URGE_LEVELS, onBack = ::relapseBack) {
+        RStep.URGE -> urgeScaleScreen(
+            "How strong was the urge?", onBack = ::relapseBack) {
             draft.urge = it; relapseAdvance()
         }
 
@@ -2051,6 +2264,102 @@ private fun pickCard(label: String, onClick: () -> Unit): TextView {
         ).apply { topMargin = (8 * dp).toInt() }
         setOnClickListener { onClick() }
     }
+}
+
+// ── "How strong is the urge?" as a vertical colour scale ───────────────────
+// Strongest at the top (red) fading to the gentlest at the bottom (blue), with
+// faint hi/lo markers and a short example on each card (full text behind the ⓘ).
+// Returns the chosen Opts.URGE_LEVELS string, so callers are unchanged.
+private val URGE_EXAMPLES = mapOf(
+    "Overwhelming" to "I feel I can't control it \u2014 like it's inevitable I'll give in.",
+    "Strong" to "Hard to think about much else right now.",
+    "Noticeable" to "Clearly there, but I can still steer around it.",
+    "Mild" to "A small pull \u2014 easy to set aside.",
+    "Barely there" to "Just a flicker \u2014 it barely registers.",
+)
+
+private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (String) -> Unit) {
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    if (onBack != null) root.addView(backText { onBack() })
+    root.addView(titleText(title))
+
+    // weighted middle band so the scale sits centred between title and bottom edge
+    val center = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+    }
+    center.addView(TextView(this).apply {
+        text = "high level of urge"; textSize = 12f; gravity = Gravity.CENTER
+        setTextColor(0x33000000); setPadding(0, 0, 0, (6 * dp).toInt())
+    })
+    val red = 0xFFC0392B.toInt()
+    val blue = 0xFF3E78C9.toInt()
+    val ordered = Opts.URGE_LEVELS.reversed()   // Overwhelming (top) -> Barely there (bottom)
+    ordered.forEachIndexed { i, level ->
+        val f = if (ordered.size > 1) i.toFloat() / (ordered.size - 1) else 0f
+        center.addView(urgeCard(level, URGE_EXAMPLES[level] ?: "", lerpColor(red, blue, f)) { onPick(level) })
+    }
+    center.addView(TextView(this).apply {
+        text = "low level of urge"; textSize = 12f; gravity = Gravity.CENTER
+        setTextColor(0x33000000); setPadding(0, (6 * dp).toInt(), 0, 0)
+    })
+    root.addView(center)
+    setContentView(root)
+}
+
+private fun urgeCard(level: String, example: String, color: Int, onPick: () -> Unit): View {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * dp; setColor(color)
+        }
+        val p = (14 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (6 * dp).toInt(); bottomMargin = (6 * dp).toInt() }
+        isClickable = true; isFocusable = true
+        setOnClickListener { onPick() }
+    }
+    val textCol = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    textCol.addView(TextView(this).apply {
+        text = level; textSize = 18f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFFFFFFFF.toInt())
+    })
+    if (example.isNotEmpty()) textCol.addView(TextView(this).apply {
+        text = example; textSize = 13f; setTextColor(0xCCFFFFFF.toInt())
+        setPadding(0, (2 * dp).toInt(), 0, 0)
+    })
+    row.addView(textCol)
+    row.addView(TextView(this).apply {
+        text = "\u24D8"; textSize = 20f; setTextColor(0xFFFFFFFF.toInt())
+        setPadding((10 * dp).toInt(), 0, 0, 0); isClickable = true; isFocusable = true
+        setOnClickListener {
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle(level).setMessage(example)
+                .setPositiveButton(android.R.string.ok, null).show()
+        }
+    })
+    return row
+}
+
+private fun lerpColor(a: Int, b: Int, t: Float): Int {
+    val tt = t.coerceIn(0f, 1f)
+    val ar = (a shr 16) and 0xFF; val ag = (a shr 8) and 0xFF; val ab = a and 0xFF
+    val br = (b shr 16) and 0xFF; val bg = (b shr 8) and 0xFF; val bb = b and 0xFF
+    val r = (ar + (br - ar) * tt).toInt()
+    val g = (ag + (bg - ag) * tt).toInt()
+    val bl = (ab + (bb - ab) * tt).toInt()
+    return (0xFF shl 24) or (r shl 16) or (g shl 8) or bl
 }
 
 
@@ -4307,8 +4616,7 @@ class BreathingOverlay(private val context: Context) {
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var view: View? = null
-    private var animator: AnimatorSet? = null
-    private var pulse: ValueAnimator? = null
+    private var orbAnim: BreathOrbAnimator? = null
     private var controlsActive = false
 
     val isShowing: Boolean get() = view != null
@@ -4410,43 +4718,16 @@ class BreathingOverlay(private val context: Context) {
     private fun startBreathing(
         orb: BreathOrbView, phase: TextView, controls: View, dontWant: Button,
     ) {
-        val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
-        val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
-
-        val inhale = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 3000
-            interpolator = inhaleEase
-            addUpdateListener { orb.progress = it.animatedValue as Float }
-        }
-        val exhale = ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = 6300
-            interpolator = exhaleEase
-            addUpdateListener { orb.progress = it.animatedValue as Float }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationStart(a: Animator) {
-                    phase.text = "Breathe out"
+        orbAnim = BreathOrbAnimator(orb, phase).also { a ->
+            a.start(
+                cycles = 1,
+                onExhaleStart = {
+                    // controls fade in over the (long) exhale, exactly as before
                     controls.visibility = View.VISIBLE
                     controls.animate().alpha(0.55f).setDuration(3600).start()
-                }
-            })
-        }
-
-        pulse = ValueAnimator.ofFloat(0.95f, 0.6f).apply {
-            duration = 1300
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = AccelerateDecelerateInterpolator()
-            addUpdateListener { phase.alpha = it.animatedValue as Float }
-            start()
-        }
-
-        animator = AnimatorSet().apply {
-            playSequentially(inhale, exhale)
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(a: Animator) {
-                    pulse?.cancel(); pulse = null
+                },
+                onComplete = {
                     phase.alpha = 0f
-                    orb.progress = 0f
                     controls.alpha = 1f
                     controlsActive = true
                     ValueAnimator.ofObject(android.animation.ArgbEvaluator(), accentMuted, accent)
@@ -4458,15 +4739,13 @@ class BreathingOverlay(private val context: Context) {
                             }
                             start()
                         }
-                }
-            })
-            start()
+                },
+            )
         }
     }
 
     fun hide() {
-        pulse?.cancel(); pulse = null
-        animator?.cancel(); animator = null
+        orbAnim?.stop(); orbAnim = null
         controlsActive = false
         view?.let {
             try { windowManager.removeView(it) } catch (_: Throwable) {}
@@ -4480,6 +4759,13 @@ class BreathingOverlay(private val context: Context) {
         else
             @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
 }
+
+// =====================================================================================
+// BreathOrb  (reusable breathing-orb widget + its animation driver)
+// -------------------------------------------------------------------------------------
+// Shared by the app-open gate (BreathingOverlay) and the in-app "ride the wave" /
+// report breathing. In the un-merged source this is its own file; keep it that way.
+// =====================================================================================
 
 /** A soft dim orb that grows on the in-breath and shrinks on the out-breath. */
 class BreathOrbView(context: Context, private val accent: Int) : View(context) {
@@ -4518,6 +4804,228 @@ class BreathOrbView(context: Context, private val accent: Int) : View(context) {
 
     private fun withAlpha(color: Int, alpha: Int) =
         (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
+}
+
+/**
+ * Drives the inhale/exhale breathing on a [BreathOrbView] (plus an optional phase
+ * label). One place, two callers:
+ *
+ *  - the app-open gate runs a single cycle, then reveals its controls;
+ *  - the report "breathe with the circle" screen runs a fixed number of cycles with a
+ *    "1 of 3 done" counter and then lets the user continue.
+ *
+ * [cycles] = null breathes forever (until [stop]); otherwise it runs that many
+ * inhale+exhale cycles. [onCycle] fires after each completed breath as (done, total);
+ * [onExhaleStart] fires at the start of every exhale; [onComplete] fires once, after
+ * the final exhale.
+ */
+class BreathOrbAnimator(
+    private val orb: BreathOrbView,
+    private val phase: TextView?,
+    private val inhaleMs: Long = 3000,
+    private val exhaleMs: Long = 6300,
+) {
+    private val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
+    private val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
+    private var anim: ValueAnimator? = null
+    private var pulse: ValueAnimator? = null
+    private var running = false
+
+    fun start(
+        cycles: Int? = null,
+        onCycle: (done: Int, total: Int) -> Unit = { _, _ -> },
+        onExhaleStart: () -> Unit = {},
+        onComplete: () -> Unit = {},
+    ) {
+        stop()
+        running = true
+        startPulse()
+
+        var done = 0
+        // var-lambdas instead of mutually-recursive local funcs (no forward-ref error)
+        var runInhale: () -> Unit = {}
+        var runExhale: () -> Unit = {}
+
+        runExhale = exhale@{
+            if (!running) return@exhale
+            phase?.text = "Breathe out"
+            onExhaleStart()
+            anim = ValueAnimator.ofFloat(1f, 0f).apply {
+                duration = exhaleMs
+                interpolator = exhaleEase
+                addUpdateListener { orb.progress = it.animatedValue as Float }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(a: Animator) {
+                        if (!running) return
+                        done++
+                        onCycle(done, cycles ?: done)
+                        if (cycles != null && done >= cycles) finish(onComplete) else runInhale()
+                    }
+                })
+                start()
+            }
+        }
+        runInhale = inhale@{
+            if (!running) return@inhale
+            phase?.text = "Breathe in"
+            anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = inhaleMs
+                interpolator = inhaleEase
+                addUpdateListener { orb.progress = it.animatedValue as Float }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(a: Animator) { runExhale() }
+                })
+                start()
+            }
+        }
+        runInhale()
+    }
+
+    private fun startPulse() {
+        pulse = ValueAnimator.ofFloat(0.95f, 0.6f).apply {
+            duration = 1300
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { phase?.alpha = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    private fun finish(onComplete: () -> Unit) {
+        running = false
+        pulse?.cancel(); pulse = null
+        anim = null
+        phase?.alpha = 1f
+        orb.progress = 0f
+        onComplete()
+    }
+
+    fun stop() {
+        running = false
+        anim?.cancel(); anim = null
+        pulse?.cancel(); pulse = null
+    }
+}
+
+// =====================================================================================
+// FeelingFaceView  (overlapping feeling circles + a draggable face that reacts)
+// -------------------------------------------------------------------------------------
+// Used in the loosen flow: drag the face onto where you'll end up. With
+// positiveInside = false the face is happiest in the clear centre and sours as it
+// enters the (negative) feeling circles; with positiveInside = true it's the opposite.
+// =====================================================================================
+class FeelingFaceView(
+    context: Context,
+    private val labels: List<String>,
+    private val circleColor: Int,
+    private val positiveInside: Boolean,
+) : View(context) {
+
+    var mood: Float = 0.5f
+        private set
+    var onMoodChange: ((Float) -> Unit)? = null
+
+    private var fx = 0f
+    private var fy = 0f
+    private var placed = false
+
+    private class Circ(val cx: Float, val cy: Float, val r: Float, val label: String)
+    private var circles = listOf<Circ>()
+
+    private val circleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val circleStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = 2f; color = circleColor
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF40464B.toInt(); textAlign = Paint.Align.CENTER
+    }
+    private val faceFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFC857.toInt() }
+    private val faceLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF222222.toInt(); style = Paint.Style.STROKE; strokeWidth = 5f; strokeCap = Paint.Cap.ROUND
+    }
+    private val faceDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF222222.toInt() }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        if (w == 0 || h == 0) return
+        val cx = w / 2f; val cy = h / 2f
+        labelPaint.textSize = 13f * resources.displayMetrics.density
+        val ring = kotlin.math.min(w, h) * 0.30f
+        val r = kotlin.math.min(w, h) * 0.27f
+        circles = labels.mapIndexed { i, lab ->
+            val ang = (-90.0 + i * 360.0 / labels.size) * Math.PI / 180.0
+            Circ(cx + ring * kotlin.math.cos(ang).toFloat(), cy + ring * kotlin.math.sin(ang).toFloat(), r, lab)
+        }
+        if (!placed) { fx = cx; fy = cy; placed = true; invalidate() }
+    }
+
+    private fun penetration(): Float {
+        var pen = 0f
+        for (c in circles) {
+            val d = kotlin.math.hypot(fx - c.cx, fy - c.cy)
+            val p = 1f - d / c.r
+            if (p > pen) pen = p
+        }
+        return pen.coerceIn(0f, 1f)
+    }
+
+    private fun recompute() {
+        val pen = penetration()
+        mood = if (positiveInside) pen else (1f - pen)
+        onMoodChange?.invoke(mood)
+        invalidate()
+    }
+
+    /** Nearest feeling label if the face is sitting in one, else null. */
+    fun nearestLabel(): String? {
+        var best: String? = null; var bestPen = 0.15f
+        for (c in circles) {
+            val d = kotlin.math.hypot(fx - c.cx, fy - c.cy)
+            val p = 1f - d / c.r
+            if (p > bestPen) { bestPen = p; best = c.label }
+        }
+        return best
+    }
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        when (event.action) {
+            android.view.MotionEvent.ACTION_DOWN,
+            android.view.MotionEvent.ACTION_MOVE -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
+                fx = event.x.coerceIn(0f, width.toFloat())
+                fy = event.y.coerceIn(0f, height.toFloat())
+                recompute()
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (circles.isEmpty()) return
+        for (c in circles) {
+            circleFill.color = (circleColor and 0x00FFFFFF) or (46 shl 24)
+            canvas.drawCircle(c.cx, c.cy, c.r, circleFill)
+            canvas.drawCircle(c.cx, c.cy, c.r, circleStroke)
+        }
+        for (c in circles) {
+            canvas.drawText(c.label, c.cx, c.cy + labelPaint.textSize / 3f, labelPaint)
+        }
+        val fr = kotlin.math.min(width, height) * 0.085f
+        canvas.drawCircle(fx, fy, fr, faceFill)
+        val ex = fr * 0.42f; val ey = fr * 0.28f; val er = fr * 0.12f
+        canvas.drawCircle(fx - ex, fy - ey, er, faceDot)
+        canvas.drawCircle(fx + ex, fy - ey, er, faceDot)
+        // mouth: smile when mood high, frown when low
+        val curve = (mood - 0.5f) * 2f      // -1 .. 1
+        val mw = fr * 0.5f
+        val my = fy + fr * 0.30f
+        val path = Path().apply {
+            moveTo(fx - mw, my)
+            quadTo(fx, my + curve * fr * 0.6f, fx + mw, my)
+        }
+        canvas.drawPath(path, faceLine)
+    }
 }
 
 
@@ -4932,7 +5440,7 @@ object LoosenWait {
 // LoosenLimit  (one unlock per day, five for life)
 // =====================================================================================
 object LoosenLimit {
-    const val LIFETIME_MAX = 5
+    const val LIFETIME_MAX = 3
     private const val PREFS = "loosen_limit"
     private const val KEY_TOTAL = "total"
     private const val KEY_DAY = "last_day"
@@ -5012,7 +5520,6 @@ object CustomOptions {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
-
 
 // =====================================================================================
 // Lockdown  (temporary 30-min "allow-list only" mode)
