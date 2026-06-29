@@ -1,4 +1,7 @@
 
+
+----------------------------------
+
 TODO:
 - there is a claude in progress. make that continue
 - then got some notes on phone
@@ -150,3 +153,9 @@ beacons:
     Even as simple as: "if you're outside of your home, its unlikely you'll be tempted"
     or... If you want to look at stuff... leave your house... simple as that(!)
 - prevent phone from being used in bed?!?!? (or say.. in the toilet etc/!!?!?)
+
+
+
+Defo down theline;
+- the 'pay myself back' system.
+- the 'white room I'm in' system.

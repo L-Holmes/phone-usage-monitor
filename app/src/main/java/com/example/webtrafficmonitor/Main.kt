@@ -177,11 +177,26 @@ class MainActivity : AppCompatActivity() {
         title: String, base: List<String>, category: String?,
         onBack: (() -> Unit)?, onPick: (String) -> Unit,
     ) {
-        val opts = (base + (category?.let { CustomOptions.all(this, it) } ?: emptyList())).distinct() +
-            (if (category != null) listOf("Add your own\u2026") else emptyList())
-        reportChoiceScreen(title, opts, onBack = onBack) { choice ->
-            if (choice == "Add your own\u2026") promptCustom(category!!) { onPick(it) } else onPick(choice)
+        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
+        if (onBack != null) root.addView(backText { onBack() })
+        root.addView(titleText(title))
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val customs = category?.let { CustomOptions.all(this, it) } ?: emptyList()
+        var cs = (base + customs).distinct().map { metaFor(category ?: "", it) }
+        if (category == "feeling") cs = cs.sortedBy { feelingRank(it.value) }
+        cs.forEach { c ->
+            list.addView(optionRow(c) { onPick(c.value) })
+        }
+        if (category != null) list.addView(addOwnRow { promptCustom(category) { onPick(it) } })
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+        })
+        setContentView(root)
     }
 
     private fun promptCustom(category: String, onAdded: (String) -> Unit) {
@@ -199,77 +214,62 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Like [pickWithCustomScreen] but lets the user tick several options ("select all
-     * that apply") and hands back the full list. "Add your own" still works and the
-     * freshly-added option is auto-ticked.
+     * that apply") and hands back the full list. Feelings render grouped + tinted.
      */
     private fun pickMultiWithCustomScreen(
         title: String, base: List<String>, category: String?,
         onBack: (() -> Unit)?, onPick: (List<String>) -> Unit,
     ) {
         val selected = linkedSetOf<String>()
-        fun build() {
-            val opts = (base + (category?.let { CustomOptions.all(this, it) } ?: emptyList())).distinct()
-            val dp = resources.displayMetrics.density
-            val pad = (16 * dp).toInt()
-            val root = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            }
-            if (onBack != null) root.addView(backText { onBack() })
-            root.addView(titleText(title))
-            root.addView(TextView(this).apply {
-                text = "Select all that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
-                setPadding(0, 0, 0, (8 * dp).toInt())
-            })
-            val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            opts.forEach { opt ->
-                val b = checkButton()
-                fun render() { b.text = (if (opt in selected) "\u2611  " else "\u2610  ") + opt }
-                b.setOnClickListener {
-                    if (opt in selected) selected.remove(opt) else selected.add(opt); render()
-                }
-                render(); list.addView(b)
-            }
-            if (category != null) {
-                list.addView(Button(this).apply {
-                    text = "Add your own\u2026"; setAllCaps(false)
-                    setOnClickListener { promptCustom(category) { added -> selected.add(added); build() } }
+        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        if (onBack != null) root.addView(backText { onBack() })
+        root.addView(titleText(title))
+        root.addView(TextView(this).apply {
+            text = "Select all that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        })
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+        })
+        val cont = bigContinue("Continue") { if (selected.isNotEmpty()) onPick(selected.toList()) }
+        root.addView(cont)
+
+        fun choices(): List<Choice> {
+            val customs = category?.let { CustomOptions.all(this, it) } ?: emptyList()
+            var cs = (base + customs).distinct().map { metaFor(category ?: "", it) }
+            if (category == "feeling") cs = cs.sortedBy { feelingRank(it.value) }
+            return cs
+        }
+        fun renderList() {
+            list.removeAllViews()
+            choices().forEach { c ->
+                list.addView(checkRow(c, c.value in selected) {
+                    if (c.value in selected) selected.remove(c.value) else selected.add(c.value)
+                    renderList(); tuneContinue(cont, selected.isNotEmpty())
                 })
             }
-            root.addView(ScrollView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-                addView(list)
+            if (category != null) list.addView(addOwnRow {
+                promptCustom(category) { added -> selected.add(added); renderList(); tuneContinue(cont, selected.isNotEmpty()) }
             })
-            root.addView(Button(this).apply {
-                text = "Continue"
-                setOnClickListener {
-                    if (selected.isEmpty()) {
-                        Toast.makeText(this@MainActivity, "Pick at least one.", Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
-                    }
-                    onPick(selected.toList())
-                }
-            })
-            setContentView(root)
         }
-        build()
+        renderList(); tuneContinue(cont, false)
+        setContentView(root)
     }
 
     // ── "I feel temptation" flow (groups -> sub-picks -> ride the wave) ─────────
-    private enum class TGroup(val label: String, val title: String, val category: String) {
-        SCREEN(
-            "Something on a screen triggered the feeling (e.g. my phone, my computer, the TV\u2026)",
-            "What kind of screen?", "screen"),
-        PLACE(
-            "It may be linked to my location (e.g. bedroom, bathroom, in the house\u2026)",
-            "Where are you?", "location"),
-        FEELING(
-            "My emotional state / how I feel may be impacting it (e.g. anxious, feeling negative\u2026)",
-            "How are you feeling?", "feeling"),
-        DOING(
-            "I feel it's happening out of habit\u2026",
-            "What were you doing?", "activity"),
+    private enum class TGroup(
+        val short: String, val example: String, val title: String, val category: String, val icon: String,
+    ) {
+        SCREEN("Something on a screen", "e.g. my phone, my computer, the TV", "What kind of screen?", "screen", "\uD83D\uDCF1"),
+        PLACE("Linked to where I am", "e.g. bedroom, bathroom, in the house", "Where are you?", "location", "\uD83D\uDCCD"),
+        FEELING("How I'm feeling", "e.g. anxious, low, frustrated", "How are you feeling?", "feeling", "\uD83D\uDCAD"),
+        DOING("Out of habit", "e.g. scrolling, winding down, just woke up", "What were you doing?", "activity", "\uD83D\uDD01"),
     }
     private fun baseFor(g: TGroup): List<String> = when (g) {
         TGroup.SCREEN -> Opts.SCREEN_TYPES
@@ -312,29 +312,26 @@ class MainActivity : AppCompatActivity() {
         root.addView(titleText("What's feeding it right now?"))
         root.addView(TextView(this).apply {
             text = "Pick any that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
-            setPadding(0, 0, 0, (12 * dp).toInt())
+            setPadding(0, 0, 0, (4 * dp).toInt())
         })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        TGroup.values().forEach { g ->
-            val b = checkButton()
-            fun render() { b.text = (if (g in tGroups) "\u2611  " else "\u2610  ") + g.label }
-            b.setOnClickListener { if (g in tGroups) tGroups.remove(g) else tGroups.add(g); render() }
-            render(); list.addView(b)
-        }
         root.addView(ScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-            addView(list)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
         })
-        root.addView(Button(this).apply {
-            text = "Continue"
-            setOnClickListener {
-                if (tGroups.isEmpty()) {
-                    Toast.makeText(this@MainActivity, "Pick at least one.", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                tSubQueue = tGroups.toList(); tSubIndex = 0; renderNextSub()
+        val cont = bigContinue("Continue") {
+            if (tGroups.isNotEmpty()) { tSubQueue = tGroups.toList(); tSubIndex = 0; renderNextSub() }
+        }
+        root.addView(cont)
+        fun renderList() {
+            list.removeAllViews()
+            TGroup.values().forEach { g ->
+                list.addView(checkRow(Choice(g.short, g.icon, g.example), g in tGroups) {
+                    if (g in tGroups) tGroups.remove(g) else tGroups.add(g)
+                    renderList(); tuneContinue(cont, tGroups.isNotEmpty())
+                })
             }
-        })
+        }
+        renderList(); tuneContinue(cont, tGroups.isNotEmpty())
         setContentView(root)
     }
 
@@ -645,57 +642,70 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
     // ── ride the wave: click-through, one idea per screen ──────────────────────
     private fun startRideWave() {
         waveStartAt = System.currentTimeMillis()
-        waveBreatheScreen(
-            "Breathe with the circle",
-            "Notice how the urge grips your body \u2014 then feel it start to loosen. It's a wave, not a command.",
-            "I'm steadier",
-        ) { waveWalk() }
+        waveWalk()   // questions first; the breathing now lives at the "stuck" step
     }
 
     private fun waveWalk() {
-        tBack = { startRideWave() }
+        tBack = { stopRideTimer(); temptationUrgeScreen() }
         waveActionScreen(
-            "Can you put the phone down and step outside \u2014 a short walk or run?",
-            "Fresh air and movement break the wave fastest.",
+            "Can you step outside \u2014 even just a short walk?", "\uD83D\uDEB6",
             "Yes \u2014 I'll go now", { waveSuccess() },
             "Not right now", { waveMove() },
-            "I'm going to look anyway \u2014 lock it down first", { waveLockdownOffRamp() },
         )
     }
     private fun waveMove() {
         tBack = { waveWalk() }
         waveActionScreen(
-            "Can you move to a different room, away from this?",
-            "Changing your surroundings resets the moment.",
+            "Can you move to a different room?", "\uD83D\uDEAA",
             "Done \u2014 I've moved", { waveSuccess() },
             "Can't right now", { wavePhysical() },
-            "I'm going to look anyway \u2014 lock it down first", { waveLockdownOffRamp() },
         )
     }
     private fun wavePhysical() {
         tBack = { waveMove() }
         waveActionScreen(
-            "Can you do something physical now \u2014 stretch, tidy up, press-ups?",
-            "Even 60 seconds of movement helps. A glass of water helps too.",
+            "Can you do something physical \u2014 stretch, press-ups, tidy up?", "\uD83E\uDD38",
             "Yes \u2014 doing it", { waveSuccess() },
             "I can't do any of these", { waveStuck() },
-            "I'm going to look anyway \u2014 lock it down first", { waveLockdownOffRamp() },
         )
     }
 
-    /** Same lockdown controls the panic screen offers — reused, not duplicated. */
-    private fun waveLockdownOffRamp() {
-        stopRideTimer()
-        inTemptationFlow = false
-        openPanic()
-    }
     private fun waveStuck() {
         tBack = { wavePhysical() }
         waveBreatheScreen(
             "Then just breathe and wait",
             "You don't have to do anything but outlast it. The wave always passes \u2014 you only have to get through this one.",
-            "I'll wait it out",
-        ) { waveSuccess() }
+            "I've breathed \u2014 what now?",
+        ) { wavePeakScreen() }
+    }
+
+    /** After the breathing: make a real moment of "you're already past the peak". */
+    private fun wavePeakScreen() {
+        tBack = { waveStuck() }
+        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(pad, pad, pad, pad)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        root.addView(backText { temptationBack() })
+        root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(TextView(this).apply {
+            text = "\uD83C\uDF0A"; textSize = 64f; gravity = Gravity.CENTER
+        })
+        root.addView(TextView(this).apply {
+            text = "You've already cleared the hardest part."
+            textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+            setPadding(0, (16 * dp).toInt(), 0, (10 * dp).toInt())
+        })
+        root.addView(TextView(this).apply {
+            text = "An urge peaks within the first 30 seconds or so \u2014 and you just rode straight through it. From here it only fades. You can get through this."
+            textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
+        })
+        root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(bigChoice("I've got through it", 0xFF2E7D32.toInt()) { waveSuccess() })
+        setContentView(root)
     }
 
     private fun waveSuccess() {
@@ -715,21 +725,36 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
         val pad = (20 * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+            gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         root.addView(titleText("That was you, beating it."))
         root.addView(TextView(this).apply {
-            text = "Every urge you ride out makes the next one weaker. You're getting stronger at this."
-            textSize = 16f; setPadding(0, (8 * dp).toInt(), 0, (16 * dp).toInt())
+            text = "Every urge you ride out makes the next one weaker."
+            textSize = 16f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
         })
+        // urge over time: it spikes, then falls — and you're already past the peak.
+        root.addView(PeakCurveView(this), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt() })
         root.addView(TextView(this).apply {
             text = "$total ridden out  \u00b7  $week this week"
-            textSize = 15f; setTypeface(typeface, Typeface.BOLD)
+            textSize = 15f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+            setPadding(0, 0, 0, (12 * dp).toInt())
         })
-        root.addView(progressChart(TemptationLog.dailyCounts(this, 14)))
-        root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(Button(this).apply { text = "I've got this"; setOnClickListener { setupMainScreen() } })
+        root.addView(captionedButton("Put the phone down", "closes the app", 0xFF2E7D32.toInt()) {
+            try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
+        })
+        root.addView(TextView(this).apply {
+            text = "or lock apps for 30 minutes"; textSize = 14f; gravity = Gravity.CENTER
+            setTextColor(0xFF48606A.toInt()); isClickable = true; isFocusable = true
+            setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
+            setOnClickListener {
+                Lockdown.start(this@MainActivity)
+                Toast.makeText(this@MainActivity, "Locked down for 30 min. Essentials still work.", Toast.LENGTH_LONG).show()
+                setupMainScreen()
+            }
+        })
         setContentView(root)
     }
 
@@ -746,50 +771,36 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     }
     root.addView(backText { temptationBack() })
     root.addView(titleText(title))
-    root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(TextView(this).apply {
+        text = side; textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (4 * dp).toInt())
+    })
 
-    // Same orb as the app-open gate, on a dark card so it reads identically.
-    val orbAccent = 0xFF3E9C8E.toInt()
-    val orb = BreathOrbView(this, orbAccent)
+    // Big orb, straight on the page (no dark card), filling the free space.
+    val orb = BreathOrbView(this, 0xFF2E9E8F.toInt())
     val orbBox = FrameLayout(this).apply {
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 24 * dp
-            setColor(0xFF0A0B0D.toInt())
-        }
-        clipToOutline = true
-        layoutParams = LinearLayout.LayoutParams((220 * dp).toInt(), (220 * dp).toInt()).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         addView(orb, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
     root.addView(orbBox)
 
     val breatheLabel = TextView(this).apply {
-        text = "Breathe in"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (16 * dp).toInt(), 0, 0)
+        text = "Breathe in"; textSize = 18f; gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, 0)
     }
     root.addView(breatheLabel)
     val counter = TextView(this).apply {
         text = "Follow the orb \u2014 $totalBreaths slow breaths"
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
-        setPadding(0, (8 * dp).toInt(), 0, 0)
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, (6 * dp).toInt(), 0, 0)
     }
     root.addView(counter)
-    root.addView(TextView(this).apply {
-        text = side; textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
-        setPadding((8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), 0)
-    })
     val milestone = TextView(this).apply {
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt()); setPadding(0, (12 * dp).toInt(), 0, 0)
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
     }
     root.addView(milestone)
-    root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-    // Continue stays disabled until the 3 breaths are done, so it doesn't run forever.
-    val continueBtn = Button(this).apply {
-        text = continueLabel; isEnabled = false; alpha = 0.5f
-        setOnClickListener { onContinue() }
-    }
+    val continueBtn = bigContinue(continueLabel) { onContinue() }
     root.addView(continueBtn)
     setContentView(root)
 
@@ -801,7 +812,7 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
                 if (done >= total) {
                     counter.text = "Done \u2014 nicely paced"
                     breatheLabel.text = ""
-                    continueBtn.isEnabled = true; continueBtn.alpha = 1f
+                    tuneContinue(continueBtn, true)
                 } else {
                     counter.text = "$done of $total done"
                 }
@@ -812,7 +823,7 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
 }
 
 private fun waveActionScreen(
-    prompt: String, sideTip: String?,
+    prompt: String, icon: String,
     yesLabel: String, onYes: () -> Unit, noLabel: String, onNo: () -> Unit,
     tertiaryLabel: String? = null, onTertiary: (() -> Unit)? = null,
 ) {
@@ -820,27 +831,32 @@ private fun waveActionScreen(
     val pad = (16 * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        gravity = Gravity.CENTER_HORIZONTAL
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     root.addView(backText { temptationBack() })
-    root.addView(titleText(prompt))
-    if (sideTip != null) root.addView(TextView(this).apply {
-        text = sideTip; textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
-    })
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(TextView(this).apply {
+        text = icon; textSize = 72f; gravity = Gravity.CENTER
+    })
+    root.addView(TextView(this).apply {
+        text = prompt; textSize = 23f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setPadding((8 * dp).toInt(), (18 * dp).toInt(), (8 * dp).toInt(), 0)
+    })
     val milestone = TextView(this).apply {
         textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
-        setPadding(0, 0, 0, (8 * dp).toInt())
+        setPadding(0, (10 * dp).toInt(), 0, 0)
     }
     root.addView(milestone)
+    root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     root.addView(bigChoice(yesLabel, 0xFF2E7D32.toInt()) { onYes() })
-    root.addView(Button(this).apply { text = noLabel; setOnClickListener { onNo() } })
+    root.addView(Button(this).apply { text = noLabel; setAllCaps(false); setOnClickListener { onNo() } })
     if (tertiaryLabel != null && onTertiary != null) {
         root.addView(TextView(this).apply {
             text = tertiaryLabel; textSize = 14f; gravity = Gravity.CENTER
             setTextColor(0xFF48606A.toInt())
-            setPadding(0, (10 * dp).toInt(), 0, (4 * dp).toInt())
+            setPadding(0, (8 * dp).toInt(), 0, (10 * dp).toInt())
             isClickable = true; isFocusable = true
             setOnClickListener { onTertiary() }
         })
@@ -857,10 +873,10 @@ private fun attachWaveTimer(label: TextView) {
         override fun run() {
             val sec = (System.currentTimeMillis() - waveStartAt) / 1000
             label.text = when {
-                sec >= 600 -> "10 minutes \u2014 it's fading. You did this."
-                sec >= 120 -> "2 minutes \u2014 you're riding it out."
-                sec >= 60 -> "1 minute \u2014 the peak is passing."
-                sec >= 30 -> "30 seconds \u2014 stay with it."
+                sec >= 600 -> "10 minutes in \u2014 it's faded. You did this."
+                sec >= 120 -> "2 minutes in \u2014 you're riding it out."
+                sec >= 60 -> "1 minute in \u2014 the peak has passed."
+                sec >= 30 -> "30 seconds in \u2014 you're doing it, keep going."
                 else -> ""
             }
             rideHandler?.postDelayed(this, 1000)
@@ -1348,84 +1364,68 @@ private fun loosenIntro1() {
     loosenBackAction = { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(bigPanic())
-    root.addView(body("This is a supervised unlock, only for times of desperation."))
+    root.addView(boldWordTitle("This is a supervised unlock, only for times of desperation.", "desperation"))
     root.addView(TextView(this).apply {
-        text = "\u2022  ${LoosenLimit.remaining(this@MainActivity)} of ${LoosenLimit.LIFETIME_MAX} unlocks left for life\n" +
-               "\u2022  one a day\n" +
-               "\u2022  this device only"
-        textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (10 * dp).toInt(), 0, 0)
+        text = "${LoosenLimit.remaining(this@MainActivity)} of ${LoosenLimit.LIFETIME_MAX} unlocks available"
+        textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
-    root.addView(grow())
-    root.addView(Button(this).apply { text = "I understand"; setOnClickListener { loosenFaceActScreen() } })
+    root.addView(TextView(this).apply {
+        text = "Every urge works the same way \u2014 it spikes hard, then fades. People who wait it out almost always find it's gone in minutes."
+        textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
+    })
+    root.addView(PeakCurveView(this, showMarker = false, labelTop = "it always", labelBot = "passes"),
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(captionedButton("I want to stop instead", "I am strong and can do it", 0xFF2E7D32.toInt()) { openPanic() })
+    root.addView(captionedButton("I understand", "and want to continue", 0xFF3E535C.toInt()) { loosenFaceActScreen() })
     setContentView(root)
 }
 
 private val NEG_FEELINGS = listOf("Regret", "Numb", "Empty", "Ashamed")
 private val POS_FEELINGS = listOf("Proud", "Relieved", "Clear", "In control")
 
-// ── Screen A: where you land if you unlock (negative feelings, drag the face) ─
+// ── Screen A: how will you feel after you unlock? (drag into the venn) ───────
 private fun loosenFaceActScreen() {
     loosenBackAction = { loosenIntro1() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
     root.addView(backText { loosenBack() })
-    root.addView(titleText("If you unlock \u2014 where do you land?"))
+    root.addView(titleText("How will you feel after?"))
     root.addView(TextView(this).apply {
-        text = "Drag the face to where you'll honestly be a few minutes after."
-        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
+        text = "Drag the face to where you'll feel after\u2026"
+        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
     })
-    val face = FeelingFaceView(this, NEG_FEELINGS, 0xFFB0453B.toInt(), positiveInside = false)
+    val face = FeelingFaceView(this, NEG_FEELINGS, 0xFFB0453B.toInt(), positiveInside = false,
+        startZoneLabel = "you, if you get past this\n(just 5 minutes of waiting)")
     root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val readout = TextView(this).apply {
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
-        setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
-        text = "Drag it where it's headed\u2026"
-    }
-    root.addView(readout)
-    face.onMoodChange = { m ->
-        readout.text = if (m < 0.45f) "That's what the urge is steering you toward."
-                       else "Notice you had to pull away from it to feel that."
-    }
-    root.addView(Button(this).apply {
-        text = "Continue"
-        setOnClickListener { loosenRegret = face.nearestLabel() ?: loosenRegret; loosenFaceRideScreen() }
-    })
+    val cont = continueLink("Continue") { loosenRegret = face.nearestLabel() ?: loosenRegret; loosenFaceRideScreen() }
+    face.onMoodChange = { enableLink(cont) }
     root.addView(panicBar())
+    root.addView(cont)
     setContentView(root)
 }
 
-// ── Screen B: where you'll be if you ride out the next 30 mins (+ countdown) ─
+// ── Screen B: how will you feel if you wait it out? (all happy / neutral) ────
 private fun loosenFaceRideScreen() {
     loosenBackAction = { stopLoosenTimer(); loosenFaceActScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
     root.addView(backText { loosenBack() })
-    root.addView(titleText("Now \u2014 ride out the next 30 minutes"))
+    root.addView(titleText("And if you wait it out?"))
     root.addView(TextView(this).apply {
-        text = "Same drag. Where are you in 30 minutes if you DON'T unlock?"
-        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+        text = "Drag the face to where you'll be in 30 minutes\u2026"
+        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (2 * dp).toInt())
     })
     val timer = TextView(this).apply {
-        textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-        setTextColor(0xFF2E7D32.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+        textSize = 28f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setTextColor(0xFF2E7D32.toInt())
     }
     root.addView(timer)
     val face = FeelingFaceView(this, POS_FEELINGS, 0xFF2E7D32.toInt(), positiveInside = true)
     root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val readout = TextView(this).apply {
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
-        setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
-        text = "Drag it to where waiting takes you\u2026"
-    }
-    root.addView(readout)
-    face.onMoodChange = { m ->
-        readout.text = if (m > 0.55f) "That's 30 minutes away \u2014 and free." else "Worth more than the unlock, isn't it?"
-    }
-    root.addView(Button(this).apply {
-        text = "Continue"; setOnClickListener { stopLoosenTimer(); loosenDelayChanceScreen() }
-    })
+    val cont = continueLink("Continue") { stopLoosenTimer(); loosenDelayChanceScreen() }
+    face.onMoodChange = { enableLink(cont) }
     root.addView(panicBar())
+    root.addView(cont)
     setContentView(root)
     runLoosenCountdown(timer, System.currentTimeMillis() + 30L * 60 * 1000) { timer.text = "0:00" }
 }
@@ -1437,7 +1437,7 @@ private fun loosenDelayChanceScreen() {
     val root = vbox(pad)
     root.addView(backText { loosenBack() })
     root.addView(titleText("A 30-minute challenge"))
-    root.addView(body("Beat the urge by doing nothing but waiting it out. Almost no one who rides out 30 minutes still acts after. Can you become one of them?"))
+    root.addView(body("Beat the urge by doing nothing but waiting it out."))
     root.addView(TextView(this).apply {
         text = "Right now, how likely is it you can hold off for 30 minutes?"
         textSize = 15f; setPadding(0, (16 * dp).toInt(), 0, (8 * dp).toInt())
@@ -1460,14 +1460,17 @@ private fun loosenDelayChanceScreen() {
     })
     root.addView(ends)
     label.text = delayBand(seek.progress)
+    val cont = continueLink("I want to continue anyway") { loosenOneOffScreen() }
     seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-        override fun onProgressChanged(s: android.widget.SeekBar, p: Int, fromUser: Boolean) { label.text = delayBand(p) }
+        override fun onProgressChanged(s: android.widget.SeekBar, p: Int, fromUser: Boolean) {
+            label.text = delayBand(p); if (fromUser) enableLink(cont)
+        }
         override fun onStartTrackingTouch(s: android.widget.SeekBar) {}
         override fun onStopTrackingTouch(s: android.widget.SeekBar) {}
     })
     root.addView(grow())
-    root.addView(Button(this).apply { text = "Take the challenge"; setOnClickListener { loosenOneOffScreen() } })
     root.addView(panicBar())
+    root.addView(cont)
     setContentView(root)
 }
 
@@ -1487,12 +1490,12 @@ private fun loosenOneOffScreen() {
     val root = vbox(pad)
     root.addView(backText { loosenBack() })
     root.addView(titleText("Is this really a one-off?"))
-    root.addView(body("Each unlock makes the next one easier to talk yourself into. \u201cJust this once\u201d is exactly how the pattern keeps itself alive."))
+    root.addView(body("Each unlock nudges your brain back toward the old wiring. \u201cJust this once\u201d is exactly how the pattern keeps itself alive."))
+    root.addView(RecoveryBrainView(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     list.addView(pickCard("Yes \u2014 genuinely a one-off") { loosenOneOffFollow(true) })
     list.addView(pickCard("Honestly, it's becoming a habit") { loosenOneOffFollow(false) })
     root.addView(list)
-    root.addView(grow())
     root.addView(panicBar())
     setContentView(root)
 }
@@ -1512,71 +1515,56 @@ private fun loosenOneOffFollow(oneOff: Boolean) {
         LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
         loosenStop("That was the hard choice, made well. The urge passes; this stays with you. Nothing's been used up.")
     })
-    root.addView(Button(this).apply { text = "Continue anyway"; setOnClickListener { loosenFixScreen() } })
-    root.addView(panicBar())
+    root.addView(continueLink("Continue anyway") { loosenFixScreen() }.also { enableLink(it) })
+    root.addView(grow())
     setContentView(root)
 }
 
-// ── reuse the shared feeling picker for "what are you hoping this quiets" ────
+// ── reuse the temptation emotion picker, then where they are ────────────────
 private fun loosenFixScreen() {
     loosenBackAction = { loosenOneOffScreen() }
-    pickWithCustomScreen("What are you hoping this will quiet?", Opts.FEELINGS, "feeling",
-        onBack = { loosenBack() }) { loosenFix = it; loosenUrgeGraphScreen() }
+    pickMultiWithCustomScreen("What emotions are you feeling right now?", Opts.FEELINGS, "feeling",
+        onBack = { loosenBack() }) { feels -> loosenFix = feels.joinToString(", "); loosenPlaceScreen() }
 }
 
-// ── the urge graph: hope ───────────────────────────────────────────────────
-private fun loosenUrgeGraphScreen() {
+private fun loosenPlaceScreen() {
     loosenBackAction = { loosenFixScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
-    val root = vbox(pad)
-    root.addView(backText { loosenBack() })
-    root.addView(titleText("Here's what actually happens"))
-    root.addView(urgeGraphView())
-    val legend = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (8 * dp).toInt(), 0, 0) }
-    legend.addView(TextView(this).apply {
-        text = "\u25CF If you wait"; setTextColor(0xFF2E7D32.toInt()); textSize = 13f
-        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-    })
-    legend.addView(TextView(this).apply {
-        text = "\u25CF If you act"; setTextColor(0xFFC0392B.toInt()); textSize = 13f
-    })
-    root.addView(legend)
-    root.addView(body("The urge feels permanent. It isn't \u2014 in a few minutes it's gone either way. One way leaves you better, the other leaves you worse."))
-    root.addView(grow())
-    root.addView(Button(this).apply { text = "I see it"; setOnClickListener { loosenReflectScreen() } })
-    root.addView(panicBar())
-    setContentView(root)
-}
-
-// ── reflect their own words back, end on I NEED TO STOP ────────────────────
-private fun loosenReflectScreen() {
-    loosenBackAction = { loosenUrgeGraphScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
-    val root = vbox(pad)
-    root.addView(backText { loosenBack() })
-    root.addView(titleText("One honest moment"))
-    root.addView(body(loosenReflectText()))
-    root.addView(grow())
-    root.addView(bigChoice("I NEED TO STOP", 0xFF2E7D32.toInt()) {
-        LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)   // ADD
-        loosenStop("That was the hardest choice, and you made it. The urge passes; the pride stays. Nothing's been used up.")
-    })
-    root.addView(Button(this).apply { text = "Continue anyway"; setOnClickListener { loosenWaitScreen() } })
-    setContentView(root)
-}
-
-private fun loosenReflectText(): String {
-    val sb = StringBuilder("Picture yourself a few minutes from now. ")
-    val r = loosenRegret
-    when {
-        r?.contains("regret", true) == true || r?.contains("already", true) == true ->
-            sb.append("You just told yourself you'll regret this. ")
-        r?.contains("numb", true) == true -> sb.append("You said it'll leave you numb \u2014 not better. ")
-        else -> sb.append("You're not even sure it'll help. ")
+    pickWithCustomScreen("Where are you right now?", Opts.LOCATIONS, "location",
+        onBack = { loosenBack() }) { loc ->
+        loosenFix = listOfNotNull(loosenFix?.takeIf { it.isNotBlank() }, loc).joinToString("  \u00b7  ")
+        loosenUrgeGraphScreen()
     }
-    loosenFix?.let { sb.append("What you're really carrying is feeling ${it.lowercase()}, and this won't touch that. ") }
-    sb.append("Stopping right now isn't losing \u2014 it's the exact moment the pattern starts to heal.")
-    return sb.toString()
+}
+
+// ── the urge curve: they tap where they think they are on the wave ──────────
+private fun loosenUrgeGraphScreen() {
+    loosenBackAction = { loosenPlaceScreen() }
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { loosenBack() })
+    root.addView(titleText("Where are you on the wave?"))
+    root.addView(TextView(this).apply {
+        text = "The urge spikes, then fades. Tap where you think you are right now."
+        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+    })
+    val resp = TextView(this).apply {
+        textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+    }
+    val cont = continueLink("I want to continue anyway") { loosenWaitScreen() }
+    val graph = PeakTapView(this, threshold = 0.30f) { _, correct ->
+        if (correct) {
+            resp.text = "That's right \u2014 you only have to beat the next 5 minutes. That's all, and it trains you for life."
+            enableLink(cont)
+        } else {
+            resp.text = "Not quite \u2014 you've actually passed the peak already. Tap again, further along, where the urge is fading."
+        }
+    }
+    root.addView(graph, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    root.addView(resp)
+    root.addView(panicBar())
+    root.addView(cont)
+    setContentView(root)
 }
 
 // ── the wait: persists, whitelist-locks, reuses breathing ──────────────────
@@ -1590,20 +1578,20 @@ private fun loosenWaitScreen() {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
     }
     content.addView(backText { loosenBack() })
-    content.addView(titleText("A short wait first"))
-    val countdown = TextView(this).apply {
-        textSize = 40f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-        setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
+    content.addView(TextView(this).apply {
+        text = "A short wait first"; textSize = 21f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    })
+    // the only time readout — updates each minute, no ticking seconds
+    val sub = TextView(this).apply {
+        text = "you'll be able to continue in 5 minutes"; textSize = 16f; gravity = Gravity.CENTER
+        setTextColor(0xFF4A4F54.toInt()); setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
     }
-    content.addView(countdown)
-    val orbAccent = 0xFF3E9C8E.toInt()
-    val orb = BreathOrbView(this, orbAccent)
+    content.addView(sub)
+    // big orb on the page (no dark card), matching the temptation breathing
+    val orb = BreathOrbView(this, 0xFF2E9E8F.toInt())
     val orbBox = FrameLayout(this).apply {
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 22 * dp; setColor(0xFF0A0B0D.toInt())
-        }
-        clipToOutline = true
-        layoutParams = LinearLayout.LayoutParams((180 * dp).toInt(), (180 * dp).toInt()).apply {
+        layoutParams = LinearLayout.LayoutParams((230 * dp).toInt(), (230 * dp).toInt()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         }
         addView(orb, FrameLayout.LayoutParams(
@@ -1611,30 +1599,25 @@ private fun loosenWaitScreen() {
     }
     content.addView(orbBox)
     val breatheLabel = TextView(this).apply {
-        text = "Breathe in"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (12 * dp).toInt(), 0, (12 * dp).toInt())
+        text = "Breathe in"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
     }
     content.addView(breatheLabel)
-    content.addView(TextView(this).apply {
-        text = "Breathe, or go for a short walk \u2014 the timer keeps running. Other apps are paused for now."
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
-        setPadding(0, 0, 0, (16 * dp).toInt())
+
+    // the enticing primary; tapping it groups the "give it longer" options
+    content.addView(GlowButton(this, "Lock me out for 5 mins \u2014 I can do this") { showLoosenLongerDialog() }.apply {
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (62 * dp).toInt()
+        ).apply { bottomMargin = (8 * dp).toInt() }
     })
-    content.addView(bigChoice("Wait 30 mins \u2014 recommended", 0xFF2E7D32.toInt()) {
-        LoosenWait.start(this, 30L * 60 * 1000); loosenWaitScreen()
+    // the temptation-style exit, caption now inside the button
+    content.addView(captionedButton("Put the phone down", "closes the app", 0xFF2E7D32.toInt()) {
+        LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
+        try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
     })
-    content.addView(bigChoice("Leave it till tomorrow", 0xFF2E7D32.toInt()) {
-        LoosenLog.record(this, "tomorrow", loosenRegret, loosenFix, 0)   // ADD
-        loosenStop("You chose to wait it out. By tomorrow it's long gone \u2014 and you kept your unlocks. Strong move.")
-    })
-    content.addView(bigChoice("+ 10 more minutes", 0xFF3E535C.toInt()) {
-        LoosenWait.add(this, 10L * 60 * 1000); loosenWaitScreen()
-    })
-    val continueBtn = Button(this).apply {
-        text = "No thanks \u2014 continue"; visibility = View.GONE
-        setOnClickListener { loosenCommitStart() }
-    }
-    content.addView(continueBtn)
-    content.addView(panicBar())
+    content.addView(grow())
+    // revealed once the wait is up, pinned to the very bottom
+    val doneContinue = continueLink("I've waited \u2014 continue") { loosenCommitStart() }
+    content.addView(doneContinue)
     val root = ScrollView(this).apply {
         setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -1642,8 +1625,32 @@ private fun loosenWaitScreen() {
         addView(content)
     }
     setContentView(root)
-    runLoosenCountdown(countdown, endAt) { continueBtn.visibility = View.VISIBLE }
+    runLoosenMinuteCountdown(sub, endAt) {
+        enableLink(doneContinue); sub.setTextColor(0xFF2E7D32.toInt()); sub.setTypeface(sub.typeface, Typeface.BOLD)
+    }
     loosenOrb = BreathOrbAnimator(orb, breatheLabel).also { it.start(cycles = null) }
+}
+
+private fun showLoosenLongerDialog() {
+    val dp = resources.displayMetrics.density
+    val box = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        val p = (20 * dp).toInt(); setPadding(p, (8 * dp).toInt(), p, 0)
+    }
+    val dialog = AlertDialog.Builder(this)
+        .setTitle("Give it longer? It only helps.")
+        .setView(box)
+        .setNegativeButton("Keep the 5 minutes", null)
+        .create()
+    fun option(label: String, ms: Long) {
+        box.addView(bigChoice(label, 0xFF2E7D32.toInt()) {
+            LoosenWait.start(this, ms); dialog.dismiss(); loosenWaitScreen()
+        })
+    }
+    option("Lock me out for 10 minutes", 10L * 60 * 1000)
+    option("Lock me out for 30 minutes", 30L * 60 * 1000)
+    option("Lock me out for 2 hours", 2L * 60 * 60 * 1000)
+    dialog.show()
 }
 
 // ── commit, one step at a time, all gated ──────────────────────────────────
@@ -1952,6 +1959,24 @@ private fun runLoosenCountdown(label: TextView, endAt: Long, onDone: () -> Unit)
             val m = (remaining / 1000) / 60; val s = (remaining / 1000) % 60
             label.text = String.format("%02d:%02d", m, s)
             if (remaining <= 0) onDone() else loosenHandler?.postDelayed(this, 1000)
+        }
+    }
+    loosenRunnable?.run()
+}
+
+/** Updates "you'll be able to continue in N minutes" rather than ticking seconds. */
+private fun runLoosenMinuteCountdown(label: TextView, endAt: Long, onDone: () -> Unit) {
+    stopLoosenTimer()
+    loosenHandler = Handler(Looper.getMainLooper())
+    loosenRunnable = object : Runnable {
+        override fun run() {
+            val rem = (endAt - System.currentTimeMillis()).coerceAtLeast(0)
+            if (rem <= 0) { label.text = "you can continue now"; onDone() }
+            else {
+                val mins = ((rem + 59_999) / 60_000).toInt()
+                label.text = "you'll be able to continue in $mins minute" + (if (mins == 1) "" else "s")
+                loosenHandler?.postDelayed(this, 1000)
+            }
         }
     }
     loosenRunnable?.run()
@@ -2266,6 +2291,199 @@ private fun pickCard(label: String, onClick: () -> Unit): TextView {
     }
 }
 
+// ── nicer option rows: emoji icon (vertically centred) + label + lighter sub ──
+private class Choice(
+    val value: String,
+    val icon: String? = null,
+    val sub: String? = null,
+    val tint: Int = 0xFFF1F3F4.toInt(),
+    val group: String? = null,
+)
+
+private fun metaFor(category: String, v: String): Choice = when (category) {
+    "screen" -> Choice(v, screenIcon(v))
+    "location" -> Choice(v, locationIcon(v))
+    "activity" -> Choice(v, activityIcon(v))
+    "feeling" -> feelingMeta(v)
+    else -> Choice(v)
+}
+
+private fun screenIcon(v: String) = when (v) {
+    "Phone" -> "\uD83D\uDCF1"; "Tablet" -> "\uD83D\uDCF2"
+    "Computer / laptop" -> "\uD83D\uDCBB"; "TV" -> "\uD83D\uDCFA"
+    "Someone else's screen" -> "\uD83D\uDC40"; else -> "\uD83D\uDCF1"
+}
+private fun locationIcon(v: String) = when (v) {
+    "Bedroom" -> "\uD83D\uDECC"; "Bathroom" -> "\uD83D\uDEBF"; "Living room" -> "\uD83D\uDECB"
+    "Kitchen" -> "\uD83C\uDF73"; "Office / desk" -> "\uD83D\uDCBC"; "Out / in public" -> "\uD83C\uDF33"
+    else -> "\uD83D\uDCCD"
+}
+private fun activityIcon(v: String) = when (v) {
+    "In bed / trying to sleep" -> "\uD83D\uDECC"; "Just woke up" -> "\uD83C\uDF05"
+    "Scrolling social media" -> "\uD83D\uDCF1"; "Watching videos or TV" -> "\uD83D\uDCFA"
+    "Browsing the web" -> "\uD83C\uDF10"; "Putting off something I should do" -> "\u23F3"
+    "Just finished work or study" -> "\uD83D\uDCBC"; "Bored with nothing to do" -> "\uD83E\uDD71"
+    "After something stressful" -> "\uD83D\uDE23"; "Winding down at night" -> "\uD83C\uDF19"
+    else -> "\uD83D\uDD01"
+}
+// feelings carry a group + a subtle tint so the screen reads as grouped bands
+private fun feelingMeta(v: String): Choice = when (v) {
+    "Anxious / on edge" -> Choice(v, "\uD83D\uDE30", null, 0xFFFFF3E0.toInt(), "On edge")
+    "Stressed" -> Choice(v, "\uD83D\uDE23", null, 0xFFFFF3E0.toInt(), "On edge")
+    "Frustrated / angry" -> Choice(v, "\uD83D\uDE20", null, 0xFFFCE9E6.toInt(), "Wound up")
+    "Low / down" -> Choice(v, "\uD83D\uDE1E", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
+    "Lonely" -> Choice(v, "\uD83D\uDE41", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
+    "Tired" -> Choice(v, "\uD83D\uDE34", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
+    "Neutral" -> Choice(v, "\uD83D\uDE10", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
+    "Bored" -> Choice(v, "\uD83E\uDD71", null, 0xFFEEF1EB.toInt(), "Bored")
+    "Happy / excited" -> Choice(v, "\uD83D\uDE04", null, 0xFFE7F4E8.toInt(), "Feeling good")
+    else -> Choice(v, "\uD83D\uDE36")
+}
+private val FEELING_GROUP_ORDER = listOf("On edge", "Shut down / flat", "Bored", "Feeling good", "Wound up")
+private fun feelingRank(v: String): Int =
+    feelingMeta(v).group?.let { FEELING_GROUP_ORDER.indexOf(it) }.let { if (it == null || it < 0) FEELING_GROUP_ORDER.size else it }
+
+private fun rowCard(tint: Int, selected: Boolean): LinearLayout {
+    val dp = resources.displayMetrics.density
+    return LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        val px = (16 * dp).toInt(); val py = (15 * dp).toInt(); setPadding(px, py, px, py)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 14 * dp; setColor(tint)
+            if (selected) setStroke((2 * dp).toInt(), 0xFF2E7D32.toInt())
+        }
+        isClickable = true; isFocusable = true
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (10 * dp).toInt() }
+    }
+}
+private fun emojiView(icon: String?): View? {
+    if (icon.isNullOrEmpty()) return null
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = icon; textSize = 21f; gravity = Gravity.CENTER
+        background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(0xFFFFFFFF.toInt())
+        }
+        val s = (40 * dp).toInt()
+        layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
+    }
+}
+private fun textCol(label: String, sub: String?): LinearLayout {
+    val dp = resources.displayMetrics.density
+    return LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        addView(TextView(this@MainActivity).apply {
+            text = label; textSize = 17f; setTextColor(0xFF1A1A1A.toInt())
+        })
+        if (!sub.isNullOrEmpty()) addView(TextView(this@MainActivity).apply {
+            text = sub; textSize = 13f; setTextColor(0xFF80868B.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+        })
+    }
+}
+private fun checkRow(choice: Choice, checked: Boolean, onToggle: () -> Unit): View {
+    val dp = resources.displayMetrics.density
+    val card = rowCard(choice.tint, checked)
+    card.addView(TextView(this).apply {
+        text = if (checked) "\u2611" else "\u2610"; textSize = 22f
+        setTextColor(if (checked) 0xFF2E7D32.toInt() else 0xFF9AA0A6.toInt())
+        setPadding(0, 0, (12 * dp).toInt(), 0)
+    })
+    emojiView(choice.icon)?.let { card.addView(it) }
+    card.addView(textCol(choice.value, choice.sub))
+    card.setOnClickListener { onToggle() }
+    return card
+}
+private fun optionRow(choice: Choice, onClick: () -> Unit): View {
+    val card = rowCard(choice.tint, false)
+    emojiView(choice.icon)?.let { card.addView(it) }
+    card.addView(textCol(choice.value, choice.sub))
+    card.setOnClickListener { onClick() }
+    return card
+}
+private fun addOwnRow(onClick: () -> Unit): View = optionRow(Choice("Add your own\u2026", "\u2795"), onClick)
+
+/** Big primary Continue that brightens and grows once something is selected. */
+private fun bigContinue(label: String, onClick: () -> Unit): Button {
+    val dp = resources.displayMetrics.density
+    return Button(this).apply {
+        text = label; setAllCaps(false); setTextColor(0xFFFFFFFF.toInt())
+        setTypeface(typeface, Typeface.BOLD); textSize = 16f
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 14 * dp; setColor(0xFFB7C2BC.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (12 * dp).toInt(); bottomMargin = (22 * dp).toInt() }
+        isEnabled = false
+        setOnClickListener { onClick() }
+    }
+}
+private fun tuneContinue(btn: Button, active: Boolean) {
+    btn.isEnabled = active
+    (btn.background as? android.graphics.drawable.GradientDrawable)?.setColor(
+        if (active) 0xFF2E7D32.toInt() else 0xFFB7C2BC.toInt())
+    btn.textSize = if (active) 18f else 16f
+    btn.animate().scaleX(if (active) 1.03f else 1f).scaleY(if (active) 1.03f else 1f).setDuration(140).start()
+}
+
+/** A quiet, lowercase "continue anyway" link that stays disabled until they've engaged. */
+private fun continueLink(label: String, onClick: () -> Unit): Button {
+    val dp = resources.displayMetrics.density
+    return Button(this).apply {
+        text = label; setAllCaps(false); setTextColor(0xFF48606A.toInt()); textSize = 15f
+        background = null; isEnabled = false; alpha = 0.4f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (2 * dp).toInt(); bottomMargin = (14 * dp).toInt() }
+        setOnClickListener { onClick() }
+    }
+}
+private fun enableLink(b: Button) {
+    if (!b.isEnabled) { b.isEnabled = true; b.animate().alpha(1f).setDuration(150).start() }
+}
+
+/** A primary button with a small, greyed caption underneath it. */
+private fun captionedButton(label: String, caption: String, color: Int, onClick: () -> Unit): View {
+    val dp = resources.displayMetrics.density
+    val full = "$label\n$caption"
+    val subStart = label.length + 1
+    val sp = android.text.SpannableString(full).apply {
+        setSpan(android.text.style.RelativeSizeSpan(0.72f), subStart, full.length, 0)
+        setSpan(android.text.style.ForegroundColorSpan(0xCCFFFFFF.toInt()), subStart, full.length, 0)
+        setSpan(android.text.style.StyleSpan(Typeface.NORMAL), subStart, full.length, 0)
+    }
+    return Button(this).apply {
+        text = sp; setAllCaps(false); gravity = Gravity.CENTER
+        setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, Typeface.BOLD)
+        setLineSpacing((2 * dp), 1f)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * dp; setColor(color)
+        }
+        val px = (16 * dp).toInt(); setPadding(px, (16 * dp).toInt(), px, (16 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (8 * dp).toInt() }
+        setOnClickListener { onClick() }
+    }
+}
+
+/** A sentence-style heading with one word bolded. */
+private fun boldWordTitle(full: String, word: String): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        textSize = 19f; setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
+        val i = full.indexOf(word)
+        text = if (i >= 0) android.text.SpannableString(full).apply {
+            setSpan(android.text.style.StyleSpan(Typeface.BOLD), i, i + word.length, 0)
+        } else full
+    }
+}
+
 // ── "How strong is the urge?" as a vertical colour scale ───────────────────
 // Strongest at the top (red) fading to the gentlest at the bottom (blue), with
 // faint hi/lo markers and a short example on each card (full text behind the ⓘ).
@@ -2289,10 +2507,12 @@ private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (Strin
     if (onBack != null) root.addView(backText { onBack() })
     root.addView(titleText(title))
 
-    // weighted middle band so the scale sits centred between title and bottom edge
+    // scrollable so nothing is clipped on shorter screens; fillViewport keeps it
+    // centred when there's room to spare.
     val center = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
     center.addView(TextView(this).apply {
         text = "high level of urge"; textSize = 12f; gravity = Gravity.CENTER
@@ -2307,47 +2527,37 @@ private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (Strin
     }
     center.addView(TextView(this).apply {
         text = "low level of urge"; textSize = 12f; gravity = Gravity.CENTER
-        setTextColor(0x33000000); setPadding(0, (6 * dp).toInt(), 0, 0)
+        setTextColor(0x33000000); setPadding(0, (6 * dp).toInt(), 0, (4 * dp).toInt())
     })
-    root.addView(center)
+    root.addView(ScrollView(this).apply {
+        isFillViewport = true
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(center)
+    })
     setContentView(root)
 }
 
 private fun urgeCard(level: String, example: String, color: Int, onPick: () -> Unit): View {
     val dp = resources.displayMetrics.density
     val row = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 12 * dp; setColor(color)
+            cornerRadius = 14 * dp; setColor(color)
         }
-        val p = (14 * dp).toInt(); setPadding(p, p, p, p)
+        val px = (16 * dp).toInt(); val py = (13 * dp).toInt(); setPadding(px, py, px, py)
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (6 * dp).toInt(); bottomMargin = (6 * dp).toInt() }
+        ).apply { topMargin = (5 * dp).toInt(); bottomMargin = (5 * dp).toInt() }
         isClickable = true; isFocusable = true
         setOnClickListener { onPick() }
     }
-    val textCol = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-    }
-    textCol.addView(TextView(this).apply {
-        text = level; textSize = 18f; setTypeface(typeface, Typeface.BOLD)
+    row.addView(TextView(this).apply {
+        text = level; textSize = 19f; setTypeface(typeface, Typeface.BOLD)
         setTextColor(0xFFFFFFFF.toInt())
     })
-    if (example.isNotEmpty()) textCol.addView(TextView(this).apply {
+    if (example.isNotEmpty()) row.addView(TextView(this).apply {
         text = example; textSize = 13f; setTextColor(0xCCFFFFFF.toInt())
         setPadding(0, (2 * dp).toInt(), 0, 0)
-    })
-    row.addView(textCol)
-    row.addView(TextView(this).apply {
-        text = "\u24D8"; textSize = 20f; setTextColor(0xFFFFFFFF.toInt())
-        setPadding((10 * dp).toInt(), 0, 0, 0); isClickable = true; isFocusable = true
-        setOnClickListener {
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle(level).setMessage(example)
-                .setPositiveButton(android.R.string.ok, null).show()
-        }
     })
     return row
 }
@@ -4784,7 +4994,8 @@ class BreathOrbView(context: Context, private val accent: Int) : View(context) {
         if (width == 0 || height == 0) return
         val cx = width / 2f
         val cy = height / 2f
-        val maxR = kotlin.math.hypot(width.toFloat(), height.toFloat()) / 2f * 1.08f
+        // never let the orb spill past the box it sits in — inscribe it in the square
+        val maxR = (kotlin.math.min(width, height) / 2f) - ring.strokeWidth
         val minR = maxR * 0.04f
         val r = minR + (maxR - minR) * progress
         val a = (progress / 0.14f).coerceIn(0f, 1f)
@@ -4920,15 +5131,23 @@ class FeelingFaceView(
     private val labels: List<String>,
     private val circleColor: Int,
     private val positiveInside: Boolean,
+    private val startZoneLabel: String? = null,
 ) : View(context) {
 
     var mood: Float = 0.5f
+        private set
+    var moved: Boolean = false
         private set
     var onMoodChange: ((Float) -> Unit)? = null
 
     private var fx = 0f
     private var fy = 0f
     private var placed = false
+
+    private var dividerY = 0f
+    private var cenX = 0f
+    private var cenY = 0f
+    private var vennR = 1f
 
     private class Circ(val cx: Float, val cy: Float, val r: Float, val label: String)
     private var circles = listOf<Circ>()
@@ -4940,6 +5159,12 @@ class FeelingFaceView(
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF40464B.toInt(); textAlign = Paint.Align.CENTER
     }
+    private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE7F4E8.toInt() }
+    private val zoneText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E7D32.toInt(); textAlign = Paint.Align.LEFT }
+    private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x33000000; style = Paint.Style.STROKE; strokeWidth = 2f
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
+    }
     private val faceFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFC857.toInt() }
     private val faceLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF222222.toInt(); style = Paint.Style.STROKE; strokeWidth = 5f; strokeCap = Paint.Cap.ROUND
@@ -4948,41 +5173,50 @@ class FeelingFaceView(
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         if (w == 0 || h == 0) return
-        val cx = w / 2f; val cy = h / 2f
-        labelPaint.textSize = 13f * resources.displayMetrics.density
-        val ring = kotlin.math.min(w, h) * 0.30f
-        val r = kotlin.math.min(w, h) * 0.27f
+        val dp = resources.displayMetrics.density
+        labelPaint.textSize = 13f * dp; zoneText.textSize = 14f * dp
+        val W = w.toFloat(); val H = h.toFloat()
+        dividerY = if (startZoneLabel != null) H * 0.24f else 0f
+        cenX = W / 2f
+        cenY = (dividerY + H) / 2f
+        vennR = ((H - dividerY) / 2f) * 0.92f
+        val off = vennR * 0.40f
+        val cr = vennR * 0.56f
         circles = labels.mapIndexed { i, lab ->
             val ang = (-90.0 + i * 360.0 / labels.size) * Math.PI / 180.0
-            Circ(cx + ring * kotlin.math.cos(ang).toFloat(), cy + ring * kotlin.math.sin(ang).toFloat(), r, lab)
+            Circ(cenX + off * kotlin.math.cos(ang).toFloat(), cenY + off * kotlin.math.sin(ang).toFloat(), cr, lab)
         }
-        if (!placed) { fx = cx; fy = cy; placed = true; invalidate() }
+        if (!placed) {
+            placed = true
+            fx = if (startZoneLabel != null) W * 0.82f else cenX
+            fy = if (startZoneLabel != null) dividerY * 0.5f else H * 0.08f
+            mood = computeMood(fx, fy)
+            invalidate()
+        }
     }
 
-    private fun penetration(): Float {
-        var pen = 0f
-        for (c in circles) {
-            val d = kotlin.math.hypot(fx - c.cx, fy - c.cy)
-            val p = 1f - d / c.r
-            if (p > pen) pen = p
-        }
-        return pen.coerceIn(0f, 1f)
+    // Mood is driven by how deep into the venn you are (distance to the shared centre),
+    // NOT per-circle overlap — so the centre is unambiguously the most intense point.
+    private fun computeMood(x: Float, y: Float): Float {
+        if (startZoneLabel != null && y < dividerY) return 1f          // the one happy place
+        val d = kotlin.math.hypot(x - cenX, y - cenY)
+        val nd = (d / vennR).coerceIn(0f, 1f)                          // 0 = centre, 1 = edge
+        return if (positiveInside) 0.5f + 0.5f * (1f - nd)             // neutral edge -> happy centre
+        else 0.5f * nd                                                 // neutral edge -> sad centre
     }
 
     private fun recompute() {
-        val pen = penetration()
-        mood = if (positiveInside) pen else (1f - pen)
+        moved = true
+        mood = computeMood(fx, fy)
         onMoodChange?.invoke(mood)
         invalidate()
     }
 
-    /** Nearest feeling label if the face is sitting in one, else null. */
     fun nearestLabel(): String? {
-        var best: String? = null; var bestPen = 0.15f
+        var best: String? = null; var bestD = Float.MAX_VALUE
         for (c in circles) {
             val d = kotlin.math.hypot(fx - c.cx, fy - c.cy)
-            val p = 1f - d / c.r
-            if (p > bestPen) { bestPen = p; best = c.label }
+            if (d < c.r && d < bestD) { bestD = d; best = c.label }
         }
         return best
     }
@@ -5003,31 +5237,369 @@ class FeelingFaceView(
 
     override fun onDraw(canvas: Canvas) {
         if (circles.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        // happy start zone
+        if (startZoneLabel != null) {
+            canvas.drawRoundRect(0f, 0f, width.toFloat(), dividerY - 6f * dp, 16f * dp, 16f * dp, zoneFill)
+            val lines = startZoneLabel.split("\n")
+            var ty = dividerY * 0.5f - (lines.size - 1) * 9f * dp
+            for (ln in lines) { canvas.drawText(ln, 14f * dp, ty, zoneText); ty += 18f * dp }
+            canvas.drawLine(0f, dividerY, width.toFloat(), dividerY, dividerPaint)
+        }
+        // venn lobes
         for (c in circles) {
             circleFill.color = (circleColor and 0x00FFFFFF) or (46 shl 24)
             canvas.drawCircle(c.cx, c.cy, c.r, circleFill)
             canvas.drawCircle(c.cx, c.cy, c.r, circleStroke)
         }
+        // labels pushed to the outer edge of each lobe
         for (c in circles) {
-            canvas.drawText(c.label, c.cx, c.cy + labelPaint.textSize / 3f, labelPaint)
+            val dx = c.cx - cenX; val dy = c.cy - cenY
+            val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1f)
+            val lx = c.cx + dx / len * c.r * 0.5f
+            val ly = c.cy + dy / len * c.r * 0.5f
+            canvas.drawText(c.label, lx, ly + labelPaint.textSize / 3f, labelPaint)
         }
-        val fr = kotlin.math.min(width, height) * 0.085f
+        // face
+        val fr = kotlin.math.min(width, height) * 0.075f
         canvas.drawCircle(fx, fy, fr, faceFill)
         val ex = fr * 0.42f; val ey = fr * 0.28f; val er = fr * 0.12f
         canvas.drawCircle(fx - ex, fy - ey, er, faceDot)
         canvas.drawCircle(fx + ex, fy - ey, er, faceDot)
-        // mouth: smile when mood high, frown when low
-        val curve = (mood - 0.5f) * 2f      // -1 .. 1
-        val mw = fr * 0.5f
-        val my = fy + fr * 0.30f
-        val path = Path().apply {
-            moveTo(fx - mw, my)
-            quadTo(fx, my + curve * fr * 0.6f, fx + mw, my)
-        }
+        val curve = (mood - 0.5f) * 2f
+        val mw = fr * 0.5f; val my = fy + fr * 0.30f
+        val path = Path().apply { moveTo(fx - mw, my); quadTo(fx, my + curve * fr * 0.6f, fx + mw, my) }
         canvas.drawPath(path, faceLine)
     }
 }
 
+// =====================================================================================
+// PeakCurveView  (urge over time: spikes, then falls — and you're already past the peak)
+// =====================================================================================
+class PeakCurveView(
+    context: Context,
+    private val showMarker: Boolean = true,
+    private val labelTop: String? = "you're strong \u2014",
+    private val labelBot: String? = "you can get here",
+) : View(context) {
+    private var anim = 0f
+    private val accent = 0xFF2E9E8F.toInt()
+    private val curve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND
+    }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
+    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF5F6368.toInt(); textAlign = Paint.Align.RIGHT }
+    private val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E9E8F.toInt(); textAlign = Paint.Align.CENTER }
+    private val arrow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF8A9095.toInt(); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1500
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { anim = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    // urge vs time: quick rise to a peak, slower decay back toward baseline
+    private fun u(x: Float): Float {
+        val xc = 0.22f; val amp = 0.80f; val base = 0.12f
+        val sigma = if (x < xc) 0.10f else 0.26f
+        val d = (x - xc).toDouble()
+        return base + amp * Math.exp(-(d * d) / (2.0 * sigma * sigma)).toFloat()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val w = width.toFloat(); val h = height.toFloat()
+        val dp = resources.displayMetrics.density
+        val xL = 10f * dp; val xR = w - 10f * dp; val yB = h - 26f * dp; val yT = 14f * dp
+        fun px(x: Float) = xL + (xR - xL) * x
+        fun py(uu: Float) = yB - (yB - yT) * uu
+        curve.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp; dotRing.strokeWidth = 3f * dp; arrow.strokeWidth = 1.6f * dp
+
+        canvas.drawLine(xL, yB, xR, yB, axis)
+
+        val path = Path(); val fillPath = Path()
+        val n = 72
+        for (i in 0..n) {
+            val x = i / n.toFloat(); val xx = px(x); val yy = py(u(x))
+            if (i == 0) { path.moveTo(xx, yy); fillPath.moveTo(xx, yB); fillPath.lineTo(xx, yy) }
+            else { path.lineTo(xx, yy); fillPath.lineTo(xx, yy) }
+        }
+        fillPath.lineTo(px(1f), yB); fillPath.close()
+        fill.shader = android.graphics.LinearGradient(
+            0f, yT, 0f, yB,
+            (accent and 0x00FFFFFF) or (60 shl 24), (accent and 0x00FFFFFF) or (8 shl 24),
+            Shader.TileMode.CLAMP)
+        canvas.drawPath(fillPath, fill)
+        canvas.drawPath(path, curve)
+
+        if (showMarker) {
+            val mx = 0.42f * anim
+            val MX = px(mx); val MY = py(u(mx))
+            canvas.drawCircle(MX, MY, 7f * dp, dotFill)
+            canvas.drawCircle(MX, MY, 7f * dp, dotRing)
+        }
+
+        val la = ((anim - 0.45f) / 0.55f).coerceIn(0f, 1f)
+        if (la > 0f && showMarker) {
+            tag.textSize = 11f * dp; tag.alpha = (la * 200).toInt()
+            canvas.drawText("past the peak", px(0.42f), yB + 18f * dp, tag)
+        }
+        if (la > 0f && labelTop != null) {
+            // label sits up high, clear of the curve, with an arrow down to the faded tail
+            label.textSize = 12.5f * dp; label.alpha = (la * 255).toInt()
+            val tx = xR
+            val ty = yT + 13f * dp
+            canvas.drawText(labelTop, tx, ty, label)
+            if (labelBot != null) canvas.drawText(labelBot, tx, ty + 16f * dp, label)
+            // arrow from just below the label down to the curve's end
+            arrow.alpha = (la * 200).toInt()
+            val ax = px(0.9f); val aTopY = ty + 26f * dp; val aEndY = py(u(0.9f)) - 8f * dp
+            if (aEndY > aTopY) {
+                canvas.drawLine(ax, aTopY, ax, aEndY, arrow)
+                canvas.drawLine(ax, aEndY, ax - 4f * dp, aEndY - 6f * dp, arrow)
+                canvas.drawLine(ax, aEndY, ax + 4f * dp, aEndY - 6f * dp, arrow)
+            }
+        }
+    }
+}
+
+// =====================================================================================
+// PeakTapView  (same urge curve, but the user taps where they think they are)
+// =====================================================================================
+class PeakTapView(
+    context: Context,
+    private val threshold: Float,
+    private val onPick: (Float, Boolean) -> Unit,
+) : View(context) {
+    private val accent = 0xFF2E9E8F.toInt()
+    private val gold = 0xFFD4A017.toInt()
+    private val dull = 0xFFB9C4C2.toInt()
+    private var tappedX: Float? = null
+    private var correct = false
+    private val curve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND
+    }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
+    private val hint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF9AA0A6.toInt(); textAlign = Paint.Align.CENTER }
+    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+
+    private fun u(x: Float): Float {
+        val xc = 0.22f; val amp = 0.80f; val base = 0.12f
+        val sigma = if (x < xc) 0.10f else 0.26f
+        val d = (x - xc).toDouble()
+        return base + amp * Math.exp(-(d * d) / (2.0 * sigma * sigma)).toFloat()
+    }
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.action == android.view.MotionEvent.ACTION_DOWN || event.action == android.view.MotionEvent.ACTION_MOVE) {
+            val dp = resources.displayMetrics.density
+            val xL = 10f * dp; val xR = width - 10f * dp
+            val x = ((event.x - xL) / (xR - xL)).coerceIn(0f, 1f)
+            tappedX = x
+            if (x > threshold) correct = true       // once they get it right, it stays gold
+            invalidate(); onPick(x, x > threshold)
+            return true
+        }
+        return super.onTouchEvent(event)
+    }
+
+    // draws a curve segment over [x0,x1] in the given colour
+    private fun segment(canvas: Canvas, x0: Float, x1: Float, color: Int,
+                        px: (Float) -> Float, py: (Float) -> Float) {
+        curve.color = color
+        val p = Path(); val n = 48
+        for (i in 0..n) {
+            val x = x0 + (x1 - x0) * i / n; val xx = px(x); val yy = py(u(x))
+            if (i == 0) p.moveTo(xx, yy) else p.lineTo(xx, yy)
+        }
+        canvas.drawPath(p, curve)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val w = width.toFloat(); val h = height.toFloat()
+        val dp = resources.displayMetrics.density
+        val xL = 10f * dp; val xR = w - 10f * dp; val yB = h - 26f * dp; val yT = 14f * dp
+        fun px(x: Float) = xL + (xR - xL) * x
+        fun py(uu: Float) = yB - (yB - yT) * uu
+        curve.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp; dotRing.strokeWidth = 3f * dp
+        canvas.drawLine(xL, yB, xR, yB, axis)
+
+        // soft fill under the whole curve
+        val fillPath = Path(); val n = 72
+        for (i in 0..n) {
+            val x = i / n.toFloat(); val xx = px(x); val yy = py(u(x))
+            if (i == 0) { fillPath.moveTo(xx, yB); fillPath.lineTo(xx, yy) } else fillPath.lineTo(xx, yy)
+        }
+        fillPath.lineTo(px(1f), yB); fillPath.close()
+        val fillColor = if (correct) gold else accent
+        val a0 = if (correct) 70 else 60
+        fill.shader = android.graphics.LinearGradient(
+            0f, yT, 0f, yB,
+            (fillColor and 0x00FFFFFF) or (a0 shl 24),
+            (fillColor and 0x00FFFFFF) or (8 shl 24),
+            Shader.TileMode.CLAMP)
+        canvas.drawPath(fillPath, fill)
+
+        if (correct) {
+            // past-the-peak tail turns gold; the rising left half is dulled back
+            segment(canvas, 0f, threshold, dull, ::px, ::py)
+            segment(canvas, threshold, 1f, gold, ::px, ::py)
+        } else {
+            segment(canvas, 0f, 1f, accent, ::px, ::py)
+        }
+
+        val tx = tappedX
+        if (tx == null) {
+            hint.textSize = 13f * dp
+            canvas.drawText("tap where you think you are", w / 2f, py(u(0.5f)) - 8f * dp, hint)
+        } else {
+            val mx = px(tx); val my = py(u(tx))
+            dotFill.color = if (correct) gold else accent
+            canvas.drawCircle(mx, my, 8f * dp, dotFill)
+            canvas.drawCircle(mx, my, 8f * dp, dotRing)
+        }
+    }
+}
+
+// =====================================================================================
+// GlowButton  (a filled button with a soft light tracing its edge, to invite a tap)
+// =====================================================================================
+class GlowButton(context: Context, private val label: String, onClick: () -> Unit) : View(context) {
+    private var phase = 0f
+    private var anim: android.animation.ValueAnimator? = null
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC8932B.toInt() }
+    private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER; isFakeBoldText = true
+    }
+    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    init { isClickable = true; isFocusable = true; setOnClickListener { onClick() } }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        anim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 2600; repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { phase = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+    override fun onDetachedFromWindow() { anim?.cancel(); anim = null; super.onDetachedFromWindow() }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val dp = resources.displayMetrics.density
+        val r = 14f * dp; val inset = 2f * dp
+        val w = width.toFloat(); val h = height.toFloat()
+        canvas.drawRoundRect(inset, inset, w - inset, h - inset, r, r, bg)
+        txt.textSize = 16f * dp
+        canvas.drawText(label, w / 2f, h / 2f + txt.textSize / 3f, txt)
+        // a warm bright band that travels around the rounded-rect edge
+        edge.strokeWidth = 4f * dp
+        val sweep = android.graphics.SweepGradient(
+            w / 2f, h / 2f,
+            intArrayOf(0x00FFF6D8, 0x00FFF6D8, 0xFFFFF6D8.toInt(), 0x00FFF6D8, 0x00FFF6D8),
+            floatArrayOf(0f, 0.38f, 0.5f, 0.62f, 1f))
+        sweep.setLocalMatrix(android.graphics.Matrix().apply { postRotate(phase * 360f, w / 2f, h / 2f) })
+        edge.shader = sweep
+        canvas.drawRoundRect(inset, inset, w - inset, h - inset, r, r, edge)
+    }
+}
+
+// =====================================================================================
+// RecoveryBrainView  (your progress so far, then the fork: a one-off vs keeping going)
+// =====================================================================================
+class RecoveryBrainView(context: Context) : View(context) {
+    private var anim = 0f
+    private val amber = 0xFFC9772B.toInt()
+    private val green = 0xFF2E7D32.toInt()
+    private val past = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = 0xFF9AA0A6.toInt(); strokeCap = Paint.Cap.ROUND
+    }
+    private val up = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = amber; strokeCap = Paint.Cap.ROUND
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 10f), 0f)
+    }
+    private val down = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = green; strokeCap = Paint.Cap.ROUND
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 10f), 0f)
+    }
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
+    private val lab = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val emoji = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val axisLab = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0B5BA.toInt() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1400; startDelay = 200
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { anim = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val w = width.toFloat(); val h = height.toFloat()
+        val dp = resources.displayMetrics.density
+        val xL = 12f * dp; val xR = w - 12f * dp; val yT = 16f * dp; val yB = h - 26f * dp
+        fun px(x: Float) = xL + (xR - xL) * x
+        fun py(f: Float) = yT + (yB - yT) * f      // f: 0 = high pull (top), 1 = free (bottom)
+        past.strokeWidth = 3.5f * dp; up.strokeWidth = 3f * dp; down.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp
+
+        // faint frame + axis hints
+        canvas.drawLine(xL, yB, xR, yB, axis)
+        axisLab.textSize = 10.5f * dp
+        axisLab.textAlign = Paint.Align.LEFT; canvas.drawText("more pull", xL, yT + 4f * dp, axisLab)
+        canvas.drawText("free", xL, yB - 4f * dp, axisLab)
+
+        // progress so far: coming down from a high point to "now"
+        val nowX = 0.40f; val nowF = 0.56f
+        val pPath = Path().apply {
+            moveTo(px(0.05f), py(0.20f))
+            cubicTo(px(0.18f), py(0.22f), px(0.28f), py(0.48f), px(nowX), py(nowF))
+        }
+        canvas.drawPath(pPath, past)
+
+        // the fork, drawn growing out from "now"
+        val t = anim
+        val upPath = Path().apply {
+            moveTo(px(nowX), py(nowF))
+            val ex = nowX + (0.95f - nowX) * t; val ef = nowF + (0.30f - nowF) * t
+            cubicTo(px(nowX + 0.18f * t), py(nowF - 0.04f * t), px(nowX + 0.38f * t), py(nowF - 0.18f * t), px(ex), py(ef))
+        }
+        canvas.drawPath(upPath, up)
+        val downPath = Path().apply {
+            moveTo(px(nowX), py(nowF))
+            val ex = nowX + (0.95f - nowX) * t; val ef = nowF + (0.88f - nowF) * t
+            cubicTo(px(nowX + 0.20f * t), py(nowF + 0.10f * t), px(nowX + 0.40f * t), py(nowF + 0.22f * t), px(ex), py(ef))
+        }
+        canvas.drawPath(downPath, down)
+
+        // branch labels (fade in)
+        val la = ((anim - 0.5f) / 0.5f).coerceIn(0f, 1f)
+        lab.textSize = 12.5f * dp; lab.textAlign = Paint.Align.RIGHT; lab.alpha = (la * 255).toInt()
+        lab.color = amber; canvas.drawText("one-off \u2192 back up", px(0.95f), py(0.30f) - 6f * dp, lab)
+        lab.color = green; canvas.drawText("keep going \u2192 free", px(0.95f), py(0.88f) + 16f * dp, lab)
+
+        // a brain at "now"
+        emoji.textSize = 26f * dp
+        canvas.drawText("\uD83E\uDDE0", px(nowX), py(nowF) + 9f * dp, emoji)
+    }
+}
 
 // =====================================================================================
 // UI
