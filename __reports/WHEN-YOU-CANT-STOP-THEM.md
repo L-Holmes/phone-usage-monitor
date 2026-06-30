@@ -12,13 +12,6 @@ logically break down.
 
 lterally just bullet point.. no fluff.. no explanatoin. just the points, nothing eles.
 
-# =============
-# MY IDEAAS!!!!::
-# =============
-- financial
-    - they put 20 pounds into our account.
-    - every time they pass a day (week? to give us more money?), they get a pound back.
-    --> don't penalize them.. only reward them..
 
 
 -----------------------------------
@@ -89,7 +82,7 @@ lterally just bullet point.. no fluff.. no explanatoin. just the points, nothing
 # Pron 2
 # =======
 
-    - **Response cost escalation**: App auto-increases friction each use - longer timers, more tasks, larger financial stake after each relapse
+- **Response cost escalation**: App auto-increases friction each use - longer timers, more tasks, larger financial stake after each relapse
 - **Real-time physiological interruption**: Wearable detects arousal markers + instantly triggers cold sensation, vibration, or loud app alarm to break the loop
 - **Pre-commitment bundling**: Hardware/app locks all devices by default - you only get 30 min access if you complete gym check-in + meditation session first
 - **Opponent process activation**: App forces aversive pairing during urge - shows personal goal losses, bank balance drain, or accountability video message before any unlock
@@ -300,7 +293,6 @@ lterally just bullet point.. no fluff.. no explanatoin. just the points, nothing
 20. Pharmacological support, appetite suppressants, metabolic assistance tools
 
 
-# 
 # DOG TRAINING / CHILD TRAINING
 
 -   Differential Reinforcement of Alternative Behavior (DRA)

@@ -99,6 +99,218 @@ import android.graphics.Path
 // =====================================================================================
 
 
+// =====================================================================================
+// AppConfig  —  THE ONE PLACE TO EDIT LISTS & SETTINGS
+// =====================================================================================
+// Everything here is compile-time (no file is parsed on the device — fastest possible,
+// and a typo fails the build instead of silently breaking a list at runtime).
+// Grouped by purpose; app entries map a friendly name -> the package our monitor sees.
+// Per-page block TEXT (e.g. specific Settings screens) deliberately stays in source.
+object AppConfig {
+
+    // === Mode → permissions ==========================================================
+    // The app's modes and what each allows. Display names are read from here so the
+    // rest of the app stays consistent. (Behavioural wiring beyond names/breathing/
+    // flag-threshold is still in code; this block is the dial to grow into.)
+    data class ModeSpec(
+        val id: String,
+        val displayName: String,
+        val breathingOn: Boolean,      // show the breathing pause on "breathing apps"
+        val flagThreshold: Int,        // borderline score at/above which a page is flagged
+    )
+    val MODES: List<ModeSpec> = listOf(
+        ModeSpec(id = "relaxed", displayName = "Relaxed", breathingOn = true,  flagThreshold = 60),
+        ModeSpec(id = "strict",  displayName = "Strict",  breathingOn = true,  flagThreshold = 45),
+    )
+    fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
+
+    // === Uninstall / device-admin passcode ==========================================
+    const val UNINSTALL_PASSCODE = "666666"
+
+    // === Developer mode =============================================================
+    // When true, the home page shows a "Dev tools" button (block-rule tools, log, etc.).
+    // Flip to false for a clean end-user build.
+    const val DEV_MODE = true
+
+    // === Safe apps (friendly name -> package) ========================================
+    // No public scrolling feed and no arbitrary adult content. The monitor SKIPS these
+    // entirely — no screenshot, scan, or log — to save battery/CPU. Add freely.
+    val SAFE_APPS_BY_NAME: Map<String, String> = linkedMapOf(
+        // Maps & navigation
+        "Google Maps" to "com.google.android.apps.maps", "Waze" to "com.waze",
+        "Google Maps Go" to "com.google.android.apps.navlite", "HERE WeGo" to "com.here.app.maps",
+        "Mapbox" to "com.mapbox.app", "Citymapper" to "com.citymapper.app.release",
+        "Google Earth" to "com.google.earth",
+        // Messaging & calls (no public feed)
+        "WhatsApp" to "com.whatsapp", "WhatsApp Business" to "com.whatsapp.w4b",
+        "Telegram" to "org.telegram.messenger", "Signal" to "org.thoughtcrime.securesms",
+        "Google Messages" to "com.google.android.apps.messaging", "AOSP Messaging" to "com.android.mms",
+        "Viber" to "com.viber.voip", "Skype" to "com.skype.raider",
+        "Gmail" to "com.google.android.gm", "Outlook" to "com.microsoft.office.outlook",
+        "K-9 Mail" to "com.fsck.k9", "Google Chat" to "com.google.android.apps.dynamite",
+        "Zoom" to "us.zoom.videomeetings", "Google Meet" to "com.google.android.apps.tachyon",
+        "Microsoft Teams" to "com.microsoft.teams",
+        // Productivity, notes, office, files
+        "Google Calendar" to "com.google.android.calendar", "Google Keep" to "com.google.android.keep",
+        "Microsoft To Do" to "com.microsoft.todos", "Todoist" to "com.todoist",
+        "TickTick" to "com.ticktick.task", "Evernote" to "com.evernote", "Notion" to "com.notion.id",
+        "Obsidian" to "md.obsidian", "Any.do" to "com.anydo",
+        "Word" to "com.microsoft.office.word", "Excel" to "com.microsoft.office.excel",
+        "PowerPoint" to "com.microsoft.office.powerpoint", "OneNote" to "com.microsoft.office.onenote",
+        "Google Drive" to "com.google.android.apps.docs",
+        "Google Docs" to "com.google.android.apps.docs.editors.docs",
+        "Google Sheets" to "com.google.android.apps.docs.editors.sheets",
+        "Google Slides" to "com.google.android.apps.docs.editors.slides",
+        "Dropbox" to "com.dropbox.android", "Adobe Reader" to "com.adobe.reader",
+        // Banking & finance
+        "PayPal" to "com.paypal.android.p2pmobile", "Google Wallet" to "com.google.android.apps.walletnfcrel",
+        "Wise" to "com.wise.android", "Revolut" to "com.revolut.revolut",
+        // Utilities & system
+        "Calculator" to "com.android.calculator2", "Google Calculator" to "com.google.android.calculator",
+        "Clock" to "com.android.deskclock", "Google Clock" to "com.google.android.deskclock",
+        "Files" to "com.android.documentsui", "Files by Google" to "com.google.android.apps.nbu.files",
+        "Contacts" to "com.android.contacts", "Google Contacts" to "com.google.android.contacts",
+        "Phone" to "com.android.dialer", "Google Phone" to "com.google.android.dialer",
+        "Google Camera" to "com.google.android.GoogleCamera", "Google Photos" to "com.google.android.apps.photos",
+        "Samsung Gallery" to "com.sec.android.gallery3d",
+        // Weather
+        "Google Weather" to "com.google.android.apps.weather", "Weather Channel" to "com.weather.Weather",
+        "Met Office" to "org.metoffice.weather.android",
+        // Audio & podcasts (no visual feed)
+        "Spotify" to "com.spotify.music", "Audible" to "com.audible.application",
+        "Google Podcasts" to "com.google.android.apps.podcasts", "Shazam" to "com.shazam.android",
+        "Deezer" to "deezer.android.app",
+        // Health & fitness
+        "Google Fit" to "com.google.android.apps.fitness", "Fitbit" to "com.fitbit.FitbitMobile",
+        "MyFitnessPal" to "com.myfitnesspal.android", "Sleep Cycle" to "com.sleepcycle.sleepanalysis",
+        // Transit, ride, food
+        "Uber" to "com.ubercab", "Uber Eats" to "com.ubercab.eats", "Deliveroo" to "com.deliveroo.orderapp",
+        "Grubhub" to "com.grubhub.android", "Zomato" to "com.application.zomato",
+        // Reading, reference, translation
+        "Play Books" to "com.google.android.apps.books", "Kindle" to "com.amazon.kindle",
+        "Kobo" to "com.kobobooks.android", "Google Translate" to "com.google.android.apps.translate",
+    )
+    val SAFE_APPS: Set<String> = SAFE_APPS_BY_NAME.values.toSet()
+
+    // === Greylist apps (friendly name -> package) ====================================
+    // Social / short-form apps that MAY contain bad stuff. Never whitelisted; defaulted
+    // to the time-limited GREY tier unless the user overrides.
+    val GREYLIST_APPS_BY_NAME: Map<String, String> = linkedMapOf(
+        "TikTok" to "com.zhiliaoapp.musically", "TikTok (trill)" to "com.ss.android.ugc.trill",
+        "TikTok Lite" to "com.zhiliaoapp.musically.go",
+        "Instagram" to "com.instagram.android", "Instagram Lite" to "com.instagram.lite",
+        "Snapchat" to "com.snapchat.android", "Reddit" to "com.reddit.frontpage",
+        "X / Twitter" to "com.twitter.android", "X Lite" to "com.twitter.android.lite",
+        "Facebook" to "com.facebook.katana", "Facebook Lite" to "com.facebook.lite",
+        "Messenger" to "com.facebook.orca", "Pinterest" to "com.pinterest", "Tumblr" to "com.tumblr",
+        "Twitch" to "tv.twitch.android.app", "Discord" to "com.discord",
+        "YouTube" to "com.google.android.youtube", "LinkedIn" to "com.linkedin.android",
+        "Bluesky" to "xyz.blueskyweb.app",
+    )
+    val GREYLIST_APPS: Set<String> = GREYLIST_APPS_BY_NAME.values.toSet()
+
+    // === Short-form / feed patterns (the toggleable category) ========================
+    // Page rules where only the feed should die; host rules where the whole thing is feed.
+    val SHORT_FORM_PATTERNS: List<String> = listOf(
+        "youtube.com/shorts", "instagram.com/reels", "facebook.com/reel",
+        "snapchat.com/spotlight", "tiktok.com", "reddit.com/r/popular",
+    )
+
+    // === Trusted domains (heuristic scorer skipped here) =============================
+    val SAFE_DOMAINS: Set<String> = setOf(
+        "wikipedia.org", "wikimedia.org", "wiktionary.org", "britannica.com",
+        "stackoverflow.com", "stackexchange.com", "superuser.com", "serverfault.com",
+        "github.com", "gitlab.com", "bitbucket.org", "developer.android.com", "developer.mozilla.org",
+        "developer.apple.com", "kotlinlang.org", "python.org", "npmjs.com", "pypi.org", "rust-lang.org",
+        "go.dev", "w3.org", "w3schools.com", "geeksforgeeks.org",
+        "maps.google.com", "docs.google.com", "drive.google.com", "calendar.google.com",
+        "mail.google.com", "translate.google.com", "scholar.google.com", "openstreetmap.org",
+        "gov.uk", "nhs.uk", "who.int", "cdc.gov", "nih.gov", "nasa.gov", "europa.eu", "usa.gov",
+        "khanacademy.org", "coursera.org", "edx.org", "mit.edu", "duolingo.com",
+        "notion.so", "todoist.com", "trello.com", "asana.com", "slack.com", "figma.com", "linear.app",
+        "outlook.com", "outlook.office.com", "office.com", "microsoft.com", "apple.com", "icloud.com",
+        "metoffice.gov.uk", "accuweather.com", "arxiv.org", "pubmed.ncbi.nlm.nih.gov",
+        "paypal.com", "wise.com", "revolut.com",
+    )
+
+    // === Browsers ====================================================================
+    // We standardise on Firefox. ALLOWED_BROWSERS stay usable; everything in
+    // BLOCKED_BROWSERS is funnelled away so users land on Firefox.
+    val ALLOWED_BROWSERS: Set<String> = setOf("org.mozilla.firefox", "org.mozilla.fenix")
+    val BLOCKED_BROWSERS: Set<String> = setOf(
+        "com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary",
+        "org.mozilla.firefox_beta", "org.mozilla.fennec_fdroid", "org.mozilla.focus",
+        "org.mozilla.klar", "org.mozilla.rocket", "org.mozilla.reference.browser",
+        "io.github.forkmaintainers.iceraven", "us.spotco.fennec_dos",
+        "com.duckduckgo.mobile.android",
+        "com.microsoft.emmx", "com.opera.browser", "com.opera.browser.beta", "com.opera.mini.native",
+        "com.opera.gx", "com.opera.touch", "com.sec.android.app.sbrowser",
+        "com.sec.android.app.sbrowser.beta", "com.vivaldi.browser", "com.vivaldi.browser.snapshot",
+        "com.yandex.browser", "com.yandex.browser.beta",
+        "com.brave.browser", "com.brave.browser_beta", "com.brave.browser_nightly",
+        "com.android.browser", "com.google.android.browser",
+        "com.miui.browser", "com.mi.globalbrowser", "com.mi.globalbrowser.mini", "com.heytap.browser",
+    )
+
+    // === Firefox address-bar detection (Firefox-only now) ============================
+    // The view-ids the URL lives in. Trimmed to Firefox since that's the one browser
+    // we support; generic hints stay as a safety net.
+    val ADDRESS_BAR_IDS: List<String> = listOf(
+        ":id/mozac_browser_toolbar_url_view",  // Firefox (old toolbar)
+        "addressbar_url_box",                  // Firefox (new Compose toolbar)
+    )
+    val ADDRESS_BAR_ID_HINTS: List<String> = listOf("url", "address", "location")
+    val ADDRESS_BAR_HINTS: List<String> = listOf(
+        "search or enter", "search or type", "address bar", "enter address", "search address", "edit url",
+    )
+    // Firefox private/incognito + Focus stealth screens we block (off-web only).
+    data class ScreenGuard(val pkg: String, val titleKeywords: List<String>, val contentKeywords: List<String>, val reason: String)
+    val SCREEN_GUARDS: List<ScreenGuard> = listOf(
+        ScreenGuard("org.mozilla.focus", listOf("privacy"), listOf("stealth"),
+            "Firefox Focus stealth/privacy settings are blocked"),
+        // Private browsing on Firefox defeats monitoring → block the private-tab screen.
+        ScreenGuard("org.mozilla.firefox", listOf("private browsing", "private tab", "you're in a private tab"), emptyList(),
+            "Private browsing is blocked \u2014 use a normal tab"),
+        ScreenGuard("org.mozilla.fenix", listOf("private browsing", "private tab", "you're in a private tab"), emptyList(),
+            "Private browsing is blocked \u2014 use a normal tab"),
+    )
+
+    // === Search engines (term lives in a query param; only the search path matters) ==
+    data class Search(val domain: String, val path: String, val params: List<String>)
+    val SEARCH_ENGINES: List<Search> = listOf(
+        Search("google.", "/search", listOf("q")),
+        Search("duckduckgo.com", "", listOf("q")),
+        Search("search.brave.com", "/search", listOf("q")),
+        Search("ecosia.org", "/search", listOf("q")),
+        Search("youtube.com", "/results", listOf("search_query")),
+        Search("amazon.", "/s", listOf("k")),
+        Search("ebay.", "/sch", listOf("_nkw")),
+    )
+
+    // === Apps the monitor ignores / never logs / breathing-gates =====================
+    val IGNORED_PACKAGES: Set<String> = setOf("com.android.systemui")
+    val BREATHING_APPS: Set<String> = setOf(
+        "org.mozilla.firefox", "org.mozilla.fenix", "com.google.android.youtube", "com.android.vending",
+    )
+    val NOT_LOGGED_PACKAGES: Set<String> = setOf(
+        "com.sec.android.app.launcher", "com.google.android.apps.nexuslauncher",
+        "com.android.launcher", "com.android.launcher3", "com.microsoft.launcher",
+    )
+    val BROWSER_DEBUG_PACKAGES: Set<String> = setOf("org.mozilla.firefox")
+
+    // === Lockdown / unlock-wait essentials (kept usable even while locked down) =======
+    // Matched as substrings of the package name. (Related to SAFE_APPS but narrower:
+    // only the bare essentials, so a lockdown still lets you call/text/navigate.)
+    val LOCKDOWN_ALLOWED_SUBSTRINGS: List<String> = listOf(
+        "launcher", "trebuchet", "dialer", "incallui", "telecom", "phone", "contacts",
+        "messaging", "mms", "deskclock", "clock", "alarm",
+    )
+
+    // === Domain-strike escalation ====================================================
+    const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
+    const val DOMAIN_STRIKE_THRESHOLD = 3         // strikes on one domain in a day -> permanent block
+}
+
 // --------------------------------------------------------------
 // MainActivity
 // --------------------------------------------------------------
@@ -446,6 +658,7 @@ private fun showStatsMenu() {
     root.addView(backText { setupMainScreen() })
     root.addView(titleText("Statistics"))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    list.addView(pickCard("Progress & reward") { showProgress() })
     list.addView(pickCard("Temptation patterns") { showTemptationStats() })
     list.addView(pickCard("Relapse patterns") { showRelapseStats() })
     list.addView(pickCard("Unlock attempts") { showLoosenStats() })
@@ -453,6 +666,108 @@ private fun showStatsMenu() {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
     setContentView(root)
+}
+
+// ── Progress & reward: the non-resetting consistency score + real stats ─────
+private fun showProgress() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val s = Progress.snapshot(this)
+    val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
+    val root = vbox(pad)
+    root.addView(backText { showStatsMenu() })
+    root.addView(titleText("Progress"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentView(root)
+
+    if (!s.hasData) {
+        c.addView(TextView(this).apply {
+            text = "This fills in as you use the app. Ride out an urge or get through a wait, and your consistency and reclaimed time start showing here."
+            textSize = 15f; setTextColor(0xFF6B7075.toInt()); setPadding(0, (12 * dp).toInt(), 0, 0)
+        })
+        return
+    }
+
+    // headline: consistency that never resets to zero
+    c.addView(statBigCard("${s.consistency}%", "consistency",
+        "${s.cleanDays} of the last ${s.trackedDays} days clean", green))
+    c.addView(TextView(this).apply {
+        text = "One slip never resets this \u2014 it only dips it a little. The goal is the trend, not a perfect streak."
+        textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+    })
+    if (s.forgivingRun > 0) c.addView(TextView(this).apply {
+        text = "Current run: ${s.forgivingRun} day${if (s.forgivingRun == 1) "" else "s"} \u2014 one slip won't end it."
+        textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(green); setPadding(0, (8 * dp).toInt(), 0, 0)
+    })
+
+    c.addView(sectionTitle("Time reclaimed"))
+    c.addView(statBigCard("${s.reclaimedHours}h", "reclaimed so far",
+        "estimated \u2014 about ${Progress.EST_MIN_PER_WIN} min per urge you rode out", teal))
+
+    c.addView(sectionTitle("Heading the right way"))
+    c.addView(TrendView(this, s.weeklyWins), LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, (120 * dp).toInt()))
+    c.addView(TextView(this).apply {
+        text = "urges ridden out per week (last 8 weeks)"
+        textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+    })
+
+    c.addView(sectionTitle("If you keep this pace"))
+    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    val cardH = statBigCard("~${s.projYearHours}h", "per year", null, teal).apply {
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = (4 * dp).toInt() }
+    }
+    val cardM = statBigCard("~\u00a3${s.projYearGbp}", "per year", null, green).apply {
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = (4 * dp).toInt() }
+    }
+    row.addView(cardH); row.addView(cardM)
+    c.addView(row)
+    c.addView(TextView(this).apply {
+        text = "projected from your recent pace \u00b7 reclaimed time valued at ~\u00a3${Progress.VALUE_PER_HOUR_GBP}/hr"
+        textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+    })
+
+    c.addView(sectionTitle("Milestones"))
+    if (s.milestones.isEmpty()) c.addView(TextView(this).apply {
+        text = "None yet \u2014 they're coming."; textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+    })
+    s.milestones.forEach { m ->
+        c.addView(TextView(this).apply {
+            text = "\uD83C\uDFC5  $m"; textSize = 15f; setPadding(0, (5 * dp).toInt(), 0, (5 * dp).toInt())
+        })
+    }
+    s.nextMilestone?.let { nm ->
+        c.addView(TextView(this).apply {
+            text = "\u25CB  Next: $nm"; textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+            setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
+        })
+    }
+}
+
+private fun statBigCard(value: String, label: String, sub: String?, accent: Int): LinearLayout {
+    val dp = resources.displayMetrics.density
+    return LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 14 * dp; setColor(0xFFF3F6F5.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (8 * dp).toInt() }
+        addView(TextView(this@MainActivity).apply {
+            text = value; textSize = 30f; setTypeface(typeface, Typeface.BOLD); setTextColor(accent)
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = label; textSize = 14f; setTextColor(0xFF4A4F54.toInt())
+        })
+        if (sub != null) addView(TextView(this@MainActivity).apply {
+            text = sub; textSize = 12f; setTextColor(0xFF80868B.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+        })
+    }
 }
 
 private fun statsPage(title: String, back: () -> Unit, build: (LinearLayout) -> Unit) {
@@ -1102,7 +1417,7 @@ private fun appSiteSaved(target: String, tier: String) {
     val spacer = View(this)
     root.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     root.addView(Button(this).apply { text = "Add another"; setOnClickListener { appSiteChooseKind() } })
-    root.addView(Button(this).apply { text = "Done"; setOnClickListener { setupMainScreen() } })
+    root.addView(Button(this).apply { text = "Done"; setOnClickListener { showReportScreen() } })
     setContentView(root)
 }
 
@@ -1186,24 +1501,627 @@ private fun showRecentBlocks() {
 }
 
 // ── Report screen: 4 equal full-width panes ────────────────────────────────
+// ── Disguised home: a productivity face; the addiction tools live behind a tab ─
+private fun setupHomeScreen() {
+    onHomeScreen = true; onTemptationsTab = false; onReportScreen = false; onDevScreen = false
+    inSubPage = false; inRelapseFlow = false; inTemptationFlow = false
+    inLoosenFlow = false; inAppSiteFlow = false
+    stopRideTimer(); stopLoosenTimer(); entriesJob?.cancel()
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+
+    // ── FIRST: what you've reclaimed (reward, don't punish) ─────────────────
+    val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
+    val s = Progress.snapshot(this)
+    content.addView(TextView(this).apply {
+        text = "What you've reclaimed"; textSize = 24f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+    if (s.hasData) {
+        content.addView(statBigCard("${s.reclaimedHours}h", "reclaimed so far",
+            "about ${Progress.EST_MIN_PER_WIN} min back for every urge you rode out", teal))
+        content.addView(statBigCard("${s.consistency}%", "consistency",
+            "${s.cleanDays} of the last ${s.trackedDays} days clean \u2014 one slip never resets it", green))
+    } else {
+        content.addView(statBigCard("0h", "reclaimed so far",
+            "ride out your first urge and your reclaimed time starts here", teal))
+    }
+
+    // ── The graphic: what the scroll costs, over a number of years ──────────
+    content.addView(sectionTitle("What the scroll costs you"))
+    val hero = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        val p = (18 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+    val donut = WastedDonutView(this)
+    hero.addView(donut, LinearLayout.LayoutParams((168 * dp).toInt(), (168 * dp).toInt()).apply {
+        gravity = Gravity.CENTER_HORIZONTAL; topMargin = (4 * dp).toInt(); bottomMargin = (6 * dp).toInt()
+    })
+    val bigStat = TextView(this).apply { textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt()) }
+    val subStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
+    val lifeStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt()) }
+    hero.addView(bigStat); hero.addView(subStat); hero.addView(lifeStat)
+    val minLabel = TextView(this).apply { textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) }
+    hero.addView(minLabel)
+    val minSeek = android.widget.SeekBar(this).apply { max = 300; progress = Usage.minutes(this@MainActivity).coerceIn(0, 300) }
+    hero.addView(minSeek)
+    val yearLabel = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0) }
+    hero.addView(yearLabel)
+    val yearSeek = android.widget.SeekBar(this).apply { max = 49; progress = (Usage.years(this@MainActivity) - 1).coerceIn(0, 49) }
+    hero.addView(yearSeek)
+    content.addView(hero)
+
+    // ── big "Productivity" button (everything else lives behind it) ─────────
+    content.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(teal) }
+        val p = (18 * dp).toInt(); setPadding(p, (16 * dp).toInt(), p, (16 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (14 * dp).toInt() }
+        isClickable = true; isFocusable = true; setOnClickListener { showProductivity() }
+        addView(TextView(this@MainActivity).apply {
+            text = "Productivity"; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        addView(TextView(this@MainActivity).apply { text = "\u2192"; textSize = 22f; setTextColor(0xFFFFFFFF.toInt()) })
+    })
+
+    // ── tools, then temptations ─────────────────────────────────────────────
+    content.addView(TextView(this).apply {
+        text = "TOOLS"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+        setPadding((2 * dp).toInt(), (22 * dp).toInt(), 0, (6 * dp).toInt())
+    })
+    content.addView(homeCard("Temptations", "Manage urges and stay on track.") { showTemptationsTab() })
+
+    // ── About & privacy (moved off the dev page) ────────────────────────────
+    content.addView(homeCard("About & privacy", "How this app works and what it stores.") { showAboutPage() })
+
+    // ── Dev tools (only when dev mode is on) ────────────────────────────────
+    if (AppConfig.DEV_MODE) {
+        content.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp; setStroke((1 * dp).toInt(), 0xFFB0B6BB.toInt()); setColor(0x00000000)
+            }
+            val p = (14 * dp).toInt(); setPadding(p, (12 * dp).toInt(), p, (12 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (12 * dp).toInt() }
+            isClickable = true; isFocusable = true; setOnClickListener { setupMainScreen() }
+            addView(TextView(this@MainActivity).apply {
+                text = "\uD83D\uDD27  Dev tools"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF5A6068.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(TextView(this@MainActivity).apply { text = "\u203A"; textSize = 20f; setTextColor(0xFF9AA0A6.toInt()) })
+        })
+    }
+
+    // permission/status console, at the bottom of the opening page
+    content.addView(permissionConsole())
+
+    fun refresh() {
+        val min = Usage.minutes(this); val yrs = Usage.years(this)
+        val perYearHours = min * 365.0 / 60.0
+        val wakingDaysYr = (perYearHours / Usage.WAKING_HOURS)
+        val gbpYr = Math.round(perYearHours * Usage.VALUE_PER_HOUR_GBP)
+        val totalWakingYears = perYearHours * yrs / Usage.WAKING_HOURS / 365.0
+        val gbpTotal = gbpYr * yrs
+        donut.setFraction((min / (Usage.WAKING_HOURS * 60f)))
+        bigStat.text = "${Math.round(wakingDaysYr)} waking days a year"
+        subStat.text = "\u2248 \u00a3$gbpYr a year of your time"
+        lifeStat.text = "Over $yrs year${if (yrs == 1) "" else "s"}: about ${String.format("%.1f", totalWakingYears)} years of waking life \u2014 and \u00a3$gbpTotal"
+        minLabel.text = "$min minutes a day on short video & feeds"
+        yearLabel.text = "Looking $yrs year${if (yrs == 1) "" else "s"} ahead"
+    }
+
+    val seekListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) {
+            if (!fromUser) return
+            if (sb === minSeek) Usage.setMinutes(this@MainActivity, p)
+            else Usage.setYears(this@MainActivity, 1 + p)
+            refresh()
+        }
+        override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+        override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+    }
+    minSeek.setOnSeekBarChangeListener(seekListener)
+    yearSeek.setOnSeekBarChangeListener(seekListener)
+
+    val root = ScrollView(this).apply {
+        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        isFillViewport = true
+        addView(content)
+    }
+    setContentView(root)
+    refresh()
+}
+
+// Everything that used to sit under the home graphic now lives here.
+private fun showProductivity() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+    content.addView(backText { setupHomeScreen() })
+    content.addView(titleText("Productivity"))
+
+    // Short-form blocking toggle
+    val sfSub = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
+    val sfSwitch = android.widget.Switch(this).apply { isChecked = ShortForm.enabled() }
+    val sfCard = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt()) }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (4 * dp).toInt() }
+    }
+    val sfText = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    sfText.addView(TextView(this).apply { text = "Block reels, shorts & feeds"; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) })
+    sfText.addView(sfSub)
+    sfCard.addView(sfText); sfCard.addView(sfSwitch)
+    fun refreshSf() { sfSub.text = if (ShortForm.enabled()) "On \u2014 the endless feeds are blocked." else "Off \u2014 tap to cut the doomscroll." }
+    sfSwitch.setOnCheckedChangeListener { _, checked -> ShortForm.setEnabled(this, checked); refreshSf() }
+    refreshSf()
+    content.addView(sfCard)
+
+    // Your next year as days
+    content.addView(sectionTitle("Your next year"))
+    val grid = TimeGridView(this)
+    content.addView(grid, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    val gridCaption = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0) }
+    content.addView(gridCaption)
+
+    // Opportunity cost
+    content.addView(sectionTitle("Reclaim it and you could"))
+    val oppBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    content.addView(oppBox)
+
+    val min = Usage.minutes(this)
+    val perYearHours = min * 365.0 / 60.0
+    val wakingDaysYr = Math.round(perYearHours / Usage.WAKING_HOURS).toInt()
+    grid.setFilledDays(wakingDaysYr)
+    gridCaption.text = "$wakingDaysYr of the next 365 days, gone to the feed"
+    listOf(
+        "${Math.round(perYearHours / 6.0)} books read \u2014 about 6 hours each",
+        "${Math.round(perYearHours / 0.75)} proper workouts, 45 minutes apiece",
+        "${Math.round(perYearHours / 480.0 * 100)}% of the way to conversational in a new language",
+        "${Math.round(perYearHours / 8.0)} full nights of extra sleep",
+    ).forEach { line ->
+        oppBox.addView(TextView(this).apply {
+            text = "\u2022  $line"; textSize = 15f; setTextColor(0xFF3A434B.toInt())
+            setLineSpacing((3 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+    }
+
+    val root = ScrollView(this).apply {
+        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        isFillViewport = true; addView(content)
+    }
+    setContentView(root)
+}
+
+private fun showTemptationsTab() {
+    onTemptationsTab = true; onHomeScreen = false; onReportScreen = false; inSubPage = false
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { setupHomeScreen() })
+    root.addView(titleText("Temptations"))
+    root.addView(TextView(this).apply {
+        text = "What are you managing?"; textSize = 15f; setTextColor(0xFF7B848C.toInt())
+        setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    list.addView(homeCard("Sexual arousal  \u2642\uFE0F\u2640\uFE0F", "Tools for the moment, and the longer game.") {
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+    root.addView(list)
+    root.addView(grow())
+    root.addView(TextView(this).apply {
+        text = "More areas later."; textSize = 13f; setTextColor(0xFF9AA0A6.toInt())
+        setPadding(0, 0, 0, (8 * dp).toInt())
+    })
+    setContentView(root)
+}
+
+/** A clean tappable card for the home/tab screens (chevron shown when clickable). */
+private fun homeCard(title: String, sub: String?, onClick: (() -> Unit)? = null): View {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
+        }
+        val p = (18 * dp).toInt(); setPadding(p, (16 * dp).toInt(), p, (16 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+        if (onClick != null) { isClickable = true; isFocusable = true; setOnClickListener { onClick() } }
+    }
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+    })
+    if (sub != null) texts.addView(TextView(this).apply {
+        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+    })
+    row.addView(texts)
+    if (onClick != null) row.addView(TextView(this).apply {
+        text = "\u203A"; textSize = 24f; setTextColor(0xFFB0B5BA.toInt())
+    })
+    return row
+}
+
+// ── Break the addiction protocol: gamified, sequential big moves ────────────
+private fun showProtocol() {
+    inSubPage = true; onHomeScreen = false; onTemptationsTab = false
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val appsDone = Protocol.appsDone(this)
+    val holidayDone = Protocol.holidayDone(this)
+    val strictActive = Mode.isLocked(this)
+    val sevenStarted = Protocol.sevenStarted(this)
+    val root = vbox(pad)
+    root.addView(backText { showReportScreen() })
+    root.addView(titleText("Break the addiction protocol"))
+    root.addView(TextView(this).apply {
+        text = "Two moves do most of the work: a real break away from your device, then locking it down hard for the week after. Everything else supports those two."
+        textSize = 15f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+    // ── THE TWO KEY MOVES (visually elevated) ───────────────────────────────
+    list.addView(TextView(this).apply {
+        text = "\u2B50  THE TWO THAT MATTER MOST"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFFB8860B.toInt()); setPadding((2 * dp).toInt(), 0, 0, (8 * dp).toInt())
+    })
+    list.addView(protocolKeyStep("Go on holiday \u2014 without your device",
+        "Step right out of the environment the habit lives in. This is the single biggest reset.",
+        holidayDone) { showProtocolHoliday() })
+    val sevenSub = when {
+        strictActive -> "Active \u2014 ${Mode.daysLeft(this)} days left."
+        sevenStarted -> "Completed. You can run it again any time."
+        !holidayDone -> "Unlocks after the holiday \u2014 it's what protects the fresh start."
+        else -> "Lock yourself out for 7 days straight, right after the holiday."
+    }
+    list.addView(protocolKeyStep("Super-strict lock for a week after",
+        sevenSub, sevenStarted && !strictActive, locked = !holidayDone) {
+        if (holidayDone) showProtocol7Day()
+        else Toast.makeText(this, "Do the holiday first \u2014 it's what makes the lock stick.", Toast.LENGTH_SHORT).show()
+    })
+
+    // ── SUPPORTING TO-DOS (tickable) ────────────────────────────────────────
+    list.addView(TextView(this).apply {
+        text = "BUILD THE WALLS AROUND IT"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
+    })
+    list.addView(protocolStep(0, "Rearrange your apps",
+        "Get the troublesome ones out of easy reach.", appsDone, false, null) { showProtocolApps() })
+    val checks = listOf(
+        "replace_phone" to ("Buy things that replace your phone" to "An alarm clock, a watch, a camera, a kindle \u2014 so you don't reach for the phone for them."),
+        "out_of_house" to ("Be out of the house as much as possible" to "Spend the money if you have to \u2014 on anything that isn't addictive. Friends and social clubs most of all."),
+        "delete_social" to ("Delete your social media accounts" to "Not just the apps \u2014 the accounts. Remove the pull entirely."),
+        "new_background" to ("Set a new phone background" to "A clean visual reset every time you unlock."),
+        "new_theme" to ("Change your app theme, if you can" to "Make the phone feel like a different, less familiar device."),
+    )
+    checks.forEach { (key, pair) ->
+        val (t, sub) = pair
+        list.addView(protocolCheckRow(key, t, sub))
+    }
+
+    // ── READ-THROUGH GUIDANCE (tick once you've taken it in) ────────────────
+    list.addView(TextView(this).apply {
+        text = "KEEP THE PHONE OUT OF YOUR HANDS"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
+    })
+    list.addView(protocolGuidanceCard("Don't bring your phone to bed or high-risk spots",
+        "The bedroom, the bathroom, anywhere you've slipped before. Leave it charging in another room."))
+    list.addView(protocolGuidanceCard("Get a physical alarm clock \u2014 this one's important",
+        "The phone-by-the-bed habit is where a lot of relapses start. Replacing the things the phone does, and not carrying it everywhere, is half the battle."))
+    list.addView(protocolGuidanceCard("Change your state when an urge hits",
+        "A shower, a cold blast at the end of it, a quick workout, stepping outside, a tight bedtime and wake-up routine, even a game \u2014 anything that breaks the moment and shifts how you feel."))
+
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+    })
+    setContentView(root)
+}
+
+/** A tickable supporting to-do; persists via Protocol.isChecked. */
+private fun protocolCheckRow(key: String, title: String, sub: String): View {
+    val dp = resources.displayMetrics.density
+    var checked = Protocol.isChecked(this, key)
+    lateinit var marker: TextView
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt()) }
+        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+        isClickable = true; isFocusable = true
+    }
+    marker = TextView(this).apply {
+        textSize = 18f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD)
+        val s = (30 * dp).toInt()
+        layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
+    }
+    fun paint() {
+        marker.text = if (checked) "\u2713" else ""
+        marker.setTextColor(0xFFFFFFFF.toInt())
+        marker.background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(if (checked) 0xFF2E7D32.toInt() else 0xFFE2E6E9.toInt())
+        }
+    }
+    paint()
+    row.setOnClickListener {
+        checked = !checked; Protocol.setChecked(this, key, checked); paint()
+    }
+    row.addView(marker)
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+    })
+    texts.addView(TextView(this).apply {
+        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+    })
+    row.addView(texts)
+    return row
+}
+
+/** A read-through guidance card (no number, no required tick). */
+private fun protocolGuidanceCard(title: String, sub: String): View {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp; setColor(0xFFFCFAF3.toInt()); setStroke((1 * dp).toInt(), 0xFFEAE0C8.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+    }
+    row.addView(TextView(this).apply {
+        text = "\uD83D\uDCA1"; textSize = 16f; setPadding(0, (1 * dp).toInt(), (12 * dp).toInt(), 0)
+    })
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = title; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B5B14.toInt())
+    })
+    texts.addView(TextView(this).apply {
+        text = sub; textSize = 13f; setTextColor(0xFF7A6F4A.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+        setLineSpacing((2 * dp), 1f)
+    })
+    row.addView(texts)
+    return row
+}
+
+/** A larger, highlighted "key move" step (for the two that matter most). */
+private fun protocolKeyStep(title: String, sub: String, done: Boolean, locked: Boolean = false, onClick: () -> Unit): View {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 18 * dp
+            setColor(if (done) 0xFFEAF5EC.toInt() else if (locked) 0xFFF2EFE6.toInt() else 0xFFFFF8E6.toInt())
+            setStroke((if (done) 2 else 2 * 1).times(dp).toInt(), if (done) 0xFF2E7D32.toInt() else 0xFFD9B65A.toInt())
+        }
+        val p = (18 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+        alpha = if (locked) 0.65f else 1f
+        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
+    }
+    val marker = TextView(this).apply {
+        text = when { done -> "\u2713"; locked -> "\uD83D\uDD12"; else -> "\u2B50" }
+        textSize = 20f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (done) 0xFFFFFFFF.toInt() else 0xFF8A6D1B.toInt())
+        if (done) background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0xFF2E7D32.toInt())
+        }
+        val s = (38 * dp).toInt()
+        layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
+    }
+    row.addView(marker)
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = title; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+    })
+    texts.addView(TextView(this).apply {
+        text = sub; textSize = 13f; setTextColor(0xFF6B6448.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+        setLineSpacing((2 * dp), 1f)
+    })
+    row.addView(texts)
+    return row
+}
+
+/** A numbered protocol step with a tick / lock / active state. */
+private fun protocolStep(num: Int, title: String, sub: String, done: Boolean, locked: Boolean,
+                         badge: String?, onClick: () -> Unit): View {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp; setColor(if (locked) 0xFFEDEFF1.toInt() else 0xFFF4F6F8.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+        alpha = if (locked) 0.6f else 1f
+        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
+    }
+    // status marker: tick / lock / number
+    val marker = TextView(this).apply {
+        text = when { done -> "\u2713"; locked -> "\uD83D\uDD12"; else -> num.toString() }
+        textSize = if (done || locked) 18f else 16f; gravity = Gravity.CENTER
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (done) 0xFFFFFFFF.toInt() else 0xFF52606A.toInt())
+        if (done) background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0xFF2E7D32.toInt())
+        } else if (!locked) background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0xFFE2E6E9.toInt())
+        }
+        val s = (34 * dp).toInt()
+        layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
+    }
+    row.addView(marker)
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+    })
+    texts.addView(TextView(this).apply {
+        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+    })
+    row.addView(texts)
+    if (badge == "active") row.addView(TextView(this).apply {
+        text = "\u25CF"; textSize = 14f; setTextColor(0xFF2E7D32.toInt())
+    })
+    return row
+}
+
+private fun showProtocolApps() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { showProtocol() })
+    root.addView(titleText("Rearrange your apps"))
+    root.addView(body("Make the habit harder to reach by accident. Before anything else:"))
+    listOf(
+        "Move anything that tends to lead you in off your home screen \u2014 bury it in a folder, or remove the shortcut.",
+        "Sign out of accounts so opening them isn't one tap.",
+        "Delete the apps you don't truly need. The friction is the point.",
+        "Add the rest to this app's block list so they're handled for you.",
+    ).forEach { line ->
+        root.addView(TextView(this).apply {
+            text = "\u2022  $line"; textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+    }
+    root.addView(grow())
+    root.addView(bigChoice(if (Protocol.appsDone(this)) "Done \u2713" else "I've rearranged my apps", 0xFF2E7D32.toInt()) {
+        Protocol.setApps(this, true); showProtocol()
+    })
+    setContentView(root)
+}
+
+private fun showProtocolHoliday() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { showProtocol() })
+    root.addView(titleText("Go on holiday / break the routine"))
+    root.addView(body("The habit is wired to a place and a rhythm. The fastest way to weaken it is to physically leave that environment for a while."))
+    listOf(
+        "Aim for a proper break \u2014 ideally around two weeks.",
+        "Go without your phone if you can, or leave it locked down the whole time.",
+        "Fill the days with people, movement and daylight \u2014 not screens.",
+        "Come back to a home you've already rearranged, and start the 7-day lock fresh.",
+    ).forEach { line ->
+        root.addView(TextView(this).apply {
+            text = "\u2022  $line"; textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+    }
+    root.addView(grow())
+    root.addView(bigChoice(if (Protocol.holidayDone(this)) "Done \u2713" else "I've taken the break", 0xFF2E7D32.toInt()) {
+        Protocol.setHoliday(this, true); showProtocol()
+    })
+    setContentView(root)
+}
+
+private fun showProtocol7Day() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { showProtocol() })
+    root.addView(titleText("7-day strict lock"))
+    root.addView(body("Strict mode stays on for 7 days. You can't switch back to relaxed until it ends. It's most effective once you've reset with the holiday \u2014 you're protecting fresh ground, not fighting uphill."))
+    if (Mode.isLocked(this)) {
+        root.addView(TextView(this).apply {
+            text = "Active \u2014 ${Mode.daysLeft(this@MainActivity)} days left."
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+            setPadding(0, (12 * dp).toInt(), 0, 0)
+        })
+        root.addView(grow())
+    } else {
+        root.addView(grow())
+        root.addView(bigChoice("Start the 7-day lock", 0xFF2E7D32.toInt()) {
+            Protocol.setSevenStarted(this)
+            Mode.startWeekStrict(this)
+            Toast.makeText(this, "Strict mode on for 7 days", Toast.LENGTH_SHORT).show()
+            showProtocol()
+        })
+    }
+    setContentView(root)
+}
+
 private fun showReportScreen() {
     onReportScreen = true
+    onHomeScreen = false
+    onTemptationsTab = false
     inRelapseFlow = false
     inSubPage = false
     inTemptationFlow = false
     inLoosenFlow = false
     inAppSiteFlow = false
     stopLoosenTimer()
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    // Colours are easy to change — just edit these four.
+    // ── top controls: back button (left) + mode dropdown (right) ────────────
+    val top = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, (8 * dp).toInt())
+    }
+    val modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    modeRow.addView(backText { reportBackTarget() }.apply {
+        (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0
+    })
+    modeRow.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
+    modeRow.addView(modeSpinner())
+    top.addView(modeRow)
+    top.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 14 * dp; setColor(0xFF2E3F47.toInt()) }
+        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (10 * dp).toInt() }
+        isClickable = true; isFocusable = true; setOnClickListener { showProtocol() }
+        addView(TextView(this@MainActivity).apply {
+            text = "Break the addiction protocol"; textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFFFFFFFF.toInt())
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        addView(TextView(this@MainActivity).apply { text = "\u203A"; textSize = 22f; setTextColor(0xFFAEB6BB.toInt()) })
+    })
+    root.addView(top)
+    // Four main panes (weighted) + a thinner Statistics pane at the bottom.
     root.addView(reportPane("Report an app/site", 0xFF34464E.toInt()) { onReportAppSite() })
     root.addView(reportPane("I feel temptation", 0xFF3E535C.toInt()) { onFeelTemptation() })
     root.addView(reportPane("I'm going to look anyway", 0xFF48606A.toInt()) { onLookAnyway() })
     root.addView(reportPane("Report relapse", 0xFF526D78.toInt()) { onReportRelapse() })
+    root.addView(reportPane("Statistics", 0xFF5E7A86.toInt()) { showStatsMenu() }.apply {
+        textSize = 16f
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt())
+    })
     setContentView(root)
 }
 
@@ -1339,7 +2257,7 @@ private fun loosenStop(message: String) {
     root.addView(titleText("Good."))
     root.addView(body(message))
     root.addView(grow())
-    root.addView(Button(this).apply { text = "Done"; setOnClickListener { setupMainScreen() } })
+    root.addView(Button(this).apply { text = "Done"; setOnClickListener { showReportScreen() } })
     setContentView(root)
 }
 
@@ -1355,7 +2273,7 @@ private fun loosenBlockedScreen() {
     root.addView(titleText("Not available right now"))
     root.addView(body(msg))
     root.addView(grow())
-    root.addView(Button(this).apply { text = "Back"; setOnClickListener { setupMainScreen() } })
+    root.addView(Button(this).apply { text = "Back"; setOnClickListener { showReportScreen() } })
     setContentView(root)
 }
 
@@ -1766,7 +2684,7 @@ private fun loosenUnlockedScreen() {
     root.addView(body("The breathing orb and image friction stay on. It re-locks itself when the timer ends."))
     root.addView(grow())
     root.addView(bigChoice("Go", 0xFF3E535C.toInt()) { moveTaskToBack(true) })
-    root.addView(Button(this).apply { text = "Done"; setOnClickListener { setupMainScreen() } })
+    root.addView(Button(this).apply { text = "Done"; setOnClickListener { showReportScreen() } })
     setContentView(root)
     runLoosenCountdown(countdown, System.currentTimeMillis() + LoosenWindow.remaining(this)) {
         countdown.text = "Re-locked"
@@ -1887,7 +2805,7 @@ private fun openPanic() {
         text = "I'm okay now"
         setOnClickListener {
             if (inLoosenFlow) { if (LoosenWait.isActive(this@MainActivity)) loosenWaitScreen() else loosenIntro1() }
-            else setupMainScreen()
+            else showReportScreen()
         }
     })
     setContentView(root)
@@ -1994,8 +2912,16 @@ private fun stopLoosenTimer() {
 private fun backText(onBack: () -> Unit): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = "\u2190 Back"; textSize = 15f
-        setPadding(0, 0, 0, (8 * dp).toInt())
+        text = "\u2190 Back"; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFFFFFFFF.toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 22 * dp; setColor(0xFF2E9E8F.toInt())   // breath-orb teal
+        }
+        val px = (18 * dp).toInt(); val py = (9 * dp).toInt(); setPadding(px, py, px, py)
+        // wrap so the pill hugs the text rather than filling the row
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (12 * dp).toInt() }
         isClickable = true; isFocusable = true
         setOnClickListener { onBack() }
     }
@@ -2166,6 +3092,7 @@ private fun noteStep() {
 }
 
 private fun saveRelapse() {
+    Progress.recordSlip(this)
     lifecycleScope.launch {
         val priors = RelapseLog.all(this@MainActivity)   // their earlier reports (excludes this one)
         val report = draft.toReport()
@@ -2581,13 +3508,9 @@ private fun refreshModeUi() {
     val locked = Mode.isLocked(this)
     spinnerMode.isEnabled = !locked
     val btn = findViewById<Button>(R.id.btn_strict_week)
-    if (locked) {
-        btn.isEnabled = false
-        btn.text = "Strict locked (${Mode.daysLeft(this)})"
-    } else {
-        btn.isEnabled = true
-        btn.text = "Start week-long strict mode"
-    }
+    btn.isEnabled = true
+    btn.text = if (locked) "Break the addiction protocol  \u00b7  strict ${Mode.daysLeft(this)}d left"
+               else "Break the addiction protocol"
 }
 
 private fun startWeekStrict() {
@@ -2634,8 +3557,10 @@ private fun startWeekStrict() {
             inTemptationFlow -> temptationBack()
             inLoosenFlow -> loosenBack()
             inAppSiteFlow -> appSiteBack()
+            onReportScreen -> reportBackTarget()
+            onDevScreen -> setupHomeScreen()
+            onTemptationsTab -> setupHomeScreen()
             inSubPage -> setupMainScreen()
-            onReportScreen -> setupMainScreen()
             else -> super.onBackPressed()
         }
     }
@@ -2650,6 +3575,10 @@ private fun startWeekStrict() {
     private var lockPromptHandled = false
     private var onReportScreen = false
     private var inSubPage = false
+    private var onHomeScreen = false
+    private var onTemptationsTab = false
+    private var onDevScreen = false
+    private var reportBackTarget: () -> Unit = { setupMainScreen() }
 
     private fun currentStep(): Step = when {
         !isAccessibilityEnabled()       -> Step.MONITORING
@@ -2710,7 +3639,7 @@ private fun startWeekStrict() {
                     { lockPromptHandled = true; updateScreen() },
                 )
             }
-            Step.READY -> setupMainScreen()
+            Step.READY -> setupHomeScreen()
         }
     }
 
@@ -2743,58 +3672,34 @@ private fun startWeekStrict() {
     }
 
     private fun setupMainScreen() {
-        onReportScreen = false
+        onReportScreen = false; onHomeScreen = false; onTemptationsTab = false
+        onDevScreen = true
         inRelapseFlow = false; inTemptationFlow = false; inLoosenFlow = false
         inAppSiteFlow = false; inSubPage = false
         stopRideTimer(); stopLoosenTimer()
         entriesJob?.cancel()
 
-        setContentView(R.layout.activity_main)
-
-        statusOverlay = findViewById(R.id.status_overlay)
-        statusAccessibility = findViewById(R.id.status_accessibility)
-        statusLock = findViewById(R.id.status_lock)
-        statusOverlay.setOnClickListener { requestOverlayPermission() }
-        statusAccessibility.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        statusLock.setOnClickListener { toggleUninstallGuard() }
-
-        spinnerMode = findViewById(R.id.spinner_mode)
-        val modeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("Relaxed", "Strict"))
-        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerMode.adapter = modeAdapter
-        spinnerMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                val chosen = if (pos == 0) Mode.RELAXED else Mode.STRICT
-                if (chosen == Mode.current(this@MainActivity)) return
-                if (Mode.setMode(this@MainActivity, chosen)) {
-                    Toast.makeText(this@MainActivity,
-                        if (chosen == Mode.STRICT) "Strict mode on" else "Relaxed mode on",
-                        Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@MainActivity, "Strict mode is locked \u2014 can't switch back yet",
-                        Toast.LENGTH_SHORT).show()
-                }
-                refreshModeUi()
-            }
-            override fun onNothingSelected(p: AdapterView<*>?) {}
-        }
-
-        findViewById<Button>(R.id.btn_report).setOnClickListener { showReportScreen() }
-        findViewById<Button>(R.id.btn_recent_blocks).setOnClickListener { showRecentBlocks() }
-        findViewById<Button>(R.id.btn_strict_week).setOnClickListener { startWeekStrict() }
-        findViewById<Button>(R.id.btn_clear_blocks).setOnClickListener {
+        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+        content.addView(backText { setupHomeScreen() })
+        content.addView(titleText("Developer tools"))
+        content.addView(TextView(this).apply {
+            text = "Diagnostics and block-rule management. Not shown to end users when dev mode is off."
+            textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+        })
+        content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
+        content.addView(homeCard("Manage block rules", "Add or remove blocked sites and apps.") { showManageRules() })
+        content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
+        content.addView(homeCard("Clear block rules", "Wipe all block rules and strikes.") {
             BlockRules.clear(this); BlockEscalation.clear(this); AppTimedBlock.clear(this)
             Toast.makeText(this, "Block rules cleared", Toast.LENGTH_SHORT).show()
-        }
-        findViewById<Button>(R.id.btn_ban_list).setOnClickListener { showManageRules() }
-        findViewById<Button>(R.id.btn_view_log).setOnClickListener { showLogPage() }
-        findViewById<Button>(R.id.btn_stats).setOnClickListener { showStatsMenu() }
-        findViewById<Button>(R.id.btn_about).setOnClickListener { showAboutPage() }
+        })
 
-        refreshModeUi()
-        renderStatus()
+        val root = ScrollView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            isFillViewport = true; addView(content)
+        }
+        setContentView(root)
     }
 
     private fun renderStatus() {
@@ -2807,15 +3712,8 @@ private fun startWeekStrict() {
     }
 
     private fun renderActiveTimers() {
-        val v = findViewById<TextView>(R.id.status_active) ?: return
-        val lines = mutableListOf<String>()
-        if (Lockdown.isActive(this)) lines.add("App lockdown \u2014 ${minLeft(Lockdown.remaining(this))} left")
-        if (LoosenWindow.isActive(this)) lines.add("Unlock window \u2014 ${minLeft(LoosenWindow.remaining(this))} left")
-        if (LoosenWait.isActive(this)) lines.add("Unlock wait \u2014 ${minLeft(LoosenWait.remaining(this))} left")
-        if (Mode.isLocked(this)) lines.add("Week-long strict \u2014 ${Mode.daysLeft(this)}")
-        if (lines.isEmpty()) { v.visibility = View.GONE } else {
-            v.visibility = View.VISIBLE; v.text = lines.joinToString("\n")
-        }
+        // Active timers now live on the home page's permission console; keep this row hidden.
+        findViewById<TextView>(R.id.status_active)?.visibility = View.GONE
     }
 
     private fun minLeft(ms: Long): String {
@@ -2826,6 +3724,67 @@ private fun startWeekStrict() {
     private fun setDot(view: TextView, label: String, on: Boolean) {
         view.text = "${if (on) "\u25CF" else "\u25CB"}  $label \u2014 ${if (on) "On" else "Off"}"
         view.setTextColor(if (on) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
+    }
+
+    /** A self-contained mode dropdown (used on the sexual-urge page). Drives Mode
+     *  directly and resets itself if strict is locked. Does NOT touch dashboard views. */
+    private fun modeSpinner(): Spinner {
+        val sp = Spinner(this)
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, AppConfig.MODES.map { it.displayName })
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        sp.adapter = adapter
+        fun curIdx() = AppConfig.MODES.indexOfFirst { it.id == Mode.current(this) }.coerceAtLeast(0)
+        sp.setSelection(curIdx())
+        sp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                val chosen = AppConfig.MODES.getOrNull(pos)?.id ?: return
+                if (chosen == Mode.current(this@MainActivity)) return
+                if (Mode.setMode(this@MainActivity, chosen)) {
+                    Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Strict mode is locked \u2014 can't switch back yet", Toast.LENGTH_SHORT).show()
+                    sp.setSelection(curIdx())
+                }
+            }
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
+        return sp
+    }
+
+    /** The permission/status console, rendered programmatically for the home page. */
+    private fun permissionConsole(): View {
+        val dp = resources.displayMetrics.density
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (24 * dp).toInt() }
+        }
+        box.addView(TextView(this).apply {
+            text = "STATUS"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
+        })
+        fun row(label: String, on: Boolean, onClick: () -> Unit) = box.addView(TextView(this).apply {
+            text = "${if (on) "\u25CF" else "\u25CB"}  $label \u2014 ${if (on) "On" else "Off"}"
+            textSize = 14f; setTextColor(if (on) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
+            isClickable = true; isFocusable = true; setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+            setOnClickListener { onClick() }
+        })
+        row("Page monitoring", isAccessibilityEnabled()) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        row("Block overlay permission", Settings.canDrawOverlays(this)) { requestOverlayPermission() }
+        row("Uninstall lock", UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)) { toggleUninstallGuard() }
+        val timers = mutableListOf<String>()
+        if (Lockdown.isActive(this)) timers.add("App lockdown \u2014 ${minLeft(Lockdown.remaining(this))} left")
+        if (LoosenWindow.isActive(this)) timers.add("Unlock window \u2014 ${minLeft(LoosenWindow.remaining(this))} left")
+        if (LoosenWait.isActive(this)) timers.add("Unlock wait \u2014 ${minLeft(LoosenWait.remaining(this))} left")
+        if (Mode.isLocked(this)) timers.add("Week-long strict \u2014 ${Mode.daysLeft(this)}")
+        if (timers.isNotEmpty()) box.addView(TextView(this).apply {
+            text = timers.joinToString("\n"); textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            setPadding(0, (8 * dp).toInt(), 0, 0)
+        })
+        return box
     }
 
     private fun observeEntries() {
@@ -2887,7 +3846,7 @@ private fun startWeekStrict() {
     }
 
     // Hardcoded for now. Auto-verifies on the 6th digit — no Enter needed.
-    private val uninstallPasscode = "666666"
+    private val uninstallPasscode = AppConfig.UNINSTALL_PASSCODE
 
     private fun promptDisableLock() {
         val input = EditText(this).apply {
@@ -3186,12 +4145,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * if-block and change the package / keywords.
      */
     private fun appScreenBlock(packageName: String, title: String?, content: String?): String? {
-        if (packageName == "org.mozilla.focus") {
-            val t = title?.lowercase().orEmpty()
-            val c = content?.lowercase().orEmpty()
-            if ("privacy" in t || "stealth" in c) {
-                return "Firefox Focus stealth/privacy settings are blocked"
-            }
+        val t = title?.lowercase().orEmpty()
+        val c = content?.lowercase().orEmpty()
+        for (g in AppConfig.SCREEN_GUARDS) {
+            if (g.pkg != packageName) continue
+            val hitTitle = g.titleKeywords.any { it in t }
+            val hitContent = g.contentKeywords.any { it in c }
+            if (hitTitle || hitContent) return g.reason
         }
         return null
     }
@@ -3348,6 +4308,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (now - lastProcessedAt < MIN_INTERVAL_MS) return
         lastProcessedAt = now
 
+        // Known-safe app (maps, messaging, banking, utilities…): no public feed and
+        // no arbitrary web content worth scanning — skip the read/scan/screenshot/log
+        // entirely to save battery and CPU.
+        if (Whitelist.isSafeApp(this, packageName)) return
+
         val root = rootInActiveWindow ?: return
 
         if (DEBUG_DUMP_NODES && packageName in BROWSER_DEBUG_PACKAGES &&
@@ -3398,7 +4363,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // Log the content score on every web page so we can see what each one scored
         // while tuning — shows as a prefix on the log row, e.g. "[score 18] cute puppies".
-        val pageScore = if (host != null)
+        val pageScore = if (host != null && !Whitelist.isSafeDomain(this, host))
             BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text)?.score else null
         val loggedTitle = if (pageScore != null) "[score $pageScore]  ${title.orEmpty()}".trim()
                           else title
@@ -3566,6 +4531,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
                    GreyUsage.isOverLimit(this, host) ->
                        "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 $host opens again soon"
+               host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
                (host != null || AppBlocklist.isBrowser(packageName)) ->
                    BorderlineScorer.evaluate(title, url, content)?.reason
                else -> null
@@ -3953,62 +4919,32 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // ban for it — long enough to outlast the stale-content flicker while
         // navigating back through history, so innocent previous pages aren't banned.
         private const val BAN_SETTLE_MS = 1500L
-        private const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
+        private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
 
-        private val IGNORED_PACKAGES = setOf("com.android.systemui")
+        private val IGNORED_PACKAGES = AppConfig.IGNORED_PACKAGES
 
         // Apps that get a calming breathing pause each time they're opened.
-        private val BREATHING_APPS = setOf(
-            "org.mozilla.firefox",          // Firefox
-            "org.mozilla.fenix",            // Firefox Beta
-            "com.google.android.youtube",   // YouTube
-            "com.android.vending",          // Google Play Store
-        )
+        private val BREATHING_APPS = AppConfig.BREATHING_APPS
 
-        private val NOT_LOGGED_PACKAGES = setOf(
-            "com.sec.android.app.launcher",
-            "com.google.android.apps.nexuslauncher",
-            "com.android.launcher",
-            "com.android.launcher3",
-            "com.microsoft.launcher",
-        )
+        private val NOT_LOGGED_PACKAGES = AppConfig.NOT_LOGGED_PACKAGES
 
-        private val ADDRESS_BAR_HINTS = listOf(
-            "search or enter",
-            "search or type",
-            "address bar",
-            "enter address",
-            "search address",
-            "edit url",
-        )
+        private val ADDRESS_BAR_HINTS = AppConfig.ADDRESS_BAR_HINTS
 
         private val HOST_PATTERN = Regex("""(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/?#]\S*)?""", RegexOption.IGNORE_CASE)
 
         private const val MAX_URL_CHARS = 2048
 
-        // Known address-bar view IDs, matched by suffix (the package prefix varies).
-        // This is the list to extend if a browser's URL isn't being captured.
-        // Find a browser's real id: open it, and if the URL column stays blank,
-        // its bar id isn't here yet — see the README for how to discover it.
-        private val ADDRESS_BAR_IDS = listOf(
-            ":id/url_bar",                        // Chrome, Edge, Brave, most Chromium
-            ":id/url_field",                      // Opera
-            ":id/mozac_browser_toolbar_url_view", // Firefox (old toolbar)
-            ":id/location_bar_edit_text",         // Samsung Internet
-            ":id/omnibartextinput",               // DuckDuckGo
-            "addressbar_url_box",                 // Firefox (new Compose toolbar — no :id/ prefix)
-        )
+        // Address-bar view IDs (Firefox only — see AppConfig). The generic hints below
+        // are the backup used by isAddressBar.
+        private val ADDRESS_BAR_IDS = AppConfig.ADDRESS_BAR_IDS
 
-        // Generic "looks like an address bar" id fragments, used as a backup in
-        // isAddressBar. Paired with the host-shaped check in hostInText, this is the
-        // URL-detection safety net.
-        private val ADDRESS_BAR_ID_HINTS = listOf("url", "address", "location", "omnibar")
+        private val ADDRESS_BAR_ID_HINTS = AppConfig.ADDRESS_BAR_ID_HINTS
 
         // Diagnostics: true logs a "NODE DUMP" row for the browsers below. Turn OFF
         // once you've found the URL node.
         private const val DEBUG_DUMP_NODES = false
         private const val DUMP_INTERVAL_MS = 1500L
-        private val BROWSER_DEBUG_PACKAGES = setOf("org.mozilla.firefox")
+        private val BROWSER_DEBUG_PACKAGES = AppConfig.BROWSER_DEBUG_PACKAGES
 
     }
 }
@@ -4186,17 +5122,7 @@ object BlockRules {
     //  Add one: domain (no "www."; a trailing "." matches any TLD, so "google."
     //  covers google.com / google.co.uk), the results path ("" = site root), and
     //  the term param(s), best first.
-    private data class SearchEngine(val domain: String, val path: String, val params: List<String>)
-
-    private val SEARCH_ENGINES = listOf(
-        SearchEngine("google.",          "/search",        listOf("q")),   // incl. Images (udm=2)
-        SearchEngine("duckduckgo.com",   "",               listOf("q")),
-        SearchEngine("search.brave.com", "/search",        listOf("q")),
-        SearchEngine("ecosia.org",       "/search",        listOf("q")),
-        SearchEngine("youtube.com",      "/results",       listOf("search_query")),
-        SearchEngine("amazon.",          "/s",             listOf("k")),
-        SearchEngine("ebay.",            "/sch",           listOf("_nkw")),
-    )
+    private val SEARCH_ENGINES = AppConfig.SEARCH_ENGINES
 
     private fun hostMatches(host: String, domain: String): Boolean {
         val h = host.removePrefix("www.")
@@ -4204,7 +5130,7 @@ object BlockRules {
                else h == domain || h.endsWith(".$domain")
     }
 
-    private fun engineFor(host: String, path: String): SearchEngine? =
+    private fun engineFor(host: String, path: String): AppConfig.Search? =
         SEARCH_ENGINES.firstOrNull { e ->
             hostMatches(host, e.domain) &&
                 (e.path.isEmpty() || path == e.path || path.startsWith("${e.path}/"))
@@ -4265,6 +5191,70 @@ object BlockRules {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
+// =====================================================================================
+// ShortForm  (reels / shorts / feeds as one toggleable category of the block system)
+// =====================================================================================
+// These are ordinary BlockRules patterns — page rules where only the feed should go
+// (so the rest of the app/site still works), host rules where the whole thing is the
+// feed. Toggling the category just adds or removes this curated set.
+object ShortForm {
+    val PATTERNS = AppConfig.SHORT_FORM_PATTERNS
+    fun enabled(): Boolean = PATTERNS.all { it in BlockRules.all() }
+    fun setEnabled(context: Context, on: Boolean) {
+        if (on) PATTERNS.forEach { BlockRules.add(context, it) }
+        else PATTERNS.forEach { BlockRules.remove(context, it) }
+    }
+}
+
+// =====================================================================================
+// Whitelist  (apps/domains we trust enough to skip processing; plus a greylist)
+// =====================================================================================
+// SAFE_APPS: no public scrolling feed and no arbitrary adult content — so the service
+//   skips the screenshot/scan/log entirely (big battery + CPU saving).
+// SAFE_DOMAINS: genuinely safe sites — exempt from the heuristic borderline scorer
+//   (fewer false positives, less work). Explicit user block rules still apply.
+// GREYLIST_APPS: social / short-form apps that MAY contain bad stuff — never whitelisted;
+//   defaulted to the GREY tier (time-limited, always scrutinised) unless the user overrides.
+// The hardcoded sets below are a curated subset in the spirit of public allowlists; a
+// persisted user list extends them, and Whitelist.reload() refreshes the cache.
+object Whitelist {
+
+    val SAFE_APPS: Set<String> = AppConfig.SAFE_APPS
+    val SAFE_DOMAINS: Set<String> = AppConfig.SAFE_DOMAINS
+    val GREYLIST_APPS: Set<String> = AppConfig.GREYLIST_APPS
+
+    private const val PREFS = "whitelist"
+    private const val KEY_APPS = "user_apps"
+    private const val KEY_DOMAINS = "user_domains"
+    @Volatile private var cApps: Set<String>? = null
+    @Volatile private var cDoms: Set<String>? = null
+
+    fun reload(c: Context) { cApps = read(c, KEY_APPS); cDoms = read(c, KEY_DOMAINS) }
+    private fun userApps(c: Context) = cApps ?: read(c, KEY_APPS).also { cApps = it }
+    private fun userDoms(c: Context) = cDoms ?: read(c, KEY_DOMAINS).also { cDoms = it }
+
+    fun addSafeApp(c: Context, pkg: String) { write(c, KEY_APPS, userApps(c) + pkg.trim().lowercase()); cApps = null }
+    fun addSafeDomain(c: Context, d: String) { write(c, KEY_DOMAINS, userDoms(c) + d.trim().lowercase()); cDoms = null }
+
+    fun isSafeApp(c: Context, pkg: String?): Boolean {
+        if (pkg.isNullOrBlank()) return false
+        val p = pkg.lowercase()
+        return p in SAFE_APPS || p in userApps(c)
+    }
+    fun isGreylistApp(pkg: String?): Boolean = !pkg.isNullOrBlank() && pkg.lowercase() in GREYLIST_APPS
+    fun isSafeDomain(c: Context, host: String?): Boolean {
+        if (host.isNullOrBlank()) return false
+        val h = host.lowercase()
+        if (SAFE_DOMAINS.any { h == it || h.endsWith(".$it") }) return true
+        return userDoms(c).any { h == it || h.endsWith(".$it") }
+    }
+
+    private fun read(c: Context, key: String) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(key, emptySet())!!.toSet()
+    private fun write(c: Context, key: String, set: Set<String>) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(key, HashSet(set)).apply()
+}
+
 // --------------------------------------------------------------
 // BlockEscalation
 // --------------------------------------------------------------
@@ -4281,7 +5271,7 @@ object BlockEscalation {
 
     private const val PREFS = "block_escalation"
     private const val KEY_DAY = "day"
-    private const val THRESHOLD = 3   // strikes on one domain in a day -> permanent domain block
+    private val THRESHOLD = AppConfig.DOMAIN_STRIKE_THRESHOLD   // strikes on one domain in a day -> permanent domain block
 
     // Dedupe: repeated back-taps while stuck on the SAME host shouldn't inflate the
     // count. Only a genuinely different host (or a long gap) counts again.
@@ -4622,103 +5612,14 @@ object AppBlocklist {
 
     // NEW: browsers that must stay allowed even if detected at runtime.
     // Add a package name here to whitelist a browser.
-    private val ALLOWED_BROWSERS = setOf(
-        "org.mozilla.fenix",
-        "org.mozilla.firefox",
-    )
+    private val ALLOWED_BROWSERS = AppConfig.ALLOWED_BROWSERS
 
     // ================================================================
     // EDIT BELOW — the browser package names to block. All lowercase.
     // DuckDuckGo is in ALLOWED_BROWSERS above, so it stays allowed even
     // if dynamic detection finds it.
     // ================================================================
-    private val BLOCKED_BROWSERS = setOf(
-        // --- Chrome ---
-        "com.android.chrome",
-        "com.chrome.beta",
-        "com.chrome.dev",
-        "com.chrome.canary",
-
-        // --- Firefox / Gecko family ---
-        "org.mozilla.firefox_beta",
-        "org.mozilla.fennec_fdroid",
-        "org.mozilla.focus",
-        "org.mozilla.klar",
-        "org.mozilla.rocket",
-        "org.mozilla.reference.browser",
-        "io.github.forkmaintainers.iceraven",
-        "us.spotco.fennec_dos",
-
-        // duckduckgo 
-        "com.duckduckgo.mobile.android",
-
-        // --- Edge / Opera / Samsung / Vivaldi / Yandex ---
-        "com.microsoft.emmx",
-        "com.opera.browser",
-        "com.opera.browser.beta",
-        "com.opera.mini.native",
-        "com.opera.gx",
-        "com.opera.touch",
-        "com.sec.android.app.sbrowser",
-        "com.sec.android.app.sbrowser.beta",
-        "com.vivaldi.browser",
-        "com.vivaldi.browser.snapshot",
-        "com.yandex.browser",
-        "com.yandex.browser.beta",
-
-        // --- Brave ---
-        "com.brave.browser",
-        "com.brave.browser_beta",
-        "com.brave.browser_nightly",
-
-        // --- AOSP / stock ---
-        "com.android.browser",
-        "com.google.android.browser",
-
-        // --- OEM built-ins ---
-        "com.miui.browser",
-        "com.mi.globalbrowser",
-        "com.mi.globalbrowser.mini",
-        "com.heytap.browser",
-        "com.coloros.browser",
-        "com.oppo.browser",
-        "com.vivo.browser",
-        "com.huawei.browser",
-
-        // --- Chromium forks / FOSS ---
-        "org.bromite.bromite",
-        "org.cromite.cromite",
-        "com.kiwibrowser.browser",
-        "com.stoutner.privacybrowser.standard",
-        "com.stoutner.privacybrowser.free",
-        "acr.browser.lightning",
-        "acr.browser.barebones",
-        "jp.hazuki.yuzubrowser",
-        "foundation.e.browser",
-        "org.adblockplus.browser",
-        "org.torproject.torbrowser",
-
-        // --- Other popular third-party ---
-        "com.ucmobile.intl",
-        "com.uc.browser.en",
-        "com.tencent.mtt",
-        "com.qihoo.browser",
-        "com.cloudmosa.puffinfree",
-        "com.cloudmosa.puffin",
-        "mark.via.gp",
-        "mark.via",
-        "com.aloha.browser",
-        "com.naver.whale",
-        "com.phoenix.browser",
-        "com.apusapps.browser",
-        "com.ksmobile.cb",
-        "mobi.mgeek.tunnybrowser",
-
-        // --- Added after testing on real devices ---
-        "net.quetta.browser",      // Quetta
-        "com.qwant.liberty",       // Qwant
-        // "org.triple.banana",       // Banana Browser
-    )
+    private val BLOCKED_BROWSERS = AppConfig.BLOCKED_BROWSERS
 }
 
 
@@ -5859,9 +6760,270 @@ object LoosenLog {
 }
 
 // =====================================================================================
-// AppRules  (user "Report an app/site" rules: block outright, or greylist)
+// Progress  (the reward view's data: a non-resetting consistency score + real stats)
 // =====================================================================================
-// App blocklist/greylist live here (AppBlocklist is browser-only). URL *blocklist* uses
+// Consistency = clean days within a rolling 30-day window. One slip just dips the
+// number; it never wipes to zero. Slip days = reported relapses (recorded here) plus
+// any supervised unlock that ended in "looked". Wins = urges ridden out + unlocks
+// stopped. Everything is an estimate where noted, and milestones never un-earn.
+object Progress {
+    private const val PREFS = "progress"
+    private const val KEY_SLIPS = "slips"
+    private const val KEY_BEST = "best_clean30"
+    private const val WINDOW = 30
+    const val EST_MIN_PER_WIN = 25          // est. minutes reclaimed per urge ridden out
+    const val VALUE_PER_HOUR_GBP = 12       // assumed value of reclaimed time, for the £ projection
+
+    data class Snapshot(
+        val hasData: Boolean,
+        val trackedDays: Int, val cleanDays: Int, val slipDays: Int, val consistency: Int,
+        val forgivingRun: Int, val bestClean: Int,
+        val totalWins: Int, val reclaimedHours: Int,
+        val projYearHours: Int, val projYearGbp: Int,
+        val weeklyWins: FloatArray,
+        val milestones: List<String>, val nextMilestone: String?,
+    )
+
+    fun recordSlip(context: Context, ts: Long = System.currentTimeMillis()) {
+        val list = readSlips(context).toMutableList()
+        list.add(ts.toString())
+        while (list.size > 4000) list.removeAt(0)
+        prefs(context).edit().putString(KEY_SLIPS, list.joinToString("\n")).apply()
+    }
+
+    fun snapshot(context: Context): Snapshot {
+        val today = dayIndex(System.currentTimeMillis())
+        val loosen = LoosenLog.all(context)
+        val winTs = TemptationLog.timestamps(context) +
+            loosen.filter { it.outcome == "stopped" || it.outcome == "tomorrow" }.map { it.ts }
+        val slipTs = readSlips(context).mapNotNull { it.toLongOrNull() } +
+            loosen.filter { it.outcome == "looked" }.map { it.ts }
+
+        val allTs = winTs + slipTs
+        if (allTs.isEmpty())
+            return Snapshot(false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, FloatArray(0), emptyList(), null)
+
+        val firstIdx = allTs.minOf { dayIndex(it) }
+        val daysSinceFirst = (today - firstIdx).toInt() + 1
+        val trackedDays = daysSinceFirst.coerceIn(1, WINDOW)
+        val windowStart = today - trackedDays + 1
+
+        val slipDaySet = slipTs.map { dayIndex(it) }.toSet()
+        val slipDaysInWindow = (windowStart..today).count { it in slipDaySet }
+        val cleanDays = (trackedDays - slipDaysInWindow).coerceAtLeast(0)
+        val consistency = if (trackedDays > 0) Math.round(cleanDays * 100f / trackedDays) else 0
+
+        // forgiving run: walk back from today, absorbing up to one slip before it ends
+        var budget = 1; var run = 0; var d = today
+        while (d >= firstIdx) {
+            if (d in slipDaySet) { if (budget > 0) { budget--; run++ } else break } else run++
+            d--
+        }
+
+        val totalWins = winTs.size
+        val winsInWindow = winTs.count { dayIndex(it) in windowStart..today }
+        val weeklyRate = if (trackedDays > 0) winsInWindow * 7.0 / trackedDays else 0.0
+        val reclaimedHours = (totalWins * EST_MIN_PER_WIN) / 60
+        val projYearHours = Math.round(weeklyRate * 52 * EST_MIN_PER_WIN / 60.0).toInt()
+        val projYearGbp = projYearHours * VALUE_PER_HOUR_GBP
+
+        val weeks = FloatArray(8)
+        for (ts in winTs) {
+            val w = ((today - dayIndex(ts)) / 7).toInt()
+            if (w in 0..7) weeks[7 - w] += 1f
+        }
+
+        val best = maxOf(prefs(context).getInt(KEY_BEST, 0), cleanDays)
+        prefs(context).edit().putInt(KEY_BEST, best).apply()
+
+        val ms = mutableListOf<String>()
+        if (totalWins >= 1) ms.add("First urge ridden out")
+        if (daysSinceFirst >= 7) ms.add("First week in")
+        if (best >= 7) ms.add("A clean week in the bag")
+        if (totalWins >= 25) ms.add("25 urges beaten")
+        if (best >= 14) ms.add("Two clean weeks")
+        if (best >= 30) ms.add("A clean month \u2014 every day counted")
+        if (totalWins >= 100) ms.add("100 urges beaten")
+
+        val next = when {
+            totalWins < 1 -> "Ride out your first urge"
+            daysSinceFirst < 7 -> "Reach your first full week"
+            best < 7 -> "Get to 7 clean days in your window"
+            totalWins < 25 -> "Ride out 25 urges ($totalWins/25)"
+            best < 30 -> "Build toward a clean month ($best/30)"
+            totalWins < 100 -> "Ride out 100 urges ($totalWins/100)"
+            else -> null
+        }
+
+        return Snapshot(true, trackedDays, cleanDays, slipDaysInWindow, consistency, run, best,
+            totalWins, reclaimedHours, projYearHours, projYearGbp, weeks, ms, next)
+    }
+
+    private fun readSlips(c: Context) =
+        prefs(c).getString(KEY_SLIPS, "").orEmpty().split("\n").filter { it.isNotEmpty() }
+    private fun dayIndex(ms: Long): Long {
+        val off = java.util.TimeZone.getDefault().getOffset(ms)
+        return (ms + off) / 86_400_000L
+    }
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+// =====================================================================================
+// Usage  (inputs for the "time wasted" calculator on the home screen)
+// =====================================================================================
+object Usage {
+    private const val PREFS = "usage"
+    private const val MIN = "min_per_day"
+    private const val AGE = "age"
+    private const val YEARS = "years"
+    const val WAKING_HOURS = 16
+    const val LIFE_EXPECTANCY = 80
+    const val VALUE_PER_HOUR_GBP = 12
+    fun minutes(c: Context) = prefs(c).getInt(MIN, 75)
+    fun setMinutes(c: Context, v: Int) = prefs(c).edit().putInt(MIN, v).apply()
+    fun age(c: Context) = prefs(c).getInt(AGE, 30)
+    fun setAge(c: Context, v: Int) = prefs(c).edit().putInt(AGE, v).apply()
+    fun years(c: Context) = prefs(c).getInt(YEARS, 10)
+    fun setYears(c: Context, v: Int) = prefs(c).edit().putInt(YEARS, v).apply()
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+// =====================================================================================
+// Protocol  (the "break the addiction" challenge: which big moves are done)
+// =====================================================================================
+object Protocol {
+    private const val PREFS = "protocol"
+    private const val APPS = "apps_done"
+    private const val HOLIDAY = "holiday_done"
+    private const val SEVEN = "seven_started_at"
+    fun appsDone(c: Context) = prefs(c).getBoolean(APPS, false)
+    fun setApps(c: Context, v: Boolean) = prefs(c).edit().putBoolean(APPS, v).apply()
+    fun holidayDone(c: Context) = prefs(c).getBoolean(HOLIDAY, false)
+    fun setHoliday(c: Context, v: Boolean) = prefs(c).edit().putBoolean(HOLIDAY, v).apply()
+    fun sevenStarted(c: Context) = prefs(c).getLong(SEVEN, 0L) > 0L
+    fun setSevenStarted(c: Context) = prefs(c).edit().putLong(SEVEN, System.currentTimeMillis()).apply()
+    // Generic tickable checklist items (keyed by a stable id).
+    fun isChecked(c: Context, key: String) = prefs(c).getBoolean("chk_$key", false)
+    fun setChecked(c: Context, key: String, v: Boolean) = prefs(c).edit().putBoolean("chk_$key", v).apply()
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+// =====================================================================================
+// WastedDonutView  (share of your waking life going to the scroll — updates live)
+// =====================================================================================
+class WastedDonutView(context: Context) : View(context) {
+    private var frac = 0f                 // 0..1 share of waking hours
+    private var anim = 0f
+    private val ringBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFE6EAED.toInt(); strokeCap = Paint.Cap.ROUND }
+    private val ringFg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFE4673B.toInt(); strokeCap = Paint.Cap.ROUND }
+    private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1F2933.toInt(); textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF7B848C.toInt(); textAlign = Paint.Align.CENTER }
+
+    fun setFraction(f: Float) {
+        val target = f.coerceIn(0f, 1f)
+        android.animation.ValueAnimator.ofFloat(anim, target).apply {
+            duration = 450; interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { anim = it.animatedValue as Float; invalidate() }
+            start()
+        }
+        frac = target
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val dp = resources.displayMetrics.density
+        val sw = 16f * dp
+        ringBg.strokeWidth = sw; ringFg.strokeWidth = sw
+        val r = (kotlin.math.min(width, height) / 2f) - sw
+        val cx = width / 2f; val cy = height / 2f
+        val rect = android.graphics.RectF(cx - r, cy - r, cx + r, cy + r)
+        canvas.drawArc(rect, 0f, 360f, false, ringBg)
+        canvas.drawArc(rect, -90f, 360f * anim, false, ringFg)
+        big.textSize = 30f * dp
+        canvas.drawText("${Math.round(anim * 100)}%", cx, cy + 4f * dp, big)
+        small.textSize = 12.5f * dp
+        canvas.drawText("of your waking life", cx, cy + 24f * dp, small)
+    }
+}
+
+// =====================================================================================
+// TimeGridView  (your next year as 365 squares; the ones lost to the scroll filled in)
+// =====================================================================================
+class TimeGridView(context: Context) : View(context) {
+    private var filled = 0
+    private val total = 365
+    private val cols = 21
+    private val on = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE4673B.toInt() }
+    private val off = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE6EAED.toInt() }
+
+    fun setFilledDays(d: Int) { filled = d.coerceIn(0, total); invalidate() }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0) return
+        val dp = resources.displayMetrics.density
+        val gap = 3f * dp
+        val cell = (width - gap * (cols - 1)) / cols
+        val rad = 2f * dp
+        for (i in 0 until total) {
+            val rIdx = i / cols; val cIdx = i % cols
+            val x = cIdx * (cell + gap); val y = rIdx * (cell + gap)
+            canvas.drawRoundRect(x, y, x + cell, y + cell, rad, rad, if (i < filled) on else off)
+        }
+    }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val w = MeasureSpec.getSize(widthSpec)
+        val dp = resources.displayMetrics.density
+        val gap = 3f * dp
+        val rows = Math.ceil(total / cols.toDouble()).toInt()
+        val cell = if (w > 0) (w - gap * (cols - 1)) / cols else 10f * dp
+        val h = (rows * cell + (rows - 1) * gap).toInt()
+        setMeasuredDimension(w, h)
+    }
+}
+
+// =====================================================================================
+// TrendView  (a small line chart for "urges ridden out per week" — shows direction)
+// =====================================================================================
+class TrendView(context: Context, private val values: FloatArray) : View(context) {
+    private val accent = 0xFF2E7D32.toInt()
+    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
+    private val fillP = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0 || values.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        val xL = 10f * dp; val xR = width - 10f * dp; val yT = 12f * dp; val yB = height - 12f * dp
+        val n = values.size
+        val mx = (values.maxOrNull() ?: 1f).coerceAtLeast(1f)
+        fun px(i: Int) = if (n == 1) (xL + xR) / 2f else xL + (xR - xL) * i / (n - 1)
+        fun py(v: Float) = yB - (yB - yT) * (v / mx)
+        line.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp; ring.strokeWidth = 3f * dp
+        canvas.drawLine(xL, yB, xR, yB, axis)
+
+        val path = Path(); val fill = Path()
+        for (i in 0 until n) {
+            val xx = px(i); val yy = py(values[i])
+            if (i == 0) { path.moveTo(xx, yy); fill.moveTo(xx, yB); fill.lineTo(xx, yy) }
+            else { path.lineTo(xx, yy); fill.lineTo(xx, yy) }
+        }
+        fill.lineTo(px(n - 1), yB); fill.close()
+        fillP.shader = android.graphics.LinearGradient(
+            0f, yT, 0f, yB, (accent and 0x00FFFFFF) or (44 shl 24), (accent and 0x00FFFFFF) or (6 shl 24),
+            Shader.TileMode.CLAMP)
+        canvas.drawPath(fill, fillP)
+        canvas.drawPath(path, line)
+        for (i in 0 until n) canvas.drawCircle(px(i), py(values[i]), 3.5f * dp, dot)
+        val li = n - 1
+        canvas.drawCircle(px(li), py(values[li]), 6f * dp, dot)
+        canvas.drawCircle(px(li), py(values[li]), 6f * dp, ring)
+    }
+}
 // the existing BlockRules engine instead; only URL *greylist* is stored here as a host.
 object AppRules {
     const val BLOCK = "B"
@@ -5885,7 +7047,11 @@ object AppRules {
     fun appTier(context: Context, pkg: String?): String? {
         if (pkg.isNullOrBlank()) return null
         val key = pkg.lowercase()
-        return readApps(context).firstOrNull { it.substringAfter('|') == key }?.substringBefore('|')
+        val user = readApps(context).firstOrNull { it.substringAfter('|') == key }?.substringBefore('|')
+        if (user != null) return user
+        // Built-in greylist (TikTok, Instagram, etc.): time-limited by default.
+        if (Whitelist.isGreylistApp(key)) return GREY
+        return null
     }
 
     fun hostTier(context: Context, host: String?): String? {
@@ -6113,13 +7279,7 @@ object Lockdown {
     private const val KEY_UNTIL = "until"
     const val DURATION_MS = 30L * 60 * 1000
 
-    private val ALLOW_SUBSTRINGS = listOf(
-        "launcher", "trebuchet",                  // home screens
-        "dialer", "incallui", "telecom", "phone", // calls
-        "contacts",
-        "messaging", "mms",                       // texts
-        "deskclock", "clock", "alarm",            // alarms / timers
-    )
+    private val ALLOW_SUBSTRINGS = AppConfig.LOCKDOWN_ALLOWED_SUBSTRINGS
 
     fun start(context: Context) {
         prefs(context).edit()

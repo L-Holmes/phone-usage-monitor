@@ -1,96 +1,56 @@
 
 
-----------------------------------
-
-TODO:
-- there is a claude in progress. make that continue
-- then got some notes on phone
-- then continue go through the 'report' pages,optimising them
-- then;
-    - go through my research on 'what if we can't stop them'..
-    - thikn whta to add from that
-- then;
-    - continue with the rest of the TODOs below...
 
 
-TODO:
 
-**5. Auto-raise strictness at high-risk times, then learn their personal ones.**
-   - Defaults from the research: 
-        - hard at 11pm–1am, bumps at 9–10am and the 3–4pm slump, plus Sundays and work-from-home days. 
-   - Then the actual product: learn *their* real peaks from their own logged events (#1) 
-   and override the generic times, once we have a certain amount of data...
-   - Fire the coping prompt *before* the window opens, not after. 
-   - Driven off their reported relapses ... and our auto recorded ones.. data pool.
+TODO NEXT:
+- capture extra data;
+    - led down;
+        - use the gyroscope to determine if they're led down, looking at phone? (i.e. either on their back, or more likely on their side??!?!)
+        - want another flag in the mode / strictness settings for whether they're likely led down or not..
+    - hmmmm
+        - do we ask them... or their phone.. to detect like light levels in the room?
+            - could we auto capture that, and log as one of the variables?
+        - want a flag for the light level threshold... but mapped to an enum like 'dark', 'dull', normal, bright...
+    (if you could research and set pre-existing thresholds.. for like light levels and whether they're led down, based off your exising knowledge / the research / open source projects...
+     --> then maybe have an additional debug page accessible from the sexual urge settings page... for debugging,, that just shows the gyro angle, and a green 'led down' if it thinks they are..
+     --> and the same for hte light levels... it shows the number then the equivalent enum...
+- enforce greyscale if in strict mode?
+    - GREYSCALE FILTERS! (ESPECIALLY AT HIGH-RISK TIMES, IF NOT ALL THE TIME!!!)
+- make all greylist apps requirre the breath in orb thing..? (including app store etc?)
+- LINK UP HTE PLUGIN
+- dopamine baseline masurement
+    TODO- bulk this idea out...
+    - user sees scale over time
+    - can click to see how to lower the threshold.
+- exnted the ucrrent landing screen; 
+    - represent time wasted in other ways
+        - money made in that time..
+        - social connections...
+        - health etc...
+        (and vice versa- if they are improving, show what they are ptoentially gaining back (although of course will be more time focused...))
 
-**6. Build the progress view — non-resetting, and this is where the reward actually lives.**
-   - It's a streak counter that *doesn't* drop to zero. Track rolling consistency (clean days out of the last 30),
-       with a "lapse day" buffer so one slip nudges the number down a little instead of wiping it.
-       The 30→0 reset is the exact thing that makes people go "well I've blown it" and binge — that's why you avoid it.
-   - The reward is real stats they care about, not a tree or a smiley (you're right, those won't move anyone): 
-        - time reclaimed, a trend line heading the right way, estimated hours/£ saved per year. 
-        - That doubles as your productivity hook.
-   - Light milestone text is fine (first week, first holiday survived) *as long as* missing one never resets or "kills" anything.
 
-**7. Build the productivity surface + short-form blocking — the public face and the sell.**
-   - Reels/shorts/feed blocking is just another category inside the strictness system from #2.
-   - Put the "time wasted per year" stat front and centre. This is what makes it a believable productivity / anti-doomscroll app with the porn side quieter underneath.
-   - Your "design a logo" task belongs here — make it look like a normal focus app. Discreet icon, non-triggering notifications. Do it anytime.
-
-**8. Keep onboarding smooth — default to strict, let them change it after.**
-   - No screener quiz, per your call. Drop straight in on strict; they can dial it down later if they want.
-   - One thing that costs you nothing: keep the supportive content (urge-surf, the acceptance-style stuff) always non-shaming and available, so the people whose problem is shame rather than loss-of-control aren't made worse by the default strictness. That handles the moral-incongruence concern without an annoying quiz.
-
-**9. Recommendations / guidance page — content, slots in last.**
-   - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place). Coping-rehearsal scenarios can live here too.
+MANUAL TODO:
+- move across my 'stay focused' blocks
+- block all app store vpns...
+- add the holiday stuff? / guideance?
+   - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place).
+   - Coping-rehearsal scenarios can live here too.
+   - Need to keep themselves busy!
    - No tracking needed on this — they'll know where they're at.
-
-
-At some point:
-- for relaxed vs strict mode..
-    - have some obvious map somewhere.. of all the things our app does in text form... and then each mapped to like a number... 1 or 2 representing relaxed and strict...
-    - so then i can easily change just that map, and know what will activate in each mode (we may add more modes in future which is why we are doing this!)
-
 
 ------------------------------
 
 TODO LATER:
-- dopamine baseline masurement
-    - user sees scale over time
-    - can click to see how to lower the threshold.
-- represent time wasted in other ways
-    - money made in that time..
-    - social connections...
-    - health etc...
-    (and vice versa- if they are improving, show what they are ptoentially gaining back (although of course will be more time focused...))
 
+- add ads??
+- FINISH THE PLUGIN + integrate plugin enforcement...
 
-- in order to change;
-    - change habits... and daily schedule..
-    - understand how habits lead to downfall
-    - in the moment you're a different person- third person principle
-    - need to stop as soon as the first trigger occurs- don't let it go too late
-    - a slip isn't just a one off..
-        --> have make the brain forget about it... 
-    - encourage to get past 'just this day'...
-    - gameify like duoloingo..
-        - like daily things?
-        - how to get statistics where they;ll want to _keep_ coming back??!?!
-    - do we let them help others?? Or have a button on main screen for that which... does something??
-
-
-
-
+- keyword integration for plugin?? (When deciding whether to block pictures or not...)
 
 -------
 
-recommendations for the step by step todo:
-- go on holiday
-- buy things to replace your phone... so you don't need it...
-- super strict lock for a week after holiday..
-- try and be out of the house as much as possible...
-    - spend their money if they have to.. on things that aren't addictive...
-    - on seeing friends especially... or at social clubs...
 
 DONT DO SOFTCORE mode...
     - thats just wrong..
@@ -103,35 +63,19 @@ MAKE THEM WAIT 5 MINUTES! (OR 10... or 20... or 30! and then ask again- like foo
 
 
 -------
+????
 
-- integrate the whitelisting of common apps....
-    - Add more whitelisted apps - think of common ones that are deffo fine..
-    (google maps.. waze... messaging apps like whatsapp, facebook (but not ones with reels etc. like insta or snapchat... )) especially ones from 
-    (use your knowledge of common safe, non-social media apps and add more!)
-    (I think we possbly already do this, just want to extend)
-    ideally no screenshotting / processing if we know we're on a whitelist app.. 
-    (to save processing etc. for the user!)
+Then even perhaps a seperate config / file(s) for like preference things like all of the feeling potions and loctions and other things from the reports page (be extra careful with this one as i know htey are linked to specific emojis as well!)
+
 
 ---------
-
-maybe if its a non-web app..
-    - and they end up on the 'forever block'...
-    perhaps instead:
-maybe make it so if you press back a couple times... then it unblocks the app? (unless you manually add it to the permanat block list...) --> just in case like insta etc.. 
-
------------------
 
 
 NEXT TODOS:
 - integrate the whitelisting of trusted domains
-- Load in an open source trusted domains list (blacklist)
-    - auto add them all to whitelist
-- Load in an open source trusted non-sexual app list 
-    - auto add them all to whitelist
 - Add my own custom words blocklist(?)   (seperate from the main list.. somewhere obvious in the code for me to edit.. like a constant at the top...)
     - for strict mode...
     - like bkni etc.
-- greylist of apps? like tiktok?!?!?
 
 ------------------------------------------------------------------------------------
 
@@ -155,7 +99,99 @@ beacons:
 - prevent phone from being used in bed?!?!? (or say.. in the toilet etc/!!?!?)
 
 
+# =============
+# MY IDEAAS!!!!::
+# =============
+- financial
+    - they put 20 pounds into our account.
+    - every time they pass a day (week? to give us more money?), they get a pound back.
+    --> don't penalize them.. only reward them..
+- Location
+    - prevent internet device from high risk areas (bedroom etc)
+    -> will need the beacon for this...
+    - Also;
+        - buy seperate alarm clock
+        - No charging in bedroom
+
+- some guideance / products that help with;...  
+    - boredom
+    - stress
+    - loneliness...
+- OOH
+    - reduce in stages;
+        - sessions per day...
+        - session length (keep updating them how long they have..)
+        - 
+- trusted person for the unlock passcodes
+    - but what if they don't have a 'trusted person'?
+    - ... I guess we are their 'trusted person'...
+    --> If they asked a trusted person...
+        - they'd probably give an excuse
+        - the trusted person would probably give it to them anyway...
+    - problem is, its easier for them to just request the code from us...
+    - and we aren't going to make them call.. we don't want to have to handle calls..
+    - perhaps;  
+        - they request.
+        - give an excuse
+        - pass excuse into AI...
+        - if the excuse can be handled without giving full unlock privelleges...
+        - then have specific sub functions for that?
+        (Perhaps;
+            - prepare a list of common excuses...
+            - or common reasons why they'd want to unlock the app...
+            - then have settings ready in the app, ready for those types of 
+            - PERHAPS
+                - as a lock code, we have the base (666666), and then maybe a device ID that they can find in their settings somewhere??
+        (perhaps;
+            - give 5 mins if its desperate? surely that's enough for most things?!?!?
+            - (and as a one off- they'll have to contact us...
+            - OOH! or make them pay us to have a one off?
+- ???
+    - physical device lockbox??
+    - USB data blockers!?!?!?
+- OOOOH 
+    - WHAT IF THEY ARE SEARCHING IN OTHER LANGUAGES?!??!?
+- oooh
+    - could we have an excercise device... which much be completed in order to then unlock the phone or whatever???
+- OOOHWHH
+    - could we have a wearable that can accurately detect arrousal? surely not...
+- ..
+    - determine how long theyve been scrolling / on a single url for?!??!?!
+    - / on a single website for?
+- hmmm
+    - no access until micro goal (like 2000 steps... etc?)
+        - dont know if we'd need a wearable for that..?
+- hmmm...
+    - randomly show popup of something that they wouldnt want to look at whilst... _distracted_...
+        - siblings.. same gender people... etc?
+- make them watch video of themself.. or people close to them!??!
+    - before committing???
+- hmmmm
+    - perhaps we can lock down if we detect they're using a vpn?
+    - OR even if they're using data?
+    - because if we know home wifi... then we know where they are..
+        - (home wifi ip may change though!)
+
+
+==========
+JUST GENUINE QUESTIONS;
+- (maybe make the temptation log locked behind a passcode?)
+
+
+================================
 
 Defo down theline;
 - the 'pay myself back' system.
-- the 'white room I'm in' system.
+- the 'which room I'm in' system.
+
+could add different features / variations if i know location... e.g.;
+    - phone becomes grayscale in bedroom
+    - social apps blocked at desk
+    - YouTube disabled after entering bathroom too long
+    - “focus mode” when sitting at work setup
+
+================
+Questions for user testing:
+- Is the 'complete lock out' good for really addicted users?
+    - How restricted should it be? (e.g.allow for only static images etc?)
+    - I-> i dont want to go too far and have them bypass my app you see!
