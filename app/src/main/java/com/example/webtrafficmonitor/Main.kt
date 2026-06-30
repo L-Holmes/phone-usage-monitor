@@ -655,7 +655,7 @@ private fun showStatsMenu() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { setupMainScreen() })
+    root.addView(backText { showReportScreen() })
     root.addView(titleText("Statistics"))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     list.addView(pickCard("Progress & reward") { showProgress() })
@@ -1771,10 +1771,31 @@ private fun showProtocol() {
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
-    // ── THE TWO KEY MOVES (visually elevated) ───────────────────────────────
+    // ── SUPPORTING TO-DOS first (the little things) ─────────────────────────
+    list.addView(TextView(this).apply {
+        text = "BUILD THE WALLS AROUND IT"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), 0, 0, (8 * dp).toInt())
+    })
+    list.addView(protocolStep(0, "Rearrange your apps",
+        "Get the troublesome ones out of easy reach.", appsDone, false, null) { showProtocolApps() })
+    list.addView(protocolGuidanceCard("Keep your phone out of the bedroom \u2014 get an alarm clock",
+        "The phone-by-the-bed habit is where most late-night relapses start. Replacing what the phone does at night is one of the highest-impact moves. Tap to see how.")
+        .apply { isClickable = true; isFocusable = true; setOnClickListener { showProtocolReplace() } })
+    val checks = listOf(
+        "out_of_house" to ("Be out of the house as much as possible" to "Spend the money if you have to \u2014 on anything that isn't addictive. Friends and social clubs most of all."),
+        "delete_social" to ("Delete your social media accounts" to "Not just the apps \u2014 the accounts. Remove the pull entirely."),
+        "new_background" to ("Set a new phone background" to "A clean visual reset every time you unlock."),
+        "new_theme" to ("Change your app theme, if you can" to "Make the phone feel like a different, less familiar device."),
+    )
+    checks.forEach { (key, pair) ->
+        val (t, sub) = pair
+        list.addView(protocolCheckRow(key, t, sub))
+    }
+
+    // ── THE TWO KEY MOVES (now after the little things) ─────────────────────
     list.addView(TextView(this).apply {
         text = "\u2B50  THE TWO THAT MATTER MOST"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFFB8860B.toInt()); setPadding((2 * dp).toInt(), 0, 0, (8 * dp).toInt())
+        setTextColor(0xFFB8860B.toInt()); setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
     })
     list.addView(protocolKeyStep("Go on holiday \u2014 without your device",
         "Step right out of the environment the habit lives in. This is the single biggest reset.",
@@ -1791,37 +1812,51 @@ private fun showProtocol() {
         else Toast.makeText(this, "Do the holiday first \u2014 it's what makes the lock stick.", Toast.LENGTH_SHORT).show()
     })
 
-    // ── SUPPORTING TO-DOS (tickable) ────────────────────────────────────────
-    list.addView(TextView(this).apply {
-        text = "BUILD THE WALLS AROUND IT"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
-    })
-    list.addView(protocolStep(0, "Rearrange your apps",
-        "Get the troublesome ones out of easy reach.", appsDone, false, null) { showProtocolApps() })
-    val checks = listOf(
-        "replace_phone" to ("Buy things that replace your phone" to "An alarm clock, a watch, a camera, a kindle \u2014 so you don't reach for the phone for them."),
-        "out_of_house" to ("Be out of the house as much as possible" to "Spend the money if you have to \u2014 on anything that isn't addictive. Friends and social clubs most of all."),
-        "delete_social" to ("Delete your social media accounts" to "Not just the apps \u2014 the accounts. Remove the pull entirely."),
-        "new_background" to ("Set a new phone background" to "A clean visual reset every time you unlock."),
-        "new_theme" to ("Change your app theme, if you can" to "Make the phone feel like a different, less familiar device."),
-    )
-    checks.forEach { (key, pair) ->
-        val (t, sub) = pair
-        list.addView(protocolCheckRow(key, t, sub))
-    }
+    // ── Additional tips (own page) ──────────────────────────────────────────
+    list.addView(homeCard("Additional tips", "More ways to keep the phone out of your hands.") { showProtocolTips() })
 
-    // ── READ-THROUGH GUIDANCE (tick once you've taken it in) ────────────────
-    list.addView(TextView(this).apply {
-        text = "KEEP THE PHONE OUT OF YOUR HANDS"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
+    setContentView(root)
+}
+
+// A focused mini-page on replacing the phone's role (esp. at the bedside).
+private fun showProtocolReplace() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { showProtocol() })
+    root.addView(titleText("Replace what the phone does"))
+    root.addView(TextView(this).apply {
+        text = "The goal is simple: never need to bring your phone into the bedroom. If the phone isn't there at night, the highest-risk moments mostly disappear."
+        textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    list.addView(protocolCheckRow("buy_alarm", "Buy a real alarm clock",
+        "The single most important purchase. It removes the only honest reason to have the phone by your bed."))
+    list.addView(protocolCheckRow("charge_outside", "Charge your phone in another room",
+        "Pick a spot \u2014 kitchen, hallway \u2014 and make it the permanent overnight home for the phone."))
+    list.addView(protocolCheckRow("buy_watch", "Wear a watch",
+        "So you never reach for the phone just to check the time."))
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+    })
+    setContentView(root)
+}
+
+// Read-through guidance, grouped on its own page.
+private fun showProtocolTips() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(backText { showProtocol() })
+    root.addView(titleText("Additional tips"))
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     list.addView(protocolGuidanceCard("Don't bring your phone to bed or high-risk spots",
         "The bedroom, the bathroom, anywhere you've slipped before. Leave it charging in another room."))
-    list.addView(protocolGuidanceCard("Get a physical alarm clock \u2014 this one's important",
-        "The phone-by-the-bed habit is where a lot of relapses start. Replacing the things the phone does, and not carrying it everywhere, is half the battle."))
     list.addView(protocolGuidanceCard("Change your state when an urge hits",
         "A shower, a cold blast at the end of it, a quick workout, stepping outside, a tight bedtime and wake-up routine, even a game \u2014 anything that breaks the moment and shifts how you feel."))
-
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
@@ -2173,7 +2208,7 @@ private fun showAboutPage() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { setupMainScreen() })
+    root.addView(backText { setupHomeScreen() })
     root.addView(titleText("About & privacy"))
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     content.addView(TextView(this).apply {
@@ -2282,6 +2317,7 @@ private fun loosenIntro1() {
     loosenBackAction = { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
+    root.addView(backText { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() })
     root.addView(boldWordTitle("This is a supervised unlock, only for times of desperation.", "desperation"))
     root.addView(TextView(this).apply {
         text = "${LoosenLimit.remaining(this@MainActivity)} of ${LoosenLimit.LIFETIME_MAX} unlocks available"
@@ -2410,9 +2446,11 @@ private fun loosenOneOffScreen() {
     root.addView(titleText("Is this really a one-off?"))
     root.addView(body("Each unlock nudges your brain back toward the old wiring. \u201cJust this once\u201d is exactly how the pattern keeps itself alive."))
     root.addView(RecoveryBrainView(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    val list = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, (resources.displayMetrics.density * 8).toInt(), 0, (resources.displayMetrics.density * 4).toInt())
+    }
     list.addView(pickCard("Yes \u2014 genuinely a one-off") { loosenOneOffFollow(true) })
-    list.addView(pickCard("Honestly, it's becoming a habit") { loosenOneOffFollow(false) })
     root.addView(list)
     root.addView(panicBar())
     setContentView(root)
@@ -2804,8 +2842,8 @@ private fun openPanic() {
     root.addView(Button(this).apply {
         text = "I'm okay now"
         setOnClickListener {
-            if (inLoosenFlow) { if (LoosenWait.isActive(this@MainActivity)) loosenWaitScreen() else loosenIntro1() }
-            else showReportScreen()
+            stopLoosenTimer(); inLoosenFlow = false
+            showReportScreen()
         }
     })
     setContentView(root)
@@ -2912,16 +2950,14 @@ private fun stopLoosenTimer() {
 private fun backText(onBack: () -> Unit): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = "\u2190 Back"; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFFFFFFFF.toInt())
+        text = "\u2190"; textSize = 20f; gravity = Gravity.CENTER
+        setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 22 * dp; setColor(0xFF2E9E8F.toInt())   // breath-orb teal
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(0x55000000.toInt())   // translucent — sits lightly over the content
         }
-        val px = (18 * dp).toInt(); val py = (9 * dp).toInt(); setPadding(px, py, px, py)
-        // wrap so the pill hugs the text rather than filling the row
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = (12 * dp).toInt() }
+        val s = (40 * dp).toInt()
+        layoutParams = LinearLayout.LayoutParams(s, s).apply { bottomMargin = (10 * dp).toInt() }
         isClickable = true; isFocusable = true
         setOnClickListener { onBack() }
     }
@@ -3687,6 +3723,7 @@ private fun startWeekStrict() {
             text = "Diagnostics and block-rule management. Not shown to end users when dev mode is off."
             textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
         })
+        content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
         content.addView(homeCard("Manage block rules", "Add or remove blocked sites and apps.") { showManageRules() })
         content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
@@ -3700,6 +3737,63 @@ private fun startWeekStrict() {
             isFillViewport = true; addView(content)
         }
         setContentView(root)
+    }
+
+    // Read-only snapshot of everything the app is currently doing.
+    private fun showDevConsole() {
+        inSubPage = true
+        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val root = vbox(pad)
+        root.addView(backText { setupMainScreen() })
+        root.addView(titleText("System console"))
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+        })
+        setContentView(root)
+
+        fun header(t: String) = list.addView(TextView(this).apply {
+            text = t.uppercase(); textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            setPadding((2 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
+        })
+        fun row(label: String, value: String, on: Boolean? = null) = list.addView(TextView(this).apply {
+            val dot = when (on) { true -> "\u25CF  "; false -> "\u25CB  "; null -> "" }
+            text = "$dot$label:  $value"; textSize = 14f
+            setTextColor(when (on) { true -> 0xFF2E9E44.toInt(); false -> 0xFF9AA0A6.toInt(); null -> 0xFF3A434B.toInt() })
+            setPadding(0, (5 * dp).toInt(), 0, (5 * dp).toInt())
+        })
+
+        val modeId = Mode.current(this)
+        val spec = AppConfig.MODES.firstOrNull { it.id == modeId }
+        header("Mode")
+        row("Current mode", spec?.displayName ?: modeId)
+        row("Week-long strict lock", if (Mode.isLocked(this)) "locked \u2014 ${Mode.daysLeft(this)}" else "off", Mode.isLocked(this))
+        row("Breathing pause", if (spec?.breathingOn == true) "on" else "off", spec?.breathingOn == true)
+        row("Page flag threshold", "${spec?.flagThreshold ?: "-"} (score \u2265 this is flagged)")
+
+        header("Blocking")
+        row("Reels / shorts / feeds", if (ShortForm.enabled()) "blocked" else "allowed", ShortForm.enabled())
+        row("Active block rules", "${BlockRules.all().size}")
+        row("Domain strike threshold", "${AppConfig.DOMAIN_STRIKE_THRESHOLD} strikes/day \u2192 block")
+        row("Domain block length", "${AppConfig.DOMAIN_BLOCK_MS / 60000} min")
+        row("Safe apps (skip scan)", "${AppConfig.SAFE_APPS.size}")
+        row("Greylisted apps (time-limited)", "${AppConfig.GREYLIST_APPS.size}")
+        row("Trusted domains (skip heuristic)", "${AppConfig.SAFE_DOMAINS.size}")
+
+        header("Permissions")
+        row("Page monitoring", if (isAccessibilityEnabled()) "on" else "off", isAccessibilityEnabled())
+        row("Block overlay", if (Settings.canDrawOverlays(this)) "on" else "off", Settings.canDrawOverlays(this))
+        val lock = UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)
+        row("Uninstall lock", if (lock) "on" else "off", lock)
+
+        header("Active timers")
+        row("App lockdown", if (Lockdown.isActive(this)) "${minLeft(Lockdown.remaining(this))} left" else "none", Lockdown.isActive(this))
+        row("Unlock window", if (LoosenWindow.isActive(this)) "${minLeft(LoosenWindow.remaining(this))} left" else "none", LoosenWindow.isActive(this))
+        row("Unlock wait", if (LoosenWait.isActive(this)) "${minLeft(LoosenWait.remaining(this))} left" else "none", LoosenWait.isActive(this))
+        row("Unlocks left (lifetime)", "${LoosenLimit.remaining(this)} of ${LoosenLimit.LIFETIME_MAX}")
+
+        header("Build")
+        row("Dev mode", if (AppConfig.DEV_MODE) "on" else "off", AppConfig.DEV_MODE)
     }
 
     private fun renderStatus() {
