@@ -1,4 +1,16 @@
 
+- you got the back button all wrong!
+- --> I said.. it should be the transparent thumb back button like on some games... Around the bottom right of the screen to easily click with you're thumb..
+- --> also the arrow isn't even centred anyway! And it's way too grey! More see through! The arrow is below centre!
+- on the break the addiction provil, the tasks don't look like clickable completable things, make them look clickable! And make the phone out of bedroom looks like the rest! It currently looks like a tool tip! And if I press back after clicking it I go sllt eh way back to temptations!?! How hard is it to have a back button? Why you making it overcomplicated?? 
+- Pressing android back button on the "break the addiction protocol" doesn't go back to sexual urges, it goes back to temptations!?!?
+
+- Remove your silly back button. On report pages ,add back the old one, but just say "back" and keep it in the same tip left place rather than centring it sometimes.. in other pages, have the thumb back button... About 20% up from bottom of screen, and slightly off the right side...
+- I STILL GET REDIRECTED TO DEVELOPER TOOLS AFTER COMPLETING A RELAPSE REPORT! CHECK ALL PAGES FOR THIS STUPID BEHABIOUR! AND CAN YOU NOT JUST MAKE BACK BUTTON GO TO PREVIUOS PAGE!?!?
+
+
+
+
 
 TODO NEXT:
 - capture extra data;
