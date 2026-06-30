@@ -1,8 +1,5 @@
 
 
-
-
-
 TODO NEXT:
 - capture extra data;
     - led down;
