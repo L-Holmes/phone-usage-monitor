@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <uses-permission android:name="android.permission.INTERNET"/> <!-- used for loading in the banned urls list. -->
+
     <!-- Lets us detect installed browsers at runtime (see AppBlocklist.refresh).
          This is a visibility declaration, not a permission. -->
     <queries>

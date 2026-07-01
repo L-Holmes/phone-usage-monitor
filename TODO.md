@@ -11,6 +11,8 @@
 
 
 TODO NEXT:
+- reverse the change of having the content filter pull the stuff from github...
+    - remove that, and make it done by the deloy script instead like before...
 - capture extra data;
     - integrate gyroscope and lux data.
     - (do i log these when user fails?)
@@ -49,8 +51,6 @@ TODO LATER:
 
 - add ads??
 - FINISH THE PLUGIN + integrate plugin enforcement...
-
-- keyword integration for plugin?? (When deciding whether to block pictures or not...)
 
 -------
 

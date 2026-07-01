@@ -3711,7 +3711,7 @@ private fun startWeekStrict() {
             tiltLine.text = "Tilt from upright: ${Math.round(monitor.tiltDeg)}\u00b0"
             rollLine.text = "Side roll: ${Math.round(monitor.rollDeg)}\u00b0"
             gLine.text = "Gravity  x ${String.format("%.2f", monitor.gX)}  y ${String.format("%.2f", monitor.gY)}  z ${String.format("%.2f", monitor.gZ)}" +
-                "   (side |x|\u2265${AppConfig.SIDE_GX}, back |z|\u2265${AppConfig.BACK_GZ})"
+                "  screen ${monitor.screenFacing}   (side |x|\u2265${AppConfig.SIDE_GX}, back z\u2264-${AppConfig.BACK_GZ})"
             if (monitor.lux < 0f) { luxLine.text = "- lux"; levelLine.text = "waiting for light sensor\u2026" }
             else {
                 luxLine.text = "${Math.round(monitor.lux)} lux"

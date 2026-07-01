@@ -289,7 +289,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         BlockRules.load(this)
         AppBlocklist.refresh(this)
         loadKeyboardPackages()
-        WordLists.load(this)
         DomainBlocklist.warmUp(this)
     }
 

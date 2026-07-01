@@ -132,11 +132,12 @@ object AppConfig {
     // Uses the normalised gravity vector (gx, gy, gz). Calibrated against real test data:
     //   * on the LEFT side  -> gx strongly positive (~+0.87..+0.99)
     //   * on the RIGHT side -> gx strongly negative (~-0.87..-0.99)
-    //   * on the BACK       -> gx near 0 and the screen tilted toward horizontal (|gz| large)
+    //   * on the BACK       -> gx near 0 AND the screen faces DOWN toward the face (gz strongly
+    //                          negative). Screen facing UP (gz positive) is looking-down, NOT lying.
     // Tune these on the sensor debug page. (If left/right read reversed on a given device,
     // flip the sign test in SensorMonitor.)
     const val SIDE_GX = 0.55f   // |gx| at/above this  -> lying on a side
-    const val BACK_GZ = 0.55f   // |gz| at/above this (and not on a side) -> lying on back
+    const val BACK_GZ = 0.55f   // gz at/below -this (screen face-down) + not on a side -> lying on back
 
     // === Uninstall / device-admin passcode ==========================================
     const val UNINSTALL_PASSCODE = "666666"

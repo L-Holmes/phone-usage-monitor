@@ -135,8 +135,18 @@ class SensorMonitor(context: Context) : SensorEventListener {
     // Posture classifiers, calibrated to real test data (see AppConfig).
     val onLeftSide: Boolean get() = gotAccel && gx > AppConfig.SIDE_GX
     val onRightSide: Boolean get() = gotAccel && gx < -AppConfig.SIDE_GX
-    val onBack: Boolean get() = gotAccel && Math.abs(gx) <= AppConfig.SIDE_GX && Math.abs(gz) >= AppConfig.BACK_GZ
+    // Lying on back = reclined with the screen facing DOWN toward the face (gz strongly
+    // negative). Screen facing UP (gz positive) means looking down at it -> NOT lying down.
+    val onBack: Boolean get() = gotAccel && Math.abs(gx) <= AppConfig.SIDE_GX && gz <= -AppConfig.BACK_GZ
     val lyingDown: Boolean get() = onLeftSide || onRightSide || onBack
+
+    // Which way the screen faces, from gz: >0 up (toward the ceiling), <0 down.
+    val screenFacing: String get() = when {
+        !gotAccel -> "-"
+        gz >= 0.3f -> "up"
+        gz <= -0.3f -> "down"
+        else -> "edge-on"
+    }
 
     val lightLevel: AppConfig.LightLevel? get() = if (lux < 0f) null else AppConfig.lightLevel(lux)
 }

@@ -1,481 +1,408 @@
 package com.example.webtrafficmonitor
 
 import android.content.Context
-import java.io.File
-import java.io.FileOutputStream
-import java.io.RandomAccessFile
+import android.util.Log
 import java.util.zip.GZIPInputStream
 
 // =====================================================================================
-// CONTENT FILTER  (sexual-content text scoring + self-updating adult-domain blocklist)
+//  CONTENT FILTER  —  the single home for all "banned words / banned sites" logic.
 // =====================================================================================
 //
-// Can live in its own file (it does here) OR be pasted into Main.kt as another
-// "// ===" section — same package, only depends on android.content + java.io/net.
+//  Everything that decides whether a page looks sexual/adult lives here:
+//    * the four hardcoded word tiers (below),
+//    * BorderlineScorer  — turns page text/title/URL into a score and a block reason,
+//    * DomainBlocklist   — the ~550k-host adult blocklist (loaded from the bundled .gz),
+//    * DomainStrikes     — repeat-offender domains get blocked for a while,
+//    * DomainGreylist    — our own list of mixed-content sites (Reddit, etc.) to limit.
 //
-// Three independent pieces:
+//  The word lists used to live in assets/words/*.txt and were read at runtime; they are
+//  now hardcoded here so the whole thing is one source-controlled module.
 //
-//   WordLists        - loads the editable word tiers from assets/words/*.txt
-//   BorderlineScorer - scores a page's text/title/URL for sexual content
-//   DomainBlocklist  - reads the merged adult-domain list that was BUNDLED into the
-//                      APK at build time (regenerated fresh each build by
-//                      build_adult_blocklist.py). It extracts the bundled list once
-//                      per install, then binary-searches it on disk. No networking,
-//                      no INTERNET permission, no runtime downloads.
-//                      runtime, merges them on-device, and binary-searches the
-//                      result on disk. NOTHING is hardcoded/bundled — the list is
-//                      always as fresh as the last refresh (default: weekly).
+//  ── THE FOUR WORD TIERS (strongest → weakest) ──────────────────────────────────────
 //
-// Word tiers, strongest to weakest (all are small, editable, bundled assets):
-//   explicit_sexual.txt  EXPLICIT_WEIGHT   hardcore/clinical, always sexual
-//   strong_sexual.txt    STRONG_WEIGHT     always-adult ("sex","slut"), count alone
-//   subtle.txt           SUBTLE_WEIGHT     suggestive ("bikini"), accumulate
-//   dual_meaning.txt     DUAL_SEXUAL_WEIGHT ambiguous ("hot","girls"), context only
+//  EXPLICIT (weight 6) — hardcore / clinical terms that are sexual in essentially every
+//      context, with no innocent use ("blowjob", "pussy", "porn"). Two in the body — or
+//      one in the title/URL, which counts double — is enough to block. Also act as
+//      "indicators" that switch on a nearby dual-meaning word.
 //
-// Runs ALONGSIDE BlockRules and the NSFW image model; changes neither.
+//  STRONG (weight 4) — always-adult words that mean the adult thing ~99% of the time
+//      ("sex", "slut", "onlyfans", "naked"). They count on their own (no neighbour
+//      needed) but weigh a little less, so a single stray use is tolerated. Also
+//      indicators. ("sex" is the one word here with real innocent uses — it must repeat
+//      to block; move it to DUAL if a sex-ed page ever trips.)
+//
+//  SUBTLE (weight 2) — suggestive terms that lean adult but have plenty of innocent uses
+//      (swimwear, fashion, fitness): "bikini", "lingerie", "cleavage". One alone should
+//      not block; several — or one alongside other signals — should. PER_WORD_CAP gives
+//      the "bikini ×10 = bad, bikini ×2 = fine" behaviour. Also indicators.
+//
+//  DUAL (weight 3, ONLY in context) — words that are sexual in some contexts and innocent
+//      in others: "hot", "wet", "girls", "bang". They count for NOTHING on their own; a
+//      dual word only scores when an indicator (any EXPLICIT/STRONG/SUBTLE word) is within
+//      CONTEXT_WINDOW words of it. "hot chocolate" → 0; "hot naked teens" → "hot"+"teens".
+//
+//  There is no phrase matching — word combinations are handled purely by the DUAL context
+//  rule. Multi-word entries (e.g. "see through") therefore never match; they are kept in
+//  the list only for the record.
+//
+//  TUNING: to make a word stronger/weaker, move it between the four sets below, or adjust
+//  the weights / THRESHOLD / CONTEXT_WINDOW / PER_WORD_CAP constants.
+// =====================================================================================
 
 
-// --------------------------------------------------------------
-// WordLists
-// --------------------------------------------------------------
-
-/**
- * Loads the four editable word tiers from `assets/words/` into in-memory sets the
- * [BorderlineScorer] reads. The lists are tiny, so plain sets are fine. Call [load]
- * once (e.g. in the accessibility service's onServiceConnected). Reads are
- * best-effort: a missing/garbled file just leaves that set empty.
- */
-object WordLists {
-
-    @Volatile var explicit: Set<String> = emptySet(); private set
-    @Volatile var strong: Set<String> = emptySet(); private set
-    @Volatile var subtle: Set<String> = emptySet(); private set
-    @Volatile var dual: Set<String> = emptySet(); private set
-
-    /** Any explicit, strong, OR subtle word — these "sexualise" a nearby dual word. */
-    @Volatile var indicators: Set<String> = emptySet(); private set
-
-    @Volatile var isReady = false; private set
-
-    fun load(context: Context) {
-        val app = context.applicationContext
-        explicit = readSet(app, "words/explicit_sexual.txt")
-        strong = readSet(app, "words/strong_sexual.txt")
-        subtle = readSet(app, "words/subtle.txt")
-        dual = readSet(app, "words/dual_meaning.txt")
-        indicators = explicit + strong + subtle
-        isReady = explicit.isNotEmpty() || strong.isNotEmpty() ||
-            subtle.isNotEmpty() || dual.isNotEmpty()
-        android.util.Log.i(
-            "WordLists",
-            "loaded explicit=${explicit.size} strong=${strong.size} " +
-                "subtle=${subtle.size} dual=${dual.size}",
-        )
-    }
-
-    private fun readSet(context: Context, path: String): Set<String> = try {
-        context.assets.open(path).bufferedReader().useLines { lines ->
-            lines.map { it.trim() }
-                .filter { it.isNotEmpty() && !it.startsWith("#") }
-                .map { it.lowercase() }
-                .toCollection(LinkedHashSet())
-        }
-    } catch (t: Throwable) {
-        android.util.Log.w("WordLists", "could not read assets/$path; using empty set", t)
-        emptySet()
-    }
-}
-
-
-// --------------------------------------------------------------
-// BorderlineScorer
-// --------------------------------------------------------------
-
-/**
- * Decides whether a web page's text looks sexual by adding up weighted "hits" and
- * comparing the total to [THRESHOLD]. Returns a [Result] (score + reason) when it
- * decides to block, else null.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * HOW THE SCORE IS BUILT
- * ─────────────────────────────────────────────────────────────────────────────
- * The page is split into lowercase word tokens. Four signals add points:
- *
- *  1. EXPLICIT word  -> + EXPLICIT_WEIGHT each   (hardcore; counts anywhere)
- *  2. STRONG word    -> + STRONG_WEIGHT  each    (always-adult; counts anywhere)
- *  3. SUBTLE word    -> + SUBTLE_WEIGHT  each    (suggestive; counts anywhere)
- *  4. DUAL word      -> + DUAL_SEXUAL_WEIGHT each, BUT ONLY when a sexual INDICATOR
- *                       (any explicit/strong/subtle word) is within CONTEXT_WINDOW
- *                       words of it. This is the "is this 'hot' a sexual 'hot'?"
- *                       check:
- *                         "hot chocolate"   -> no indicator near "hot"  -> 0
- *                         "hot naked girls" -> "naked" near "hot"/"girls" -> count
- *                         "women in tech"   -> no indicator near "women" -> 0
- *
- * REPETITION & CAP: a single word can count at most PER_WORD_CAP times, so one word
- * screamed 50× can't dominate — but repetition still matters up to the cap. This is
- * the "bikini ×10 = bad, bikini ×2 = fine" knob.
- *
- * TITLE / URL: hits there are multiplied by TITLE_URL_MULTIPLIER, since a word in
- * the address/title is far more telling than one buried in body text.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * TUNING CHEAT-SHEET
- * ─────────────────────────────────────────────────────────────────────────────
- *   Too many false blocks?  -> raise THRESHOLD, lower the weights, or shrink
- *                              CONTEXT_WINDOW.
- *   Missing real porn?      -> lower THRESHOLD, raise weights, add words to the lists.
- *   "hot" etc. too jumpy?   -> shrink CONTEXT_WINDOW (e.g. 2), or move the word out
- *                              of dual_meaning.txt.
- *   Single explicit word    -> set EXPLICIT_WEIGHT >= THRESHOLD. (Default needs two
- *   should block instantly?    explicit in the body, or one in the title/URL.)
- *
- * Worked numbers with defaults (THRESHOLD 10): two explicit body words = 12 (block);
- * one explicit in the title = 6×2 = 12 (block); "sex" ×3 body = 4×3 = 12 (block);
- * "bikini" ×6+ body = 2×6 = 12 (block); "hot naked girls" = naked(4)+hot(3)+girls(3)
- * = 10 (block); "hot chocolate" = 0.
- *
- * NOTE: the accessibility service samples up to MAX_TEXT_CHARS (1000) of page text;
- * raise that constant to count repeats over more of a long page.
- */
-object BorderlineScorer {
-
-    // ── TUNABLES ───────────────────────────────────────────────────────────────
-    const val THRESHOLD = 30                // calculated score at which we decide to block a webpage
+// ── Scoring knobs ────────────────────────────────────────────────────────────────────
+object FilterTuning {
     const val EXPLICIT_WEIGHT = 6
     const val STRONG_WEIGHT = 4
     const val SUBTLE_WEIGHT = 2
     const val DUAL_SEXUAL_WEIGHT = 3
-    const val PER_WORD_CAP = 6
-    const val CONTEXT_WINDOW = 5
-    const val TITLE_URL_MULTIPLIER = 2
-    // ─────────────────────────────────────────────────────────────────────────────
 
-    data class Result(val score: Int, val reason: String)
-
-    /**
-     * Full content score for a page, with NO threshold applied. Returns null only
-     * when the word lists aren't loaded or there's no text at all. Use this for
-     * logging/tuning; use [evaluate] for the actual block decision.
-     */
-    fun score(title: String?, url: String?, text: String?): Result? {
-        if (!WordLists.isReady) return null
-
-        val bodyTokens = tokenize(text)
-        val fieldTokens = tokenize(title) + tokenize(url)   // title + URL = one strong bucket
-        if (bodyTokens.isEmpty() && fieldTokens.isEmpty()) return null
-
-        var score = 0
-        var explicitHits = 0
-        var strongHits = 0
-        var subtleHits = 0
-        val dualWordsSeen = LinkedHashSet<String>()
-
-        // ---- BODY ----
-        val bExplicit = countMembers(bodyTokens, WordLists.explicit)
-        val bStrong = countMembers(bodyTokens, WordLists.strong)
-        val bSubtle = countMembers(bodyTokens, WordLists.subtle)
-        explicitHits += bExplicit.values.sum()
-        strongHits += bStrong.values.sum()
-        subtleHits += bSubtle.values.sum()
-        score += bExplicit.values.sum() * EXPLICIT_WEIGHT
-        score += bStrong.values.sum() * STRONG_WEIGHT
-        score += bSubtle.values.sum() * SUBTLE_WEIGHT
-        for ((word, n) in countSexualisedDual(bodyTokens)) {
-            dualWordsSeen += word
-            score += n * DUAL_SEXUAL_WEIGHT
-        }
-
-        // ---- TITLE + URL (stronger) ----
-        if (fieldTokens.isNotEmpty()) {
-            val fExplicit = countMembers(fieldTokens, WordLists.explicit)
-            val fStrong = countMembers(fieldTokens, WordLists.strong)
-            val fSubtle = countMembers(fieldTokens, WordLists.subtle)
-            explicitHits += fExplicit.values.sum()
-            strongHits += fStrong.values.sum()
-            subtleHits += fSubtle.values.sum()
-            score += fExplicit.values.sum() * EXPLICIT_WEIGHT * TITLE_URL_MULTIPLIER
-            score += fStrong.values.sum() * STRONG_WEIGHT * TITLE_URL_MULTIPLIER
-            score += fSubtle.values.sum() * SUBTLE_WEIGHT * TITLE_URL_MULTIPLIER
-            if (fieldTokens.any { it in WordLists.indicators }) {
-                for ((word, n) in countMembers(fieldTokens, WordLists.dual)) {
-                    dualWordsSeen += word
-                    score += n * DUAL_SEXUAL_WEIGHT * TITLE_URL_MULTIPLIER
-                }
-            }
-        }
-
-        return Result(score, buildReason(score, explicitHits, strongHits, subtleHits, dualWordsSeen))
-    }
-
-    /** Block decision: a Result only when the score meets THRESHOLD. */
-    fun evaluate(title: String?, url: String?, text: String?): Result? =
-        score(title, url, text)?.takeIf { it.score >= THRESHOLD }
-
-    /** Per matched word, how many times it appears in [tokens], capped at PER_WORD_CAP. */
-    private fun countMembers(tokens: List<String>, set: Set<String>): Map<String, Int> {
-        if (set.isEmpty() || tokens.isEmpty()) return emptyMap()
-        val counts = HashMap<String, Int>()
-        for (t in tokens) if (t in set) {
-            val c = counts.getOrDefault(t, 0)
-            if (c < PER_WORD_CAP) counts[t] = c + 1
-        }
-        return counts
-    }
-
-    /**
-     * Dual words that are SEXUALISED by a nearby indicator. A dual word at position
-     * i counts if any token within ±CONTEXT_WINDOW (not itself) is an indicator.
-     * Capped per word at PER_WORD_CAP.
-     */
-    private fun countSexualisedDual(tokens: List<String>): Map<String, Int> {
-        if (WordLists.dual.isEmpty() || tokens.isEmpty()) return emptyMap()
-        val isIndicator = BooleanArray(tokens.size) { tokens[it] in WordLists.indicators }
-        val counts = HashMap<String, Int>()
-        for (i in tokens.indices) {
-            val t = tokens[i]
-            if (t !in WordLists.dual) continue
-            val lo = (i - CONTEXT_WINDOW).coerceAtLeast(0)
-            val hi = (i + CONTEXT_WINDOW).coerceAtMost(tokens.size - 1)
-            var sexual = false
-            var j = lo
-            while (j <= hi) {
-                if (j != i && isIndicator[j]) { sexual = true; break }
-                j++
-            }
-            if (sexual) {
-                val c = counts.getOrDefault(t, 0)
-                if (c < PER_WORD_CAP) counts[t] = c + 1
-            }
-        }
-        return counts
-    }
-
-    /** Split into lowercase word tokens. Letters/digits make a token; else breaks. */
-    fun tokenize(s: String?): List<String> {
-        if (s.isNullOrBlank()) return emptyList()
-        val out = ArrayList<String>()
-        val sb = StringBuilder()
-        for (ch in s) {
-            if (ch.isLetterOrDigit()) {
-                sb.append(ch.lowercaseChar())
-            } else if (sb.isNotEmpty()) {
-                out.add(sb.toString()); sb.setLength(0)
-            }
-        }
-        if (sb.isNotEmpty()) out.add(sb.toString())
-        return out
-    }
-
-    private fun buildReason(
-        score: Int,
-        explicit: Int,
-        strong: Int,
-        subtle: Int,
-        dualWords: Set<String>,
-    ): String {
-        val parts = ArrayList<String>()
-        if (explicit > 0) parts += "$explicit explicit term${plural(explicit)}"
-        if (strong > 0) parts += "$strong strong term${plural(strong)}"
-        if (subtle > 0) parts += "$subtle suggestive term${plural(subtle)}"
-        if (dualWords.isNotEmpty()) {
-            val shown = dualWords.take(3).joinToString(", ") { "\"$it\"" }
-            parts += "$shown in a sexual context"
-        }
-        return "Likely sexual content — score $score/$THRESHOLD (" + parts.joinToString("; ") + ")"
-    }
-
-    private fun plural(n: Int) = if (n == 1) "" else "s"
+    const val CONTEXT_WINDOW = 4     // a DUAL word counts only if an indicator is this near
+    const val PER_WORD_CAP = 5       // one word can contribute at most this many times
+    const val THRESHOLD = 10         // score at/above this → block
+    const val TITLE_URL_MULTIPLIER = 2   // hits in the title or URL count double
 }
 
 
-// --------------------------------------------------------------
-// DomainBlocklist
-// --------------------------------------------------------------
+// ── The four hardcoded word tiers ────────────────────────────────────────────────────
+object BannedWords {
 
-/**
- * "Is this host an adult site?" — answered against the merged adult-domain list
- * that is BUNDLED into the APK as `assets/blocklist/adult_hosts.txt.gz`.
- *
- * The bundle is regenerated FRESH at build time by build_adult_blocklist.py (it
- * downloads StevenBlack + Blocklist Project + UT1, merges, drops mainstream apexes,
- * sorts, gzips). So the list is current as of each build — but the app itself does
- * NO networking, needs NO INTERNET permission, and never downloads on the device.
- *
- * WHAT IT DOES
- *   - On [warmUp] (background thread): if the bundled list hasn't been extracted for
- *     the current install yet, it gunzips the asset to private storage once; then it
- *     opens that file. Re-extraction happens automatically after each reinstall /
- *     app update (i.e. whenever you deploy a fresh build), so a new bundle is always
- *     picked up.
- *   - [isBlocked] binary-searches the sorted file on disk, so 550k+ hosts cost ~0
- *     heap (a HashSet that big risks OOM on cheap phones).
- *
- * MATCHING: a host matches if it, or any parent of it, is listed. "vids.badporn.com"
- * matches "badporn.com"; "someone.tumblr.com" matches only that exact entry —
- * "tumblr.com" itself is never blocked (the build script's NEVER_BLOCK set drops the
- * mainstream apexes but keeps their bad subdomains).
- *
- * SORT ORDER: the build script writes the file sorted with Python's sorted(). For
- * these ASCII [a-z0-9_.-] hosts that matches String.compareTo (the lookup's
- * comparison) and RandomAccessFile.readLine's byte decoding, so the on-disk binary
- * search is correct. Keep the file ASCII + sorted if you ever hand-edit it.
- *
- * IF THE ASSET IS MISSING (you forgot to run the build step): extraction fails
- * quietly, [isReady] stays false, and [isBlocked] just returns false — domain
- * blocking is inactive, the text scorer still works. Nothing crashes.
- */
-object DomainBlocklist {
+    val EXPLICIT: Set<String> = setOf(
+        "anal", "analsex", "ballsack", "bareback", "bbw", "bdsm", "blowjob", "bukkake",
+        "buttplug", "camgirl", "camwhore", "clit", "clitoris", "cock", "cocks", "creampie",
+        "cuckold", "cum", "cumming", "cumshot", "cunnilingus", "cunt", "deepthroat", "dildo",
+        "dildos", "doggystyle", "dominatrix", "ejaculate", "ejaculation", "erection",
+        "fellatio", "femdom", "fingering", "fisting", "footjob", "foreskin", "gangbang",
+        "gloryhole", "handjob", "hardcore", "hentai", "horny", "incest", "jerkoff", "labia",
+        "masturbate", "masturbating", "masturbation", "milf", "nipple", "nipples", "nsfw",
+        "nude", "nudes", "nudity", "orgasm", "orgasms", "orgy", "pegging", "penetration",
+        "penis", "porn", "porno", "pornographic", "pornography", "pornstar", "pussies",
+        "pussy", "rimjob", "scissoring", "semen", "sextape", "sextoy", "sextoys", "sodomy",
+        "spunk", "squirting", "strapon", "threesome", "titfuck", "titjob", "tits", "titties",
+        "titty", "twat", "vagina", "vaginal", "vulva", "wank", "wanking", "xxx",
+    )
 
-    private const val TAG = "DomainBlocklist"
-    private const val DIR = "blocklist"
-    private const val FILE_NAME = "adult_hosts.txt"
-    private const val ASSET_GZ = "blocklist/adult_hosts.txt.gz"   // bundled at build time
-    private const val PREFS = "domain_blocklist"
-    private const val KEY_EXTRACTED_FOR = "extracted_for_update_time"
+    val STRONG: Set<String> = setOf(
+        "boob", "boobies", "boobs", "hardon", "naked", "onlyfans", "sex", "slut", "sluts",
+        "slutty", "smut", "topless", "whore", "whores", "xrated",
+    )
 
-    @Volatile private var raf: RandomAccessFile? = null
-    @Volatile private var length = 0L
-    @Volatile var isReady = false; private set
-    private val lock = Any()
+    val SUBTLE: Set<String> = setOf(
+        "arousal", "aroused", "bikini", "bikinis", "booty", "bosom", "bra", "braless",
+        "breast", "breasts", "busty", "butt", "buttock", "buttocks", "cleavage", "curves",
+        "curvy", "erotic", "erotica", "escort", "escorts", "fetish", "flirt", "flirty",
+        "foreplay", "garter", "hooters", "intercourse", "intimate", "kinky", "lapdance",
+        "lewd", "libido", "lingerie", "lust", "lustful", "negligee", "panties", "provocative",
+        "raunchy", "revealing", "risque", "seduce", "seduction", "seductive", "sensual",
+        "sexual", "sexuality", "sexy", "showgirl", "skimpy", "spank", "spanking", "strip",
+        "stripper", "striptease", "suggestive", "swimsuit", "temptress", "thong", "thongs",
+        "underwear", "undress", "undressing", "voluptuous", "webcam", "sheer", "transparent",
+        "tights", "panty", "pantyhose", "cosplay",
+        // multi-word entries kept for the record; they never match (no phrase matching):
+        // "see through", "try on", "try on haul"
+    )
 
-    /**
-     * Extract the bundled list if needed, then open it for lookups. Safe to call from
-     * onServiceConnected — it does its work on a background thread.
-     */
-    fun warmUp(context: Context) {
-        val app = context.applicationContext
-        Thread {
-            try {
-                ensureExtracted(app)
-                openExisting(app)
-            } catch (t: Throwable) {
-                android.util.Log.e(TAG, "warmUp failed", t)
-            }
-        }.apply { isDaemon = true; name = "domain-blocklist-init" }.start()
+    val DUAL: Set<String> = setOf(
+        "adult", "ass", "babe", "babes", "bang", "banged", "banging", "blow", "blown",
+        "bombshell", "cheeks", "chick", "chicks", "dirties", "dirty", "doll", "dolls",
+        "exposed", "fuck", "fucked", "fucking", "gentlemen", "girl", "girls", "hookup", "hot",
+        "hottie", "hotties", "hump", "humping", "kink", "ladies", "lady", "load", "loads",
+        "mature", "moan", "moaning", "naughty", "package", "petite", "pole", "rack", "ride",
+        "riding", "score", "screw", "screwed", "screwing", "spread", "stud", "suck", "sucking",
+        "tease", "teen", "teens", "thick", "tight", "toy", "toys", "vixen", "wet", "women",
+    )
+
+    // Any non-dual sexual word "switches on" a nearby dual word.
+    val INDICATORS: Set<String> = EXPLICIT + STRONG + SUBTLE
+}
+
+
+// ── The scorer: text/title/URL → score + block reason ────────────────────────────────
+object BorderlineScorer {
+
+    data class Result(val score: Int, val reason: String)
+
+    /** Raw score for logging/flagging; null when nothing sexual was found. */
+    fun score(title: String?, url: String?, text: String?): Result? {
+        val s = compute(title, url, text)
+        return if (s <= 0) null else Result(s, reasonFor(s))
     }
 
-    /** True if [host] (or a parent domain of it) is in the adult blocklist. */
-    fun isBlocked(host: String?): Boolean {
-        if (host.isNullOrBlank()) return false
-        if (raf == null) return false
-        for (candidate in candidates(host)) if (containsExact(candidate)) return true
+    /** Non-null (with a block reason) only when the score reaches the block THRESHOLD. */
+    fun evaluate(title: String?, url: String?, content: String?): Result? {
+        val s = compute(title, url, content)
+        return if (s >= FilterTuning.THRESHOLD) Result(s, reasonFor(s)) else null
+    }
+
+    private fun reasonFor(score: Int): String = "Sexual / adult content (score $score)"
+
+    private fun compute(title: String?, url: String?, body: String?): Int {
+        val counted = HashMap<String, Int>()   // per-word occurrence cap, shared across fields
+        var total = 0
+        total += scoreField(tokenize(title), FilterTuning.TITLE_URL_MULTIPLIER, counted)
+        total += scoreField(tokenize(url), FilterTuning.TITLE_URL_MULTIPLIER, counted)
+        total += scoreField(tokenize(body), 1, counted)
+        return total
+    }
+
+    private fun scoreField(words: List<String>, mult: Int, counted: HashMap<String, Int>): Int {
+        var s = 0
+        for (i in words.indices) {
+            val w = words[i]
+            val base = when {
+                w in BannedWords.EXPLICIT -> FilterTuning.EXPLICIT_WEIGHT
+                w in BannedWords.STRONG   -> FilterTuning.STRONG_WEIGHT
+                w in BannedWords.SUBTLE   -> FilterTuning.SUBTLE_WEIGHT
+                w in BannedWords.DUAL     -> if (hasIndicatorNear(words, i)) FilterTuning.DUAL_SEXUAL_WEIGHT else 0
+                else -> 0
+            }
+            if (base == 0) continue
+            val c = counted.getOrDefault(w, 0)
+            if (c >= FilterTuning.PER_WORD_CAP) continue
+            counted[w] = c + 1
+            s += base * mult
+        }
+        return s
+    }
+
+    private fun hasIndicatorNear(words: List<String>, i: Int): Boolean {
+        val lo = maxOf(0, i - FilterTuning.CONTEXT_WINDOW)
+        val hi = minOf(words.lastIndex, i + FilterTuning.CONTEXT_WINDOW)
+        for (j in lo..hi) {
+            if (j == i) continue
+            if (words[j] in BannedWords.INDICATORS) return true
+        }
         return false
     }
 
-    private fun listFile(context: Context): File =
-        File(File(context.filesDir, DIR).apply { mkdirs() }, FILE_NAME)
-
-    /**
-     * Gunzip the bundled asset into private storage ONCE per install/update. We key
-     * off PackageManager.lastUpdateTime, which changes every time you reinstall
-     * (adb install -r) or update the app — so a freshly built bundle is always
-     * re-extracted, and normal launches skip the work.
-     */
-    private fun ensureExtracted(context: Context) {
-        val f = listFile(context)
-        val updateTime = try {
-            context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
-        } catch (_: Throwable) {
-            0L
-        }
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (f.exists() && f.length() > 0L && prefs.getLong(KEY_EXTRACTED_FOR, -1L) == updateTime) {
-            return  // already extracted for this build
-        }
-        synchronized(lock) {
-            if (f.exists() && f.length() > 0L &&
-                prefs.getLong(KEY_EXTRACTED_FOR, -1L) == updateTime
-            ) {
-                return
-            }
-            raf?.let { try { it.close() } catch (_: Throwable) {} }
-            raf = null
-            isReady = false
-            val tmp = File(f.parentFile, "$FILE_NAME.tmp")
-            context.assets.open(ASSET_GZ).use { raw ->
-                GZIPInputStream(raw).use { gz ->
-                    FileOutputStream(tmp).use { out -> gz.copyTo(out, 1 shl 16) }
-                }
-            }
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-            prefs.edit().putLong(KEY_EXTRACTED_FOR, updateTime).apply()
-            android.util.Log.i(TAG, "extracted ${f.length()} bytes (build $updateTime)")
-        }
+    /** Lowercase, split on anything that isn't a letter, keep whole words of length ≥ 2. */
+    private fun tokenize(s: String?): List<String> {
+        if (s.isNullOrEmpty()) return emptyList()
+        return s.lowercase().split(Regex("[^a-z]+")).filter { it.length >= 2 }
     }
+}
 
-    private fun openExisting(context: Context) {
-        synchronized(lock) {
-            val f = listFile(context)
-            if (!f.exists() || f.length() == 0L) {
-                android.util.Log.w(TAG, "no list on disk; domain blocking inactive")
-                return
-            }
-            raf?.let { try { it.close() } catch (_: Throwable) {} }
-            val opened = RandomAccessFile(f, "r")
-            length = opened.length()
-            raf = opened
-            isReady = true
-            android.util.Log.i(TAG, "open: ${f.length()} bytes")
-        }
-    }
 
-    /** full host, then drop leftmost labels down to the last two (also strips "www."). */
-    private fun candidates(rawHost: String): List<String> {
-        var host = rawHost.lowercase().trim().trim('.')
-        if (host.startsWith("www.")) host = host.substring(4)
-        if (host.isEmpty()) return emptyList()
-        val labels = host.split('.')
-        if (labels.size <= 2) return listOf(host)
-        val out = ArrayList<String>()
-        var i = 0
-        while (labels.size - i >= 2) {
-            out.add(labels.subList(i, labels.size).joinToString("."))
-            i++
-        }
-        return out
-    }
+// ── The ~550k-host adult domain blocklist ─────────────────────────────────────────────
+//  The app builds this itself, ONCE: on first run it downloads the source lists, dedups
+//  them, and caches the result to internal storage (gzipped). Every run after that loads
+//  straight from the cache — no re-download. If the network is unavailable on that first
+//  run, it falls back to the bundled asset (assets/blocklist/adult_hosts.txt.gz) if present,
+//  so blocking still works; the next run with a connection builds and caches for good.
+//
+//  REQUIREMENTS / NOTES:
+//    * Needs INTERNET permission in AndroidManifest.xml:
+//        <uses-permission android:name="android.permission.INTERNET"/>
+//    * Only the three plain host-format sources are fetched in-app (they're ~99.9% of the
+//      hosts). The two UT1 sources are .tar.gz archives — awkward to unpack on-device — so
+//      they're left to the build script. Their combined contribution is a few hundred hosts.
+//    * Runs on a background thread; isBlocked() just returns false until the set is ready.
+//    * To force a fresh rebuild (e.g. a settings button), call rebuild(context).
+object DomainBlocklist {
 
-    /**
-     * Binary-search the sorted file for an exact line == [key]. Each probe finds the
-     * line that CONTAINS the midpoint (scanning back to the previous newline) and
-     * compares it — the robust form; a naive "skip the partial line after mid"
-     * version silently misses interior lines.
-     */
-    private fun containsExact(key: String): Boolean {
-        synchronized(lock) {
-            val f = raf ?: return false
+    // Plain host/txt sources the APP can fetch and parse itself:
+    val NETWORK_SOURCES: List<String> = listOf(
+        "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts",
+        "https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/pornography-hosts",
+        "https://raw.githubusercontent.com/blocklistproject/Lists/master/porn.txt",
+    )
+    // .tar.gz archives handled by the build script only (not fetched in-app):
+    val SCRIPT_ONLY_SOURCES: List<String> = listOf(
+        "https://dsi.ut-capitole.fr/blacklists/download/adult.tar.gz",     // UT1 mixed_adult
+        "https://dsi.ut-capitole.fr/blacklists/download/lingerie.tar.gz",  // UT1 lingerie
+    )
+
+    private const val BUNDLED_ASSET = "blocklist/adult_hosts.txt.gz"
+    private const val CACHE_NAME = "adult_hosts_cache.txt.gz"
+
+    @Volatile private var hosts: HashSet<String>? = null
+    @Volatile private var loading = false
+
+    val isReady: Boolean get() = hosts != null
+
+    /** Load once: cache → (seed from bundled asset) → download & cache. Safe to call repeatedly. */
+    fun warmUp(context: Context) {
+        if (hosts != null || loading) return
+        loading = true
+        val app = context.applicationContext
+        Thread {
             try {
-                var lo = 0L
-                var hi = length
-                while (lo < hi) {
-                    val mid = (lo + hi) ushr 1
-                    val ls = findLineStart(f, mid)
-                    f.seek(ls)
-                    val line = f.readLine() ?: return false
-                    val le = f.filePointer
-                    when {
-                        line == key -> return true
-                        line < key -> lo = le     // ls <= mid < le  -> lo strictly grows
-                        else -> hi = ls           // ls <= mid < hi  -> hi strictly shrinks
+                val cache = java.io.File(app.filesDir, CACHE_NAME)
+                if (cache.exists() && cache.length() > 0L) {
+                    hosts = readGz(java.util.zip.GZIPInputStream(cache.inputStream()))
+                    Log.i("DomainBlocklist", "loaded ${hosts?.size ?: 0} hosts from cache")
+                } else {
+                    // Seed from the bundled asset (if any) so blocking works immediately.
+                    tryLoadAsset(app)?.let { hosts = it }
+                    // Then build from the network and cache it for next time.
+                    val built = downloadAndBuild()
+                    if (built != null && built.isNotEmpty()) {
+                        writeGz(cache, built)
+                        hosts = built
+                        Log.i("DomainBlocklist", "built ${built.size} hosts from network; cached")
+                    } else if (hosts == null) {
+                        Log.w("DomainBlocklist", "no cache, no asset, no network — blocklist empty for now")
                     }
                 }
             } catch (t: Throwable) {
-                android.util.Log.e(TAG, "lookup failed for $key", t)
+                Log.w("DomainBlocklist", "warmUp failed: ${t.message}")
+            } finally {
+                loading = false
             }
-            return false
+        }.start()
+    }
+
+    /** Delete the cache and rebuild from the network on the next warmUp. */
+    fun rebuild(context: Context) {
+        java.io.File(context.applicationContext.filesDir, CACHE_NAME).delete()
+        hosts = null
+        warmUp(context)
+    }
+
+    /** True if the host, or any of its parent domains, is on the adult blocklist. */
+    fun isBlocked(host: String): Boolean {
+        val set = hosts ?: return false
+        var cur = host.lowercase().removePrefix("www.")
+        while (true) {
+            if (cur in set) return true
+            val dot = cur.indexOf('.')
+            if (dot < 0) return false
+            cur = cur.substring(dot + 1)
+            if (cur.indexOf('.') < 0) return false   // don't test a bare TLD
         }
     }
 
-    /** Offset of the start of the line that contains byte [pos] (scans back to prev '\n'). */
-    private fun findLineStart(f: RandomAccessFile, pos: Long): Long {
-        if (pos <= 0L) return 0L
-        var p = pos
-        while (p > 0L) {
-            f.seek(p - 1)
-            if (f.read() == '\n'.code) return p
-            p--
+    // ── internals ─────────────────────────────────────────────────────────────────────
+    private fun tryLoadAsset(context: Context): HashSet<String>? = try {
+        readGz(java.util.zip.GZIPInputStream(context.assets.open(BUNDLED_ASSET)))
+    } catch (t: Throwable) { null }
+
+    private fun downloadAndBuild(): HashSet<String>? {
+        val set = HashSet<String>(600_000)
+        var anyOk = false
+        for (url in NETWORK_SOURCES) {
+            try {
+                fetchHosts(url).forEach { set.add(it) }
+                anyOk = true
+            } catch (t: Throwable) {
+                Log.w("DomainBlocklist", "fetch failed $url: ${t.message}")
+            }
         }
-        return 0L
+        return if (anyOk && set.isNotEmpty()) set else null
+    }
+
+    private fun fetchHosts(urlStr: String): List<String> {
+        val conn = (java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 15_000; readTimeout = 45_000; requestMethod = "GET"
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "web-traffic-monitor")
+        }
+        try {
+            return conn.inputStream.bufferedReader().useLines { seq ->
+                seq.mapNotNull { parseHost(it) }.toList()
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Parse a hosts/txt line ("0.0.0.0 domain", "127.0.0.1 domain", or just "domain"). */
+    private fun parseHost(line: String): String? {
+        val l = line.trim()
+        if (l.isEmpty() || l.startsWith("#")) return null
+        val parts = l.split(Regex("\\s+"))
+        var host = (if (parts.size >= 2) parts[1] else parts[0]).lowercase().removePrefix("www.")
+        val hash = host.indexOf('#'); if (hash >= 0) host = host.substring(0, hash)
+        host = host.trim()
+        if (host.isEmpty() || host == "localhost" || !host.contains('.') ||
+            host.contains('/') || host.any { it.isWhitespace() }) return null
+        return host
+    }
+
+    private fun readGz(input: java.util.zip.GZIPInputStream): HashSet<String> {
+        val set = HashSet<String>(600_000)
+        input.bufferedReader().useLines { lines ->
+            lines.forEach { val h = it.trim(); if (h.isNotEmpty() && !h.startsWith("#")) set.add(h) }
+        }
+        return set
+    }
+
+    private fun writeGz(file: java.io.File, set: Set<String>) {
+        java.util.zip.GZIPOutputStream(file.outputStream()).bufferedWriter().use { w ->
+            for (h in set) { w.write(h); w.newLine() }
+        }
+    }
+}
+
+
+// ── Repeat-offender domains: a handful of strikes → blocked for a while ───────────────
+//  Uses AppConfig.DOMAIN_STRIKE_THRESHOLD / DOMAIN_BLOCK_MS. Self-contained (SharedPrefs).
+object DomainStrikes {
+    private const val PREFS = "domain_strikes"
+
+    /** Record a strike against a domain; returns true once it tips into a block. */
+    fun strike(context: Context, host: String): Boolean {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val key = "n_" + host.lowercase()
+        val n = p.getInt(key, 0) + 1
+        p.edit().putInt(key, n).apply()
+        if (n >= AppConfig.DOMAIN_STRIKE_THRESHOLD) {
+            p.edit().putLong("until_" + host.lowercase(), System.currentTimeMillis() + AppConfig.DOMAIN_BLOCK_MS).apply()
+            return true
+        }
+        return false
+    }
+
+    fun isBlocked(context: Context, host: String): Boolean {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val until = p.getLong("until_" + host.lowercase(), 0L)
+        return until > System.currentTimeMillis()
+    }
+
+    fun reset(context: Context, host: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove("n_" + host.lowercase()).remove("until_" + host.lowercase()).apply()
+    }
+}
+
+
+// ── Our own greylist of MIXED-content sites (limit, don't block) ──────────────────────
+//  There is no clean community "greylist" repo — the community social lists block sites
+//  outright and even lump Reddit in with Facebook — so this is a hand-curated list of
+//  sites that carry a real feed of user content (some of it adult) but are also broadly
+//  useful. Treat like the greylisted APPS: allow, but on a time budget rather than block.
+//  (Provides the data + a matcher; wiring it into the per-domain time limit in the
+//  service is a small follow-up.)
+object DomainGreylist {
+    val DOMAINS: Set<String> = setOf(
+        "reddit.com", "redd.it",
+        "x.com", "twitter.com", "t.co",
+        "tumblr.com",
+        "imgur.com",
+        "pinterest.com",
+        "deviantart.com",
+        "quora.com",
+        "9gag.com",
+        "twitch.tv",
+        "discord.com",
+        "tiktok.com",
+        "instagram.com",
+        "snapchat.com",
+        "facebook.com", "fb.com",
+        "vk.com",
+        "flickr.com",
+        "wattpad.com",
+    )
+
+    /** True if the host, or any parent domain, is on our greylist. */
+    fun isGreylisted(host: String): Boolean {
+        var cur = host.lowercase().removePrefix("www.")
+        while (true) {
+            if (cur in DOMAINS) return true
+            val dot = cur.indexOf('.')
+            if (dot < 0) return false
+            cur = cur.substring(dot + 1)
+            if (cur.indexOf('.') < 0) return false
+        }
     }
 }
