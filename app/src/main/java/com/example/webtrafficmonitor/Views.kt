@@ -1,0 +1,865 @@
+package com.example.webtrafficmonitor
+
+import android.graphics.PixelFormat
+import android.accessibilityservice.AccessibilityService
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.provider.Settings
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Button
+import android.widget.EditText
+import android.text.Editable
+import android.text.InputFilter
+import android.text.InputType
+import android.text.TextWatcher
+import android.widget.FrameLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
+import android.os.Looper
+import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.ScrollView
+import androidx.appcompat.app.AlertDialog
+import android.app.admin.DeviceAdminReceiver
+import android.app.admin.DevicePolicyManager
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ValueAnimator
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.LinearLayout
+import android.graphics.Typeface
+import android.view.ViewTreeObserver
+import android.view.animation.PathInterpolator
+import android.widget.ImageView
+import android.graphics.Path
+
+
+// =====================================================================================
+// BreathOrb  (reusable breathing-orb widget + its animation driver)
+// -------------------------------------------------------------------------------------
+// Shared by the app-open gate (BreathingOverlay) and the in-app "ride the wave" /
+// report breathing. In the un-merged source this is its own file; keep it that way.
+// =====================================================================================
+
+/** A soft dim orb that grows on the in-breath and shrinks on the out-breath. */
+class BreathOrbView(context: Context, private val accent: Int) : View(context) {
+
+    var progress = 0f
+        set(value) { field = value; invalidate() }
+
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        color = accent
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val cx = width / 2f
+        val cy = height / 2f
+        // never let the orb spill past the box it sits in — inscribe it in the square
+        val maxR = (kotlin.math.min(width, height) / 2f) - ring.strokeWidth
+        val minR = maxR * 0.04f
+        val r = minR + (maxR - minR) * progress
+        val a = (progress / 0.14f).coerceIn(0f, 1f)
+
+        fill.shader = RadialGradient(
+            cx, cy, r,
+            intArrayOf(withAlpha(accent, (165 * a).toInt()),
+                       withAlpha(accent, (80 * a).toInt()),
+                       withAlpha(accent, 0)),
+            floatArrayOf(0f, 0.62f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawCircle(cx, cy, r, fill)
+        ring.alpha = (70 * a).toInt()
+        canvas.drawCircle(cx, cy, r, ring)
+    }
+
+    private fun withAlpha(color: Int, alpha: Int) =
+        (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
+}
+
+
+/**
+ * Drives the inhale/exhale breathing on a [BreathOrbView] (plus an optional phase
+ * label). One place, two callers:
+ *
+ *  - the app-open gate runs a single cycle, then reveals its controls;
+ *  - the report "breathe with the circle" screen runs a fixed number of cycles with a
+ *    "1 of 3 done" counter and then lets the user continue.
+ *
+ * [cycles] = null breathes forever (until [stop]); otherwise it runs that many
+ * inhale+exhale cycles. [onCycle] fires after each completed breath as (done, total);
+ * [onExhaleStart] fires at the start of every exhale; [onComplete] fires once, after
+ * the final exhale.
+ */
+class BreathOrbAnimator(
+    private val orb: BreathOrbView,
+    private val phase: TextView?,
+    private val inhaleMs: Long = 3000,
+    private val exhaleMs: Long = 6300,
+) {
+    private val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
+    private val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
+    private var anim: ValueAnimator? = null
+    private var pulse: ValueAnimator? = null
+    private var running = false
+
+    fun start(
+        cycles: Int? = null,
+        onCycle: (done: Int, total: Int) -> Unit = { _, _ -> },
+        onExhaleStart: () -> Unit = {},
+        onComplete: () -> Unit = {},
+    ) {
+        stop()
+        running = true
+        startPulse()
+
+        var done = 0
+        // var-lambdas instead of mutually-recursive local funcs (no forward-ref error)
+        var runInhale: () -> Unit = {}
+        var runExhale: () -> Unit = {}
+
+        runExhale = exhale@{
+            if (!running) return@exhale
+            phase?.text = "Breathe out"
+            onExhaleStart()
+            anim = ValueAnimator.ofFloat(1f, 0f).apply {
+                duration = exhaleMs
+                interpolator = exhaleEase
+                addUpdateListener { orb.progress = it.animatedValue as Float }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(a: Animator) {
+                        if (!running) return
+                        done++
+                        onCycle(done, cycles ?: done)
+                        if (cycles != null && done >= cycles) finish(onComplete) else runInhale()
+                    }
+                })
+                start()
+            }
+        }
+        runInhale = inhale@{
+            if (!running) return@inhale
+            phase?.text = "Breathe in"
+            anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = inhaleMs
+                interpolator = inhaleEase
+                addUpdateListener { orb.progress = it.animatedValue as Float }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(a: Animator) { runExhale() }
+                })
+                start()
+            }
+        }
+        runInhale()
+    }
+
+    private fun startPulse() {
+        pulse = ValueAnimator.ofFloat(0.95f, 0.6f).apply {
+            duration = 1300
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { phase?.alpha = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    private fun finish(onComplete: () -> Unit) {
+        running = false
+        pulse?.cancel(); pulse = null
+        anim = null
+        phase?.alpha = 1f
+        orb.progress = 0f
+        onComplete()
+    }
+
+    fun stop() {
+        running = false
+        anim?.cancel(); anim = null
+        pulse?.cancel(); pulse = null
+    }
+}
+
+
+// =====================================================================================
+// FeelingFaceView  (overlapping feeling circles + a draggable face that reacts)
+// -------------------------------------------------------------------------------------
+// Used in the loosen flow: drag the face onto where you'll end up. With
+// positiveInside = false the face is happiest in the clear centre and sours as it
+// enters the (negative) feeling circles; with positiveInside = true it's the opposite.
+// =====================================================================================
+class FeelingFaceView(
+    context: Context,
+    private val labels: List<String>,
+    private val circleColor: Int,
+    private val positiveInside: Boolean,
+    private val startZoneLabel: String? = null,
+) : View(context) {
+
+    var mood: Float = 0.5f
+        private set
+    var moved: Boolean = false
+        private set
+    var onMoodChange: ((Float) -> Unit)? = null
+
+    private var fx = 0f
+    private var fy = 0f
+    private var placed = false
+
+    private var dividerY = 0f
+    private var cenX = 0f
+    private var cenY = 0f
+    private var vennR = 1f
+
+    private class Circ(val cx: Float, val cy: Float, val r: Float, val label: String)
+    private var circles = listOf<Circ>()
+
+    private val circleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val circleStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = 2f; color = circleColor
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF40464B.toInt(); textAlign = Paint.Align.CENTER
+    }
+    private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE7F4E8.toInt() }
+    private val zoneText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E7D32.toInt(); textAlign = Paint.Align.LEFT }
+    private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x33000000; style = Paint.Style.STROKE; strokeWidth = 2f
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
+    }
+    private val faceFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFC857.toInt() }
+    private val faceLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF222222.toInt(); style = Paint.Style.STROKE; strokeWidth = 5f; strokeCap = Paint.Cap.ROUND
+    }
+    private val faceDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF222222.toInt() }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        if (w == 0 || h == 0) return
+        val dp = resources.displayMetrics.density
+        labelPaint.textSize = 13f * dp; zoneText.textSize = 14f * dp
+        val W = w.toFloat(); val H = h.toFloat()
+        dividerY = if (startZoneLabel != null) H * 0.24f else 0f
+        cenX = W / 2f
+        cenY = (dividerY + H) / 2f
+        vennR = ((H - dividerY) / 2f) * 0.92f
+        val off = vennR * 0.40f
+        val cr = vennR * 0.56f
+        circles = labels.mapIndexed { i, lab ->
+            val ang = (-90.0 + i * 360.0 / labels.size) * Math.PI / 180.0
+            Circ(cenX + off * kotlin.math.cos(ang).toFloat(), cenY + off * kotlin.math.sin(ang).toFloat(), cr, lab)
+        }
+        if (!placed) {
+            placed = true
+            fx = if (startZoneLabel != null) W * 0.82f else cenX
+            fy = if (startZoneLabel != null) dividerY * 0.5f else H * 0.08f
+            mood = computeMood(fx, fy)
+            invalidate()
+        }
+    }
+
+    // Mood is driven by how deep into the venn you are (distance to the shared centre),
+    // NOT per-circle overlap — so the centre is unambiguously the most intense point.
+    private fun computeMood(x: Float, y: Float): Float {
+        if (startZoneLabel != null && y < dividerY) return 1f          // the one happy place
+        val d = kotlin.math.hypot(x - cenX, y - cenY)
+        val nd = (d / vennR).coerceIn(0f, 1f)                          // 0 = centre, 1 = edge
+        return if (positiveInside) 0.5f + 0.5f * (1f - nd)             // neutral edge -> happy centre
+        else 0.5f * nd                                                 // neutral edge -> sad centre
+    }
+
+    private fun recompute() {
+        moved = true
+        mood = computeMood(fx, fy)
+        onMoodChange?.invoke(mood)
+        invalidate()
+    }
+
+    fun nearestLabel(): String? {
+        var best: String? = null; var bestD = Float.MAX_VALUE
+        for (c in circles) {
+            val d = kotlin.math.hypot(fx - c.cx, fy - c.cy)
+            if (d < c.r && d < bestD) { bestD = d; best = c.label }
+        }
+        return best
+    }
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        when (event.action) {
+            android.view.MotionEvent.ACTION_DOWN,
+            android.view.MotionEvent.ACTION_MOVE -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
+                fx = event.x.coerceIn(0f, width.toFloat())
+                fy = event.y.coerceIn(0f, height.toFloat())
+                recompute()
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (circles.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        // happy start zone
+        if (startZoneLabel != null) {
+            canvas.drawRoundRect(0f, 0f, width.toFloat(), dividerY - 6f * dp, 16f * dp, 16f * dp, zoneFill)
+            val lines = startZoneLabel.split("\n")
+            var ty = dividerY * 0.5f - (lines.size - 1) * 9f * dp
+            for (ln in lines) { canvas.drawText(ln, 14f * dp, ty, zoneText); ty += 18f * dp }
+            canvas.drawLine(0f, dividerY, width.toFloat(), dividerY, dividerPaint)
+        }
+        // venn lobes
+        for (c in circles) {
+            circleFill.color = (circleColor and 0x00FFFFFF) or (46 shl 24)
+            canvas.drawCircle(c.cx, c.cy, c.r, circleFill)
+            canvas.drawCircle(c.cx, c.cy, c.r, circleStroke)
+        }
+        // labels pushed to the outer edge of each lobe
+        for (c in circles) {
+            val dx = c.cx - cenX; val dy = c.cy - cenY
+            val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1f)
+            val lx = c.cx + dx / len * c.r * 0.5f
+            val ly = c.cy + dy / len * c.r * 0.5f
+            canvas.drawText(c.label, lx, ly + labelPaint.textSize / 3f, labelPaint)
+        }
+        // face
+        val fr = kotlin.math.min(width, height) * 0.075f
+        canvas.drawCircle(fx, fy, fr, faceFill)
+        val ex = fr * 0.42f; val ey = fr * 0.28f; val er = fr * 0.12f
+        canvas.drawCircle(fx - ex, fy - ey, er, faceDot)
+        canvas.drawCircle(fx + ex, fy - ey, er, faceDot)
+        val curve = (mood - 0.5f) * 2f
+        val mw = fr * 0.5f; val my = fy + fr * 0.30f
+        val path = Path().apply { moveTo(fx - mw, my); quadTo(fx, my + curve * fr * 0.6f, fx + mw, my) }
+        canvas.drawPath(path, faceLine)
+    }
+}
+
+
+// =====================================================================================
+// PeakCurveView  (urge over time: spikes, then falls — and you're already past the peak)
+// =====================================================================================
+class PeakCurveView(
+    context: Context,
+    private val showMarker: Boolean = true,
+    private val labelTop: String? = "you're strong \u2014",
+    private val labelBot: String? = "you can get here",
+) : View(context) {
+    private var anim = 0f
+    private val accent = 0xFF2E9E8F.toInt()
+    private val curve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND
+    }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
+    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF5F6368.toInt(); textAlign = Paint.Align.RIGHT }
+    private val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E9E8F.toInt(); textAlign = Paint.Align.CENTER }
+    private val arrow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF8A9095.toInt(); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1500
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { anim = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    // urge vs time: quick rise to a peak, slower decay back toward baseline
+    private fun u(x: Float): Float {
+        val xc = 0.22f; val amp = 0.80f; val base = 0.12f
+        val sigma = if (x < xc) 0.10f else 0.26f
+        val d = (x - xc).toDouble()
+        return base + amp * Math.exp(-(d * d) / (2.0 * sigma * sigma)).toFloat()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val w = width.toFloat(); val h = height.toFloat()
+        val dp = resources.displayMetrics.density
+        val xL = 10f * dp; val xR = w - 10f * dp; val yB = h - 26f * dp; val yT = 14f * dp
+        fun px(x: Float) = xL + (xR - xL) * x
+        fun py(uu: Float) = yB - (yB - yT) * uu
+        curve.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp; dotRing.strokeWidth = 3f * dp; arrow.strokeWidth = 1.6f * dp
+
+        canvas.drawLine(xL, yB, xR, yB, axis)
+
+        val path = Path(); val fillPath = Path()
+        val n = 72
+        for (i in 0..n) {
+            val x = i / n.toFloat(); val xx = px(x); val yy = py(u(x))
+            if (i == 0) { path.moveTo(xx, yy); fillPath.moveTo(xx, yB); fillPath.lineTo(xx, yy) }
+            else { path.lineTo(xx, yy); fillPath.lineTo(xx, yy) }
+        }
+        fillPath.lineTo(px(1f), yB); fillPath.close()
+        fill.shader = android.graphics.LinearGradient(
+            0f, yT, 0f, yB,
+            (accent and 0x00FFFFFF) or (60 shl 24), (accent and 0x00FFFFFF) or (8 shl 24),
+            Shader.TileMode.CLAMP)
+        canvas.drawPath(fillPath, fill)
+        canvas.drawPath(path, curve)
+
+        if (showMarker) {
+            val mx = 0.42f * anim
+            val MX = px(mx); val MY = py(u(mx))
+            canvas.drawCircle(MX, MY, 7f * dp, dotFill)
+            canvas.drawCircle(MX, MY, 7f * dp, dotRing)
+        }
+
+        val la = ((anim - 0.45f) / 0.55f).coerceIn(0f, 1f)
+        if (la > 0f && showMarker) {
+            tag.textSize = 11f * dp; tag.alpha = (la * 200).toInt()
+            canvas.drawText("past the peak", px(0.42f), yB + 18f * dp, tag)
+        }
+        if (la > 0f && labelTop != null) {
+            // label sits up high, clear of the curve, with an arrow down to the faded tail
+            label.textSize = 12.5f * dp; label.alpha = (la * 255).toInt()
+            val tx = xR
+            val ty = yT + 13f * dp
+            canvas.drawText(labelTop, tx, ty, label)
+            if (labelBot != null) canvas.drawText(labelBot, tx, ty + 16f * dp, label)
+            // arrow from just below the label down to the curve's end
+            arrow.alpha = (la * 200).toInt()
+            val ax = px(0.9f); val aTopY = ty + 26f * dp; val aEndY = py(u(0.9f)) - 8f * dp
+            if (aEndY > aTopY) {
+                canvas.drawLine(ax, aTopY, ax, aEndY, arrow)
+                canvas.drawLine(ax, aEndY, ax - 4f * dp, aEndY - 6f * dp, arrow)
+                canvas.drawLine(ax, aEndY, ax + 4f * dp, aEndY - 6f * dp, arrow)
+            }
+        }
+    }
+}
+
+
+// =====================================================================================
+// PeakTapView  (same urge curve, but the user taps where they think they are)
+// =====================================================================================
+class PeakTapView(
+    context: Context,
+    private val threshold: Float,
+    private val onPick: (Float, Boolean) -> Unit,
+) : View(context) {
+    private val accent = 0xFF2E9E8F.toInt()
+    private val gold = 0xFFD4A017.toInt()
+    private val dull = 0xFFB9C4C2.toInt()
+    private var tappedX: Float? = null
+    private var correct = false
+    private val curve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND
+    }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
+    private val hint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF9AA0A6.toInt(); textAlign = Paint.Align.CENTER }
+    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+
+    private fun u(x: Float): Float {
+        val xc = 0.22f; val amp = 0.80f; val base = 0.12f
+        val sigma = if (x < xc) 0.10f else 0.26f
+        val d = (x - xc).toDouble()
+        return base + amp * Math.exp(-(d * d) / (2.0 * sigma * sigma)).toFloat()
+    }
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.action == android.view.MotionEvent.ACTION_DOWN || event.action == android.view.MotionEvent.ACTION_MOVE) {
+            val dp = resources.displayMetrics.density
+            val xL = 10f * dp; val xR = width - 10f * dp
+            val x = ((event.x - xL) / (xR - xL)).coerceIn(0f, 1f)
+            tappedX = x
+            if (x > threshold) correct = true       // once they get it right, it stays gold
+            invalidate(); onPick(x, x > threshold)
+            return true
+        }
+        return super.onTouchEvent(event)
+    }
+
+    // draws a curve segment over [x0,x1] in the given colour
+    private fun segment(canvas: Canvas, x0: Float, x1: Float, color: Int,
+                        px: (Float) -> Float, py: (Float) -> Float) {
+        curve.color = color
+        val p = Path(); val n = 48
+        for (i in 0..n) {
+            val x = x0 + (x1 - x0) * i / n; val xx = px(x); val yy = py(u(x))
+            if (i == 0) p.moveTo(xx, yy) else p.lineTo(xx, yy)
+        }
+        canvas.drawPath(p, curve)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val w = width.toFloat(); val h = height.toFloat()
+        val dp = resources.displayMetrics.density
+        val xL = 10f * dp; val xR = w - 10f * dp; val yB = h - 26f * dp; val yT = 14f * dp
+        fun px(x: Float) = xL + (xR - xL) * x
+        fun py(uu: Float) = yB - (yB - yT) * uu
+        curve.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp; dotRing.strokeWidth = 3f * dp
+        canvas.drawLine(xL, yB, xR, yB, axis)
+
+        // soft fill under the whole curve
+        val fillPath = Path(); val n = 72
+        for (i in 0..n) {
+            val x = i / n.toFloat(); val xx = px(x); val yy = py(u(x))
+            if (i == 0) { fillPath.moveTo(xx, yB); fillPath.lineTo(xx, yy) } else fillPath.lineTo(xx, yy)
+        }
+        fillPath.lineTo(px(1f), yB); fillPath.close()
+        val fillColor = if (correct) gold else accent
+        val a0 = if (correct) 70 else 60
+        fill.shader = android.graphics.LinearGradient(
+            0f, yT, 0f, yB,
+            (fillColor and 0x00FFFFFF) or (a0 shl 24),
+            (fillColor and 0x00FFFFFF) or (8 shl 24),
+            Shader.TileMode.CLAMP)
+        canvas.drawPath(fillPath, fill)
+
+        if (correct) {
+            // past-the-peak tail turns gold; the rising left half is dulled back
+            segment(canvas, 0f, threshold, dull, ::px, ::py)
+            segment(canvas, threshold, 1f, gold, ::px, ::py)
+        } else {
+            segment(canvas, 0f, 1f, accent, ::px, ::py)
+        }
+
+        val tx = tappedX
+        if (tx == null) {
+            hint.textSize = 13f * dp
+            canvas.drawText("tap where you think you are", w / 2f, py(u(0.5f)) - 8f * dp, hint)
+        } else {
+            val mx = px(tx); val my = py(u(tx))
+            dotFill.color = if (correct) gold else accent
+            canvas.drawCircle(mx, my, 8f * dp, dotFill)
+            canvas.drawCircle(mx, my, 8f * dp, dotRing)
+        }
+    }
+}
+
+
+// =====================================================================================
+// GlowButton  (a filled button with a soft light tracing its edge, to invite a tap)
+// =====================================================================================
+class GlowButton(context: Context, private val label: String, onClick: () -> Unit) : View(context) {
+    private var phase = 0f
+    private var anim: android.animation.ValueAnimator? = null
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC8932B.toInt() }
+    private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER; isFakeBoldText = true
+    }
+    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    init { isClickable = true; isFocusable = true; setOnClickListener { onClick() } }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        anim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 2600; repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { phase = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+    override fun onDetachedFromWindow() { anim?.cancel(); anim = null; super.onDetachedFromWindow() }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val dp = resources.displayMetrics.density
+        val r = 14f * dp; val inset = 2f * dp
+        val w = width.toFloat(); val h = height.toFloat()
+        canvas.drawRoundRect(inset, inset, w - inset, h - inset, r, r, bg)
+        txt.textSize = 16f * dp
+        canvas.drawText(label, w / 2f, h / 2f + txt.textSize / 3f, txt)
+        // a warm bright band that travels around the rounded-rect edge
+        edge.strokeWidth = 4f * dp
+        val sweep = android.graphics.SweepGradient(
+            w / 2f, h / 2f,
+            intArrayOf(0x00FFF6D8, 0x00FFF6D8, 0xFFFFF6D8.toInt(), 0x00FFF6D8, 0x00FFF6D8),
+            floatArrayOf(0f, 0.38f, 0.5f, 0.62f, 1f))
+        sweep.setLocalMatrix(android.graphics.Matrix().apply { postRotate(phase * 360f, w / 2f, h / 2f) })
+        edge.shader = sweep
+        canvas.drawRoundRect(inset, inset, w - inset, h - inset, r, r, edge)
+    }
+}
+
+
+// =====================================================================================
+// RecoveryBrainView  (your progress so far, then the fork: a one-off vs keeping going)
+// =====================================================================================
+class RecoveryBrainView(context: Context) : View(context) {
+    private var anim = 0f
+    private val amber = 0xFFC9772B.toInt()
+    private val green = 0xFF2E7D32.toInt()
+    private val past = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = 0xFF9AA0A6.toInt(); strokeCap = Paint.Cap.ROUND
+    }
+    private val up = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = amber; strokeCap = Paint.Cap.ROUND
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 10f), 0f)
+    }
+    private val down = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = green; strokeCap = Paint.Cap.ROUND
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 10f), 0f)
+    }
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
+    private val lab = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val emoji = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val axisLab = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0B5BA.toInt() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1400; startDelay = 200
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { anim = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val w = width.toFloat(); val h = height.toFloat()
+        val dp = resources.displayMetrics.density
+        val xL = 12f * dp; val xR = w - 12f * dp; val yT = 16f * dp; val yB = h - 26f * dp
+        fun px(x: Float) = xL + (xR - xL) * x
+        fun py(f: Float) = yT + (yB - yT) * f      // f: 0 = high pull (top), 1 = free (bottom)
+        past.strokeWidth = 3.5f * dp; up.strokeWidth = 3f * dp; down.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp
+
+        // faint frame + axis hints
+        canvas.drawLine(xL, yB, xR, yB, axis)
+        axisLab.textSize = 10.5f * dp
+        axisLab.textAlign = Paint.Align.LEFT; canvas.drawText("more pull", xL, yT + 4f * dp, axisLab)
+        canvas.drawText("free", xL, yB - 4f * dp, axisLab)
+
+        // progress so far: coming down from a high point to "now"
+        val nowX = 0.40f; val nowF = 0.56f
+        val pPath = Path().apply {
+            moveTo(px(0.05f), py(0.20f))
+            cubicTo(px(0.18f), py(0.22f), px(0.28f), py(0.48f), px(nowX), py(nowF))
+        }
+        canvas.drawPath(pPath, past)
+
+        // the fork, drawn growing out from "now"
+        val t = anim
+        val upPath = Path().apply {
+            moveTo(px(nowX), py(nowF))
+            val ex = nowX + (0.95f - nowX) * t; val ef = nowF + (0.30f - nowF) * t
+            cubicTo(px(nowX + 0.18f * t), py(nowF - 0.04f * t), px(nowX + 0.38f * t), py(nowF - 0.18f * t), px(ex), py(ef))
+        }
+        canvas.drawPath(upPath, up)
+        val downPath = Path().apply {
+            moveTo(px(nowX), py(nowF))
+            val ex = nowX + (0.95f - nowX) * t; val ef = nowF + (0.88f - nowF) * t
+            cubicTo(px(nowX + 0.20f * t), py(nowF + 0.10f * t), px(nowX + 0.40f * t), py(nowF + 0.22f * t), px(ex), py(ef))
+        }
+        canvas.drawPath(downPath, down)
+
+        // branch labels (fade in)
+        val la = ((anim - 0.5f) / 0.5f).coerceIn(0f, 1f)
+        lab.textSize = 12.5f * dp; lab.textAlign = Paint.Align.RIGHT; lab.alpha = (la * 255).toInt()
+        lab.color = amber; canvas.drawText("one-off \u2192 back up", px(0.95f), py(0.30f) - 6f * dp, lab)
+        lab.color = green; canvas.drawText("keep going \u2192 free", px(0.95f), py(0.88f) + 16f * dp, lab)
+
+        // a brain at "now"
+        emoji.textSize = 26f * dp
+        canvas.drawText("\uD83E\uDDE0", px(nowX), py(nowF) + 9f * dp, emoji)
+    }
+}
+
+
+// A circular, see-through back control with a geometrically-centred left arrow.
+class ThumbBackView(context: Context) : View(context) {
+    private val dp = context.resources.displayMetrics.density
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1F000000; style = Paint.Style.FILL }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x22000000; style = Paint.Style.STROKE; strokeWidth = 1f * dp
+    }
+    private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xCC1F2933.toInt(); style = Paint.Style.STROKE; strokeWidth = 2.4f * dp
+        strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    override fun onDraw(canvas: Canvas) {
+        val cx = width / 2f; val cy = height / 2f
+        val r = Math.min(width, height) / 2f - strokePaint.strokeWidth
+        canvas.drawCircle(cx, cy, r, fillPaint)
+        canvas.drawCircle(cx, cy, r, strokePaint)
+        val a = r * 0.42f      // shaft half-length
+        val h = r * 0.30f      // arrowhead size
+        canvas.drawLine(cx - a, cy, cx + a, cy, arrowPaint)
+        val head = Path().apply {
+            moveTo(cx - a + h, cy - h); lineTo(cx - a, cy); lineTo(cx - a + h, cy + h)
+        }
+        canvas.drawPath(head, arrowPaint)
+    }
+}
+
+
+class WastedDonutView(context: Context) : View(context) {
+    private var frac = 0f                 // 0..1 share of waking hours
+    private var anim = 0f
+    private val ringBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFE6EAED.toInt(); strokeCap = Paint.Cap.ROUND }
+    private val ringFg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFE4673B.toInt(); strokeCap = Paint.Cap.ROUND }
+    private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1F2933.toInt(); textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF7B848C.toInt(); textAlign = Paint.Align.CENTER }
+
+    fun setFraction(f: Float) {
+        val target = f.coerceIn(0f, 1f)
+        android.animation.ValueAnimator.ofFloat(anim, target).apply {
+            duration = 450; interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { anim = it.animatedValue as Float; invalidate() }
+            start()
+        }
+        frac = target
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val dp = resources.displayMetrics.density
+        val sw = 16f * dp
+        ringBg.strokeWidth = sw; ringFg.strokeWidth = sw
+        val r = (kotlin.math.min(width, height) / 2f) - sw
+        val cx = width / 2f; val cy = height / 2f
+        val rect = android.graphics.RectF(cx - r, cy - r, cx + r, cy + r)
+        canvas.drawArc(rect, 0f, 360f, false, ringBg)
+        canvas.drawArc(rect, -90f, 360f * anim, false, ringFg)
+        big.textSize = 30f * dp
+        canvas.drawText("${Math.round(anim * 100)}%", cx, cy + 4f * dp, big)
+        small.textSize = 12.5f * dp
+        canvas.drawText("of your waking life", cx, cy + 24f * dp, small)
+    }
+}
+
+
+// =====================================================================================
+// TimeGridView  (your next year as 365 squares; the ones lost to the scroll filled in)
+// =====================================================================================
+class TimeGridView(context: Context) : View(context) {
+    private var filled = 0
+    private val total = 365
+    private val cols = 21
+    private val on = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE4673B.toInt() }
+    private val off = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE6EAED.toInt() }
+
+    fun setFilledDays(d: Int) { filled = d.coerceIn(0, total); invalidate() }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0) return
+        val dp = resources.displayMetrics.density
+        val gap = 3f * dp
+        val cell = (width - gap * (cols - 1)) / cols
+        val rad = 2f * dp
+        for (i in 0 until total) {
+            val rIdx = i / cols; val cIdx = i % cols
+            val x = cIdx * (cell + gap); val y = rIdx * (cell + gap)
+            canvas.drawRoundRect(x, y, x + cell, y + cell, rad, rad, if (i < filled) on else off)
+        }
+    }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val w = MeasureSpec.getSize(widthSpec)
+        val dp = resources.displayMetrics.density
+        val gap = 3f * dp
+        val rows = Math.ceil(total / cols.toDouble()).toInt()
+        val cell = if (w > 0) (w - gap * (cols - 1)) / cols else 10f * dp
+        val h = (rows * cell + (rows - 1) * gap).toInt()
+        setMeasuredDimension(w, h)
+    }
+}
+
+
+// =====================================================================================
+// TrendView  (a small line chart for "urges ridden out per week" — shows direction)
+// =====================================================================================
+class TrendView(context: Context, private val values: FloatArray) : View(context) {
+    private val accent = 0xFF2E7D32.toInt()
+    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
+    private val fillP = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0 || values.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        val xL = 10f * dp; val xR = width - 10f * dp; val yT = 12f * dp; val yB = height - 12f * dp
+        val n = values.size
+        val mx = (values.maxOrNull() ?: 1f).coerceAtLeast(1f)
+        fun px(i: Int) = if (n == 1) (xL + xR) / 2f else xL + (xR - xL) * i / (n - 1)
+        fun py(v: Float) = yB - (yB - yT) * (v / mx)
+        line.strokeWidth = 3f * dp; axis.strokeWidth = 1f * dp; ring.strokeWidth = 3f * dp
+        canvas.drawLine(xL, yB, xR, yB, axis)
+
+        val path = Path(); val fill = Path()
+        for (i in 0 until n) {
+            val xx = px(i); val yy = py(values[i])
+            if (i == 0) { path.moveTo(xx, yy); fill.moveTo(xx, yB); fill.lineTo(xx, yy) }
+            else { path.lineTo(xx, yy); fill.lineTo(xx, yy) }
+        }
+        fill.lineTo(px(n - 1), yB); fill.close()
+        fillP.shader = android.graphics.LinearGradient(
+            0f, yT, 0f, yB, (accent and 0x00FFFFFF) or (44 shl 24), (accent and 0x00FFFFFF) or (6 shl 24),
+            Shader.TileMode.CLAMP)
+        canvas.drawPath(fill, fillP)
+        canvas.drawPath(path, line)
+        for (i in 0 until n) canvas.drawCircle(px(i), py(values[i]), 3.5f * dp, dot)
+        val li = n - 1
+        canvas.drawCircle(px(li), py(values[li]), 6f * dp, dot)
+        canvas.drawCircle(px(li), py(values[li]), 6f * dp, ring)
+    }
+}

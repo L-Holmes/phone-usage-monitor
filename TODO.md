@@ -1,30 +1,99 @@
 
-- you got the back button all wrong!
-- --> I said.. it should be the transparent thumb back button like on some games... Around the bottom right of the screen to easily click with you're thumb..
-- --> also the arrow isn't even centred anyway! And it's way too grey! More see through! The arrow is below centre!
-- on the break the addiction provil, the tasks don't look like clickable completable things, make them look clickable! And make the phone out of bedroom looks like the rest! It currently looks like a tool tip! And if I press back after clicking it I go sllt eh way back to temptations!?! How hard is it to have a back button? Why you making it overcomplicated?? 
-- Pressing android back button on the "break the addiction protocol" doesn't go back to sexual urges, it goes back to temptations!?!?
-
-- Remove your silly back button. On report pages ,add back the old one, but just say "back" and keep it in the same tip left place rather than centring it sometimes.. in other pages, have the thumb back button... About 20% up from bottom of screen, and slightly off the right side...
-- I STILL GET REDIRECTED TO DEVELOPER TOOLS AFTER COMPLETING A RELAPSE REPORT! CHECK ALL PAGES FOR THIS STUPID BEHABIOUR! AND CAN YOU NOT JUST MAKE BACK BUTTON GO TO PREVIUOS PAGE!?!?
+Next:
 
 
 
+* only give me back the files that have changed.
 
+
+
+Here the feedback;
+
+
+
+* Just put the floating thumb back button on every page that isn't the landing page! (or the report subpages... Its still not on the temptations page or the temptations -> sexual arrousal page! This should be easy! Surely you could add somehwere in config that is either a list of all pages and then true or false for if the back button is added? Or even a whitelist / blacklist of 'thumb back button' pages if thats not possible... 
+
+* same for all pages in statistics... like progress... remove the back button from top... should all ahave the thumb back button... 
+
+* same with rearrange your apps... remove the back button... add on the thumb back button
+
+* on 'im going to look anyway'.. 'yes - genuinly a one off..' remove the AI dash (in fact, do that everywhere.. that long stupid dash), and make the text horizontally centred
+
+* Also you still haven't fixed the two back button on first two pages of report relapse... 
+
+* Decrease the size of hte arrow on the thumb floating back button.. like half as big... and arrrow ever so slightly less dark... 
+
+* When i go to accessibility -> installed apps -> web traffic monitoring (our app) -> [on -> allow]... 
+
+* --> Is there then any quick way to return back to our app? I either have to press the OS back button 3 times or swipe off the app (because the settings open in our app!) and reopen it.. I want a quicker process... iether one back click or some easier way to go bak..
+
+* In temptations -> sexual arrousal: no back button... also the 'back' button at the top (which we may as well just remove) clips off the top a bit... 
+
+* Add the lightbulb emoji to 'additional tips' on hte 'break the addiction protocol' page. 
+
+
+
+For the sensor debug;
+
+
+
+* when I'm on my back (lying) its:
+
+* --> tilt from upright: 140 (lying back a little) to 78 (lying right back)
+
+* --> side roll: -180 (lying back a little) to 10 (lying right back)
+
+.. interesting when lying back a little, the side roll seems to jump to +180 randomly.. not sure why... 
+
+
+
+* When I'm on my left side lying) its;
+
+* --> tilt from upright: 83 to 120
+
+* --> side roll: 83 to 120
+
+
+
+* When I'm on my right side lying) its;
+
+* --> tilt from upright: 83 to 120
+
+* --> side roll: -83 to -120
+
+
+
+
+
+
+
+
+
+Please update your logic and values to reflect these test results!
+
+To note: add these 3 extra things as seperate subsections for the tilt debug... (is lying on left side... is lying on right side... is lying on back)...
+
+
+
+
+
+For the lux, lets increase cutoff to 20 lux for dark. 
+
+
+
+
+
+
+------------------
 
 TODO NEXT:
 - capture extra data;
-    - led down;
-        - use the gyroscope to determine if they're led down, looking at phone? (i.e. either on their back, or more likely on their side??!?!)
-        - want another flag in the mode / strictness settings for whether they're likely led down or not..
-    - hmmmm
-        - do we ask them... or their phone.. to detect like light levels in the room?
-            - could we auto capture that, and log as one of the variables?
-        - want a flag for the light level threshold... but mapped to an enum like 'dark', 'dull', normal, bright...
-    (if you could research and set pre-existing thresholds.. for like light levels and whether they're led down, based off your exising knowledge / the research / open source projects...
-     --> then maybe have an additional debug page accessible from the sexual urge settings page... for debugging,, that just shows the gyro angle, and a green 'led down' if it thinks they are..
-     --> and the same for hte light levels... it shows the number then the equivalent enum...
-    - yeah add this to the dev page...
+    - integrate gyroscope and lux data.
+    - (do i log these when user fails?)
+    - (do i turn on strict mode?)
+- extract out shared logic that should be in its own file...
+    - like the back button...
+    - but keep the config at the top in main!
 - enforce greyscale if in strict mode?
     - GREYSCALE FILTERS! (ESPECIALLY AT HIGH-RISK TIMES, IF NOT ALL THE TIME!!!)
 - make all greylist apps requirre the breath in orb thing..? (including app store etc?)

@@ -32,7 +32,8 @@
     - slow page times etc?!!??!
 
 
-Other little things we do;
+# Other little things we do;
+- Block private browsing
 - Monitor time of day / date
     - Increase guards at times of day more likely to see improper usage.
 
