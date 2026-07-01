@@ -168,7 +168,7 @@ class OverlayController(private val context: Context) {
 
     private fun overlayType(): Int =
         // An accessibility service may draw TYPE_ACCESSIBILITY_OVERLAY windows
-        // WITHOUT the "display over other apps" permission — so a revoked overlay
+        // WITHOUT the "display over other apps" permission - so a revoked overlay
         // permission can no longer crash the service or silently kill blocking.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -181,7 +181,7 @@ class OverlayController(private val context: Context) {
 
 
 // =====================================================================================
-// BreathingOverlay — a calming "take a breath" gate shown before chosen apps open
+// BreathingOverlay - a calming "take a breath" gate shown before chosen apps open
 // =====================================================================================
 
 class BreathingOverlay(private val context: Context) {

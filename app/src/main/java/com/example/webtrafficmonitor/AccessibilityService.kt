@@ -194,7 +194,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 // Enforce even while the app sits idle with no events.
                 if (greyIsApp && GreyUsage.isOverLimit(this@PageMonitorAccessibilityService, t)) {
                     showAppBlock(
-                        "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 it'll open again soon", t)
+                        "That's your ${GreyUsage.LIMIT_MIN} min for this hour - it'll open again soon", t)
                 }
                 mainHandler.postDelayed(this, GREY_TICK_MS)
             }
@@ -259,13 +259,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // 3. Page-monitoring accessibility page AND the accessibility list that
         //    contains it. "page monitoring" is THIS app's accessibility label.
-        //    Seen: "Web Traffic Monitor — page monitoring" / "Lets the app read..."
+        //    Seen: "Web Traffic Monitor - page monitoring" / "Lets the app read..."
         GuardedPage("Page monitoring (accessibility)", listOf("page monitoring")),
 
         // 4. "Appear on top" overlay-permission area. Our app's row may be scrolled
         //    off-screen, so we match the page title alone.
         //    NOTE: this blocks the WHOLE overlay list while locked, not just our
-        //    app — acceptable: only reachable in Settings, only while locked.
+        //    app - acceptable: only reachable in Settings, only while locked.
         //    Seen: title "Appear on top"
         GuardedPage("Overlay – Appear on top", listOf("Appear on top")),
     )
@@ -295,7 +295,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // A crash in here kills the whole service ("keeps stopping") and with it
-        // ALL blocking — never let one bad event take the service down.
+        // ALL blocking - never let one bad event take the service down.
         try {
             handleEvent(event)
         } catch (t: Throwable) {
@@ -376,7 +376,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         lastProcessedAt = now
 
         // Known-safe app (maps, messaging, banking, utilities…): no public feed and
-        // no arbitrary web content worth scanning — skip the read/scan/screenshot/log
+        // no arbitrary web content worth scanning - skip the read/scan/screenshot/log
         // entirely to save battery and CPU.
         if (Whitelist.isSafeApp(this, packageName)) return
 
@@ -429,7 +429,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         lastLogSignature = signature
 
         // Log the content score on every web page so we can see what each one scored
-        // while tuning — shows as a prefix on the log row, e.g. "[score 18] cute puppies".
+        // while tuning - shows as a prefix on the log row, e.g. "[score 18] cute puppies".
         val pageScore = if (host != null && !Whitelist.isSafeDomain(this, host))
             BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text)?.score else null
         val loggedTitle = if (pageScore != null) "[score $pageScore]  ${title.orEmpty()}".trim()
@@ -466,7 +466,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             },
             onLeave = { exitToHome() },
             onReport = {
-                // Intentionally does nothing — reporting an incorrect block must NOT
+                // Intentionally does nothing - reporting an incorrect block must NOT
                 // unlock a blocked app.  Kept as a stub so the overlay button still
                 // appears, but the app stays covered.
             },
@@ -480,16 +480,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun appBlockReason(pkg: String?): String? {
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
-            return "Locked down \u2014 ride out the urge"
+            return "Locked down - ride out the urge"
         }
         if (LoosenWait.isActive(this) && pkg != packageName && !LoosenWait.isAllowed(pkg)) {
-            return "Waiting it out \u2014 stay off other apps for now"
+            return "Waiting it out - stay off other apps for now"
         }
         when (AppRules.appTier(this, pkg)) {                   // user "Report an app" rules
             AppRules.BLOCK -> return "Blocked app"
             AppRules.GREY ->
                 if (pkg != null && GreyUsage.isOverLimit(this, pkg.lowercase()))
-                    return "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 it'll open again soon"
+                    return "That's your ${GreyUsage.LIMIT_MIN} min for this hour - it'll open again soon"
         }
         AppBlocklist.blockedReason(pkg)?.let { return "Blocked app: $it" }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
@@ -524,8 +524,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     /**
      * The "Leave" / exit-all button. A single HOME sometimes does nothing (the cover
      * can immediately re-arm, or an app swallows it), so press Back twice to climb
-     * out of nested screens, then Home. Still cannot FORCE the app off recents —
-     * Android gives no accessibility API for that — but the re-cover-on-reopen
+     * out of nested screens, then Home. Still cannot FORCE the app off recents -
+     * Android gives no accessibility API for that - but the re-cover-on-reopen
      * blocking is what actually stops them coming back.
      */
     private fun exitToHome() {
@@ -534,7 +534,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, 450)
     }
 
-    /** Page-level (domain/keyword) blocking — unchanged behaviour. */
+    /** Page-level (domain/keyword) blocking - unchanged behaviour. */
     private fun evaluateBlock(
         packageName: String,
         rawHost: String?,
@@ -557,12 +557,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // The address bar is often unreadable exactly when it matters (scrolled
         // away, image viewer open). For browsers, fall back to the REMEMBERED host
-        // of the current page — this is the fix for "pressed back onto the same
+        // of the current page - this is the fix for "pressed back onto the same
         // blocked page and nothing happened".
         var host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
 
         // Tab switcher / "jump back in" previews expose a tab's URL but no readable
-        // PAGE TEXT — you're looking at a thumbnail, not visiting the page. So when a
+        // PAGE TEXT - you're looking at a thumbnail, not visiting the page. So when a
         // browser gives us a host with no page content, suppress web blocking; a real
         // visit always has text. (Fixes Firefox blocking you on the open-tabs grid.)
         if (host != null && AppBlocklist.isBrowser(packageName) && content.isNullOrBlank()) {
@@ -582,7 +582,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val rule = if (appGuard == null) {
             if (host == null) {
                 // Off the web: keyword rules vs the screen title only (deliberately
-                // NOT the text — two mentions of a keyword in a chat app shouldn't
+                // NOT the text - two mentions of a keyword in a chat app shouldn't
                 // lock the app). Launchers skipped.
                 if (packageName !in NOT_LOGGED_PACKAGES) BlockRules.matchedRule(null, title) else null
             } else {
@@ -597,7 +597,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                rule != null -> describeRule(rule)
                host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
                    GreyUsage.isOverLimit(this, host) ->
-                       "That's your ${GreyUsage.LIMIT_MIN} min for this hour \u2014 $host opens again soon"
+                       "That's your ${GreyUsage.LIMIT_MIN} min for this hour - $host opens again soon"
                host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
                (host != null || AppBlocklist.isBrowser(packageName)) ->
                    BorderlineScorer.evaluate(title, url, content)?.reason
@@ -616,9 +616,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             val status = when {
                 freshShow -> null
                 host != null && host == shownBlockHost ->
-                    "You went BACK — this is still the SAME blocked page.\nKeep pressing Back, or exit the app."
+                    "You went BACK - this is still the SAME blocked page.\nKeep pressing Back, or exit the app."
                 shownBlockHost != null ->
-                    "You're now on a DIFFERENT page — but it's blocked too.\nKeep pressing Back, or exit the app."
+                    "You're now on a DIFFERENT page - but it's blocked too.\nKeep pressing Back, or exit the app."
                 else -> null
             }
             // A DIFFERENT page just became the blocked one -> restart the settle timer.
@@ -722,7 +722,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /**
      * Reads the address bar, preferring the FULL url. DuckDuckGo's unfocused
-     * omnibar has several matching nodes — typically a chip/label showing only the
+     * omnibar has several matching nodes - typically a chip/label showing only the
      * host ("en.wikipedia.org") AND the real input field holding the full URL
      * ("https://en.wikipedia.org/wiki/Dog"). A plain depth-first walk hits the
      * host-only one first, which is why we were logging just the domain. So gather
@@ -789,7 +789,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (ADDRESS_BAR_IDS.any { viewId.endsWith(it) }) return true
             // Generic backup (the "looks like a url bar" catch-all): any id that
             // contains url / address / location / omnibar. Catches browsers we
-            // haven't enumerated — e.g. Firefox's "ADDRESSBAR_URL_BOX".
+            // haven't enumerated - e.g. Firefox's "ADDRESSBAR_URL_BOX".
             if (ADDRESS_BAR_ID_HINTS.any { it in viewId }) return true
         }
         if (node.isEditable || node.className == "android.widget.EditText") return true
@@ -827,7 +827,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun cleanTitle(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
         var t = raw.trim()
-        for (sep in listOf(" — ", " – ", " - ", " | ", " · ", " :: ")) {
+        for (sep in listOf(" - ", " – ", " - ", " | ", " · ", " :: ")) {
             val idx = t.indexOf(sep)
             if (idx > 0) { t = t.substring(0, idx).trim(); break }
         }
@@ -835,7 +835,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Collects text from INSIDE the WebView only — i.e. the actual web page,
+     * Collects text from INSIDE the WebView only - i.e. the actual web page,
      * skipping the browser's own chrome (toolbar, tabs, menus). This is what makes
      * "page content" the page, not the address bar.
      */
@@ -886,7 +886,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * DDG only exposes the full path while the omnibar is focused (tapped). Grab it
      * then, but only if the host matches the current page and there's a real path,
      * so a half-typed search isn't mistaken for the URL. Link taps don't focus the
-     * bar, so those navigations stay host-only — that's a DDG limit, not a bug.
+     * bar, so those navigations stay host-only - that's a DDG limit, not a bug.
      */
     private fun readFocusedFullUrl(currentHost: String?): String? {
         if (currentHost == null) return null
@@ -983,7 +983,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 700L
         // A page must stay blocked this long before Back/Leave writes a PERMANENT
-        // ban for it — long enough to outlast the stale-content flicker while
+        // ban for it - long enough to outlast the stale-content flicker while
         // navigating back through history, so innocent previous pages aren't banned.
         private const val BAN_SETTLE_MS = 1500L
         private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
@@ -1001,7 +1001,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         private const val MAX_URL_CHARS = 2048
 
-        // Address-bar view IDs (Firefox only — see AppConfig). The generic hints below
+        // Address-bar view IDs (Firefox only - see AppConfig). The generic hints below
         // are the backup used by isAddressBar.
         private val ADDRESS_BAR_IDS = AppConfig.ADDRESS_BAR_IDS
 

@@ -1,90 +1,14 @@
-
-Next:
-
-
-
-* only give me back the files that have changed.
-
-
-
-Here the feedback;
-
-
-
-* Just put the floating thumb back button on every page that isn't the landing page! (or the report subpages... Its still not on the temptations page or the temptations -> sexual arrousal page! This should be easy! Surely you could add somehwere in config that is either a list of all pages and then true or false for if the back button is added? Or even a whitelist / blacklist of 'thumb back button' pages if thats not possible... 
-
-* same for all pages in statistics... like progress... remove the back button from top... should all ahave the thumb back button... 
-
-* same with rearrange your apps... remove the back button... add on the thumb back button
-
-* on 'im going to look anyway'.. 'yes - genuinly a one off..' remove the AI dash (in fact, do that everywhere.. that long stupid dash), and make the text horizontally centred
-
-* Also you still haven't fixed the two back button on first two pages of report relapse... 
-
-* Decrease the size of hte arrow on the thumb floating back button.. like half as big... and arrrow ever so slightly less dark... 
-
-* When i go to accessibility -> installed apps -> web traffic monitoring (our app) -> [on -> allow]... 
-
-* --> Is there then any quick way to return back to our app? I either have to press the OS back button 3 times or swipe off the app (because the settings open in our app!) and reopen it.. I want a quicker process... iether one back click or some easier way to go bak..
-
-* In temptations -> sexual arrousal: no back button... also the 'back' button at the top (which we may as well just remove) clips off the top a bit... 
-
-* Add the lightbulb emoji to 'additional tips' on hte 'break the addiction protocol' page. 
-
-
-
-For the sensor debug;
-
-
-
-* when I'm on my back (lying) its:
-
-* --> tilt from upright: 140 (lying back a little) to 78 (lying right back)
-
-* --> side roll: -180 (lying back a little) to 10 (lying right back)
-
-.. interesting when lying back a little, the side roll seems to jump to +180 randomly.. not sure why... 
-
-
-
-* When I'm on my left side lying) its;
-
-* --> tilt from upright: 83 to 120
-
-* --> side roll: 83 to 120
-
-
-
-* When I'm on my right side lying) its;
-
-* --> tilt from upright: 83 to 120
-
-* --> side roll: -83 to -120
-
-
-
-
-
-
-
-
-
-Please update your logic and values to reflect these test results!
-
-To note: add these 3 extra things as seperate subsections for the tilt debug... (is lying on left side... is lying on right side... is lying on back)...
-
-
-
-
-
-For the lux, lets increase cutoff to 20 lux for dark. 
-
-
-
-
-
-
 ------------------
+------------------
+------------------
+------------------
+
+
+------------------------
+
+
+
+
 
 TODO NEXT:
 - capture extra data;

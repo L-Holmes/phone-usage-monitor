@@ -135,7 +135,7 @@ abstract class MonitorDatabase : RoomDatabase() {
                 )
                     // Dev build: a schema change just wipes old rows (they expire in
                     // 10 min anyway). If your Room is 2.6+, you may get a deprecation
-                    // warning — swap for .fallbackToDestructiveMigration(dropAllTables = true)
+                    // warning - swap for .fallbackToDestructiveMigration(dropAllTables = true)
                     .fallbackToDestructiveMigration()
                     .build().also { instance = it }
             }

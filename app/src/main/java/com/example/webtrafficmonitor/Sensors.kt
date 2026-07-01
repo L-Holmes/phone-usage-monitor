@@ -84,7 +84,7 @@ import android.graphics.Path
 
 
 // =====================================================================================
-// WastedDonutView  (share of your waking life going to the scroll — updates live)
+// WastedDonutView  (share of your waking life going to the scroll - updates live)
 // =====================================================================================
 // Reads the accelerometer (for tilt / "lying down") and the light sensor (lux), and
 // exposes derived values. Register with start(), release with stop(). onUpdate fires
@@ -122,11 +122,21 @@ class SensorMonitor(context: Context) : SensorEventListener {
     }
     override fun onAccuracyChanged(s: Sensor?, a: Int) {}
 
+    // Normalised gravity components (exposed for the debug page).
+    val gX: Float get() = gx
+    val gY: Float get() = gy
+    val gZ: Float get() = gz
+
     // Angle away from upright: 0deg held upright, 90deg flat or on its side.
     val tiltDeg: Float get() = Math.toDegrees(Math.acos((-gy).coerceIn(-1f, 1f).toDouble())).toFloat()
-    // Side roll: 0deg upright, ~±90deg lying on a side.
+    // Side roll: 0deg upright, ~+90deg on the left side, ~-90deg on the right side.
     val rollDeg: Float get() = Math.toDegrees(Math.atan2(gx.toDouble(), (-gy).toDouble())).toFloat()
-    val lyingDown: Boolean get() = gotAccel &&
-        (tiltDeg >= AppConfig.LYING_TILT_DEG || Math.abs(rollDeg) >= AppConfig.LYING_SIDE_ROLL_DEG)
+
+    // Posture classifiers, calibrated to real test data (see AppConfig).
+    val onLeftSide: Boolean get() = gotAccel && gx > AppConfig.SIDE_GX
+    val onRightSide: Boolean get() = gotAccel && gx < -AppConfig.SIDE_GX
+    val onBack: Boolean get() = gotAccel && Math.abs(gx) <= AppConfig.SIDE_GX && Math.abs(gz) >= AppConfig.BACK_GZ
+    val lyingDown: Boolean get() = onLeftSide || onRightSide || onBack
+
     val lightLevel: AppConfig.LightLevel? get() = if (lux < 0f) null else AppConfig.lightLevel(lux)
 }

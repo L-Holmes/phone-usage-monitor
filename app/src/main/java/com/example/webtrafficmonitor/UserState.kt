@@ -332,7 +332,7 @@ object Progress {
         if (best >= 7) ms.add("A clean week in the bag")
         if (totalWins >= 25) ms.add("25 urges beaten")
         if (best >= 14) ms.add("Two clean weeks")
-        if (best >= 30) ms.add("A clean month \u2014 every day counted")
+        if (best >= 30) ms.add("A clean month - every day counted")
         if (totalWins >= 100) ms.add("100 urges beaten")
 
         val next = when {
@@ -431,7 +431,7 @@ object TriggerOptions {
 
 
 // =====================================================================================
-// CustomOptions  (user-typed options per category — feeling / location / activity / screen)
+// CustomOptions  (user-typed options per category - feeling / location / activity / screen)
 // =====================================================================================
 object CustomOptions {
     private const val PREFS = "custom_options"

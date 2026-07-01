@@ -83,9 +83,9 @@ import android.widget.ImageView
 import android.graphics.Path
 
 // =====================================================================================
-// AppConfig  —  THE ONE PLACE TO EDIT LISTS & SETTINGS
+// AppConfig  -  THE ONE PLACE TO EDIT LISTS & SETTINGS
 // =====================================================================================
-// Everything here is compile-time (no file is parsed on the device — fastest possible,
+// Everything here is compile-time (no file is parsed on the device - fastest possible,
 // and a typo fails the build instead of silently breaking a list at runtime).
 // Grouped by purpose; app entries map a friendly name -> the package our monitor sees.
 // Per-page block TEXT (e.g. specific Settings screens) deliberately stays in source.
@@ -112,13 +112,13 @@ object AppConfig {
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
 
     // === Ambient light (from the phone's light sensor, in lux) =======================
-    // Thresholds are rough, drawn from common lighting references: moonlit/near-dark
-    // rooms sit under ~10 lux, a dim lamp-lit evening room ~10–80, ordinary indoor
-    // lighting ~80–400, and bright indoor / daylight above that.
+    // Thresholds are rough, drawn from common lighting references: a dark room (lights off,
+    // curtains drawn) sits under ~20 lux, a dim lamp-lit evening room ~20-80, ordinary indoor
+    // lighting ~80-400, and bright indoor / daylight above that.
     enum class LightLevel { DARK, DULL, NORMAL, BRIGHT }
-    const val LIGHT_DULL_MAX = 10f      // < 10 lux  -> DARK
-    const val LIGHT_NORMAL_MAX = 80f    // 10–80     -> DULL
-    const val LIGHT_BRIGHT_MAX = 400f   // 80–400    -> NORMAL ; >=400 -> BRIGHT
+    const val LIGHT_DULL_MAX = 20f      // < 20 lux  -> DARK
+    const val LIGHT_NORMAL_MAX = 80f    // 20-80     -> DULL
+    const val LIGHT_BRIGHT_MAX = 400f   // 80-400    -> NORMAL ; >=400 -> BRIGHT
     fun lightLevel(lux: Float): LightLevel = when {
         lux < LIGHT_DULL_MAX -> LightLevel.DARK
         lux < LIGHT_NORMAL_MAX -> LightLevel.DULL
@@ -129,12 +129,14 @@ object AppConfig {
     fun lightAtOrBelow(level: LightLevel, floor: LightLevel): Boolean = level.ordinal <= floor.ordinal
 
     // === Lying-down heuristic (from the accelerometer / gravity direction) ===========
-    // tilt = angle of the phone away from upright (0deg = held upright, 90deg = flat or
-    // rolled onto its side). Beyond ~60deg the phone is well past normal upright use, and
-    // a large side-roll suggests lying on one's side. These match the ranges used by
-    // common "posture from accelerometer" projects; tune on the debug page.
-    const val LYING_TILT_DEG = 60f
-    const val LYING_SIDE_ROLL_DEG = 50f
+    // Uses the normalised gravity vector (gx, gy, gz). Calibrated against real test data:
+    //   * on the LEFT side  -> gx strongly positive (~+0.87..+0.99)
+    //   * on the RIGHT side -> gx strongly negative (~-0.87..-0.99)
+    //   * on the BACK       -> gx near 0 and the screen tilted toward horizontal (|gz| large)
+    // Tune these on the sensor debug page. (If left/right read reversed on a given device,
+    // flip the sign test in SensorMonitor.)
+    const val SIDE_GX = 0.55f   // |gx| at/above this  -> lying on a side
+    const val BACK_GZ = 0.55f   // |gz| at/above this (and not on a side) -> lying on back
 
     // === Uninstall / device-admin passcode ==========================================
     const val UNINSTALL_PASSCODE = "666666"
@@ -146,7 +148,7 @@ object AppConfig {
 
     // === Safe apps (friendly name -> package) ========================================
     // No public scrolling feed and no arbitrary adult content. The monitor SKIPS these
-    // entirely — no screenshot, scan, or log — to save battery/CPU. Add freely.
+    // entirely - no screenshot, scan, or log - to save battery/CPU. Add freely.
     val SAFE_APPS_BY_NAME: Map<String, String> = linkedMapOf(
         // Maps & navigation
         "Google Maps" to "com.google.android.apps.maps", "Waze" to "com.waze",

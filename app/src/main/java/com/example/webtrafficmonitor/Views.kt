@@ -107,7 +107,7 @@ class BreathOrbView(context: Context, private val accent: Int) : View(context) {
         if (width == 0 || height == 0) return
         val cx = width / 2f
         val cy = height / 2f
-        // never let the orb spill past the box it sits in — inscribe it in the square
+        // never let the orb spill past the box it sits in - inscribe it in the square
         val maxR = (kotlin.math.min(width, height) / 2f) - ring.strokeWidth
         val minR = maxR * 0.04f
         val r = minR + (maxR - minR) * progress
@@ -311,7 +311,7 @@ class FeelingFaceView(
     }
 
     // Mood is driven by how deep into the venn you are (distance to the shared centre),
-    // NOT per-circle overlap — so the centre is unambiguously the most intense point.
+    // NOT per-circle overlap - so the centre is unambiguously the most intense point.
     private fun computeMood(x: Float, y: Float): Float {
         if (startZoneLabel != null && y < dividerY) return 1f          // the one happy place
         val d = kotlin.math.hypot(x - cenX, y - cenY)
@@ -390,12 +390,12 @@ class FeelingFaceView(
 
 
 // =====================================================================================
-// PeakCurveView  (urge over time: spikes, then falls — and you're already past the peak)
+// PeakCurveView  (urge over time: spikes, then falls - and you're already past the peak)
 // =====================================================================================
 class PeakCurveView(
     context: Context,
     private val showMarker: Boolean = true,
-    private val labelTop: String? = "you're strong \u2014",
+    private val labelTop: String? = "you're strong -",
     private val labelBot: String? = "you can get here",
 ) : View(context) {
     private var anim = 0f
@@ -729,7 +729,7 @@ class ThumbBackView(context: Context) : View(context) {
         color = 0x22000000; style = Paint.Style.STROKE; strokeWidth = 1f * dp
     }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xCC1F2933.toInt(); style = Paint.Style.STROKE; strokeWidth = 2.4f * dp
+        color = 0xB32B333B.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f * dp
         strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     }
     override fun onDraw(canvas: Canvas) {
@@ -737,8 +737,8 @@ class ThumbBackView(context: Context) : View(context) {
         val r = Math.min(width, height) / 2f - strokePaint.strokeWidth
         canvas.drawCircle(cx, cy, r, fillPaint)
         canvas.drawCircle(cx, cy, r, strokePaint)
-        val a = r * 0.42f      // shaft half-length
-        val h = r * 0.30f      // arrowhead size
+        val a = r * 0.21f      // shaft half-length (about half the previous size)
+        val h = r * 0.15f      // arrowhead size
         canvas.drawLine(cx - a, cy, cx + a, cy, arrowPaint)
         val head = Path().apply {
             moveTo(cx - a + h, cy - h); lineTo(cx - a, cy); lineTo(cx - a + h, cy + h)
@@ -822,7 +822,7 @@ class TimeGridView(context: Context) : View(context) {
 
 
 // =====================================================================================
-// TrendView  (a small line chart for "urges ridden out per week" — shows direction)
+// TrendView  (a small line chart for "urges ridden out per week" - shows direction)
 // =====================================================================================
 class TrendView(context: Context, private val values: FloatArray) : View(context) {
     private val accent = 0xFF2E7D32.toInt()

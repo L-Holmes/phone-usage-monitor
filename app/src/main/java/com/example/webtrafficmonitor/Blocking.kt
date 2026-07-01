@@ -98,7 +98,7 @@ import android.graphics.Path
  * The list of things to block, plus a per-session allow list for "report
  * incorrect block".
  *
- * A rule is matched against only the current page's domain and title — never the
+ * A rule is matched against only the current page's domain and title - never the
  * full on-screen text, so an autocomplete suggestion or an embedded resource
  * mentioning a domain does not trigger a block. Blocking applies to web pages
  * only (where we can read an address bar); it does not block apps.
@@ -140,11 +140,11 @@ object BlockRules {
 
     fun all(): List<String> = rules.toList()
 
-    /** "rule — Xm left" lines for the ban-list screen (expired ones pruned). */
+    /** "rule - Xm left" lines for the ban-list screen (expired ones pruned). */
     fun allTimed(): List<String> {
         pruneExpired()
         val now = System.currentTimeMillis()
-        return timedRules.entries.map { "${it.key}  —  ${(it.value - now) / 60_000} min left" }.sorted()
+        return timedRules.entries.map { "${it.key}  -  ${(it.value - now) / 60_000} min left" }.sorted()
     }
 
     fun add(context: Context, rule: String) {
@@ -183,7 +183,7 @@ object BlockRules {
      * The rule blocking this page, or null. Domain rules (contain a dot) match the
      * host and its subdomains, permanent or timed. Keyword rules now match the
      * TITLE or the URL once, or the on-screen TEXT at least [TEXT_HITS_NEEDED]
-     * times — so "dog" typed into Google Images is caught via the URL/results,
+     * times - so "dog" typed into Google Images is caught via the URL/results,
      * but one stray mention of a keyword in an article can't block on its own.
      */
     fun matchedRule(domain: String?, title: String?, url: String? = null, text: String? = null): String? {
@@ -241,12 +241,12 @@ object BlockRules {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  SEARCH-ENGINE WHITELIST — sites that put the search term in a query param
+    //  SEARCH-ENGINE WHITELIST - sites that put the search term in a query param
     // ─────────────────────────────────────────────────────────────────────────
     //  Normally a blocked page becomes a PATH rule with the query dropped, so
     //  "reddit.com/nsfw?sort=high" and "...?sort=low" are both caught by the rule
     //  "reddit.com/nsfw". But on a search engine the path is generic ("/search")
-    //  and the real content is the "?q=..." term — dropping the query there would
+    //  and the real content is the "?q=..." term - dropping the query there would
     //  collapse EVERY search into one rule (blocking "q=porn" would also block
     //  "q=wolves"). For the engines below we key the rule to the TERM instead, so
     //  each search blocks independently. Only their SEARCH PATH is treated this
@@ -329,7 +329,7 @@ object BlockRules {
 // =====================================================================================
 // ShortForm  (reels / shorts / feeds as one toggleable category of the block system)
 // =====================================================================================
-// These are ordinary BlockRules patterns — page rules where only the feed should go
+// These are ordinary BlockRules patterns - page rules where only the feed should go
 // (so the rest of the app/site still works), host rules where the whole thing is the
 // feed. Toggling the category just adds or removes this curated set.
 object ShortForm {
@@ -345,11 +345,11 @@ object ShortForm {
 // =====================================================================================
 // Whitelist  (apps/domains we trust enough to skip processing; plus a greylist)
 // =====================================================================================
-// SAFE_APPS: no public scrolling feed and no arbitrary adult content — so the service
+// SAFE_APPS: no public scrolling feed and no arbitrary adult content - so the service
 //   skips the screenshot/scan/log entirely (big battery + CPU saving).
-// SAFE_DOMAINS: genuinely safe sites — exempt from the heuristic borderline scorer
+// SAFE_DOMAINS: genuinely safe sites - exempt from the heuristic borderline scorer
 //   (fewer false positives, less work). Explicit user block rules still apply.
-// GREYLIST_APPS: social / short-form apps that MAY contain bad stuff — never whitelisted;
+// GREYLIST_APPS: social / short-form apps that MAY contain bad stuff - never whitelisted;
 //   defaulted to the GREY tier (time-limited, always scrutinised) unless the user overrides.
 // The hardcoded sets below are a curated subset in the spirit of public allowlists; a
 // persisted user list extends them, and Whitelist.reload() refreshes the cache.
@@ -425,7 +425,7 @@ object BlockEscalation {
     fun recordWebBlock(context: Context, host: String): String? {
         val now = System.currentTimeMillis()
 
-        // Do NOT refresh lastAt inside the dedupe branch — that made it a SLIDING
+        // Do NOT refresh lastAt inside the dedupe branch - that made it a SLIDING
         // window, so continuous re-blocks on one host never counted past strike 1.
         // Now at most one strike per DEDUPE_MS is swallowed, then the next counts.
         if (host == lastHost && now - lastAt < DEDUPE_MS) return null
@@ -445,13 +445,13 @@ object BlockEscalation {
         return if (count >= THRESHOLD) domain else null
     }
 
-    /** "domain — N strike(s) today" lines for the ban-list screen. */
+    /** "domain - N strike(s) today" lines for the ban-list screen. */
     @Synchronized
     fun summary(context: Context): List<String> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return prefs.all.entries
             .filter { it.key.startsWith("count:") }
-            .map { "${it.key.removePrefix("count:")}  —  ${it.value} strike(s) today" }
+            .map { "${it.key.removePrefix("count:")}  -  ${it.value} strike(s) today" }
             .sorted()
     }
 
@@ -492,7 +492,7 @@ object BlockEscalation {
 
 /**
  * Counts block events per app in a rolling 10-minute window. Five blocks on the
- * SAME app inside that window earns a hard 90-minute block — browser or not. Kept
+ * SAME app inside that window earns a hard 90-minute block - browser or not. Kept
  * in memory (the window is short); a process restart forgives the count.
  */
 object RapidBlockMonitor {
@@ -566,7 +566,7 @@ object AppTimedBlock {
         val reason = prefs.getString("reason:$key", null)
             ?: reasonFor(prefs.getInt("strikes:$key", 1), until)
         // Rapid 90-min block disabled? Clear any lingering one and let the app
-        // through. (The content-strike ladder — 5 min / tomorrow / permanent — is
+        // through. (The content-strike ladder - 5 min / tomorrow / permanent - is
         // unaffected; this only targets the "too many blocks" reason.)
         if (!RapidBlockMonitor.ENABLED && reason.endsWith("(too many blocks)")) {
             prefs.edit().remove("until:$key").remove("reason:$key").apply()
@@ -598,7 +598,7 @@ object AppTimedBlock {
         sessionAllow.clear()
     }
 
-    /** "package — strikes, status" lines for the ban-list screen. */
+    /** "package - strikes, status" lines for the ban-list screen. */
     @Synchronized
     fun summary(context: Context): List<String> {
         val prefs = prefs(context)
@@ -618,7 +618,7 @@ object AppTimedBlock {
                 until > now -> "blocked ${(until - now) / 60_000} min more"
                 else -> "not currently blocked"
             }
-            "$pkg  —  $strikes strike(s), $status"
+            "$pkg  -  $strikes strike(s), $status"
         }
     }
 
@@ -682,7 +682,7 @@ object AppBlocklist {
     }
 
     /**
-     * True if [packageName] is ANY known browser — blocked, allowed (DuckDuckGo),
+     * True if [packageName] is ANY known browser - blocked, allowed (DuckDuckGo),
      * or detected at runtime. This, not "did we read a URL", is what decides
      * web-vs-app: a browser is never timed-blocked on content; the page is blocked.
      */
@@ -755,7 +755,7 @@ object AppBlocklist {
     private val ALLOWED_BROWSERS = AppConfig.ALLOWED_BROWSERS
 
     // ================================================================
-    // EDIT BELOW — the browser package names to block. All lowercase.
+    // EDIT BELOW - the browser package names to block. All lowercase.
     // DuckDuckGo is in ALLOWED_BROWSERS above, so it stays allowed even
     // if dynamic detection finds it.
     // ================================================================
@@ -811,7 +811,7 @@ object AppRules {
     fun apps(context: Context): List<Pair<String, String>> =     // (tier, pkg)
         readApps(context).map { it.substringBefore('|') to it.substringAfter('|') }
 
-    fun hosts(context: Context): List<Pair<String, String>> =    // (tier, host) — always GREY
+    fun hosts(context: Context): List<Pair<String, String>> =    // (tier, host) - always GREY
         readHosts(context).map { it.substringBefore('|') to it.substringAfter('|') }
 
     private fun readApps(c: Context) = prefs(c).getStringSet(KEY_APPS, emptySet())!!.toSet()
@@ -949,11 +949,11 @@ object LoosenLimit {
 // =====================================================================================
 /**
  * While active, the accessibility service covers every app EXCEPT the essentials below.
- * Browsers, social, games — all off the table — so an urge has nowhere to go. Calls,
+ * Browsers, social, games - all off the table - so an urge has nowhere to go. Calls,
  * texts, alarms, contacts and the home screen still work, so the phone isn't bricked.
  * (systemui, keyboards and this app itself are already let through upstream.)
  *
- * Can't be cancelled early on purpose — that's the commitment. It just expires after
+ * Can't be cancelled early on purpose - that's the commitment. It just expires after
  * 30 minutes. Same best-effort durability as the app's other locks.
  *
  * Note: Settings is NOT on the allow-list, so the service can't be switched off mid-
