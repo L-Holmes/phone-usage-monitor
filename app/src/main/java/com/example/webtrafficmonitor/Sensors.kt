@@ -102,9 +102,10 @@ class SensorMonitor(context: Context) : SensorEventListener {
     var onUpdate: (() -> Unit)? = null
     private var lastEmit = 0L
 
-    fun start() {
-        accel?.let { sm.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
-        light?.let { sm.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    fun start(slow: Boolean = false) {
+        val rate = if (slow) SensorManager.SENSOR_DELAY_NORMAL else SensorManager.SENSOR_DELAY_UI
+        accel?.let { sm.registerListener(this, it, rate) }
+        light?.let { sm.registerListener(this, it, rate) }
     }
     fun stop() { sm.unregisterListener(this) }
 

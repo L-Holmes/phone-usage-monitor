@@ -36,6 +36,8 @@
 - Block private browsing
 - Monitor time of day / date
     - Increase guards at times of day more likely to see improper usage.
+- montiro angle / light level
+- prevent clearing browing data...
 
 
 
@@ -48,3 +50,4 @@
 # AND
 - don't fully lock people out..
     - decreasing the likelihood of the user to attempt extreme bypass measures such as buying new devices.. resetting devices etc.
+

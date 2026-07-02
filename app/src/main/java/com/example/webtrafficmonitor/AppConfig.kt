@@ -139,6 +139,14 @@ object AppConfig {
     const val SIDE_GX = 0.55f   // |gx| at/above this  -> lying on a side
     const val BACK_GZ = 0.55f   // gz at/below -this (screen face-down) + not on a side -> lying on back
 
+    // === Greyscale enforcement (see Greyscale.kt) ====================================
+    // Drains the colour out of the whole screen in strict mode to kill the visual pull.
+    // A normal app CANNOT switch system greyscale on itself - the user enables it once in
+    // Settings (the in-app "Grayscale setup" screen deep-links them there). The app reads
+    // the state to verify/nudge. Auto-toggle only happens on privileged builds.
+    const val GREYSCALE_IN_STRICT = true         // master switch for the feature
+    const val GREYSCALE_ONLY_WHEN_LYING = true   // true: only while lying down; false: whole strict session
+
     // === Uninstall / device-admin passcode ==========================================
     const val UNINSTALL_PASSCODE = "666666"
 
@@ -278,12 +286,59 @@ object AppConfig {
     val ADDRESS_BAR_HINTS: List<String> = listOf(
         "search or enter", "search or type", "address bar", "enter address", "search address", "edit url",
     )
-    // Firefox private/incognito + Focus stealth screens we block (off-web only).
+    // ═══════════════════════════════════════════════════════════════════════════════
+    //  PAGE-TEXT BLOCK RULES  -  DEVS: this is THE place to edit page blocking.
+    //  Every rule below matches a screen purely by text seen on it (from this app's own
+    //  page-monitor log). If an Android/OEM update changes the wording and a page stops
+    //  being blocked, open it on the phone, copy the on-screen text from the log, and
+    //  update the strings here. Three kinds:
+    //    • SCREEN_GUARDS        – in-app screens covered by the block overlay (Firefox).
+    //    • UNINSTALL_GUARD_PAGES – Settings pages bounced to Home while the uninstall lock is on.
+    //    • COLOR_CORRECTION_PAGE – the grayscale toggle page, optionally locked by the user.
+    // ═══════════════════════════════════════════════════════════════════════════════
+
+    // (1) In-app screens blocked by the overlay (matched off-web, host == null).
     data class ScreenGuard(val pkg: String, val titleKeywords: List<String>, val contentKeywords: List<String>, val reason: String)
-    val SCREEN_GUARDS: List<ScreenGuard> = listOf(
-        ScreenGuard("org.mozilla.focus", listOf("privacy"), listOf("stealth"),
-            "Firefox Focus stealth/privacy settings are blocked"),
+
+    // Toggle: when true, the "Delete browsing data" screen and its confirmation dialog are
+    // blocked so browsing history can't be cleared. Flip to false to allow clearing.
+    const val DISABLE_DELETE_HISTORY = true
+
+    val SCREEN_GUARDS: List<ScreenGuard> = mutableListOf<ScreenGuard>().apply {
+        add(ScreenGuard("org.mozilla.focus", listOf("privacy"), listOf("stealth"),
+            "Firefox Focus stealth/privacy settings are blocked"))
+        if (DISABLE_DELETE_HISTORY) {
+            // The settings screen ("Delete browsing data") AND the confirm dialog
+            // ("Firefox will delete the selected browsing data. / Cancel / Delete").
+            val delTitles = listOf("delete browsing data", "delete the selected browsing data")
+            val delContent = listOf("delete browsing data", "delete the selected browsing data")
+            add(ScreenGuard("org.mozilla.firefox", delTitles, delContent,
+                "Clearing browsing history is disabled"))
+            add(ScreenGuard("org.mozilla.fenix", delTitles, delContent,
+                "Clearing browsing history is disabled"))
+        }
+    }
+
+    // (2) & (3) Settings pages matched by text. A page matches when EVERY string in
+    // `mustContain` is present on screen (case-insensitive substring). Strings copied
+    // verbatim from this app's monitor on a Samsung device.
+    data class PageMatch(val label: String, val mustContain: List<String>)
+
+    // Bounced to Home while the uninstall lock is ON - the "escape routes" that would
+    // let someone unlock or kill the guard.
+    val UNINSTALL_GUARD_PAGES: List<PageMatch> = listOf(
+        PageMatch("Device admin", listOf("Web Traffic Monitor", "admin app")),
+        PageMatch("App info - uninstall", listOf("Web Traffic Monitor", "uninstall")),
+        PageMatch("App info - force stop", listOf("Web Traffic Monitor", "force stop")),
+        PageMatch("Page monitoring (accessibility)", listOf("page monitoring")),
+        PageMatch("Overlay - Appear on top", listOf("Appear on top")),
     )
+
+    // The system Colour/Color-correction page (where Greyscale is toggled). Blocked only
+    // when the user turns on "block this page" in the Grayscale setup screen AND greyscale
+    // is currently on (so they can't disable it, but can never lock themselves out of
+    // enabling it). "correction" + "yscale" match both Colour/Color and Grey/Grayscale.
+    val COLOR_CORRECTION_PAGE = PageMatch("Colour correction", listOf("correction", "yscale"))
 
     // === Search engines (term lives in a query param; only the search path matters) ==
     data class Search(val domain: String, val path: String, val params: List<String>)

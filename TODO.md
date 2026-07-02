@@ -11,17 +11,11 @@
 
 
 TODO NEXT:
-- reverse the change of having the content filter pull the stuff from github...
-    - remove that, and make it done by the deloy script instead like before...
+- rename 'sexual arousal' to 'adult content'
 - capture extra data;
     - integrate gyroscope and lux data.
     - (do i log these when user fails?)
     - (do i turn on strict mode?)
-- extract out shared logic that should be in its own file...
-    - like the back button...
-    - but keep the config at the top in main!
-- enforce greyscale if in strict mode?
-    - GREYSCALE FILTERS! (ESPECIALLY AT HIGH-RISK TIMES, IF NOT ALL THE TIME!!!)
 - make all greylist apps requirre the breath in orb thing..? (including app store etc?)
 - LINK UP HTE PLUGIN
 - dopamine baseline masurement
@@ -40,6 +34,10 @@ TODO NEXT:
     - then have additional things like inputting hourly wage...
     (also we add our own average hourly wage there instead... for calculations)
     - ... then of course integrate things like greyscale when lying down into the regular productivity flow as well...
+- once hte plugin ready..
+    - integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
+- There are likely other paths to clear history in Firefox that won't hit these exact strings — e.g. "Clear browsing data on quit" in settings, deleting a single history entry via long-press, or per-site "Delete" from the history list. This blocks the main "Delete browsing data" flow you captured. If you monitor another path, send me its title/content dump and I'll add the keywords.
+
 
 
 MANUAL TODO:

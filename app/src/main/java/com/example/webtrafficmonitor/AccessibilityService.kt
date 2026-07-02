@@ -246,39 +246,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     //     ONLY maintenance this feature needs.
     // ════════════════════════════════════════════════════════════════════════
 
-    private data class GuardedPage(val label: String, val mustContain: List<String>)
-
-    private val guardedSettingsPages = listOf(
-        // 1. Device-admin deactivation page.
-        //    Seen: "Device admin app" / "Web Traffic Monitor" / "This admin app is active"
-        GuardedPage("Device admin", listOf("Web Traffic Monitor", "admin app")),
-
-        // 2. App-info page (Uninstall / Force stop live here).
-        GuardedPage("App info – uninstall", listOf("Web Traffic Monitor", "uninstall")),
-        GuardedPage("App info – force stop", listOf("Web Traffic Monitor", "force stop")),
-
-        // 3. Page-monitoring accessibility page AND the accessibility list that
-        //    contains it. "page monitoring" is THIS app's accessibility label.
-        //    Seen: "Web Traffic Monitor - page monitoring" / "Lets the app read..."
-        GuardedPage("Page monitoring (accessibility)", listOf("page monitoring")),
-
-        // 4. "Appear on top" overlay-permission area. Our app's row may be scrolled
-        //    off-screen, so we match the page title alone.
-        //    NOTE: this blocks the WHOLE overlay list while locked, not just our
-        //    app - acceptable: only reachable in Settings, only while locked.
-        //    Seen: title "Appear on top"
-        GuardedPage("Overlay – Appear on top", listOf("Appear on top")),
-    )
-
-    /** True when the Settings screen in front matches any guarded page above. */
-    private fun isOurUninstallScreen(): Boolean {
+    // Page-match text lists now live in AppConfig (PAGE-TEXT BLOCK RULES) so devs edit
+    // them in one place. This just runs the match against whatever's on screen.
+    private fun pageMatches(page: AppConfig.PageMatch): Boolean {
         val root = rootInActiveWindow ?: return false
-        return guardedSettingsPages.any { page ->
-            page.mustContain.all { needle ->
-                root.findAccessibilityNodeInfosByText(needle).isNotEmpty()
-            }
+        return page.mustContain.all { needle ->
+            root.findAccessibilityNodeInfosByText(needle).isNotEmpty()
         }
     }
+
+    /** True when the Settings screen in front matches any uninstall-guard page. */
+    private fun isOurUninstallScreen(): Boolean =
+        AppConfig.UNINSTALL_GUARD_PAGES.any { pageMatches(it) }
 
 
 
@@ -290,6 +269,37 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         AppBlocklist.refresh(this)
         loadKeyboardPackages()
         DomainBlocklist.warmUp(this)
+        startGreyscaleWatch()
+    }
+
+    // ── Greyscale enforcement ───────────────────────────────────────────────────────
+    private var greyscaleSensor: SensorMonitor? = null
+    private var greyscaleApplied = false      // true only while WE hold greyscale on
+    private var lastGreyEval = 0L
+
+    private fun startGreyscaleWatch() {
+        if (!AppConfig.GREYSCALE_IN_STRICT) return
+        val m = SensorMonitor(this)
+        m.onUpdate = { updateGreyscale() }
+        greyscaleSensor = m
+        m.start(slow = true)      // light polling rate - this runs for the whole session
+        updateGreyscale()
+    }
+
+    private fun updateGreyscale() {
+        if (!AppConfig.GREYSCALE_IN_STRICT) return
+        val now = System.currentTimeMillis()
+        if (now - lastGreyEval < 1000L) return   // re-evaluate at most ~1x/sec
+        lastGreyEval = now
+        val strict = Mode.isStrict(this)
+        val lying = greyscaleSensor?.lyingDown ?: false
+        val want = strict && (!AppConfig.GREYSCALE_ONLY_WHEN_LYING || lying)
+        if (want && !greyscaleApplied) {
+            if (Greyscale.setEnabled(this, true)) greyscaleApplied = true
+        } else if (!want && greyscaleApplied) {
+            Greyscale.setEnabled(this, false)
+            greyscaleApplied = false
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -321,6 +331,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 performGlobalAction(GLOBAL_ACTION_HOME)
                 return
             }
+        }
+        // Optional user lock: keep them off the Colour-correction page so they can't turn
+        // greyscale back off. Only while greyscale is actually on, so they can never lock
+        // themselves out of turning it ON in the first place.
+        if (packageName == "com.android.settings" &&
+            Greyscale.isLockColorPage(this) && Greyscale.isOn(this) &&
+            pageMatches(AppConfig.COLOR_CORRECTION_PAGE)) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            return
         }
         if (packageName in IGNORED_PACKAGES) return
         // Keyboards pop their own window over the app and fire events under their
@@ -913,6 +932,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(recheck)
+        greyscaleSensor?.stop(); greyscaleSensor = null
+        if (greyscaleApplied) { Greyscale.setEnabled(this, false); greyscaleApplied = false }
         overlay?.hide()
         super.onDestroy()
     }

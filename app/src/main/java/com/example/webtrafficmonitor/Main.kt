@@ -1303,6 +1303,11 @@ private fun setupHomeScreen() {
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
+    // Gentle warning banner if the app isn't protected yet.
+    if (!(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
+        content.addView(uninstallBanner())
+    }
+
     // ── FIRST: what you've reclaimed (reward, don't punish) ─────────────────
     val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
     val s = Progress.snapshot(this)
@@ -1996,6 +2001,14 @@ private fun showProtocol7Day() {
 }
 
 private fun showReportScreen() {
+    // On the highest-risk page: offer the uninstall lock once per session (unless in dev
+    // mode, or it's already on). Returns to this page when the user enables or skips.
+    if (!AppConfig.DEV_MODE && !arousalLockPromptShown &&
+        !(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
+        arousalLockPromptShown = true
+        showLockPrompt { showReportScreen() }
+        return
+    }
     onReportScreen = true
     subBack = null
     onHomeScreen = false
@@ -3491,7 +3504,7 @@ private fun startWeekStrict() {
     override fun onStop() {
         super.onStop()
         sensorMonitor?.stop(); sensorMonitor = null
-        lockPromptHandled = false   // show the uninstall-lock page again on next reopen
+        arousalLockPromptShown = false   // re-offer the lock on the arousal page once per app session
     }
 
     @Suppress("DEPRECATION")
@@ -3515,9 +3528,14 @@ private fun startWeekStrict() {
     // The first two are required; until both are on you can't reach the main
     // screen, and disabling either later sends you straight back here.
 
-    // Reset on every reopen (see onStop) so the uninstall-lock page shows each time,
-    // not just the first.
-    private var lockPromptHandled = false
+    // The uninstall-lock prompt now shows only during FIRST setup (persisted below) and
+    // when entering the arousal page - never on every reopen. That, plus not rebuilding on
+    // resume, is what keeps you on the page you left. Home shows a gentle banner instead.
+    private var arousalLockPromptShown = false
+    private fun lockPromptSeen(): Boolean =
+        getSharedPreferences("setup", Context.MODE_PRIVATE).getBoolean("lock_prompt_seen", false)
+    private fun markLockPromptSeen() =
+        getSharedPreferences("setup", Context.MODE_PRIVATE).edit().putBoolean("lock_prompt_seen", true).apply()
     private var onReportScreen = false
     private var inSubPage = false
     private var onHomeScreen = false
@@ -3530,7 +3548,7 @@ private fun startWeekStrict() {
     private fun currentStep(): Step = when {
         !isAccessibilityEnabled()       -> Step.MONITORING
         !Settings.canDrawOverlays(this) -> Step.OVERLAY
-        !lockPromptHandled              -> Step.LOCK
+        !AppConfig.DEV_MODE && !lockPromptSeen() -> Step.LOCK
         else                            -> Step.READY
     }
 
@@ -3561,32 +3579,69 @@ private fun startWeekStrict() {
                 "Continue to \u201CAppear on top\u201D",
                 { requestOverlayPermission() },
             )
-            Step.LOCK -> if (UninstallGuard.isAdminActive(this)) {
-                showPrereq(
-                    "Uninstall lock - ON",
-                    "Protection is active: the app can't be uninstalled, and the settings " +
-                        "pages that would switch it off are blocked.\n\nYou can turn it off " +
-                        "from the main screen (you'll need the passcode).",
-                    "Continue",
-                    { lockPromptHandled = true; updateScreen() },
-                )
-            } else {
-                showPrereq(
-                    "Uninstall lock",
-                    "Page monitoring and the block screen are on, so you can now enable the " +
-                        "uninstall lock. While it's on, the app can't be uninstalled and the " +
-                        "settings pages that would switch it off are blocked.",
-                    "Enable uninstall lock",
-                    {
-                        lockPromptHandled = true
-                        UninstallGuard.setEnabled(this, true)
-                        startActivity(UninstallGuard.activationIntent(this))
-                    },
-                    "Skip for now",
-                    { lockPromptHandled = true; updateScreen() },
-                )
-            }
+            Step.LOCK -> showLockPrompt { markLockPromptSeen(); updateScreen() }
             Step.READY -> setupHomeScreen()
+        }
+    }
+
+    // Amber warning banner for the home screen; taps through to the lock prompt.
+    private fun uninstallBanner(): View {
+        val dp = resources.displayMetrics.density
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp; setColor(0xFFFFF3E0.toInt()); setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+            }
+            val p = (13 * dp).toInt(); setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (14 * dp).toInt() }
+            isClickable = true; isFocusable = true
+            setOnClickListener { showLockPrompt { setupHomeScreen() } }
+            addView(TextView(this@MainActivity).apply {
+                text = "\u26A0"; textSize = 22f; setPadding(0, 0, (12 * dp).toInt(), 0); setTextColor(0xFFB8860B.toInt())
+            })
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@MainActivity).apply {
+                    text = "This app isn't protected yet"; textSize = 15f
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = "Tap to turn on the uninstall lock so you can't delete it in a weak moment."
+                    textSize = 12f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+                })
+            })
+        }
+    }
+
+    // The uninstall-lock prompt, reused by: first-setup gate, the arousal page, and the
+    // dev-mode preview button. `onDone` runs after the user enables or skips.
+    private fun showLockPrompt(onDone: () -> Unit) {
+        if (UninstallGuard.isAdminActive(this)) {
+            showPrereq(
+                "Uninstall lock - ON",
+                "Protection is active: the app can't be uninstalled, and the settings " +
+                    "pages that would switch it off are blocked.\n\nYou can turn it off " +
+                    "from the main screen (you'll need the passcode).",
+                "Continue",
+                { onDone() },
+            )
+        } else {
+            showPrereq(
+                "Protect this app",
+                "Turn on the uninstall lock so you can't delete the app in a weak moment. " +
+                    "While it's on, the app can't be uninstalled and the settings pages that " +
+                    "would switch it off are blocked.",
+                "Enable uninstall lock",
+                {
+                    UninstallGuard.setEnabled(this, true)
+                    startActivity(UninstallGuard.activationIntent(this))
+                    onDone()
+                },
+                "Skip for now",
+                { onDone() },
+            )
         }
     }
 
@@ -3635,6 +3690,8 @@ private fun startWeekStrict() {
         })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
+        content.addView(homeCard("Grayscale setup", "Turn on the strict-mode grayscale filter.") { showGreyscaleSetup() })
+        content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
         content.addView(homeCard("Manage block rules", "Add or remove blocked sites and apps.") { showManageRules() })
         content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
@@ -3648,6 +3705,63 @@ private fun startWeekStrict() {
             isFillViewport = true; addView(content)
         }
         setContentWithThumb(root) { setupHomeScreen() }
+    }
+
+    // In-app flow to get the user to turn grayscale on (the app can't do it itself).
+    private fun showGreyscaleSetup() {
+        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Grayscale in strict mode"))
+        root.addView(TextView(this).apply {
+            text = "Colour is a big part of what makes feeds and images pull at you. Making the whole " +
+                "screen grayscale strips that out - simple, and surprisingly powerful.\n\n" +
+                "Android won't let an app switch grayscale on for you (it's a protected system " +
+                "setting), so you turn it on once yourself. In strict mode, keep it on."
+            textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, 0, 0, (14 * dp).toInt())
+        })
+        val status = TextView(this).apply {
+            textSize = 17f; setTypeface(typeface, Typeface.BOLD); setPadding(0, 0, 0, (14 * dp).toInt())
+        }
+        root.addView(status)
+        val on = Greyscale.isOn(this)
+        status.text = if (on) "Grayscale is ON \u2713" else "Grayscale is OFF"
+        status.setTextColor(if (on) 0xFF2E7D32.toInt() else 0xFFB00020.toInt())
+
+        root.addView(bigChoice("Open display settings", 0xFF2E9E8F.toInt()) { Greyscale.openGrayscaleSetting(this) })
+        root.addView(TextView(this).apply {
+            text = "How to turn it on:\n" +
+                "1. Open Settings \u2192 Accessibility.\n" +
+                "2. Go to Vision enhancements (called Colour and motion on some phones).\n" +
+                "3. Tap Colour correction and toggle the slider On.\n" +
+                "4. Scroll to the bottom and choose Greyscale."
+            textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (12 * dp).toInt(), 0, (16 * dp).toInt())
+        })
+
+        // Optional lock: block the Colour-correction page so greyscale can't be turned off.
+        val lockRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 16 * dp; setColor(0xFFFFFFFF.toInt()); setStroke((1.5f * dp).toInt(), 0xFFD7DCE0.toInt())
+            }
+            val p = (14 * dp).toInt(); setPadding(p, p, p, p)
+        }
+        lockRow.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            addView(TextView(this@MainActivity).apply {
+                text = "Lock the Colour correction page"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Once greyscale is on, block that Settings page so it can't be turned back off. Turn this off here first if you need to change it."
+                textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+            })
+        })
+        lockRow.addView(android.widget.Switch(this).apply {
+            isChecked = Greyscale.isLockColorPage(this@MainActivity)
+            setOnCheckedChangeListener { _, on -> Greyscale.setLockColorPage(this@MainActivity, on) }
+        })
+        root.addView(lockRow)
+        setContentWithThumb(root) { setupMainScreen() }
     }
 
     // Live sensor readout for tuning the lying-down + light heuristics.
@@ -3689,6 +3803,10 @@ private fun startWeekStrict() {
         val note = TextView(this).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (16 * dp).toInt(), 0, 0) }
         root.addView(note)
 
+        root.addView(sectionTitle("Greyscale"))
+        val greyLine = subLine(); val greyHint = TextView(this).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
+        root.addView(greyLine); root.addView(greyHint)
+
         sensorMonitor?.stop()
         val monitor = SensorMonitor(this)
         sensorMonitor = monitor
@@ -3721,6 +3839,11 @@ private fun startWeekStrict() {
             if (!monitor.hasAccel) bits.add("no accelerometer")
             if (!monitor.hasLight) bits.add("no light sensor")
             note.text = if (bits.isEmpty()) "Both sensors present." else "Missing: ${bits.joinToString(", ")}"
+            val perm = Greyscale.canControl(this@MainActivity)
+            greyLine.text = "Grayscale currently ${if (Greyscale.isOn(this@MainActivity)) "ON" else "off"}" +
+                (if (perm) "  (app can auto-toggle)" else "")
+            greyHint.text = if (perm) "System-controlled build: app switches it in strict mode."
+                else "Normal build: enable it in Settings - see 'Grayscale setup' on the dev page."
         }
         monitor.onUpdate = { runOnUiThread { refresh() } }
         monitor.start(); refresh()
