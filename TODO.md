@@ -12,6 +12,17 @@
 
 TODO NEXT:
 - rename 'sexual arousal' to 'adult content'
+- .
+    - Breath in animation *still* doesn't start automatically some times...
+        Try and fix that and also have text that comes in screen for like 1 frame saying ''click to enter" as a backup in case it doesn't start... 
+
+        It also doesn't fill up entire screen like it used to..
+        Which is expected as we limited it to be max size of box, but that was for the sexual arousal pages only intentionally... So I want it separate for big overlay to where it fills everything up again... 
+    -
+    also...
+    The breathing thing breaks 2FA ... Stop it on our android app... 
+    (consider only doing it the first time..)
+    (or only doing it everytime on super hardcodre mode...)
 - capture extra data;
     - integrate gyroscope and lux data.
     - (do i log these when user fails?)
@@ -55,6 +66,82 @@ TODO LATER:
 
 - add ads??
 - FINISH THE PLUGIN + integrate plugin enforcement...
+
+------------
+
+
+OOOH!
+Like Strava... And other mapping apps.. 
+Can we determine where they are on a map?
+--> then if they're out of the house.. they can't doom scroll.. 
+--> but more importantly.. if they're out of the house.. we don't have to worry about them with adult content. 
+(BUT! Will this be affected by VPNs??) 
+
+-------
+
+
+In the productivity side.. 
++ "How you compare to the average person".. as far as productivity etc... 
+
+
+====
+Add 'founder mode'
+- locks you out of non crucial apps in morning till you fill in the questionnaire..
+
+(Same with food tracking??? 
+- separate app?)
+(Same app for ease?)
+
+======
+Still thinking I might have a super duper strict mode... 
+Where I block people out of all non whitelisted apps until they re-enable the screen monitoring... 
+
+
+======
+You know the things where we have true or false to toggle depending on the mode (relaxed or strict)?
+
+Can we integrate the gyroscope into that? 
+And the light sensor? 
+
+So if gyroscope is active:
+- definitely go more strict
+- (have a super strict mode?)
+- yeah I think turn on super strict mode... (Don't allow any non whitelisted apps??) 
+
+====================================================================
+
+
+- Donors have no adds.
+- we give extra founder mode help to them...
+- Pay to..
+    - remove search history(?)
+    - remove search history... anonymously (without going through us..)?
+    - ????
+    - have priority when unblockng a part of the phone?
+
+
+======================
+
+
+-----
+- Money, adverts
+- need some sort of feedback system
+- is it too bias towards straight men?
+(Do I add a mode for prectijg people attracted to males?)
+(How about lesbians who are searching for underwear? Or scrolling through vinted?)
+
+- how do I solve the issue of people seeing sexual content in social media?
+- --> have some sort of "time on screen" of a sensual image?
+- or frequency / number of these sensual images in a short amount of time??
+
+^^^^^^^^^^^
+Perhaps the above could be "down the line" things to add later.... 
+
+
+
+
+=======================================================================
+
 
 -------
 
@@ -183,6 +270,16 @@ beacons:
 ==========
 JUST GENUINE QUESTIONS;
 - (maybe make the temptation log locked behind a passcode?)
+
+
+=======================================
+ADVERTISING
+
+
+- have to let your boyfriend/child/friend choose for themselves to use it.
+- you can't force it upon anyone!
+
+Sell the benefits.. let them choose..
 
 
 ================================
