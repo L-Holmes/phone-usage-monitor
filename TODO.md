@@ -60,6 +60,37 @@ MANUAL TODO:
    - Need to keep themselves busy!
    - No tracking needed on this — they'll know where they're at.
 
+
+
+------------------------------
+
+
+Perhaps I do load in a second AI nsfw model... For less strict modes... 
+
+
+---
+
+I'll also want a flagged side list of things that are "attracted to women" only .. (like  so women can shop for lingerie etc.) 
+
+
+----
+
+
+
+The go back functionality... 
+It's annoying it doesn't work and I think sometimes I breaks things... 
+
+
+N slip... 
+
+
+Record activity before after after a block comes up... 
+(E.g. minus 5 mins and plus 10 minutes around the block?) 
+- then log that specific thing to a list of "break reports"
+(Obviously if there's multiple in a short time... Then only log one..)
+(E.g. within the minus 5 plus 10 minutes range...) 
+
+
 ------------------------------
 
 TODO LATER:
@@ -265,6 +296,14 @@ beacons:
     - OR even if they're using data?
     - because if we know home wifi... then we know where they are..
         - (home wifi ip may change though!)
+
+
+---------------------
+## general productivity related;
+
+App monitors angle of phone for slouching... Asks you to not slouch... 
+
+App maybe asks you to look outside / take a break for a bit (e.g. in like 10 mins time... (Unless you're working!?!?) Or only block non essential apps?? 
 
 
 ==========
