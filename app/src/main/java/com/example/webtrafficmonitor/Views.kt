@@ -934,3 +934,53 @@ class TrendView(context: Context, private val values: FloatArray) : View(context
         canvas.drawCircle(px(li), py(values[li]), 6f * dp, ring)
     }
 }
+
+
+// =====================================================================================
+// DopamineScaleView  (the vertical "where you sit" gauge)
+// =====================================================================================
+// A single column, calm green at the bottom through to red at the top, with a marker at
+// the score. Vertical on purpose: it reads as a level, not as progress toward a goal -
+// there is no goal here, and a bar you could "fill" would say the wrong thing entirely.
+class DopamineScaleView(context: Context, private val score: Int) : View(context) {
+
+    private val bar = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1F2933.toInt() }
+    private val markerRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt()
+    }
+    private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
+
+    override fun onDraw(canvas: Canvas) {
+        if (width == 0 || height == 0) return
+        val dp = resources.displayMetrics.density
+        val w = 18f * dp
+        val cx = width / 2f
+        val top = 10f * dp
+        val bottom = height - 10f * dp
+
+        // Top of the column is 100 (worst), bottom is 0 (calm).
+        bar.shader = android.graphics.LinearGradient(
+            0f, top, 0f, bottom,
+            intArrayOf(
+                0xFFB3261E.toInt(), 0xFFD1462F.toInt(), 0xFFE08A26.toInt(),
+                0xFFCBA92B.toInt(), 0xFF5C9E31.toInt(), 0xFF2E7D32.toInt(),
+            ),
+            floatArrayOf(0f, 0.2f, 0.4f, 0.55f, 0.75f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        val rect = android.graphics.RectF(cx - w / 2f, top, cx + w / 2f, bottom)
+        canvas.drawRoundRect(rect, w / 2f, w / 2f, bar)
+
+        // Quarter ticks, just for a sense of scale.
+        for (i in 1..3) {
+            val y = bottom - (bottom - top) * (i / 4f)
+            canvas.drawRect(cx - w / 2f, y - 0.5f * dp, cx + w / 2f, y + 0.5f * dp, tick)
+        }
+
+        val y = bottom - (bottom - top) * (score.coerceIn(0, 100) / 100f)
+        markerRing.strokeWidth = 3f * dp
+        canvas.drawCircle(cx, y, 8f * dp, marker)
+        canvas.drawCircle(cx, y, 8f * dp, markerRing)
+    }
+}

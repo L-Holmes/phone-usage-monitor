@@ -278,6 +278,155 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         loadKeyboardPackages()
         DomainBlocklist.warmUp(this)
         startGreyscaleWatch()
+        startScreenWatch()
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  DOPAMINE BASELINE - the raw counters. The algorithm itself lives in Dopamine.kt.
+    // ═════════════════════════════════════════════════════════════════════════════════
+
+    private var segPkg: String? = null
+    private var segHost: String? = null
+    private var segStart = 0L
+    private var screenOffAt = 0L
+    private var lastUnlockAt = 0L
+    private var urgentOpenArmed = false
+    private var justWokeUntil = 0L
+    // app -> opens in the current rolling hour, for the "checked Snapchat 50 times" signal
+    private val opensThisHour = HashMap<String, Int>()
+    private var hourBucketStart = 0L
+
+    /**
+     * Unlocks and screen on/off. An accessibility service cannot see these through
+     * accessibility events at all - they only arrive as broadcasts, and SCREEN_ON/OFF and
+     * USER_PRESENT cannot be declared in the manifest, so they must be registered at runtime.
+     */
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    closeUsageSegment()
+                    screenOffAt = System.currentTimeMillis()
+                }
+                Intent.ACTION_USER_PRESENT -> onUnlock()
+            }
+        }
+    }
+
+    private fun startScreenWatch() {
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        runCatching { registerReceiver(screenReceiver, filter) }
+    }
+
+    private fun onUnlock() {
+        val now = System.currentTimeMillis()
+        val offFor = if (screenOffAt > 0) now - screenOffAt else 0L
+        if (screenOffAt > 0) {
+            val offSecs = offFor / 1000
+            DopamineLog.update(this) { it.screenOffSeconds += offSecs }
+            screenOffAt = 0L
+        }
+        // A long dark gap means this unlock is probably you waking up. It is a PROXY - we
+        // have no way to know an alarm went off (see the note at the top of Dopamine.kt).
+        val wokeGapMs = (DopamineTuning.WAKE_GAP_HOURS * 3600_000).toLong()
+        if (offFor >= wokeGapMs) {
+            justWokeUntil = now + DopamineTuning.JUST_WOKE_WINDOW_MIN * 60_000L
+        }
+        lastUnlockAt = now
+        urgentOpenArmed = true          // the next app opened is a candidate "straight-in open"
+        DopamineLog.update(this) { it.unlocks++ }
+    }
+
+    /** Called on every foreground app change: closes the last segment and opens a new one. */
+    private fun onForegroundChanged(pkg: String) {
+        closeUsageSegment()
+        segPkg = pkg
+        segHost = null
+        segStart = System.currentTimeMillis()
+
+        // Straight-in open: unlocked, and within a few seconds we're in a worst-tier feed,
+        // with no detour on the way. The purest autopilot signal we have.
+        if (urgentOpenArmed) {
+            urgentOpenArmed = false
+            val within = System.currentTimeMillis() - lastUnlockAt
+            if (within <= DopamineTuning.URGENT_OPEN_SECONDS * 1000L &&
+                DopamineClassifier.isWorstTier(pkg, null)
+            ) {
+                DopamineLog.update(this) { it.urgentOpens++ }
+            }
+        }
+
+        countAppOpen(pkg)
+    }
+
+    private fun countAppOpen(pkg: String) {
+        val now = System.currentTimeMillis()
+        if (now - hourBucketStart >= 3600_000L) {
+            hourBucketStart = now
+            opensThisHour.clear()
+        }
+        val n = (opensThisHour[pkg] ?: 0) + 1
+        opensThisHour[pkg] = n
+        DopamineLog.update(this) { if (n > it.maxChecksInHour) it.maxChecksInHour = n }
+    }
+
+    /**
+     * Bank the time spent in the app we were just in, against whatever category it counts as.
+     * The HOST matters as much as the package: youtube.com/shorts is short-form video, not
+     * long-form, even though it's the same app.
+     */
+    private fun closeUsageSegment() {
+        val pkg = segPkg ?: return
+        val start = segStart
+        segPkg = null
+        if (start <= 0) return
+        val now = System.currentTimeMillis()
+        val secs = (now - start) / 1000
+        if (secs <= 0) return
+        // A segment longer than this is almost certainly the screen having gone off without
+        // us hearing about it. Don't bank a phantom eight-hour TikTok session.
+        if (secs > MAX_SEGMENT_SECONDS) return
+
+        val cat = DopamineClassifier.categorise(pkg, segHost, lastFullUrl ?: lastUrl)
+        val lateNight = isLateNight()
+        val justWoke = now < justWokeUntil
+        val lying = SensorContext.known && SensorContext.lyingDown
+        val dark = guardDark
+
+        DopamineLog.update(this) { d ->
+            d.seconds[cat] = (d.seconds[cat] ?: 0L) + secs
+            d.screenOnSeconds += secs
+            if (cat != DopamineCategory.OTHER) {
+                if (lateNight) d.lateNightSeconds += secs
+                if (justWoke) d.justWokeSeconds += secs
+            }
+            if (lying) d.lyingSeconds += secs
+            if (dark) d.darkSeconds += secs
+        }
+    }
+
+    private fun isLateNight(): Boolean {
+        val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return h >= DopamineTuning.LATE_NIGHT_FROM || h < DopamineTuning.LATE_NIGHT_TO
+    }
+
+    /**
+     * Scrolls and taps, batched. Writing to prefs on every single scroll event would be
+     * absurd - a feed fires these dozens of times a second - so we count in memory and flush
+     * every INTERACTION_FLUSH.
+     */
+    private var pendingInteractions = 0
+    private fun countInteraction() {
+        pendingInteractions++
+        if (pendingInteractions >= INTERACTION_FLUSH) {
+            val n = pendingInteractions.toLong()
+            pendingInteractions = 0
+            DopamineLog.update(this) { it.interactions += n }
+        }
     }
 
     // ── Greyscale enforcement ───────────────────────────────────────────────────────
@@ -341,6 +490,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         val type = event.eventType
+
+        // Scroll/tap counting for the dopamine baseline. Cheap and first: these fire in
+        // bursts, so they must never fall through into the expensive page-reading path.
+        if (type == AccessibilityEvent.TYPE_VIEW_SCROLLED ||
+            type == AccessibilityEvent.TYPE_VIEW_CLICKED
+        ) {
+            if (event.packageName?.toString() != this.packageName) countInteraction()
+            return
+        }
+
         if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) {
@@ -374,6 +533,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             RecentAppsTracker.onForeground(packageName)
+            if (packageName != segPkg) onForegroundChanged(packageName)
         }
 
         // ---- App-level block: FIRST, on every event, before any throttling. ----
@@ -457,6 +617,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (host != null && host != lastHost) lastFullUrl = null
         if (host != null) lastHost = host
         if (barText != null) lastUrl = barText
+        // A host change inside the same app is a new dopamine segment: browsing reddit.com
+        // then youtube.com is two different categories, not one long "browser" blur.
+        if (host != null && host != segHost) {
+            closeUsageSegment()
+            segPkg = packageName
+            segHost = host
+            segStart = System.currentTimeMillis()
+        }
         readFocusedFullUrl(host)?.let { lastFullUrl = it }   // fills in path if user taps the bar
 
         // Content = the web page itself (WebView subtree), falling back to the whole
@@ -1167,6 +1335,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         greyscaleSensor?.stop(); greyscaleSensor = null
         if (greyscaleApplied) { Greyscale.setEnabled(this, false); greyscaleApplied = false }
         overlay?.hide()
+        closeUsageSegment()                                    // bank the time we were mid-way through
+        runCatching { unregisterReceiver(screenReceiver) }
         super.onDestroy()
     }
 
@@ -1258,6 +1428,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // second: fast enough that lying back down covers the screen almost at once, slow
         // enough that it isn't running a window query on every accelerometer sample.
         private const val GUARD_EVAL_MS = 900L
+
+        // Dopamine tracking. A "segment" longer than this means we missed the screen going
+        // off, so it is discarded rather than banked as a phantom marathon session.
+        private const val MAX_SEGMENT_SECONDS = 2 * 60 * 60L
+        // Scrolls/taps are counted in memory and written out in batches of this size.
+        private const val INTERACTION_FLUSH = 25
         private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
 
         private val IGNORED_PACKAGES = AppConfig.IGNORED_PACKAGES

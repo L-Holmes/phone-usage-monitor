@@ -448,6 +448,7 @@ private fun showStatsMenu() {
     val root = vbox(pad)
     root.addView(titleText("Statistics"))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    list.addView(pickCard("Dopamine baseline") { showDopamine() })
     list.addView(pickCard("Progress & reward") { showProgress() })
     list.addView(pickCard("Where & how it happens") { showContextStats() })
     list.addView(pickCard("Temptation patterns") { showTemptationStats() })
@@ -457,6 +458,337 @@ private fun showStatsMenu() {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
     setContentWithThumb(root) { showReportScreen() }
+}
+
+// ── About you: optional numbers, used ONLY to make the cost concrete ────────
+private fun showAboutYou() {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText("About you"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { setupHomeScreen() }
+
+    c.addView(TextView(this).apply {
+        text = "Optional. We use this only to estimate what the lost time is actually costing " +
+            "you — nothing here leaves your phone, and nothing here is shared.\n\n" +
+            "Leave it blank and we'll assume £${AboutYou.DEFAULT_HOURLY_GBP}/hr."
+        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
+        setPadding(0, 0, 0, (16 * dp).toInt())
+    })
+
+    fun moneyRow(label: String, sub: String, get: () -> Int, set: (Int) -> Unit) {
+        c.addView(TextView(this).apply {
+            text = label; textSize = 15f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF1F2933.toInt()); setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
+        })
+        c.addView(TextView(this).apply {
+            text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            setPadding(0, 0, 0, (6 * dp).toInt())
+        })
+        c.addView(EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(get().takeIf { it > 0 }?.toString().orEmpty())
+            hint = "£ per hour"
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) {
+                    set(s?.toString()?.toIntOrNull() ?: 0)
+                }
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+        })
+    }
+
+    moneyRow("What you earn an hour",
+        "Your day job, after tax if you like. Whatever feels true.",
+        { AboutYou.hourlyWage(this) }, { AboutYou.setHourlyWage(this, it) })
+    moneyRow("What your own time is worth an hour",
+        "Side income, a business you're building, freelance. If this is higher than your wage, we use it.",
+        { AboutYou.sideHourly(this) }, { AboutYou.setSideHourly(this, it) })
+
+    c.addView(TextView(this).apply {
+        text = "\nWhy we ask: \"3 hours a day\" is abstract and easy to shrug off. " +
+            "\"£13,000 a year\" is not."
+        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DOPAMINE BASELINE
+//  The number, the trend, and an honest breakdown of what is driving it.
+//  The algorithm is NOT here - it is all in Dopamine.kt (DopamineTuning).
+// ═══════════════════════════════════════════════════════════════════════════
+private fun showDopamine() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val today = DopamineLog.today(this)
+    val r = DopamineScore.of(today)
+    val root = vbox(pad)
+    root.addView(titleText("Dopamine baseline"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showStatsMenu() }
+
+    if (!r.hasData) {
+        c.addView(TextView(this).apply {
+            text = "Nothing measured yet today.\n\nThis builds itself as you use the phone - what you " +
+                "spend time on, how often you unlock, how fast you scroll, when and where you do it. " +
+                "Come back later today."
+            textSize = 15f; setTextColor(0xFF6B7075.toInt()); setLineSpacing(0f, 1.2f)
+        })
+        return
+    }
+
+    // ── the number, and the scale it sits on ──
+    val scaleRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (200 * dp).toInt())
+    }
+    scaleRow.addView(DopamineScaleView(this, r.score), LinearLayout.LayoutParams(
+        (54 * dp).toInt(), LinearLayout.LayoutParams.MATCH_PARENT))
+    val numbers = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding((16 * dp).toInt(), 0, 0, 0)
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+    }
+    numbers.addView(TextView(this).apply {
+        text = "${r.score}"; textSize = 52f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(r.colour); includeFontPadding = false
+    })
+    numbers.addView(TextView(this).apply {
+        text = r.band; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(r.colour)
+    })
+    numbers.addView(TextView(this).apply {
+        text = "out of 100 · higher is more fried\ntoday so far"
+        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0)
+    })
+    scaleRow.addView(numbers)
+    c.addView(scaleRow)
+
+    // ── the trend ──
+    val history = DopamineLog.history(this, 14)
+    val scores = history.map { DopamineScore.of(it).score.toFloat() }.toFloatArray()
+    if (scores.count { it > 0f } >= 2) {
+        c.addView(statHeader("LAST 14 DAYS", dp))
+        c.addView(TrendView(this, scores), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (120 * dp).toInt()))
+        val avg = scores.filter { it > 0f }.average().toInt()
+        c.addView(TextView(this).apply {
+            text = "Average $avg over the days we have data for."
+            textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+    }
+
+    // ── what's driving it ──
+    if (r.contributors.isNotEmpty()) {
+        c.addView(statHeader("WHAT'S DRIVING IT TODAY", dp))
+        r.contributors.forEach { line ->
+            c.addView(scoreLineRow(line.label, line.points, line.detail, 0xFFB3261E.toInt(), dp))
+        }
+    }
+    if (r.credits.isNotEmpty()) {
+        c.addView(statHeader("PULLING IT DOWN", dp))
+        r.credits.forEach { line ->
+            c.addView(scoreLineRow(line.label, line.points, line.detail, 0xFF2E7D32.toInt(), dp))
+        }
+    }
+
+    c.addView(captionedButton("How do I bring this down?", "what actually moves the number",
+        0xFF3E535C.toInt()) { showDopamineGuidance() })
+    c.addView(captionedButton("Your habits estimate", "self-reported · does NOT affect the score above",
+        0xFF52796F.toInt()) { showLifeInputs() })
+    c.addView(TextView(this).apply {
+        text = "This is a rough model, not a medical measurement. It exists to make a pattern " +
+            "visible, nothing more."
+        textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        setPadding(0, (12 * dp).toInt(), 0, (16 * dp).toInt())
+    })
+}
+
+/** One "Short-form video   +18   1h 20m today" row. */
+private fun scoreLineRow(label: String, points: Int, detail: String, colour: Int, dp: Float): View {
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+    }
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = label; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+    })
+    texts.addView(TextView(this).apply {
+        text = detail; textSize = 13f; setTextColor(0xFF7B848C.toInt())
+    })
+    row.addView(texts)
+    if (points != 0) row.addView(TextView(this).apply {
+        text = if (points > 0) "+$points" else "$points"
+        textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(colour)
+    })
+    return row
+}
+
+// ── "How do I bring this down?" - generic advice, then advice aimed at THEIR data ──
+private fun showDopamineGuidance() {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val today = DopamineLog.today(this)
+    val r = DopamineScore.of(today)
+    val root = vbox(pad)
+    root.addView(titleText("Bringing it down"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showDopamine() }
+
+    // The part aimed squarely at what THEIR number is actually made of.
+    val top = r.contributors.firstOrNull { it.points > 0 }
+    if (top != null) {
+        c.addView(statHeader("YOUR BIGGEST ONE", dp))
+        c.addView(TextView(this).apply {
+            text = "${top.label} — ${top.detail}.\n\n${adviceFor(top.label)}"
+            textSize = 15f; setTextColor(0xFF1F2933.toInt()); setLineSpacing(0f, 1.2f)
+            setPadding(0, 0, 0, (8 * dp).toInt())
+        })
+    }
+
+    c.addView(statHeader("WHAT ACTUALLY MOVES IT", dp))
+    listOf(
+        "Time is the biggest lever, by a mile." to
+            "Everything else in the score is small change next to how long you spend in the worst categories. An hour less short-form video will move this number more than a perfect day of everything else.",
+        "The first hour matters least, the fourth matters most." to
+            "The curve is deliberately steep at the top end. Cutting a four-hour day to three does more than cutting a one-hour day to zero.",
+        "Don't start the day in a feed." to
+            "Use just after waking is weighted harder, and it sets the tone for the whole day. Put the first unlock somewhere else.",
+        "Don't end it in one either." to
+            "Late-night use is weighted hardest of all, because you're paying twice: the hit, and the sleep.",
+        "Unlocks are a habit, not a need." to
+            "Most unlocks aren't for anything. The count itself is the signal - if it's high, you're reaching for it on autopilot.",
+        "Slow down." to
+            "A high interaction rate means thumbing a feed. A low one means reading something. The same hour can be either.",
+        "Get out of bed, and turn a light on." to
+            "Lying down in the dark with a phone is the single most reliable setup for a bad night. Strict mode's night guard exists for exactly this.",
+    ).forEach { (h, b) ->
+        c.addView(TextView(this).apply {
+            text = h; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
+        })
+        c.addView(TextView(this).apply {
+            text = b; textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        })
+    }
+    c.addView(TextView(this).apply {
+        text = "\nAnd the honest bit: this recovers slowly. The anti-rules in the score are weak on " +
+            "purpose, because a walk does not undo a four-hour binge and a number that pretended " +
+            "otherwise would be useless to you."
+        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        setPadding(0, (10 * dp).toInt(), 0, (16 * dp).toInt())
+    })
+}
+
+private fun adviceFor(label: String): String = when (label) {
+    DopamineCategory.ADULT.label ->
+        "This is the one this whole app is built around. Everything on the Adult Content page - strict mode, the ban list, the night guard - is aimed at exactly this."
+    DopamineCategory.FAST_VIDEO.label ->
+        "Short-form video is the most concentrated dose available to you. Turn on the short-form block (Temptations → Endless Scrolling) and the feeds die while the rest of the app still works."
+    DopamineCategory.FAST_SOCIAL.label ->
+        "Drop these to the grey tier so they get a few minutes an hour and then close. Temptations → Social Comparison has the switch."
+    DopamineCategory.IMPULSE.label ->
+        "Temptations → Impulse Shopping blocks the sites. The 48-hour basket rule does the rest."
+    DopamineCategory.FORUMS_NEWS.label ->
+        "Temptations → News Cycles. Pick one time a day to read it, and block it the rest of the time."
+    DopamineCategory.LONG_VIDEO.label ->
+        "Less concentrated than the short stuff, but it eats whole evenings. Temptations → Binge Watching."
+    DopamineCategory.MOBILE_GAMING.label ->
+        "Temptations → Gaming & Reward Loops. Name what you're avoiding by playing."
+    DopamineCategory.GAMBLING.label ->
+        "This is the one category here that can take more than your time. If it's showing up at all, it's worth treating as seriously as the adult content."
+    "Phone unlocks" ->
+        "Leave it in another room. Most of these aren't decisions - you won't miss what you never reached for."
+    "Straight-in opens" ->
+        "You unlocked and were in a feed before you'd thought about it. That's the purest autopilot there is. Moving the app off your home screen breaks the reflex more than willpower does."
+    "Compulsive checking" ->
+        "Opening the same app over and over in an hour is a tic, not a use. The grey tier (a few minutes an hour, then it closes) is built for it."
+    "Constant scrolling / tapping" ->
+        "A high rate means you're thumbing, not reading. Slowing down IS the intervention."
+    "Using it lying down", "Using it in the dark" ->
+        "Strict mode's night guard blocks non-essential apps in exactly this state. It's the single highest-leverage switch you have."
+    else -> "Cut the time first. It outweighs everything else in the score."
+}
+
+// ── The self-reported habits: a SEPARATE estimate, never mixed into the score ──
+private fun showLifeInputs() {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText("Your habits estimate"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showDopamine() }
+
+    val banner = TextView(this).apply {
+        text = "This does NOT affect your dopamine baseline.\n\nIt's self-reported, so it can't - " +
+            "otherwise you could tick a few boxes and watch the number you came here to face go " +
+            "down. This is a separate estimate of the restorative side of your life, and it runs " +
+            "the other way: HIGHER IS BETTER."
+        textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 14 * dp; setColor(0xFFF4F6F8.toInt())
+        }
+        val p = (14 * dp).toInt(); setPadding(p, p, p, p)
+    }
+    c.addView(banner)
+
+    val scoreLabel = TextView(this).apply {
+        textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
+    }
+    fun paintScore() {
+        scoreLabel.text = "Restorative habits: ${LifeInputs.estimate(this)} / 100"
+    }
+    paintScore()
+    c.addView(scoreLabel)
+    c.addView(TextView(this).apply {
+        text = "Days out of the last 7:"
+        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
+    })
+
+    LifeInputs.HABITS.forEach { (key, label) ->
+        c.addView(TextView(this).apply {
+            text = label; textSize = 14f; setTextColor(0xFF1F2933.toInt())
+            setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
+        })
+        val value = TextView(this).apply {
+            textSize = 13f; setTextColor(0xFF7B848C.toInt())
+        }
+        val seek = android.widget.SeekBar(this).apply {
+            max = 7
+            progress = LifeInputs.get(this@MainActivity, key)
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) {
+                    value.text = "$p day${if (p == 1) "" else "s"}"
+                    if (fromUser) { LifeInputs.set(this@MainActivity, key, p); paintScore() }
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+            })
+        }
+        value.text = "${seek.progress} day${if (seek.progress == 1) "" else "s"}"
+        c.addView(value)
+        c.addView(seek)
+    }
+    c.addView(View(this), LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, (24 * dp).toInt()))
 }
 
 // ── Where & how it happens: posture + light at the moment things go wrong ───
@@ -1462,7 +1794,22 @@ private fun setupHomeScreen() {
     val bigStat = TextView(this).apply { textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt()) }
     val subStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
     val lifeStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt()) }
+    // The same lost time, said in ways that aren't hours - money, health, people. Filled in
+    // by refresh(), and it uses THEIR numbers once they've given us any (see AboutYou).
+    val otherStat = TextView(this).apply {
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt())
+        setLineSpacing(0f, 1.25f)
+        setPadding(0, 0, 0, (10 * dp).toInt())
+    }
+    val aboutYouLink = TextView(this).apply {
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E9E8F.toInt())
+        setTypeface(typeface, Typeface.BOLD)
+        isClickable = true; isFocusable = true
+        setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
+        setOnClickListener { showAboutYou() }
+    }
     hero.addView(bigStat); hero.addView(subStat); hero.addView(lifeStat)
+    hero.addView(otherStat); hero.addView(aboutYouLink)
     val minLabel = TextView(this).apply { textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) }
     hero.addView(minLabel)
     val minSeek = android.widget.SeekBar(this).apply { max = 300; progress = Usage.minutes(this@MainActivity).coerceIn(0, 300) }
@@ -1522,7 +1869,8 @@ private fun setupHomeScreen() {
         val min = Usage.minutes(this); val yrs = Usage.years(this)
         val perYearHours = min * 365.0 / 60.0
         val wakingDaysYr = (perYearHours / Usage.WAKING_HOURS)
-        val gbpYr = Math.round(perYearHours * Usage.VALUE_PER_HOUR_GBP)
+        val rate = AboutYou.effectiveHourly(this)
+        val gbpYr = Math.round(perYearHours * rate)
         val totalWakingYears = perYearHours * yrs / Usage.WAKING_HOURS / 365.0
         val gbpTotal = gbpYr * yrs
         donut.setFraction((min / (Usage.WAKING_HOURS * 60f)))
@@ -1531,6 +1879,19 @@ private fun setupHomeScreen() {
         lifeStat.text = "Over $yrs year${if (yrs == 1) "" else "s"}: about ${String.format("%.1f", totalWakingYears)} years of waking life - and \u00a3$gbpTotal"
         minLabel.text = "$min minutes a day on short video & feeds"
         yearLabel.text = "Looking $yrs year${if (yrs == 1) "" else "s"} ahead"
+
+        // Hours are abstract. These aren't.
+        val gymSessions = Math.round(perYearHours / 1.0)          // ~1hr a session
+        val eveningsWithPeople = Math.round(perYearHours / 3.0)   // ~3hr an evening
+        val booksRead = Math.round(perYearHours / 8.0)            // ~8hr a book
+        otherStat.text = "That same year is also:\n" +
+            "$gymSessions hours of training  \u00b7  $eveningsWithPeople evenings with people  \u00b7  " +
+            "about $booksRead books"
+
+        aboutYouLink.text = if (AboutYou.hasData(this))
+            "Valued at \u00a3$rate/hr, from your numbers  \u00b7  change"
+        else
+            "Add your hourly rate to see what it's really costing you  \u203a"
     }
 
     val seekListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
