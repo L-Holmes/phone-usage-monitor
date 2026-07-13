@@ -1,4 +1,20 @@
 
+it should be under the 'productuvity' page.. not deep in the settings of the adult content... also the
+  habits estimate should be minutes / hours per day... between like <15 mins ~30 mins, ~45mins ~ 1 hour
+  ~ 2 hour.. etc. up to like >4 hours.. (depending on the thing of course... lets be reasonable...)..
+  also, in testing, my app doesn't seem to detect any of these: 1) variations of bad words.. e.g. like
+  'nake' (short for naked)-- please think of common shortenings / variations (like nekked) or whatever..
+  for sexual words, and monitor for them... be sensible with the scoring .. something like 'nake' for
+  instance ins't used for anything else so is obvoius bad... but others may be used in other contexts..
+  (2) phrases like 'try on haul' don't seem to be caught.. or 'nip slip' or things like 'no pants', 'no
+  leggings' etc.. please think of at least 30 for each of those and add them in.. think what people may
+  be typing to get around things.. and please just polish and make professional the whole dopamine
+  baseline page- it doesn't look cohesive its a bit confusing.. there is no singl
+   e button that shows a list of how the score is calculated... I got blocked on an app from
+Claude Code has been suspended. Run `fg` to bring Claude Code back. i did was 10 opens of one app in a
+Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input. added the new metrics and self input of
+  things, which I also exxpect to be in the productivity page.. you know, about potential mone made per hour, houry wages.. etc. please add your own that you feel are needed and appropriate..
+
 ------------------
 ------------------
 ------------------
@@ -58,15 +74,6 @@ TODO NEXT:
 
 
 - exnted the ucrrent landing screen / general productivity related things:; 
-    - represent time wasted in other ways
-        - money made in that time..
-        - social connections...
-        - health etc...
-        (based off what the user has actually inputted... if they haven't inputted.. perhaps give them a button to 'input your stats to see.. thaever'
-        (and vice versa- if they are improving, show what they are ptoentially gaining back (although of course will be more time focused...))
-    - then have additional things like inputting hourly wage... or how much they make an hour on their 'side hustle'... 
-        (also we add our own average hourly wage there instead... for calculations)
-        - this will be in an optional 'about you' section... where it says 'we use this data to estimate what you are missing out on via your productivity...
 
 - There are likely other paths to clear history in Firefox that won't hit these exact strings — e.g. "Clear browsing data on quit" in settings, deleting a single history entry via long-press, or per-site "Delete" from the history list. This blocks the main "Delete browsing data" flow you captured. If you monitor another path, send me its title/content dump and I'll add the keywords.
 
