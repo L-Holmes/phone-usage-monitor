@@ -87,13 +87,19 @@ import android.graphics.Path
 // Mode  (relaxed vs strict; optional week-long strict lock)
 // =====================================================================================
 /**
- * Two modes:
- *   RELAXED - the calming "breathing" pause is suppressed for every app.
- *   STRICT  - normal behaviour (the breathing pause shows for the chosen apps).
+ * Three modes:
+ *   RELAXED       - the calming "breathing" pause is suppressed for every app.
+ *   STRICT        - the breathing pause shows on the FIRST open of a chosen app each day.
+ *   SUPERHARDCORE - the breathing pause shows on EVERY open of a chosen app, plus the
+ *                   tightest flagging thresholds.
+ *
+ * The per-mode behaviour that actually differs lives in AppConfig.MODES (one ModeSpec
+ * per mode) - keep it there rather than sprinkling `if (isStrict)` around, because the
+ * user-facing rules screen (showModeRules) is generated straight from those specs.
  *
  * "Start week-long strict mode" sets STRICT and locks it for 7 days: until the timer
- * runs out the mode can't be switched back to RELAXED. Stored in SharedPreferences,
- * same best-effort durability as the other locks in this app.
+ * runs out the mode can't be loosened. Stored in SharedPreferences, same best-effort
+ * durability as the other locks in this app.
  */
 object Mode {
     private const val PREFS = "app_mode"
@@ -103,18 +109,38 @@ object Mode {
 
     const val RELAXED = "relaxed"
     const val STRICT = "strict"
+    const val SUPERHARDCORE = "superhardcore"
+
+    /** Loose -> tight. Used by the lock, so it can refuse a downgrade but allow an upgrade. */
+    private fun rank(mode: String) = when (mode) {
+        SUPERHARDCORE -> 2
+        STRICT -> 1
+        else -> 0
+    }
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** Current mode. A live strict lock forces STRICT regardless of the stored value. */
+    /**
+     * Current mode. A live strict lock enforces a FLOOR of STRICT - it no longer
+     * flattens a stricter choice, so someone locked into the week can still sit in
+     * superhardcore.
+     */
     fun current(ctx: Context): String {
-        if (isLocked(ctx)) return STRICT
-        return prefs(ctx).getString(KEY_MODE, RELAXED) ?: RELAXED
+        val stored = prefs(ctx).getString(KEY_MODE, RELAXED) ?: RELAXED
+        if (isLocked(ctx) && rank(stored) < rank(STRICT)) return STRICT
+        return stored
     }
 
     fun isRelaxed(ctx: Context) = current(ctx) == RELAXED
     fun isStrict(ctx: Context) = current(ctx) == STRICT
+    fun isSuperHardcore(ctx: Context) = current(ctx) == SUPERHARDCORE
+
+    /** The behaviour spec for the mode in force. Single source of truth for what a mode does. */
+    fun spec(ctx: Context): AppConfig.ModeSpec {
+        val id = current(ctx)
+        return AppConfig.MODES.firstOrNull { it.id == id } ?: AppConfig.MODES.first()
+    }
 
     /** True while the week-long strict lock is still running. */
     fun isLocked(ctx: Context): Boolean =
@@ -137,11 +163,12 @@ object Mode {
     }
 
     /**
-     * Change the mode. Refused (returns false) if the strict lock is active and you're
-     * trying to go back to RELAXED. Switching TO strict is always allowed.
+     * Change the mode. While the strict lock is active any LOOSENING is refused (returns
+     * false) - so you can go strict -> superhardcore, but not back down to relaxed.
+     * Tightening is always allowed.
      */
     fun setMode(ctx: Context, mode: String): Boolean {
-        if (isLocked(ctx) && mode == RELAXED) return false
+        if (isLocked(ctx) && rank(mode) < rank(STRICT)) return false
         prefs(ctx).edit().putString(KEY_MODE, mode).apply()
         return true
     }
@@ -153,6 +180,63 @@ object Mode {
             .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + WEEK_MS)
             .apply()
     }
+}
+
+
+// =====================================================================================
+// BreathingGate  (how often the app-open breathing pause is allowed to fire)
+// =====================================================================================
+/**
+ * Decides whether opening a watched app earns a breathing pause right now.
+ *
+ *  - RELAXED       : never (unless a loosen window is running - that re-arms the gate).
+ *  - STRICT        : the FIRST open of that app each calendar day. Re-opening it later the
+ *                    same day goes straight through. This is what stops the pause eating
+ *                    2FA codes: you tab to the authenticator, grab the code, tab back, and
+ *                    the gate does not fire again.
+ *  - SUPERHARDCORE : every single open, no daily pass.
+ *
+ * The pass is per app and per calendar day, so it clears itself at midnight.
+ *
+ * KNOWN GAP - "reset when the app is swiped away": not implemented, because Android gives
+ * an accessibility service no dependable signal for it. Visible-window checks can't see a
+ * backgrounded-but-alive app, and a cold-start heuristic based on the first activity is
+ * useless for exactly the apps we gate (Firefox/Fenix is single-activity, so a resume and
+ * a fresh launch look identical). The honest options are to leave the daily pass as-is, or
+ * to take the PACKAGE_USAGE_STATS special permission and watch for ACTIVITY_DESTROYED.
+ * If you take that route, call [reset] with the package - that is the only hook needed.
+ */
+object BreathingGate {
+
+    private const val PREFS = "breathing_gate"
+
+    /** True if [pkg] should get the breathing pause on this open. */
+    fun shouldBreathe(ctx: Context, pkg: String): Boolean {
+        val spec = Mode.spec(ctx)
+        // A loosen window re-arms the pause even in Relaxed: the whole point of the window
+        // is that the guard rails come off elsewhere, so this one stays on.
+        val on = spec.breathingOn || LoosenWindow.isActive(ctx)
+        if (!on) return false
+        if (spec.breathEveryOpen) return true
+        return prefs(ctx).getString(pkg.lowercase(), null) != today()
+    }
+
+    /** Record that [pkg] has used its pause for today. */
+    fun markBreathed(ctx: Context, pkg: String) {
+        prefs(ctx).edit().putString(pkg.lowercase(), today()).apply()
+    }
+
+    /** Give [pkg] its daily pause back (see the KNOWN GAP note above). */
+    fun reset(ctx: Context, pkg: String) {
+        prefs(ctx).edit().remove(pkg.lowercase()).apply()
+    }
+
+    fun resetAll(ctx: Context) = prefs(ctx).edit().clear().apply()
+
+    private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
 

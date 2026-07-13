@@ -14,7 +14,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.SystemClock
 import android.provider.Settings
+import android.view.Choreographer
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -90,8 +92,22 @@ import android.graphics.Path
 // report breathing. In the un-merged source this is its own file; keep it that way.
 // =====================================================================================
 
-/** A soft dim orb that grows on the in-breath and shrinks on the out-breath. */
-class BreathOrbView(context: Context, private val accent: Int) : View(context) {
+/**
+ * A soft dim orb that grows on the in-breath and shrinks on the out-breath.
+ *
+ * [fill] decides how big the orb is allowed to get at full inhale:
+ *  - [OrbFill.INSCRIBE] keeps it inside the box it sits in (the in-app pages put the
+ *    orb in a bounded card, and it must not spill past it);
+ *  - [OrbFill.COVER] lets it reach the corners, so a full-screen parent (the app-open
+ *    breathing overlay) is filled edge to edge at peak inhale.
+ */
+enum class OrbFill { INSCRIBE, COVER }
+
+class BreathOrbView(
+    context: Context,
+    private val accent: Int,
+    private val fillMode: OrbFill = OrbFill.INSCRIBE,
+) : View(context) {
 
     var progress = 0f
         set(value) { field = value; invalidate() }
@@ -103,24 +119,42 @@ class BreathOrbView(context: Context, private val accent: Int) : View(context) {
         color = accent
     }
 
-    override fun onDraw(canvas: Canvas) {
-        if (width == 0 || height == 0) return
-        val cx = width / 2f
-        val cy = height / 2f
-        // never let the orb spill past the box it sits in - inscribe it in the square
-        val maxR = (kotlin.math.min(width, height) / 2f) - ring.strokeWidth
-        val minR = maxR * 0.04f
-        val r = minR + (maxR - minR) * progress
-        val a = (progress / 0.14f).coerceIn(0f, 1f)
+    // The radial gradient is rebuilt only when the view is resized, never per frame -
+    // allocating a RadialGradient (and its Skia shader) on every draw is what made the
+    // orb stutter on a phone. Each frame now only sets a scale matrix + a paint alpha.
+    private var shader: RadialGradient? = null
+    private val shaderMatrix = android.graphics.Matrix()
+    private var maxR = 0f
+    private var minR = 0f
 
-        fill.shader = RadialGradient(
-            cx, cy, r,
-            intArrayOf(withAlpha(accent, (165 * a).toInt()),
-                       withAlpha(accent, (80 * a).toInt()),
-                       withAlpha(accent, 0)),
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        maxR = when (fillMode) {
+            OrbFill.INSCRIBE -> (kotlin.math.min(w, h) / 2f) - ring.strokeWidth
+            OrbFill.COVER -> kotlin.math.hypot(w.toFloat(), h.toFloat()) / 2f
+        }.coerceAtLeast(1f)
+        minR = maxR * 0.04f
+        shader = RadialGradient(
+            w / 2f, h / 2f, maxR,
+            intArrayOf(withAlpha(accent, 165), withAlpha(accent, 80), withAlpha(accent, 0)),
             floatArrayOf(0f, 0.62f, 1f),
             Shader.TileMode.CLAMP,
         )
+        fill.shader = shader
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val s = shader ?: return
+        val cx = width / 2f
+        val cy = height / 2f
+        val r = minR + (maxR - minR) * progress
+        val a = (progress / 0.14f).coerceIn(0f, 1f)
+
+        // Scale the cached gradient down to the current radius instead of rebuilding it.
+        val scale = (r / maxR).coerceAtLeast(0.001f)
+        shaderMatrix.setScale(scale, scale, cx, cy)
+        s.setLocalMatrix(shaderMatrix)
+
+        fill.alpha = (255 * a).toInt()      // paint alpha modulates the shader's own alpha
         canvas.drawCircle(cx, cy, r, fill)
         ring.alpha = (70 * a).toInt()
         canvas.drawCircle(cx, cy, r, ring)
@@ -152,9 +186,25 @@ class BreathOrbAnimator(
 ) {
     private val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
     private val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
-    private var anim: ValueAnimator? = null
-    private var pulse: ValueAnimator? = null
+    private val pulseEase = AccelerateDecelerateInterpolator()
+
+    // Driven off Choreographer + our own clock rather than ValueAnimator, because a
+    // ValueAnimator finishes INSTANTLY when the system animator duration scale is 0 -
+    // which battery saver, "Remove animations" and Developer Options all do. That is
+    // what made the breathing silently not start on some opens. Our own clock always
+    // runs. It also gives us one frame callback instead of two competing animators.
+    private var choreographer: Choreographer? = null
+    private var frameCallback: Choreographer.FrameCallback? = null
     private var running = false
+
+    /** True once at least one frame has actually moved the orb (the overlay's watchdog reads it). */
+    @Volatile var hasAdvanced = false
+        private set
+
+    private var inhaling = true
+    private var phaseStart = 0L
+    private var lastDrawAt = 0L
+    private var done = 0
 
     fun start(
         cycles: Int? = null,
@@ -164,63 +214,78 @@ class BreathOrbAnimator(
     ) {
         stop()
         running = true
-        startPulse()
+        hasAdvanced = false
+        done = 0
+        inhaling = true
+        phaseStart = SystemClock.uptimeMillis()
+        lastDrawAt = 0L
+        phase?.text = "Breathe in"
 
-        var done = 0
-        // var-lambdas instead of mutually-recursive local funcs (no forward-ref error)
-        var runInhale: () -> Unit = {}
-        var runExhale: () -> Unit = {}
+        val ch = Choreographer.getInstance()
+        choreographer = ch
+        val cb = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                if (!running) return
+                val now = SystemClock.uptimeMillis()
 
-        runExhale = exhale@{
-            if (!running) return@exhale
-            phase?.text = "Breathe out"
-            onExhaleStart()
-            anim = ValueAnimator.ofFloat(1f, 0f).apply {
-                duration = exhaleMs
-                interpolator = exhaleEase
-                addUpdateListener { orb.progress = it.animatedValue as Float }
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(a: Animator) {
-                        if (!running) return
-                        done++
-                        onCycle(done, cycles ?: done)
-                        if (cycles != null && done >= cycles) finish(onComplete) else runInhale()
-                    }
-                })
-                start()
+                // ~30fps is plenty for a slow breath and halves the redraw work of a
+                // full-screen orb on a mid-range phone.
+                if (now - lastDrawAt >= FRAME_MS) {
+                    lastDrawAt = now
+                    tick(now, cycles, onCycle, onExhaleStart, onComplete)
+                }
+                if (running) ch.postFrameCallback(this)
             }
         }
-        runInhale = inhale@{
-            if (!running) return@inhale
-            phase?.text = "Breathe in"
-            anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = inhaleMs
-                interpolator = inhaleEase
-                addUpdateListener { orb.progress = it.animatedValue as Float }
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(a: Animator) { runExhale() }
-                })
-                start()
-            }
-        }
-        runInhale()
+        frameCallback = cb
+        ch.postFrameCallback(cb)
     }
 
-    private fun startPulse() {
-        pulse = ValueAnimator.ofFloat(0.95f, 0.6f).apply {
-            duration = 1300
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = AccelerateDecelerateInterpolator()
-            addUpdateListener { phase?.alpha = it.animatedValue as Float }
-            start()
+    private fun tick(
+        now: Long,
+        cycles: Int?,
+        onCycle: (Int, Int) -> Unit,
+        onExhaleStart: () -> Unit,
+        onComplete: () -> Unit,
+    ) {
+        val duration = if (inhaling) inhaleMs else exhaleMs
+        val t = ((now - phaseStart).toFloat() / duration).coerceIn(0f, 1f)
+
+        orb.progress =
+            if (inhaling) inhaleEase.getInterpolation(t)
+            else 1f - exhaleEase.getInterpolation(t)
+        if (orb.progress > 0.02f) hasAdvanced = true
+
+        // The phase label's slow pulse, on the same clock (was a second ValueAnimator).
+        phase?.let { p ->
+            val cycle = ((now % (PULSE_MS * 2)).toFloat() / PULSE_MS)
+            val tri = if (cycle <= 1f) cycle else 2f - cycle
+            p.alpha = 0.95f - 0.35f * pulseEase.getInterpolation(tri)
+        }
+
+        if (t < 1f) return
+
+        // Phase boundary.
+        if (inhaling) {
+            inhaling = false
+            phaseStart = now
+            phase?.text = "Breathe out"
+            onExhaleStart()
+        } else {
+            done++
+            onCycle(done, cycles ?: done)
+            if (cycles != null && done >= cycles) {
+                finish(onComplete)
+            } else {
+                inhaling = true
+                phaseStart = now
+                phase?.text = "Breathe in"
+            }
         }
     }
 
     private fun finish(onComplete: () -> Unit) {
-        running = false
-        pulse?.cancel(); pulse = null
-        anim = null
+        stop()
         phase?.alpha = 1f
         orb.progress = 0f
         onComplete()
@@ -228,8 +293,14 @@ class BreathOrbAnimator(
 
     fun stop() {
         running = false
-        anim?.cancel(); anim = null
-        pulse?.cancel(); pulse = null
+        frameCallback?.let { choreographer?.removeFrameCallback(it) }
+        frameCallback = null
+        choreographer = null
+    }
+
+    private companion object {
+        const val FRAME_MS = 28L     // ~30fps
+        const val PULSE_MS = 1300L
     }
 }
 

@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  The block cover.
+
+  Button order is deliberate: LEAVING is the primary action and is big, bold and green.
+  "Go back" is kept - sometimes one page back really is where you want to be - but demoted
+  to a small quiet link, because Back inside a browser is unpredictable: it can dump you on
+  another blocked page, or somewhere you never asked for. The app itself NEVER presses Back
+  for you; it only happens if you tap that link.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -17,14 +26,15 @@
 
     <TextView
         android:id="@+id/block_reason"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
+        android:gravity="center"
         android:textColor="#FFD54F"
         android:textSize="18sp" />
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:gravity="center"
@@ -32,25 +42,54 @@
         android:textColor="#CCCCCC"
         android:textSize="14sp" />
 
+    <!-- PRIMARY: the way out. -->
     <Button
+        android:id="@+id/btn_leave"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="36dp"
+        android:background="#FF2E9E8F"
+        android:minHeight="76dp"
+        android:paddingLeft="20dp"
+        android:paddingRight="20dp"
+        android:text="@string/leave"
+        android:textAllCaps="false"
+        android:textColor="#FF06201B"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:text="@string/leave_hint"
+        android:textColor="#FF8FC2BA"
+        android:textSize="12sp" />
+
+    <!-- SECONDARY: quiet, optional, never automatic. -->
+    <TextView
         android:id="@+id/btn_go_back"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="28dp"
-        android:text="@string/go_back" />
+        android:layout_marginTop="30dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:padding="10dp"
+        android:text="@string/go_back"
+        android:textColor="#FF9AA0A6"
+        android:textSize="14sp" />
 
-    <Button
-        android:id="@+id/btn_leave"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/leave" />
-
-    <Button
+    <TextView
         android:id="@+id/btn_report"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/report_block" />
+        android:layout_marginTop="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:padding="10dp"
+        android:text="@string/report_block"
+        android:textColor="#FF6B7075"
+        android:textSize="13sp" />
 
 </LinearLayout>

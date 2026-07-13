@@ -95,21 +95,87 @@ object AppConfig {
     // The app's modes and what each allows. Display names are read from here so the
     // rest of the app stays consistent. (Behavioural wiring beyond names/breathing/
     // flag-threshold is still in code; this block is the dial to grow into.)
+    //
+    // ┌───────────────────────────────────────────────────────────────────────────────┐
+    // │  AI / MAINTAINER - READ THIS BEFORE CHANGING ANY MODE BEHAVIOUR               │
+    // │                                                                               │
+    // │  `summary` is what the user reads on the in-app "What each mode does" screen  │
+    // │  (Main.kt -> showModeRules, reachable from the Sexual arousal page). It is    │
+    // │  the ONLY explanation they get, so it must stay true.                         │
+    // │                                                                               │
+    // │  Whenever you change what a mode does - here, or anywhere in the code that    │
+    // │  branches on Mode.current()/Mode.isStrict()/Mode.isSuperHardcore()/spec() -   │
+    // │  you MUST update that mode's `summary` lines in the same change. A rule the   │
+    // │  user can't see is a rule they'll feel blindsided by.                         │
+    // │                                                                               │
+    // │  Keep each line short, concrete and in plain English ("Breathing pause: every │
+    // │  time you open a watched app"), never jargon or internal names.               │
+    // └───────────────────────────────────────────────────────────────────────────────┘
     data class ModeSpec(
         val id: String,
         val displayName: String,
-        val breathingOn: Boolean,      // show the breathing pause on "breathing apps"
-        val flagThreshold: Int,        // borderline score at/above which a page is flagged
-        val flagLyingDown: Boolean = false,          // treat "probably lying down" as higher-risk
-        val lightFlagBelow: LightLevel = LightLevel.DARK,  // treat light at/below this as higher-risk
+        val breathingOn: Boolean,      // show the breathing pause on "breathing apps" at all
+        val breathEveryOpen: Boolean,  // true = every open; false = first open of each day only
+        val greyscale: Boolean,        // let the greyscale watcher grey the screen in this mode
+        // NOT WIRED UP. These three are shown in the dev console only - the live scorer
+        // uses one flat FilterTuning.THRESHOLD for every mode, and the sensors are not
+        // consulted when flagging. Wire them into BorderlineScorer BEFORE you describe
+        // them in `summary`, or the rules screen becomes a lie.
+        val flagThreshold: Int,
+        val flagLyingDown: Boolean = false,
+        val lightFlagBelow: LightLevel = LightLevel.DARK,
+        val summary: List<String> = emptyList(),     // plain-English rules shown to the user
     )
     val MODES: List<ModeSpec> = listOf(
-        ModeSpec(id = "relaxed", displayName = "Relaxed", breathingOn = true,  flagThreshold = 60,
-            flagLyingDown = false, lightFlagBelow = LightLevel.DARK),
-        ModeSpec(id = "strict",  displayName = "Strict",  breathingOn = true,  flagThreshold = 45,
-            flagLyingDown = true,  lightFlagBelow = LightLevel.DULL),
+        ModeSpec(id = "relaxed", displayName = "Relaxed",
+            breathingOn = false, breathEveryOpen = false, greyscale = false,
+            flagThreshold = 60, flagLyingDown = false, lightFlagBelow = LightLevel.DARK,
+            summary = listOf(
+                "Breathing pause: NEVER. Watched apps open straight away.",
+                "Greyscale: off. Your screen stays in colour.",
+                "Everything in \"Always on\" above still applies - blocking does not stop in Relaxed.",
+                "You can switch out of this mode whenever you like, unless the 7-day strict lock is running.",
+            )),
+        ModeSpec(id = "strict",  displayName = "Strict",
+            breathingOn = true,  breathEveryOpen = false, greyscale = true,
+            flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DULL,
+            summary = listOf(
+                "Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.",
+                "The daily pass resets at midnight.",
+                "Greyscale: your screen turns grey while you are lying down.",
+                "Everything in \"Always on\" above still applies.",
+                "The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.",
+            )),
+        ModeSpec(id = "superhardcore", displayName = "Super hardcore",
+            breathingOn = true,  breathEveryOpen = true, greyscale = true,
+            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.NORMAL,
+            summary = listOf(
+                "Breathing pause: EVERY single time you open a watched app. There is no daily pass.",
+                "Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.",
+                "Greyscale: your screen turns grey while you are lying down, same as Strict.",
+                "Everything in \"Always on\" above still applies.",
+                "This is Strict with the daily pass taken away. Nothing else is looser.",
+            )),
     )
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
+
+    /**
+     * Rules that are TRUE IN EVERY MODE - the "Always on" block at the top of the in-app
+     * rules screen. Same maintenance contract as ModeSpec.summary: change the behaviour,
+     * change these lines in the same commit.
+     */
+    val ALWAYS_ON_RULES: List<String> = listOf(
+        "Known adult sites are blocked outright. Mode makes no difference.",
+        "Pages are scanned for sexual words. Enough of them and the page is blocked, in every mode - including Relaxed.",
+        "Anything on your ban list is blocked - the sites, pages, search terms and keywords you have banned yourself from.",
+        "Blocked browsers are covered the moment you open them. DuckDuckGo is deliberately left usable.",
+        "Dismiss a block on the same site enough times in one day and the whole site gets banned automatically for a while.",
+        "Short-form feeds (Reels, Shorts, TikTok-style) are blocked if you have that switch on.",
+        "Greylisted apps (TikTok, Instagram and friends) get ${GreyUsage.LIMIT_MIN} minutes per hour, then they close.",
+        "\"Ride out the urge\" lockdown: ${Lockdown.DURATION_MS / 60_000} minutes where only the essentials - calls, texts, alarms, maps - will open. It cannot be cancelled early.",
+        "Unlocking a relaxed window is limited: once a day, and only ${LoosenLimit.LIFETIME_MAX} times ever.",
+        "The app never presses Back for you. Blocking covers the screen and offers you the way out; it never navigates your browser behind your back.",
+    )
 
     // === Ambient light (from the phone's light sensor, in lux) =======================
     // Thresholds are rough, drawn from common lighting references: a dark room (lights off,
@@ -146,6 +212,13 @@ object AppConfig {
     // the state to verify/nudge. Auto-toggle only happens on privileged builds.
     const val GREYSCALE_IN_STRICT = true         // master switch for the feature
     const val GREYSCALE_ONLY_WHEN_LYING = true   // true: only while lying down; false: whole strict session
+
+    // === Leaving a blocked browser ===================================================
+    // Where a browser is sent when the user taps "Close app" on a block cover. The point
+    // is to get the browser OFF the blocked page, so reopening it lands somewhere neutral
+    // and the user can close the offending tab in peace. "about:blank" costs no data; a
+    // real URL (e.g. "https://duckduckgo.com") also works if you'd rather land on a page.
+    const val BROWSER_HOME_URL = "about:blank"
 
     // === Uninstall / device-admin passcode ==========================================
     const val UNINSTALL_PASSCODE = "666666"

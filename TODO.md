@@ -9,31 +9,27 @@ TODO NEXT:
 - rename 'sexual arousal' to 'adult content'
 - add N slip to list of rules...
 
-Tasks:
-- The go back functionality... 
-    - It's annoying it doesn't work and I think sometimes I breaks things... 
-        - i.e. for the web browser..
-        - I think remove this functionality... 
-        - do not auto go back ever.. 
-        - just let the user close the app..
-        - if possible on firefox, redirect back to the home screen of firefox so they can close whatever troublesome tab..
-        - hmmmmm TODO- do i keep the manual option to go back on a blocked page? perhaps we do, but make the option to close app / go to home screen much more bigger and bold. 
-- Breath in animation *still* doesn't start automatically some times...
-        Try and fix that and also have text that comes in screen for like 1 frame saying ''click to enter" as a backup in case it doesn't start... 
+DONE - breathing animation
+    - Auto-start: was hung off a single OnGlobalLayoutListener, and driven by ValueAnimator -
+      which completes INSTANTLY when the system animator duration scale is 0 (battery saver,
+      "Remove animations", Developer Options). That is the "sometimes doesn't start" bug. Now
+      driven by Choreographer + our own clock, started from two independent triggers.
+    - Backup: "If nothing happens, tap to enter" flashes on entry; a 1.5s watchdog re-shows it
+      and lets a tap through if the orb genuinely never moved, so you can never be trapped.
+    - Fills the screen again: BreathOrbView takes an OrbFill - COVER for the big overlay
+      (reaches the corners), INSCRIBE (unchanged) for the boxed in-app arousal pages.
+    - Lag: the orb was allocating a new RadialGradient every single frame. It is now built
+      once per resize and scaled with a matrix, and the loop runs at ~30fps not 60.
+    - 2FA: breathing is now FIRST OPEN PER APP PER DAY (BreathingGate), so tabbing to an
+      authenticator no longer re-gates you. Super hardcore breathes on every open.
 
-        It also doesn't fill up entire screen like it used to..
-        Which is expected as we limited it to be max size of box, but that was for the sexual arousal pages only intentionally... So I want it separate for big overlay to where it fills everything up again... 
-
-        Also, try and make it a bit less intensive on the phone, it seems to even lag a bit...
-    -
-    also...
-    The breathing thing breaks 2FA ... 
-        You know what? Lets actually only do it on the first time a user opens an app in a given day (if they swipe off / close the app, it is then reset.)
-    (if on superhard core mode, do it everytime...)
-- make a clear list somewhere in the adult content section... 
-    - where they can see absolutely everything in an idiot friendly digestible way, regarding rules for the different modes (like strict mode)...
-    - add a comment for AI to remember to continuously update that...
-
+    !! NOT DONE - "if they swipe off / close the app, it is then reset".
+       Android gives an accessibility service no dependable "app was swiped away" signal.
+       Backgrounded-but-alive apps have no visible window, and a cold-start heuristic is
+       useless for the apps we gate (Fenix is single-activity, so resume and fresh launch
+       look identical). Options: leave the daily pass as-is, or take PACKAGE_USAGE_STATS
+       and watch for ACTIVITY_DESTROYED, then call BreathingGate.reset(pkg) - that is the
+       only hook needed. See the KNOWN GAP note on BreathingGate in UserState.kt.
 
 - when in strict mode, make it so that the user cannot use any non-whitelisted apps when lying down or if they are in the dark, as determined by out existing sensor data.
     - Also, add them to our log when the user fails / slips / is detected to be looking at bad conent (i.e. a page block or self reported etc). so that we can see the trends in that data as well..

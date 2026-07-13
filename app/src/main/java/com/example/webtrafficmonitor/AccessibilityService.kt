@@ -291,9 +291,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - lastGreyEval < 1000L) return   // re-evaluate at most ~1x/sec
         lastGreyEval = now
-        val strict = Mode.isStrict(this)
+        // Read the flag off the mode spec, NOT Mode.isStrict(): super hardcore is not
+        // strict, and a stricter mode must never end up with weaker greyscale.
+        val greyMode = Mode.spec(this).greyscale
         val lying = greyscaleSensor?.lyingDown ?: false
-        val want = strict && (!AppConfig.GREYSCALE_ONLY_WHEN_LYING || lying)
+        val want = greyMode && (!AppConfig.GREYSCALE_ONLY_WHEN_LYING || lying)
         if (want && !greyscaleApplied) {
             if (Greyscale.setEnabled(this, true)) greyscaleApplied = true
         } else if (!want && greyscaleApplied) {
@@ -361,21 +363,25 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             return // No point reading or logging pages inside a blocked app.
         }
 
-        // ---- Breathing gate: a calming pause each time a chosen app opens ----
+        // ---- Breathing gate: a calming pause when a chosen app opens ----
         // Fire only when the foreground app actually changes, so it triggers on a
-        // fresh open but never while you're already inside the app.
+        // fresh open but never while you're already inside the app. How OFTEN it may
+        // fire is BreathingGate's call: every open in super hardcore, otherwise only
+        // the first open of that app each day (which is what keeps it out of the way
+        // of 2FA codes).
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             packageName != lastForegroundPkgForBreathing
         ) {
             if (breathing?.isShowing == true) breathing?.hide()   // left the gated app: drop it
             lastForegroundPkgForBreathing = packageName
             if (packageName in BREATHING_APPS && overlay?.isShowing != true &&
-                (!Mode.isRelaxed(this) || LoosenWindow.isActive(this))) {
+                BreathingGate.shouldBreathe(this, packageName)) {
+                BreathingGate.markBreathed(this, packageName)
                 val label = appLabelFor(packageName)
                 breathing?.show(
                     appLabel = label,
                     onContinue = { breathing?.hide() },
-                    onDontWant = { breathing?.hide(); exitToHome() },
+                    onDontWant = { breathing?.hide(); exitToHome(packageName) },
                 )
                 return
             }
@@ -482,7 +488,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     performGlobalAction(GLOBAL_ACTION_BACK)
                 }
             },
-            onLeave = { exitToHome() },
+            onLeave = { exitToHome(blockedPackage, redirectBrowser = true) },
             onReport = {
                 // Intentionally does nothing - reporting an incorrect block must NOT
                 // unlock a blocked app.  Kept as a stub so the overlay button still
@@ -540,16 +546,47 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
 
     /**
-     * The "Leave" / exit-all button. A single HOME sometimes does nothing (the cover
-     * can immediately re-arm, or an app swallows it), so press Back twice to climb
-     * out of nested screens, then Home. Still cannot FORCE the app off recents -
-     * Android gives no accessibility API for that - but the re-cover-on-reopen
-     * blocking is what actually stops them coming back.
+     * The "Leave" / exit-all button.
+     *
+     * This used to fire Back, Back, then Home. That was the thing that "broke" browsers:
+     * two blind Back presses land wherever the app's history happens to point - closing
+     * tabs, backing out of a form, or bouncing off a page the user still needed. The app
+     * now NEVER presses Back on its own. Only HOME, which is unambiguous.
+     *
+     * For a browser we first hand it a blank page. The troublesome tab stays in the tab
+     * list (Android gives us no way to close it), but the browser is no longer sitting on
+     * that page - so reopening it lands somewhere neutral, and the user can close the tab
+     * themselves without the block cover slamming back down on them.
+     *
+     * We still cannot force the app off recents; the re-cover-on-reopen blocking is what
+     * actually stops them coming back.
      */
-    private fun exitToHome() {
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 200)
-        mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, 450)
+    private fun exitToHome(pkg: String? = null, redirectBrowser: Boolean = false) {
+        val target = pkg ?: lastPackage
+        val redirecting = redirectBrowser && target != null && AppBlocklist.isBrowser(target)
+        if (redirecting) sendBrowserHome(target!!)
+        // Only wait if we actually handed the browser an intent; otherwise go straight out.
+        if (redirecting) mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, BROWSER_HOME_DELAY_MS)
+        else performGlobalAction(GLOBAL_ACTION_HOME)
+    }
+
+    /**
+     * Point [pkg] at a blank page, so it is no longer parked on the blocked one. Fired as
+     * a normal VIEW intent at that browser specifically; if the browser refuses it, we
+     * just go Home and nothing is lost.
+     */
+    private fun sendBrowserHome(pkg: String) {
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(BROWSER_HOME_URL)).apply {
+                    setPackage(pkg)
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+        } catch (t: Throwable) {
+            android.util.Log.w("PageMonitor", "could not send $pkg to a blank page", t)
+        }
     }
 
     /** Page-level (domain/keyword) blocking - unchanged behaviour. */
@@ -675,7 +712,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 },
                 onLeave = {
                     if (blockSettled()) shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }
-                    exitToHome()
+                    exitToHome(packageName, redirectBrowser = true)
                     controller.hide()
                     shownBlockHost = null
                     shownBlockUrl = null
@@ -1006,6 +1043,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // ban for it - long enough to outlast the stale-content flicker while
         // navigating back through history, so innocent previous pages aren't banned.
         private const val BAN_SETTLE_MS = 1500L
+
+        // "Leave" on a browser: hand it a blank page, give it a moment to take the
+        // intent, then go Home. (The background-activity-start restriction added in
+        // Android 10 doesn't bite us - holding SYSTEM_ALERT_WINDOW exempts the app.)
+        private val BROWSER_HOME_URL = AppConfig.BROWSER_HOME_URL
+        private const val BROWSER_HOME_DELAY_MS = 250L
         private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
 
         private val IGNORED_PACKAGES = AppConfig.IGNORED_PACKAGES

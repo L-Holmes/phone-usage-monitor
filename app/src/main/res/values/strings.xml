@@ -26,7 +26,8 @@
 
     <string name="block_title">Blocked</string>
     <string name="block_explanation">This content was identified by Web Traffic Monitor as distracting.</string>
-    <string name="go_back">Go back</string>
-    <string name="leave">Leave (home screen)</string>
+    <string name="leave">Close app · Go to home screen</string>
+    <string name="leave_hint">The way out. In a browser this also drops the bad tab off your screen, so you can close it yourself.</string>
+    <string name="go_back">Go back one page instead</string>
     <string name="report_block">Report incorrect block</string>
 </resources>

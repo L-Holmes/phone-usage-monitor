@@ -2030,6 +2030,15 @@ private fun showReportScreen() {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, (8 * dp).toInt())
     }
     val modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    // Sits beside the dropdown on purpose: the moment you change mode is the moment you
+    // want to know what you just signed up for.
+    modeRow.addView(TextView(this).apply {
+        text = "What each mode does  ›"
+        textSize = 14f; setTextColor(0xFF2E9E8F.toInt()); setTypeface(typeface, Typeface.BOLD)
+        isClickable = true; isFocusable = true
+        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+        setOnClickListener { showModeRules() }
+    })
     modeRow.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
     modeRow.addView(modeSpinner())
     top.addView(modeRow)
@@ -2060,6 +2069,121 @@ private fun showReportScreen() {
     })
     setContentWithThumb(root) { reportBackTarget() }
 }
+
+/**
+ * "What each mode does" - the plain-English rulebook.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────────────┐
+ * │  AI / MAINTAINER: DO NOT let this screen drift out of date.                       │
+ * │                                                                                  │
+ * │  It is generated from AppConfig.ALWAYS_ON_RULES and AppConfig.MODES[].summary -   │
+ * │  so there is nothing to edit HERE when behaviour changes. Edit those lists in     │
+ * │  AppConfig, in the SAME change that alters the behaviour. That is the contract:   │
+ * │  if a user can feel a rule, this screen must state it, in words a tired person    │
+ * │  can understand at 1am.                                                           │
+ * │                                                                                  │
+ * │  Whenever you touch anything that branches on Mode (breathing, greyscale, block   │
+ * │  thresholds, sensors, lock behaviour), re-read those lists and fix them.          │
+ * └──────────────────────────────────────────────────────────────────────────────────┘
+ */
+private fun showModeRules() {
+    inSubPage = true; onReportScreen = false
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val current = Mode.current(this)
+    val root = vbox(pad)
+    root.addView(titleText("The rules, in plain English"))
+    root.addView(TextView(this).apply {
+        text = "Everything this app does to you, and exactly when. No surprises."
+        textSize = 14f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+    fun sectionHeader(text: String, colour: Int) = list.addView(TextView(this).apply {
+        this.text = text; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(colour); setPadding(0, (14 * dp).toInt(), 0, (8 * dp).toInt())
+    })
+
+    fun rulesCard(title: String, sub: String?, rules: List<String>, accent: Int, highlight: Boolean) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 16 * dp
+                setColor(0xFFFFFFFF.toInt())
+                setStroke(((if (highlight) 2.5f else 1.5f) * dp).toInt(),
+                    if (highlight) accent else 0xFFD7DCE0.toInt())
+            }
+            val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (10 * dp).toInt() }
+        }
+        card.addView(TextView(this).apply {
+            text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF1F2933.toInt())
+        })
+        if (sub != null) card.addView(TextView(this).apply {
+            text = sub; textSize = 13f; setTextColor(accent)
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, (2 * dp).toInt(), 0, 0)
+        })
+        rules.forEach { rule ->
+            card.addView(TextView(this).apply {
+                text = "•  $rule"
+                textSize = 14f; setTextColor(0xFF3C4650.toInt())
+                setLineSpacing(0f, 1.15f)
+                setPadding(0, (9 * dp).toInt(), 0, 0)
+            })
+        }
+        list.addView(card)
+    }
+
+    sectionHeader("ALWAYS ON - IN EVERY MODE", 0xFF9AA0A6.toInt())
+    rulesCard("These never switch off", "Even in Relaxed.", AppConfig.ALWAYS_ON_RULES,
+        0xFF2E7D32.toInt(), highlight = false)
+
+    sectionHeader("THE MODES - WHAT CHANGES", 0xFF9AA0A6.toInt())
+    AppConfig.MODES.forEach { spec ->
+        val isCurrent = spec.id == current
+        rulesCard(
+            title = spec.displayName,
+            sub = if (isCurrent) "You are in this mode right now" else null,
+            rules = spec.summary,
+            accent = 0xFF2E9E8F.toInt(),
+            highlight = isCurrent,
+        )
+    }
+
+    if (Mode.isLocked(this)) {
+        list.addView(TextView(this).apply {
+            text = "Strict lock is running: ${Mode.daysLeft(this@MainActivity)}. " +
+                "You cannot go back to Relaxed until it ends. You can still go up to Super hardcore."
+            textSize = 13f; setTextColor(0xFFB1541F.toInt()); setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
+        })
+    }
+
+    list.addView(TextView(this).apply {
+        text = "\"Watched apps\" are the ones that get the breathing pause: " +
+            AppConfig.BREATHING_APPS.joinToString(", ") { appLabelOrPackage(it) } + "."
+        textSize = 13f; setTextColor(0xFF7B848C.toInt())
+        setPadding(0, (6 * dp).toInt(), 0, (16 * dp).toInt())
+    })
+
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(list)
+    })
+    setContentWithThumb(root) { showReportScreen() }
+}
+
+/** Friendly app name for a package, falling back to the raw package if it isn't installed. */
+private fun appLabelOrPackage(pkg: String): String =
+    try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (t: Throwable) {
+        pkg
+    }
 
 private fun showLogPage() {
     inSubPage = true

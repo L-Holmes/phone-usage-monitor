@@ -113,9 +113,11 @@ class OverlayController(private val context: Context) {
 
         val overlay = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
         overlay.findViewById<TextView>(R.id.block_reason).text = reason
-        overlay.findViewById<Button>(R.id.btn_go_back).setOnClickListener { onGoBack() }
-        overlay.findViewById<Button>(R.id.btn_leave).setOnClickListener { onLeave() }
-        overlay.findViewById<Button>(R.id.btn_report).setOnClickListener { onReport() }
+        // Typed as View, not Button: "go back" and "report" are quiet TextView links now,
+        // and only "leave" is still an actual Button.
+        overlay.findViewById<View>(R.id.btn_go_back).setOnClickListener { onGoBack() }
+        overlay.findViewById<View>(R.id.btn_leave).setOnClickListener { onLeave() }
+        overlay.findViewById<View>(R.id.btn_report).setOnClickListener { onReport() }
 
         // Wrap the cover in a FrameLayout we control, so the temporary image layer
         // can be laid ON TOP of the cover (and removed) without touching the XML.
@@ -188,9 +190,11 @@ class BreathingOverlay(private val context: Context) {
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val handler = Handler(Looper.getMainLooper())
     private var view: View? = null
     private var orbAnim: BreathOrbAnimator? = null
     private var controlsActive = false
+    private var started = false
 
     val isShowing: Boolean get() = view != null
 
@@ -202,12 +206,16 @@ class BreathingOverlay(private val context: Context) {
     fun show(appLabel: String, onContinue: () -> Unit, onDontWant: () -> Unit) {
         if (view != null) return
         controlsActive = false
+        started = false
         val dm = context.resources.displayMetrics
         fun dp(v: Int) = (v * dm.density).toInt()
 
         val root = FrameLayout(context).apply { setBackgroundColor(bg) }
 
-        val orb = BreathOrbView(context, accent)
+        // COVER, not INSCRIBE: this overlay is the whole screen, so the orb should reach
+        // the corners at full inhale like it used to. (The in-app arousal pages keep the
+        // INSCRIBE default, because there the orb sits in a bounded box.)
+        val orb = BreathOrbView(context, accent, OrbFill.COVER)
         root.addView(orb, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
@@ -265,6 +273,23 @@ class BreathingOverlay(private val context: Context) {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM))
 
+        // Escape hatch. Flashed on entry so the user knows the screen is tappable, then it
+        // fades. If the breathing genuinely fails to run (see the watchdog below) it comes
+        // back for good, and tapping anywhere releases the controls - so a broken animation
+        // can never trap you behind this overlay.
+        val tapHint = TextView(context).apply {
+            text = "If nothing happens, tap to enter"
+            textSize = 13f
+            setTextColor(softText)
+            alpha = 0f
+            gravity = Gravity.CENTER
+        }
+        root.addView(tapHint, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+                topMargin = (dm.heightPixels * 0.17f).toInt() + dp(30)
+            })
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             overlayType(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.OPAQUE)
@@ -278,6 +303,14 @@ class BreathingOverlay(private val context: Context) {
             return
         }
 
+        // Brief "you can tap" flash, then out of the way.
+        tapHint.animate().alpha(0.5f).setDuration(400)
+            .withEndAction { tapHint.animate().alpha(0f).setStartDelay(900).setDuration(600).start() }
+            .start()
+
+        // Two independent triggers, first one wins (startBreathing is idempotent). The
+        // global-layout listener alone was the whole start path, and if it never fired the
+        // overlay just sat there dead - which is the "breathing doesn't start" bug.
         root.viewTreeObserver.addOnGlobalLayoutListener(
             object : ViewTreeObserver.OnGlobalLayoutListener {
                 override fun onGlobalLayout() {
@@ -286,11 +319,26 @@ class BreathingOverlay(private val context: Context) {
                 }
             },
         )
+        root.post { startBreathing(orb, phase, controls, dontWant) }
+
+        // Watchdog: if the orb still hasn't moved a moment later, treat the gate as broken,
+        // surface the hint and let a tap through rather than stranding the user.
+        handler.postDelayed({
+            if (view === root && orbAnim?.hasAdvanced != true) {
+                tapHint.animate().cancel()
+                tapHint.alpha = 0.8f
+                releaseControls(phase, controls, dontWant)
+                root.setOnClickListener { if (controlsActive) onContinue() }
+                root.isClickable = true
+            }
+        }, WATCHDOG_MS)
     }
 
     private fun startBreathing(
         orb: BreathOrbView, phase: TextView, controls: View, dontWant: Button,
     ) {
+        if (started) return
+        started = true
         orbAnim = BreathOrbAnimator(orb, phase).also { a ->
             a.start(
                 cycles = 1,
@@ -299,31 +347,35 @@ class BreathingOverlay(private val context: Context) {
                     controls.visibility = View.VISIBLE
                     controls.animate().alpha(0.55f).setDuration(3600).start()
                 },
-                onComplete = {
-                    phase.alpha = 0f
-                    controls.alpha = 1f
-                    controlsActive = true
-                    ValueAnimator.ofObject(android.animation.ArgbEvaluator(), accentMuted, accent)
-                        .apply {
-                            duration = 200
-                            addUpdateListener { va ->
-                                (dontWant.background as? GradientDrawable)
-                                    ?.setColor(va.animatedValue as Int)
-                            }
-                            start()
-                        }
-                },
+                onComplete = { releaseControls(phase, controls, dontWant) },
             )
         }
     }
 
+    /** The breath is done (or never ran): light up the buttons and let them be pressed. */
+    private fun releaseControls(phase: TextView, controls: View, dontWant: Button) {
+        if (controlsActive) return
+        controlsActive = true
+        phase.alpha = 0f
+        controls.animate().cancel()
+        controls.visibility = View.VISIBLE
+        controls.alpha = 1f
+        (dontWant.background as? GradientDrawable)?.setColor(accent)
+    }
+
     fun hide() {
+        handler.removeCallbacksAndMessages(null)
         orbAnim?.stop(); orbAnim = null
         controlsActive = false
+        started = false
         view?.let {
             try { windowManager.removeView(it) } catch (_: Throwable) {}
             view = null
         }
+    }
+
+    private companion object {
+        const val WATCHDOG_MS = 1500L
     }
 
     private fun overlayType(): Int =
