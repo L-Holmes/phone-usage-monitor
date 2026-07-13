@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import java.util.Calendar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,10 @@ data class RelapseReport(
     val feeling: String? = null,
     val urge: String? = null,     // mild / strong / overwhelming (optional)
     val note: String? = null,     // PRIVATE — never shown back as judgement
+    // Where you physically were, from SensorContext at the moment of reporting:
+    // "lying"/"upright"/"unknown" and "DARK"/"DULL"/"NORMAL"/"BRIGHT"/"unknown".
+    val posture: String? = null,
+    val lightLevel: String? = null,
 )
 
 
@@ -82,13 +87,21 @@ interface RelapseReportDao {
     @Query("DELETE FROM relapse_reports") suspend fun clear()
 }
 
-@Database(entities = [RelapseReport::class], version = 1, exportSchema = false)
+@Database(entities = [RelapseReport::class], version = 2, exportSchema = false)
 abstract class RelapseDatabase : RoomDatabase() {
 
     abstract fun dao(): RelapseReportDao
 
     companion object {
         @Volatile private var instance: RelapseDatabase? = null
+
+        /** v2 adds where you physically were: posture + light band. */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE relapse_reports ADD COLUMN posture TEXT")
+                db.execSQL("ALTER TABLE relapse_reports ADD COLUMN lightLevel TEXT")
+            }
+        }
 
         fun get(context: Context): RelapseDatabase =
             instance ?: synchronized(this) {
@@ -99,6 +112,7 @@ abstract class RelapseDatabase : RoomDatabase() {
                 )
                     // No destructive migration: relapse history must persist. A schema
                     // change here needs a proper Migration.
+                    .addMigrations(MIGRATION_1_2)
                     .build().also { instance = it }
             }
     }
@@ -169,6 +183,10 @@ data class RelapseDraft(
             feeling = feeling,
             urge = urge,
             note = note,
+            // Captured, not asked for: nobody self-reports "I was lying down in the dark"
+            // accurately after the fact, but the sensors already know.
+            posture = SensorContext.postureLabel(),
+            lightLevel = SensorContext.lightLabel(),
         )
     }
 }

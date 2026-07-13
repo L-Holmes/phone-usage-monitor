@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The primary "Go to home screen" button on the block cover. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FF2E9E8F" />
+    <corners android:radius="18dp" />
+</shape>

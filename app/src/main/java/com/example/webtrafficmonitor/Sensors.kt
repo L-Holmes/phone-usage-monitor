@@ -151,3 +151,50 @@ class SensorMonitor(context: Context) : SensorEventListener {
 
     val lightLevel: AppConfig.LightLevel? get() = if (lux < 0f) null else AppConfig.lightLevel(lux)
 }
+
+
+// =====================================================================================
+// SensorContext  (the last known posture + light, readable from anywhere)
+// =====================================================================================
+/**
+ * The accessibility service keeps a SensorMonitor running and publishes each reading here.
+ * Everything else - the night guard, and the "where were you when this happened" fields on
+ * block and relapse records - reads this instead of spinning up its own sensors.
+ *
+ * Values are the LAST KNOWN reading, not a live one. [known] is false until the first
+ * reading lands, and callers must treat "we don't know" as "don't block" - guessing that
+ * someone is lying down in the dark and locking their phone on that guess is far worse than
+ * missing one.
+ */
+object SensorContext {
+
+    const val UNKNOWN = "unknown"
+
+    @Volatile var lyingDown: Boolean = false; private set
+    @Volatile var light: AppConfig.LightLevel? = null; private set
+    @Volatile var lux: Float = -1f; private set
+    @Volatile var known: Boolean = false; private set
+
+    fun update(monitor: SensorMonitor) {
+        lyingDown = monitor.lyingDown
+        light = monitor.lightLevel
+        lux = monitor.lux
+        known = true
+    }
+
+    /** "lying" / "upright" / "unknown" - stored on block + relapse rows. */
+    fun postureLabel(): String = when {
+        !known -> UNKNOWN
+        lyingDown -> "lying"
+        else -> "upright"
+    }
+
+    /** "DARK" / "DULL" / "NORMAL" / "BRIGHT" / "unknown". */
+    fun lightLabel(): String = light?.name ?: UNKNOWN
+
+    /** True if the room is at [atOrBelow] or darker. False when we simply don't know. */
+    fun isDarkerThan(atOrBelow: AppConfig.LightLevel): Boolean {
+        val l = light ?: return false
+        return l.ordinal <= atOrBelow.ordinal      // LightLevel is ordered DARK..BRIGHT
+    }
+}

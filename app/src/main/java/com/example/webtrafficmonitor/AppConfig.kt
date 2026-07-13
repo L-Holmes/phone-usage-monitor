@@ -117,11 +117,16 @@ object AppConfig {
         val breathingOn: Boolean,      // show the breathing pause on "breathing apps" at all
         val breathEveryOpen: Boolean,  // true = every open; false = first open of each day only
         val greyscale: Boolean,        // let the greyscale watcher grey the screen in this mode
-        // NOT WIRED UP. These three are shown in the dev console only - the live scorer
-        // uses one flat FilterTuning.THRESHOLD for every mode, and the sensors are not
-        // consulted when flagging. Wire them into BorderlineScorer BEFORE you describe
-        // them in `summary`, or the rules screen becomes a lie.
+        /**
+         * The NIGHT GUARD: block every non-essential app while the phone says you are lying
+         * down, or the room is dark. [flagLyingDown] and [lightFlagBelow] are its triggers.
+         */
+        val nightGuard: Boolean = false,
+        // NOT WIRED INTO THE SCORER. flagThreshold is dev-console display only - the live
+        // scorer uses one flat FilterTuning.THRESHOLD for every mode. Do NOT describe it in
+        // `summary` until it is actually wired, or the rules screen becomes a lie.
         val flagThreshold: Int,
+        // These two ARE live, but only as the night-guard's triggers (see nightGuard above).
         val flagLyingDown: Boolean = false,
         val lightFlagBelow: LightLevel = LightLevel.DARK,
         val summary: List<String> = emptyList(),     // plain-English rules shown to the user
@@ -129,33 +134,50 @@ object AppConfig {
     val MODES: List<ModeSpec> = listOf(
         ModeSpec(id = "relaxed", displayName = "Relaxed",
             breathingOn = false, breathEveryOpen = false, greyscale = false,
+            nightGuard = false,
             flagThreshold = 60, flagLyingDown = false, lightFlagBelow = LightLevel.DARK,
             summary = listOf(
                 "Breathing pause: NEVER. Watched apps open straight away.",
                 "Greyscale: off. Your screen stays in colour.",
+                "Lying down or sitting in the dark changes nothing. Every app still opens.",
                 "Everything in \"Always on\" above still applies - blocking does not stop in Relaxed.",
                 "You can switch out of this mode whenever you like, unless the 7-day strict lock is running.",
             )),
         ModeSpec(id = "strict",  displayName = "Strict",
             breathingOn = true,  breathEveryOpen = false, greyscale = true,
+            nightGuard = true,
             flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DULL,
             summary = listOf(
                 "Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.",
                 "The daily pass resets at midnight.",
+                "NIGHT GUARD: while you are LYING DOWN, or the room is DIM OR DARKER, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.",
+                "That is the whole point: the phone in bed, in the dark, is where this goes wrong.",
                 "Greyscale: your screen turns grey while you are lying down.",
                 "Everything in \"Always on\" above still applies.",
                 "The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.",
             )),
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
+            nightGuard = true,
             flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.NORMAL,
             summary = listOf(
                 "Breathing pause: EVERY single time you open a watched app. There is no daily pass.",
                 "Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.",
+                "NIGHT GUARD, harder: it triggers in ORDINARY INDOOR LIGHT or darker - not just a dim room - as well as whenever you are lying down. Only the essentials open.",
                 "Greyscale: your screen turns grey while you are lying down, same as Strict.",
                 "Everything in \"Always on\" above still applies.",
-                "This is Strict with the daily pass taken away. Nothing else is looser.",
+                "This is Strict with the daily pass taken away, and a night guard that trips far more easily.",
             )),
+    )
+
+    // === Night guard: what still opens while lying down / in the dark =================
+    // Matched as SUBSTRINGS of the package name. Keep this to genuine essentials - the guard
+    // is worthless if the thing you actually reach for is on it. WhatsApp is deliberately NOT
+    // here (it is a scroll surface like any other); the dialer and SMS are, so you can still
+    // be contacted in an emergency.
+    val NIGHT_GUARD_ALLOWED_SUBSTRINGS: List<String> = listOf(
+        "launcher", "trebuchet", "dialer", "incallui", "telecom", "phone", "contacts",
+        "messaging", "mms", "deskclock", "clock", "alarm", "camera", "maps", "waze",
     )
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
 
@@ -215,16 +237,21 @@ object AppConfig {
 
     // === Leaving a blocked browser ===================================================
     // Where a browser is sent when the user taps "Go to home screen" on a block cover. The
-    // point is to get the browser OFF the blocked page, so REOPENING it lands somewhere
-    // neutral instead of straight back on it - the behaviour Stay Focused has.
+    // point is to get the browser OFF the blocked page, so REOPENING it lands on a fresh
+    // blank tab instead of straight back on it - the behaviour Stay Focused has.
     //
-    // Must be a URL the browser will accept from an external ACTION_VIEW intent, which means
-    // http/https. Do NOT put "about:blank" here: browsers only register intent filters for
-    // http/https/BROWSABLE, so an about: URL is silently dropped and the redirect does
-    // nothing at all. (That was the bug - the exit "worked" but you came back to the same
-    // page.) DuckDuckGo is deliberately the landing page: it's the one browser/search this
-    // app leaves unblocked.
-    const val BROWSER_HOME_URL = "https://duckduckgo.com"
+    // "about:blank" is what we want and what we try first. The catch: a browser only accepts
+    // an external ACTION_VIEW intent for the schemes it declares an intent-filter for, and
+    // that is normally just http/https. If Firefox ignores about: then the intent is dropped
+    // and you land back on the blocked page - so sendBrowserHome checks whether the browser
+    // will actually take it, and falls back to BROWSER_HOME_FALLBACK_URL if it won't.
+    //
+    // If you test and the new tab ISN'T blank, that means the fallback fired: set
+    // BROWSER_HOME_URL to the fallback value below and be done with it.
+    const val BROWSER_HOME_URL = "about:blank"
+
+    // Only used if the browser refuses the URL above. Must be http/https.
+    const val BROWSER_HOME_FALLBACK_URL = "https://www.google.com"
 
     // === Uninstall / device-admin passcode ==========================================
     const val UNINSTALL_PASSCODE = "666666"

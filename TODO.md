@@ -6,12 +6,6 @@
 
 TODO NEXT:
 
-- when in strict mode, make it so that the user cannot use any non-whitelisted apps (e.g. whatsapp) when lying down or if they are in the dark, as determined by out existing sensor data.
-    (block the app with our block screen- saying the user can't use it whilst [in a dark place] / [lying down]
-    - Also, add them to our log when the user fails / slips / is detected to be looking at bad conent (i.e. a page block or self reported etc). so that we can see the trends in that data as well..
-    - (and of course in our summary / graph tables add those as a graph and in the summary say that 'the light level is usually..' and 'your screen rotation is usually (upright / led down)
-
-
 - dopamine baseline masurement
     TODO- bulk this idea out...
     --> How is the dopamine baseline calculated?
@@ -68,6 +62,7 @@ TODO NEXT:
         - money made in that time..
         - social connections...
         - health etc...
+        (based off what the user has actually inputted... if they haven't inputted.. perhaps give them a button to 'input your stats to see.. thaever'
         (and vice versa- if they are improving, show what they are ptoentially gaining back (although of course will be more time focused...))
     - then have additional things like inputting hourly wage... or how much they make an hour on their 'side hustle'... 
         (also we add our own average hourly wage there instead... for calculations)
@@ -91,6 +86,7 @@ MANUAL TODO:
    - Need to keep themselves busy!
    - No tracking needed on this — they'll know where they're at.
 - add N slip to list of rules...
+    - + no cloth..
 
 
 

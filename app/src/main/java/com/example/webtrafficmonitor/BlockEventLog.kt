@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -129,12 +130,18 @@ data class BlockEvent(
     val reason: String? = null,   // why it was blocked (handy when reviewing the list)
     val score: Int? = null,       // content score, when the block came from the scorer
     val recentApps: String? = null, // packages open just before, CSV, newest first
+    // Where you physically were when it happened. "lying"/"upright"/"unknown" and
+    // "DARK"/"DULL"/"NORMAL"/"BRIGHT"/"unknown", captured from SensorContext at the moment
+    // of the block - this is what the "when does this happen to me" stats are built on.
+    val posture: String? = null,
+    val lightLevel: String? = null,
+    val lux: Float? = null,
 ) {
     companion object {
         const val KIND_WEB = "web"
         const val KIND_APP = "app"
 
-        /** Build an event stamped with the current local time / day / hour. */
+        /** Build an event stamped with the current local time / day / hour / posture / light. */
         fun now(
             kind: String,
             packageName: String?,
@@ -156,6 +163,9 @@ data class BlockEvent(
                 reason = reason,
                 score = score,
                 recentApps = recentApps.takeIf { it.isNotEmpty() }?.joinToString(","),
+                posture = SensorContext.postureLabel(),
+                lightLevel = SensorContext.lightLabel(),
+                lux = SensorContext.lux.takeIf { it >= 0f },
             )
         }
     }
@@ -222,13 +232,22 @@ interface BlockEventDao {
     suspend fun summaries(): List<BlockSummary>
 }
 
-@Database(entities = [BlockEvent::class, BlockSummary::class], version = 1, exportSchema = false)
+@Database(entities = [BlockEvent::class, BlockSummary::class], version = 2, exportSchema = false)
 abstract class BlockEventDatabase : RoomDatabase() {
 
     abstract fun dao(): BlockEventDao
 
     companion object {
         @Volatile private var instance: BlockEventDatabase? = null
+
+        /** v2 adds where you physically were: posture, light band, raw lux. */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE block_events ADD COLUMN posture TEXT")
+                db.execSQL("ALTER TABLE block_events ADD COLUMN lightLevel TEXT")
+                db.execSQL("ALTER TABLE block_events ADD COLUMN lux REAL")
+            }
+        }
 
         fun get(context: Context): BlockEventDatabase =
             instance ?: synchronized(this) {
@@ -240,6 +259,7 @@ abstract class BlockEventDatabase : RoomDatabase() {
                     // NOTE: deliberately NO fallbackToDestructiveMigration here.
                     // Unlike monitor.db, this data is meant to live ~3 months; a schema
                     // change must ship a proper Migration or it wipes the history.
+                    .addMigrations(MIGRATION_1_2)
                     .build().also { instance = it }
             }
     }

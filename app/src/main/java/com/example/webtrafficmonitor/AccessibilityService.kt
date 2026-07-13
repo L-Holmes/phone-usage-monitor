@@ -285,12 +285,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var greyscaleApplied = false      // true only while WE hold greyscale on
     private var lastGreyEval = 0L
 
+    /**
+     * One SensorMonitor for the whole session. It drives THREE things now, so it runs
+     * unconditionally (it used to start only if greyscale was enabled):
+     *   - greyscale,
+     *   - the night guard (no non-essential apps while lying down / in the dark),
+     *   - the posture + light stamped onto every block and relapse record.
+     * Slow polling rate: none of those need to be quick, and this runs all day.
+     */
     private fun startGreyscaleWatch() {
-        if (!AppConfig.GREYSCALE_IN_STRICT) return
         val m = SensorMonitor(this)
-        m.onUpdate = { updateGreyscale() }
+        m.onUpdate = {
+            SensorContext.update(m)
+            updateGreyscale()
+        }
         greyscaleSensor = m
-        m.start(slow = true)      // light polling rate - this runs for the whole session
+        m.start(slow = true)
         updateGreyscale()
     }
 
@@ -521,6 +531,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     /** Reason an app should currently be covered: a blocked browser, or a timed content block. */
     private fun appBlockReason(pkg: String?): String? {
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
+        nightGuardReason(pkg)?.let { return it }
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
             return "Locked down - ride out the urge"
         }
@@ -535,6 +546,41 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
         AppBlocklist.blockedReason(pkg)?.let { return "Blocked app: $it" }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
+    }
+
+    /**
+     * THE NIGHT GUARD. In strict (and super hardcore), while the phone says you are lying down
+     * or the room is dark, nothing but the essentials opens - WhatsApp included. That posture,
+     * in that light, is where this goes wrong, and the cheapest intervention is to make the
+     * phone useless there.
+     *
+     * The thresholds come from the mode spec (flagLyingDown / lightFlagBelow), so super
+     * hardcore trips in ordinary indoor light while strict waits for a genuinely dim room.
+     *
+     * Fails OPEN on purpose. If the sensors haven't reported yet, or the phone has no light
+     * sensor, we do NOT guess - locking someone out of their phone on a guess is far worse
+     * than missing one late-night scroll.
+     */
+    private fun nightGuardReason(pkg: String?): String? {
+        val spec = Mode.spec(this)
+        if (!spec.nightGuard) return null
+        if (pkg == null || pkg == packageName) return null       // never cover ourselves
+        if (!SensorContext.known) return null                    // no reading yet -> allow
+        if (isNightGuardAllowed(pkg)) return null
+
+        val lying = spec.flagLyingDown && SensorContext.lyingDown
+        val dark = SensorContext.isDarkerThan(spec.lightFlagBelow)
+        return when {
+            lying && dark -> "Not while you're lying down in the dark.\nSit up, or turn a light on."
+            lying -> "Not while you're lying down.\nSit up and this opens again."
+            dark -> "Not in the dark.\nTurn a light on and this opens again."
+            else -> null
+        }
+    }
+
+    private fun isNightGuardAllowed(pkg: String): Boolean {
+        val p = pkg.lowercase()
+        return NIGHT_GUARD_ALLOWED.any { p.contains(it) }
     }
 
     private fun blockSettled(): Boolean =
@@ -615,23 +661,36 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Point [pkg] at a blank page, so it is no longer parked on the blocked one. Fired as
-     * a normal VIEW intent at that browser specifically; if the browser refuses it, we
-     * just go Home and nothing is lost.
+     * Park [pkg] on a fresh blank tab, so it is no longer sitting on the blocked page and
+     * reopening it doesn't drop you straight back onto it.
+     *
+     * We ASK the browser whether it will take an about:blank intent rather than assuming.
+     * Browsers usually only register intent-filters for http/https, in which case an about:
+     * URL is silently dropped and the whole redirect does nothing - which is exactly the bug
+     * we're fixing. If it won't take it, we fall back to a real (dull) URL, because landing
+     * somewhere neutral beats landing back on the blocked page.
      */
     private fun sendBrowserHome(pkg: String) {
+        val blank = browserIntent(pkg, BROWSER_HOME_URL)
+        val intent = if (blank.resolveActivity(packageManager) != null) {
+            blank
+        } else {
+            android.util.Log.i("PageMonitor", "$pkg won't take $BROWSER_HOME_URL - using fallback")
+            browserIntent(pkg, AppConfig.BROWSER_HOME_FALLBACK_URL)
+        }
         try {
-            startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(BROWSER_HOME_URL)).apply {
-                    setPackage(pkg)
-                    addCategory(Intent.CATEGORY_BROWSABLE)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                },
-            )
+            startActivity(intent)
         } catch (t: Throwable) {
-            android.util.Log.w("PageMonitor", "could not send $pkg to a blank page", t)
+            android.util.Log.w("PageMonitor", "could not send $pkg to a fresh tab", t)
         }
     }
+
+    private fun browserIntent(pkg: String, url: String): Intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            setPackage(pkg)
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
 
     /** Page-level (domain/keyword) blocking - unchanged behaviour. */
     private fun evaluateBlock(
@@ -661,17 +720,25 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // away, image viewer open). For browsers, fall back to the REMEMBERED host
         // of the current page - this is the fix for "pressed back onto the same
         // blocked page and nothing happened".
+        // BROWSER CHROME (no WebView on screen): the TAB SWITCHER, settings, history. The
+        // browser still reports the current tab's URL and title here, so if we blocked on that
+        // we'd cover the tab grid - the one screen you need in order to CLOSE the bad tab, and
+        // the only way out of a blocked private tab. So: no page blocking, no keyword blocking,
+        // and any cover already up comes down. You must always be able to reach tab view.
+        if (AppBlocklist.isBrowser(packageName) && !hasWebView()) {
+            if (!appBlockActive) {
+                controller.hide()
+                shownBlockHost = null
+                shownBlockUrl = null
+            }
+            return
+        }
+
         val host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
 
-        // Tab switcher / "jump back in" previews expose a tab's URL but no readable PAGE TEXT -
-        // you're looking at a thumbnail, not visiting the page. A real visit always has text.
-        //
-        // This USED to null out the host entirely, which disabled ALL web blocking until the
-        // page's text had loaded - that is why reopening a browser sat on a page you'd already
-        // banned left it readable for several seconds. Now it only gags the HEURISTIC SCORER
-        // (the one that genuinely needs text to judge, and the one that was false-positiving on
-        // the tab grid). An EXPLICIT match - your own ban list, or a known adult domain - fires
-        // off the URL alone, instantly, text or no text.
+        // The heuristic scorer needs real page text to judge. Explicit matches (your ban list,
+        // the adult-domain blocklist) do not - they go off the URL, so a page you already
+        // banned is covered the instant it loads instead of after its text arrives.
         val contentReady = !content.isNullOrBlank()
 
         // Greylist time-tracking: accumulate foreground time for a greylisted app or
@@ -957,6 +1024,30 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return out.toString().trim().take(MAX_TEXT_CHARS).takeIf { it.isNotBlank() }
     }
 
+    /**
+     * Is an actual web page rendered right now? True only if a WebView is on screen.
+     *
+     * This is what tells a real page apart from the browser's own chrome - the TAB SWITCHER
+     * above all. The tab grid is a list of thumbnails, not a WebView, yet the browser still
+     * reports the current tab's URL - so without this check we block the user on the very
+     * screen they need in order to CLOSE the offending tab. They must always be able to get
+     * to tab view and shut a tab.
+     *
+     * Deliberately NOT "does the page have text yet": text arrives late, and gating on it is
+     * what made a page you'd already banned sit there readable for seconds after reopening.
+     */
+    private fun hasWebView(): Boolean {
+        fun walk(node: AccessibilityNodeInfo?, depth: Int): Boolean {
+            if (node == null || depth > MAX_DEPTH) return false
+            if (node.className == "android.webkit.WebView") return true
+            for (i in 0 until node.childCount) {
+                if (walk(node.getChild(i), depth + 1)) return true
+            }
+            return false
+        }
+        return walk(rootInActiveWindow, 0)
+    }
+
     // private fun collectWebViewText(
         // node: AccessibilityNodeInfo?,
         // depth: Int,
@@ -1121,6 +1212,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // Apps that get a calming breathing pause each time they're opened.
         private val BREATHING_APPS = AppConfig.BREATHING_APPS
+
+        // Still allowed while the night guard is up (lying down / in the dark).
+        private val NIGHT_GUARD_ALLOWED = AppConfig.NIGHT_GUARD_ALLOWED_SUBSTRINGS
 
         private val NOT_LOGGED_PACKAGES = AppConfig.NOT_LOGGED_PACKAGES
 

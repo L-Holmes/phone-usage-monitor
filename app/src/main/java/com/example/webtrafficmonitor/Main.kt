@@ -190,7 +190,6 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        if (onBack != null) root.addView(backText { onBack() })
         root.addView(titleText(title))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val customs = category?.let { CustomOptions.all(this, it) } ?: emptyList()
@@ -234,7 +233,6 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        if (onBack != null) root.addView(backText { onBack() })
         root.addView(titleText(title))
         root.addView(TextView(this).apply {
             text = "Select all that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
@@ -315,7 +313,6 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(backText { temptationBack() })
         root.addView(titleText("What's feeding it right now?"))
         root.addView(TextView(this).apply {
             text = "Pick any that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
@@ -374,14 +371,13 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(backText { setupMainScreen() })
         root.addView(titleText("Manage blocks"))
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             addView(container)
         })
-        setContentView(root)
+        setContentWithThumb(root) { setupMainScreen() }
 
         fun header(t: String): TextView = TextView(this).apply {
             text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
@@ -453,6 +449,7 @@ private fun showStatsMenu() {
     root.addView(titleText("Statistics"))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     list.addView(pickCard("Progress & reward") { showProgress() })
+    list.addView(pickCard("Where & how it happens") { showContextStats() })
     list.addView(pickCard("Temptation patterns") { showTemptationStats() })
     list.addView(pickCard("Relapse patterns") { showRelapseStats() })
     list.addView(pickCard("Unlock attempts") { showLoosenStats() })
@@ -462,6 +459,139 @@ private fun showStatsMenu() {
     setContentWithThumb(root) { showReportScreen() }
 }
 
+// ── Where & how it happens: posture + light at the moment things go wrong ───
+//
+// Built from the posture/lightLevel now stamped onto every block event and every relapse
+// report (SensorContext captures them at the moment, rather than asking you to remember).
+// The point is a single honest sentence: "this happens to you lying down, in the dark."
+private fun showContextStats() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText("Where & how it happens"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showStatsMenu() }
+
+    lifecycleScope.launch {
+        val events = BlockEventLog.recent(this@MainActivity, 90L * 24 * 60 * 60 * 1000)
+        val relapses = RelapseLog.all(this@MainActivity)
+
+        val postures = events.mapNotNull { it.posture } + relapses.mapNotNull { it.posture }
+        val lights = events.mapNotNull { it.lightLevel } + relapses.mapNotNull { it.lightLevel }
+        val known = postures.filter { it != SensorContext.UNKNOWN }
+        val knownLight = lights.filter { it != SensorContext.UNKNOWN }
+
+        if (known.isEmpty() && knownLight.isEmpty()) {
+            c.addView(TextView(this@MainActivity).apply {
+                text = "Nothing to show yet.\n\nFrom now on, every block and every reported slip " +
+                    "records whether you were lying down and how dark the room was. Once a few " +
+                    "have built up, the pattern shows up here."
+                textSize = 15f; setTextColor(0xFF6B7075.toInt()); setLineSpacing(0f, 1.2f)
+            })
+            return@launch
+        }
+
+        // ── the one-sentence verdicts ──
+        val topPosture = known.groupingBy { it }.eachCount().maxByOrNull { it.value }
+        val topLight = knownLight.groupingBy { it }.eachCount().maxByOrNull { it.value }
+        c.addView(TextView(this@MainActivity).apply {
+            val bits = mutableListOf<String>()
+            topPosture?.let { (label, n) ->
+                val pct = n * 100 / known.size
+                bits.add(if (label == "lying")
+                    "You are usually LYING DOWN when this happens ($pct% of the time)."
+                else
+                    "You are usually UPRIGHT when this happens ($pct% of the time).")
+            }
+            topLight?.let { (label, n) ->
+                val pct = n * 100 / knownLight.size
+                bits.add("The light level is usually ${lightWord(label)} ($pct% of the time).")
+            }
+            text = bits.joinToString("\n\n")
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            setLineSpacing(0f, 1.2f); setPadding(0, 0, 0, (18 * dp).toInt())
+        })
+
+        // ── the breakdowns ──
+        if (known.isNotEmpty()) {
+            c.addView(statHeader("BODY POSITION", dp))
+            listOf("lying" to "Lying down", "upright" to "Upright").forEach { (key, label) ->
+                c.addView(statBar(label, known.count { it == key }, known.size, 0xFF52796F.toInt(), dp))
+            }
+        }
+        if (knownLight.isNotEmpty()) {
+            c.addView(statHeader("LIGHT IN THE ROOM", dp))
+            AppConfig.LightLevel.values().forEach { level ->
+                c.addView(statBar(
+                    lightWord(level.name).replaceFirstChar { it.uppercase() },
+                    knownLight.count { it == level.name }, knownLight.size,
+                    0xFF3E7C8E.toInt(), dp,
+                ))
+            }
+        }
+
+        val unknown = postures.size - known.size
+        if (unknown > 0) c.addView(TextView(this@MainActivity).apply {
+            text = "$unknown record(s) had no sensor reading yet, so they're left out of the " +
+                "percentages above."
+            textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+            setPadding(0, (16 * dp).toInt(), 0, (16 * dp).toInt())
+        })
+    }
+}
+
+/** DARK/DULL/NORMAL/BRIGHT -> words a human uses. */
+private fun lightWord(level: String): String = when (level) {
+    "DARK" -> "dark"
+    "DULL" -> "dim"
+    "NORMAL" -> "normal indoor light"
+    "BRIGHT" -> "bright"
+    else -> level.lowercase()
+}
+
+private fun statHeader(text: String, dp: Float): TextView = TextView(this).apply {
+    this.text = text; textSize = 11f; setTypeface(typeface, Typeface.BOLD)
+    setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (10 * dp).toInt(), 0, (8 * dp).toInt())
+}
+
+/** One labelled proportional bar: "Lying down   12  (67%)". */
+private fun statBar(label: String, count: Int, total: Int, colour: Int, dp: Float): View {
+    val pct = if (total == 0) 0 else count * 100 / total
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, 0, 0, (10 * dp).toInt())
+    }
+    row.addView(TextView(this).apply {
+        text = "$label   ·   $count  ($pct%)"
+        textSize = 14f; setTextColor(0xFF3C4650.toInt())
+        setPadding(0, 0, 0, (4 * dp).toInt())
+    })
+    // The bar: a filled track inside a grey one, width by weight.
+    val track = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 6 * dp; setColor(0xFFE8EBED.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (12 * dp).toInt())
+    }
+    track.addView(View(this).apply {
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 6 * dp; setColor(colour)
+        }
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, pct.toFloat())
+    })
+    // The empty remainder, so the weights add up to 100.
+    track.addView(View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, (100 - pct).toFloat())
+    })
+    row.addView(track)
+    return row
+}
+
 // ── Progress & reward: the non-resetting consistency score + real stats ─────
 private fun showProgress() {
     inSubPage = true
@@ -469,13 +599,12 @@ private fun showProgress() {
     val s = Progress.snapshot(this)
     val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
     val root = vbox(pad)
-    root.addView(backText { showStatsMenu() })
     root.addView(titleText("Progress"))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
     })
-    setContentView(root)
+    setContentWithThumb(root) { showStatsMenu() }
 
     if (!s.hasData) {
         c.addView(TextView(this).apply {
@@ -796,7 +925,6 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(backText { temptationBack() })
         root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(TextView(this).apply {
             text = "\uD83C\uDF0A"; textSize = 64f; gravity = Gravity.CENTER
@@ -876,7 +1004,6 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { temptationBack() })
     root.addView(titleText(title))
     root.addView(TextView(this).apply {
         text = side; textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
@@ -942,7 +1069,6 @@ private fun waveActionScreen(
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { temptationBack() })
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     root.addView(TextView(this).apply {
         text = icon; textSize = 72f; gravity = Gravity.CENTER
@@ -1046,7 +1172,6 @@ private fun progressChart(counts: IntArray): View {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(backText { appSiteBack() })
         root.addView(titleText("What do you want to limit?"))
         root.addView(TextView(this).apply {
             text = "Set this now, while you're calm - the app just honours it later. " +
@@ -1067,7 +1192,6 @@ private fun appSiteChooseSite() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { appSiteChooseKind() })
     root.addView(titleText("Add a website"))
     val urlInput = EditText(this).apply {
         hint = "paste or type a web address"
@@ -1097,7 +1221,6 @@ private fun appSiteChooseApp() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { appSiteChooseKind() })
     root.addView(titleText("Pick an app"))
     val loading = TextView(this).apply { text = "Loading apps\u2026"; textSize = 14f }
     root.addView(loading)
@@ -1142,7 +1265,6 @@ private fun appSiteAppTier(a: AppRow) {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { appSiteChooseApp() })
     root.addView(titleText("Limit ${a.label}?"))
     root.addView(tierNote())
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -1429,7 +1551,7 @@ private fun setupHomeScreen() {
         isFillViewport = true
         addView(content)
     }
-    setContentView(root)
+    setContentNoThumb(root)   // the landing screen - nothing behind it to go back to
     refresh()
 }
 
@@ -1623,7 +1745,11 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
         val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (10 * dp).toInt() }
+        ).apply {
+            // Both margins, or this card sits flush against the button below it.
+            topMargin = (2 * dp).toInt()
+            bottomMargin = (10 * dp).toInt()
+        }
         isClickable = true; isFocusable = true
     }
     val title = TextView(this).apply {
@@ -1744,7 +1870,6 @@ private fun habitSlip(spec: AppConfig.TemptationSpec) {
         textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
         setLineSpacing(0f, 1.15f); setPadding(0, 0, 0, (14 * dp).toInt())
     })
-    root.addView(bigChoice("Back", 0xFF48606A.toInt()) { showTemptation(spec) })
     setContentWithThumb(root) { showTemptation(spec) }
 }
 
@@ -2183,7 +2308,6 @@ private fun showProtocolHoliday() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { showProtocol() })
     root.addView(titleText("Go on holiday / break the routine"))
     root.addView(body("The habit is wired to a place and a rhythm. The fastest way to weaken it is to physically leave that environment for a while."))
     listOf(
@@ -2200,14 +2324,13 @@ private fun showProtocolHoliday() {
     root.addView(bigChoice(if (Protocol.holidayDone(this)) "Done \u2713" else "I've taken the break", 0xFF2E7D32.toInt()) {
         Protocol.setHoliday(this, true); showProtocol()
     })
-    setContentView(root)
+    setContentWithThumb(root) { showProtocol() }
 }
 
 private fun showProtocol7Day() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { showProtocol() })
     root.addView(titleText("7-day strict lock"))
     root.addView(body("Strict mode stays on for 7 days. You can't switch back to relaxed until it ends. It's most effective once you've reset with the holiday - you're protecting fresh ground, not fighting uphill."))
     if (Mode.isLocked(this)) {
@@ -2226,7 +2349,7 @@ private fun showProtocol7Day() {
             showProtocol()
         })
     }
-    setContentView(root)
+    setContentWithThumb(root) { showProtocol() }
 }
 
 private fun showReportScreen() {
@@ -2259,17 +2382,17 @@ private fun showReportScreen() {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, (8 * dp).toInt())
     }
     val modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-    // Sits beside the dropdown on purpose: the moment you change mode is the moment you
-    // want to know what you just signed up for.
-    modeRow.addView(TextView(this).apply {
-        text = "What each mode does  ›"
-        textSize = 14f; setTextColor(0xFF2E9E8F.toInt()); setTypeface(typeface, Typeface.BOLD)
-        isClickable = true; isFocusable = true
-        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
-        setOnClickListener { showModeRules() }
-    })
     modeRow.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
     modeRow.addView(modeSpinner())
+    // The rules live behind an (i) right next to the mode, so "what does Strict actually do?"
+    // is answered where the question gets asked - not on a separate link somewhere else.
+    modeRow.addView(TextView(this).apply {
+        text = "ⓘ"
+        textSize = 20f; setTextColor(0xFF2E9E8F.toInt())
+        isClickable = true; isFocusable = true
+        val p = (8 * dp).toInt(); setPadding(p, p, 0, p)
+        setOnClickListener { showModeRules() }
+    })
     top.addView(modeRow)
     top.addView(LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -2423,7 +2546,6 @@ private fun showLogPage() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(backText { setupMainScreen() })
     val header = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
     }
@@ -2447,7 +2569,7 @@ private fun showLogPage() {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
     }
     root.addView(rv)
-    setContentView(root)
+    setContentWithThumb(root) { setupMainScreen() }
 
     emptyList = empty
     observeEntries()
@@ -2561,8 +2683,7 @@ private fun loosenBlockedScreen() {
     root.addView(titleText("Not available right now"))
     root.addView(body(msg))
     root.addView(grow())
-    root.addView(Button(this).apply { text = "Back"; setOnClickListener { showReportScreen() } })
-    setContentView(root)
+    setContentWithThumb(root) { showReportScreen() }
 }
 
 // ── intro, one idea per screen, panic taking the top third ──────────────────
@@ -2570,7 +2691,6 @@ private fun loosenIntro1() {
     loosenBackAction = { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() })
     root.addView(boldWordTitle("This is a supervised unlock, only for times of desperation.", "desperation"))
     root.addView(TextView(this).apply {
         text = "${LoosenLimit.remaining(this@MainActivity)} of ${LoosenLimit.LIFETIME_MAX} unlocks available"
@@ -2595,7 +2715,6 @@ private fun loosenFaceActScreen() {
     loosenBackAction = { loosenIntro1() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(titleText("How will you feel after?"))
     root.addView(TextView(this).apply {
         text = "Drag the face to where you'll feel after\u2026"
@@ -2616,7 +2735,6 @@ private fun loosenFaceRideScreen() {
     loosenBackAction = { stopLoosenTimer(); loosenFaceActScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(titleText("And if you wait it out?"))
     root.addView(TextView(this).apply {
         text = "Drag the face to where you'll be in 30 minutes\u2026"
@@ -2642,7 +2760,6 @@ private fun loosenDelayChanceScreen() {
     loosenBackAction = { loosenFaceRideScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(titleText("A 30-minute challenge"))
     root.addView(body("Beat the urge by doing nothing but waiting it out."))
     root.addView(TextView(this).apply {
@@ -2695,7 +2812,6 @@ private fun loosenOneOffScreen() {
     loosenBackAction = { loosenDelayChanceScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(titleText("Is this really a one-off?"))
     root.addView(body("Each unlock nudges your brain back toward the old wiring. \u201cJust this once\u201d is exactly how the pattern keeps itself alive."))
     root.addView(RecoveryBrainView(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -2713,7 +2829,6 @@ private fun loosenOneOffFollow(oneOff: Boolean) {
     loosenBackAction = { loosenOneOffScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(titleText(if (oneOff) "Then waiting costs you nothing" else "Then let this be where it breaks"))
     root.addView(body(if (oneOff)
         "If it's truly just once, 30 minutes won't change that - except you'll have it behind you, clean, with every unlock still in the bank."
@@ -2750,7 +2865,6 @@ private fun loosenUrgeGraphScreen() {
     loosenBackAction = { loosenPlaceScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(titleText("Where are you on the wave?"))
     root.addView(TextView(this).apply {
         text = "The urge spikes, then fades. Tap where you think you are right now."
@@ -2786,7 +2900,6 @@ private fun loosenWaitScreen() {
     val content = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
     }
-    content.addView(backText { loosenBack() })
     content.addView(TextView(this).apply {
         text = "A short wait first"; textSize = 21f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -2884,7 +2997,6 @@ private fun commitConfirmScreen(step: String, heading: String, statement: String
     get: () -> Boolean, set: (Boolean) -> Unit, continueLabel: String) {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(stepText(step))
     root.addView(titleText(heading))
     val check = checkButton()
@@ -2902,7 +3014,6 @@ private fun commitConfirmScreen(step: String, heading: String, statement: String
 private fun commitNoteScreen(step: String) {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(stepText(step))
     root.addView(titleText("What will you look at?"))
     root.addView(TextView(this).apply {
@@ -2929,7 +3040,6 @@ private fun commitNoteScreen(step: String) {
 private fun commitDurationScreen(step: String) {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(backText { loosenBack() })
     root.addView(stepText(step))
     root.addView(titleText("For how long?"))
     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -3200,47 +3310,72 @@ private fun stopLoosenTimer() {
 
 
 // ── shared little view helpers ─────────────────────────────────────────────
-private fun backText(onBack: () -> Unit): TextView {
-    val dp = resources.displayMetrics.density
-    return TextView(this).apply {
-        text = "Back"; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFFFFFFFF.toInt())
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 22 * dp; setColor(0xFF2E9E8F.toInt())     // teal button, top-left
-        }
-        val px = (20 * dp).toInt(); val py = (9 * dp).toInt(); setPadding(px, py, px, py)
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = (12 * dp).toInt() }
-        isClickable = true; isFocusable = true
-        setOnClickListener { onBack() }
-    }
-}
+// (The old green "Back" pill that used to sit at the top of pages lived here. It is gone -
+//  every page gets the thumb back button automatically now. See setContentView below.)
 
-// The floating thumb back button for non-report pages: a custom-drawn circle + arrow,
-// so the arrow is geometrically centred (no font-baseline drift).
+// The floating thumb back button: a custom-drawn circle + arrow, so the arrow is
+// geometrically centred (no font-baseline drift).
 private fun thumbBack(onBack: () -> Unit): View =
     ThumbBackView(this).apply { isClickable = true; isFocusable = true; setOnClickListener { onBack() } }
 
-// Renders a non-report page with the floating thumb back button. Back here ALWAYS
-// means "go to the page I came from" (subBack), so navigation can't get tangled.
+// =====================================================================================
+//  THE ONE BACK BUTTON
+// =====================================================================================
+//  Every page in this app gets the floating translucent thumb back button, automatically,
+//  because setContentView is overridden below to wrap whatever you pass it. There is
+//  nothing to remember and nothing to add per page.
+//
+//  DO NOT add a back button to a page. No "Back" buttons, no "← Back" links, nothing in
+//  the top-left, top-centre or top-right. They kept drifting out of sync with where back
+//  actually goes, and half of them were wrong. If you catch yourself writing one, stop -
+//  it already exists.
+//
+//  The thumb routes through onBackPressed(), which is the single source of truth for where
+//  back goes (active flow -> subBack -> tab -> home). So a page only has to declare its
+//  back target once, via setContentWithThumb, and the thumb follows automatically.
+//
+//  The ONLY page without it is the landing screen, which uses setContentNoThumb - there is
+//  nowhere behind it to go.
+// =====================================================================================
+
+/** Set while rendering the landing screen, the one page with nothing behind it. */
+private var noThumb = false
+
+/** The landing screen: rendered raw, with no thumb back button. */
+private fun setContentNoThumb(content: View) {
+    noThumb = true
+    try { setContentView(content) } finally { noThumb = false }
+}
+
+override fun setContentView(view: View) {
+    if (noThumb) { super.setContentView(view); return }
+    val dp = resources.displayMetrics.density
+    val frame = android.widget.FrameLayout(this).apply {
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    frame.addView(view, android.widget.FrameLayout.LayoutParams(
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
+    val size = (54 * dp).toInt()
+    frame.addView(
+        thumbBack { onBackPressed() },
+        android.widget.FrameLayout.LayoutParams(size, size, Gravity.BOTTOM or Gravity.END).apply {
+            bottomMargin = (resources.displayMetrics.heightPixels * 0.20f).toInt()
+            marginEnd = (16 * dp).toInt()
+        },
+    )
+    super.setContentView(frame)
+}
+
+// Declares where THIS page's back goes (subBack), then renders it. The thumb button is
+// added by the setContentView override above - this no longer adds one itself.
 private fun setContentWithThumb(content: View, onBack: () -> Unit) {
     onReportScreen = false; onTemptationsTab = false; onDevScreen = false
     inRelapseFlow = false; inTemptationFlow = false; inLoosenFlow = false; inAppSiteFlow = false
     inSubPage = true
     subBack = onBack
-    val dp = resources.displayMetrics.density
-    val frame = android.widget.FrameLayout(this).apply {
-        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    }
-    frame.addView(content, android.widget.FrameLayout.LayoutParams(
-        android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
-    val size = (54 * dp).toInt()
-    frame.addView(thumbBack(onBack), android.widget.FrameLayout.LayoutParams(size, size, Gravity.BOTTOM or Gravity.END).apply {
-        bottomMargin = (resources.displayMetrics.heightPixels * 0.20f).toInt()
-        marginEnd = (16 * dp).toInt()
-    })
-    setContentView(frame)
+    setContentView(content)
 }
 
 private fun titleText(t: String): TextView {
@@ -3364,12 +3499,6 @@ private fun noteStep() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     root.addView(TextView(this).apply {
-        text = "\u2190 Back"; textSize = 15f
-        setPadding(0, 0, 0, (8 * dp).toInt())
-        isClickable = true; isFocusable = true
-        setOnClickListener { relapseBack() }
-    })
-    root.addView(TextView(this).apply {
         text = "Anything you want to note?"
         textSize = 21f; setTypeface(typeface, Typeface.BOLD)
         setPadding(0, 0, 0, (4 * dp).toInt())
@@ -3483,7 +3612,6 @@ private fun reportChoiceScreen(
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    if (onBack != null) root.addView(backText { onBack() })
     root.addView(TextView(this).apply {
         text = title
         textSize = 21f; setTypeface(typeface, Typeface.BOLD)
@@ -3740,7 +3868,6 @@ private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (Strin
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    if (onBack != null) root.addView(backText { onBack() })
     root.addView(titleText(title))
 
     // scrollable so nothing is clipped on shorter screens; fillViewport keeps it
@@ -4291,7 +4418,17 @@ private fun startWeekStrict() {
     /** A self-contained mode dropdown (used on the sexual-urge page). Drives Mode
      *  directly and resets itself if strict is locked. Does NOT touch dashboard views. */
     private fun modeSpinner(): Spinner {
+        val dp = resources.displayMetrics.density
         val sp = Spinner(this)
+        // Looked like inert text before, so nobody realised the mode was theirs to change.
+        // An outlined pill reads as a control.
+        sp.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 20 * dp
+            setColor(0xFFFFFFFF.toInt())
+            setStroke((1.5f * dp).toInt(), 0xFF2E9E8F.toInt())
+        }
+        val px = (14 * dp).toInt(); val py = (6 * dp).toInt()
+        sp.setPadding(px, py, px, py)
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, AppConfig.MODES.map { it.displayName })
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         sp.adapter = adapter
