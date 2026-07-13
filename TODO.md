@@ -1,53 +1,109 @@
+
 ------------------
 ------------------
 ------------------
 ------------------
-
-
-------------------------
-
-
-
 
 
 TODO NEXT:
 - rename 'sexual arousal' to 'adult content'
-- .
-    - Breath in animation *still* doesn't start automatically some times...
+- N slip... 
+- The go back functionality... 
+    - It's annoying it doesn't work and I think sometimes I breaks things... 
+        - i.e. for the web browser..
+        - I think remove this functionality... 
+        - do not auto go back ever.. 
+        - just let the user close the app..
+        - if possible on firefox, redirect back to the home screen of firefox so they can close whatever troublesome tab..
+        - hmmmmm TODO- do i keep the manual option to go back on a blocked page? perhaps we do, but make the option to close app / go to home screen much more bigger and bold. 
+- when in strict mode, make it so that the user cannot use any non-whitelisted apps when lying down or if they are in the dark, as determined by out existing sensor data.
+    - Also, add them to our log when the user fails / slips / is detected to be looking at bad conent (i.e. a page block or self reported etc). so that we can see the trends in that data as well..
+    - (and of course in our summary / graph tables add those as a graph and in the summary say that 'the light level is usually..' and 'your screen rotation is usually (upright / led down)
+- make a clear list somewhere in the adult content section... 
+    - where they can see absolutely everything in an idiot friendly digestible way, regarding rules for the different modes (like strict mode)...
+    - add a comment for AI to remember to continuously update that...
+- Breath in animation *still* doesn't start automatically some times...
         Try and fix that and also have text that comes in screen for like 1 frame saying ''click to enter" as a backup in case it doesn't start... 
 
         It also doesn't fill up entire screen like it used to..
         Which is expected as we limited it to be max size of box, but that was for the sexual arousal pages only intentionally... So I want it separate for big overlay to where it fills everything up again... 
+
+        Also, try and make it a bit less intensive on the phone, it seems to even lag a bit...
     -
     also...
-    The breathing thing breaks 2FA ... Stop it on our android app... 
-    (consider only doing it the first time..)
-    (or only doing it everytime on super hardcodre mode...)
-- capture extra data;
-    - integrate gyroscope and lux data.
-    - (do i log these when user fails?)
-    - (do i turn on strict mode?)
+    The breathing thing breaks 2FA ... 
+        You know what? Lets actually only do it on the first time a user opens an app in a given day (if they swipe off / close the app, it is then reset.)
+    (if on superhard core mode, do it everytime...)
 - make all greylist apps requirre the breath in orb thing..? (including app store etc?)
-- LINK UP HTE PLUGIN
+
+
 - dopamine baseline masurement
     TODO- bulk this idea out...
-    - user sees scale over time
-    - can click to see how to lower the threshold.
-- exnted the ucrrent landing screen; 
+    --> How is the dopamine baseline calculated?
+        --> time spent... (obvoiusly weight this higher than the others!)
+            == worst ===
+            - adult content (what our app blocks)
+            - tiktok / youtube shorts / insta reels / ... fast paced video content (have seperate functions for like 'is_on_fast_paced_video' so we can update it as time goes on seperately.., same for all these, if we could detect these things off their seperate apps or from the websites that would be ideal!)
+            - social media, fast paced ones...: snapchat / etc
+            - live things.. like twitch etc.
+            - reddit / forums/ news etc.
+            - long form video content (youtube)
+            - ??? (you fill in the rest)
+            - ... impulse / instant gratitfication.. like amazon.. temu.. door dash.. uber eats.. etc. 
+            - ... gambling..
+            - ... mobile gaming.. 
+            == least worst ==
+
+            have an algorithm where if they spend like x amount of time, they get 'y' multiplier... lets have the max at like if you spend 4 hours or more, then they get the max multiplier...
+            sort of linear before then.. perhaps slightly curved to punish higher amounts more... 
+        --> Phone unlocks per hour... 
+        --> time of day (late night particularly bad... then early morning as soon as wake.. mid of day not as bad)
+        --> "Urgent Open" Metric (velocity_to_open): Did they unlock their phone and immediately open TikTok within 2 seconds?
+        --> High checks of a particular app per hour... (e.g. opening snapchat 50 times in an hour..)
+        - less interactions = generally better... not constrnatly scrolling or tapping screen..
+        - delay between the wakeup (e.g. an alarm going off- is that possible to detect?) and using apps. e.g. any of the tiktok / snapchat / reddit /youtube video immediately after waking is very bad!
+        - use led down is quite bad (we already capture the sensor data for that)
+        - use in the dark is quite bad as well (we already capture the sensor data for that)
+
+        - put the algorithm in a really obvious place with obvoius text description so manual intervention can be done by devs!
+        -----
+        then have 'anti rules' (these are obviously much less affective and take a lot longer to 'decrease' the dopamine baseline...
+        - time spent with screen off, no media playing... 
+        ----
+        - display this as a line chart over time.
+        - also as like a vertical scale which says the percentile in, then says like good, bad, very poor, etc.
+    - optional manual input
+        (don't use this to count towards the score... or perhaps have a seperate section that clearly says this is an estimate of your dopamine baseline based of user inputted habits...)
+        * **Screen-Free Reflection / Mind-Wandering** (Yoga, walking alone, sitting doing nothing, meditation, staring out a window)
+        - light / anerobic excercise (like walking etc)
+        * **Intense Physical Training** (Weightlifting, running, sports, high-intensity workouts)
+        - making money.. / working on business / planning on how business / side income etc. / **High-Leverage Building** (Working towards a future business, strategic planning, building projects, financial management) / - Working towards future goals (business, career, money, planning, learning)
+        * **Active Creation** (Writing, painting, playing an instrument, cooking, woodworking)
+        - other - Deep work / focused work
+        * **Deep Offline Focus** (Reading a physical book, studying complex topics, deep work without a screen)
+        * **In-Person Socializing** (Spending quality time with family, friends, or partners without phones)
+        * **Restorative Sleep / Deep Rest** (NOT naps, non-sleep deep rest protocols)
+        - diet / consumables... ## Health Inputs Healthy eating Caffeine Alcohol Other substanc
+    - can click a button with guidence on how see how to lower the threshold.
+        - then have a seperate section that is specifically targetted towards their data...
+
+
+- exnted the ucrrent landing screen / general productivity related things:; 
     - represent time wasted in other ways
         - money made in that time..
         - social connections...
         - health etc...
         (and vice versa- if they are improving, show what they are ptoentially gaining back (although of course will be more time focused...))
-- productivity baseline?
-    - ask them to use it normal for a week (or even just straight out track time our selves and say we'll let you add blocks after the initial week)...
-    (get some statistics during that time)
-    - then have additional things like inputting hourly wage...
-    (also we add our own average hourly wage there instead... for calculations)
-    - ... then of course integrate things like greyscale when lying down into the regular productivity flow as well...
-- once hte plugin ready..
-    - integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
+    - then have additional things like inputting hourly wage... or how much they make an hour on their 'side hustle'... 
+        (also we add our own average hourly wage there instead... for calculations)
+        - this will be in an optional 'about you' section... where it says 'we use this data to estimate what you are missing out on via your productivity...
+
 - There are likely other paths to clear history in Firefox that won't hit these exact strings — e.g. "Clear browsing data on quit" in settings, deleting a single history entry via long-press, or per-site "Delete" from the history list. This blocks the main "Delete browsing data" flow you captured. If you monitor another path, send me its title/content dump and I'll add the keywords.
+
+LATER:
+- LINK UP HTE PLUGIN
+    - once hte plugin ready..
+        - integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
 
 
 
@@ -64,10 +120,6 @@ MANUAL TODO:
 
 ------------------------------
 
-
-Perhaps I do load in a second AI nsfw model... For less strict modes... 
-
-
 ---
 
 I'll also want a flagged side list of things that are "attracted to women" only .. (like  so women can shop for lingerie etc.) 
@@ -77,11 +129,6 @@ I'll also want a flagged side list of things that are "attracted to women" only 
 
 
 
-The go back functionality... 
-It's annoying it doesn't work and I think sometimes I breaks things... 
-
-
-N slip... 
 
 
 Record activity before after after a block comes up... 
