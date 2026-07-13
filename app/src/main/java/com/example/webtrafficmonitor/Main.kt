@@ -3015,7 +3015,112 @@ private fun showReportScreen() {
         textSize = 16f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt())
     })
+    // Quiet on purpose: almost nobody needs these, and the ones who do will look for them.
+    root.addView(TextView(this).apply {
+        text = "Settings"
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF8A9299.toInt())
+        isClickable = true; isFocusable = true
+        setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
+        setOnClickListener { showAdultSettings() }
+    })
     setContentWithThumb(root) { reportBackTarget() }
+}
+
+/**
+ * Adult-content settings. Currently: who the filter is switched on for.
+ *
+ * These exist because the filter is not one-size-fits-all. A straight woman shopping for
+ * lingerie, or a gay man with no interest in bikini content, should not be fighting it all
+ * day. Turning a side down softens the SUGGESTIVE end only - explicit content stays blocked
+ * for everyone, always, and the screen says so plainly rather than leaving them to find out.
+ *
+ * LOCKED outside Relaxed mode: if a switch could be flipped in strict, it would be the first
+ * thing a bad night flipped.
+ */
+private fun showAdultSettings() {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val canEdit = AttractionFilter.canEdit(this)
+    val root = vbox(pad)
+    root.addView(titleText("Settings"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showReportScreen() }
+
+    c.addView(TextView(this).apply {
+        text = "What the filter looks for"
+        textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+        setPadding(0, 0, 0, (8 * dp).toInt())
+    })
+    c.addView(TextView(this).apply {
+        text = "By default the filter treats sexualised images of women and of men the same. " +
+            "If one of them simply isn't a temptation for you, you can turn it down — so you can " +
+            "shop for swimwear or underwear without a fight.\n\n" +
+            "This only softens the SUGGESTIVE end. Explicit content and known adult sites stay " +
+            "blocked either way, whatever these switches say."
+        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
+        setPadding(0, 0, 0, (14 * dp).toInt())
+    })
+
+    if (!canEdit) {
+        c.addView(TextView(this).apply {
+            text = "Locked while you're in ${AppConfig.modeName(Mode.current(this@MainActivity))} mode.\n" +
+                "Both are fully on. Switch to Relaxed to change them."
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB1541F.toInt())
+            setLineSpacing(0f, 1.15f)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * dp; setColor(0xFFFBF0E7.toInt())
+            }
+            val p = (12 * dp).toInt(); setPadding(p, p, p, p)
+        })
+    }
+
+    fun switchRow(label: String, sub: String, get: () -> Boolean, set: (Boolean) -> Unit) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
+            }
+            val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (10 * dp).toInt() }
+            alpha = if (canEdit) 1f else 0.5f
+        }
+        row.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            addView(TextView(this@MainActivity).apply {
+                text = label; textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(0xFF1F2933.toInt())
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = sub; textSize = 12f; setTextColor(0xFF7B848C.toInt())
+                setPadding(0, (2 * dp).toInt(), 0, 0)
+            })
+        })
+        row.addView(android.widget.Switch(this).apply {
+            isChecked = get()
+            isEnabled = canEdit
+            setOnCheckedChangeListener { _, v -> set(v) }
+        })
+        c.addView(row)
+    }
+
+    switchRow("Block sexualised women",
+        "Bikinis, lingerie, cleavage and the like.",
+        { AttractionFilter.blockFemale(this) }, { AttractionFilter.setBlockFemale(this, it) })
+    switchRow("Block sexualised men",
+        "Shirtless, bulges and the like.",
+        { AttractionFilter.blockMale(this) }, { AttractionFilter.setBlockMale(this, it) })
+
+    c.addView(TextView(this).apply {
+        text = "Health and medical pages are already treated differently — looking up a symptom " +
+            "is not the same as looking at porn, and the filter knows the difference."
+        textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setLineSpacing(0f, 1.15f)
+        setPadding(0, (18 * dp).toInt(), 0, (20 * dp).toInt())
+    })
 }
 
 /**

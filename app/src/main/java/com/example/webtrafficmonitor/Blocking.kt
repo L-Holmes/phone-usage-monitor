@@ -136,6 +136,7 @@ object BlockRules {
                 if (until > System.currentTimeMillis()) timedRules[raw.substring(0, i)] = until
             }
         }
+        pruneProtected(context)   // clears a search engine that was banned before the guard existed
     }
 
     fun all(): List<String> = rules.toList()
@@ -147,10 +148,53 @@ object BlockRules {
         return timedRules.entries.map { "${it.key}  -  ${(it.value - now) / 60_000} min left" }.sorted()
     }
 
+    /**
+     * Rules we refuse to store, no matter who asks.
+     *
+     * Banning a whole search engine ("google.com") or its bare results path
+     * ("google.com/search") bricks the web: every future search on it is blocked, and the
+     * user can't even look up how to undo it. A SPECIFIC search still bans fine
+     * ("google.com/search?q=..."), and so does any other page on the domain - only the
+     * engine itself is protected.
+     *
+     * This is a belt-and-braces guard on the STORE, not just on the escalation path, so it
+     * holds however the rule got here - escalation, a typo in the manual add box, or a bug.
+     */
+    fun isProtected(rule: String): Boolean {
+        val r = rule.trim().lowercase().removePrefix("www.")
+        if (r.isEmpty()) return false
+        if ('?' in r) return false                       // a specific search term: allowed
+        val hostPath = r.substringBefore('?')
+        val host = hostPath.substringBefore('/')
+        if ('/' !in hostPath) {
+            // bare domain rule: protected if it IS a search engine
+            return isSearchEngineHost(host)
+        }
+        // page rule with no query: protected only if it's the engine's own results path
+        val path = "/" + hostPath.substringAfter('/', "")
+        return engineFor(host, path) != null
+    }
+
     fun add(context: Context, rule: String) {
         val cleaned = rule.trim().lowercase()
         if (cleaned.isEmpty()) return
+        if (isProtected(cleaned)) {
+            android.util.Log.w("BlockRules", "refusing to block the search engine itself: $cleaned")
+            return
+        }
         rules.add(cleaned)
+        persist(context)
+    }
+
+    /**
+     * Drop any protected rule that made it into the store before the guard existed - this is
+     * what un-bricks a user who already has "google.com" banned.
+     */
+    private fun pruneProtected(context: Context) {
+        val bad = rules.filter { isProtected(it) } + timedRules.keys.filter { isProtected(it) }
+        if (bad.isEmpty()) return
+        bad.forEach { rules.remove(it); timedRules.remove(it) }
+        android.util.Log.w("BlockRules", "removed protected rule(s): $bad")
         persist(context)
     }
 
@@ -163,6 +207,10 @@ object BlockRules {
     fun addTimed(context: Context, rule: String, durationMs: Long) {
         val cleaned = rule.trim().lowercase()
         if (cleaned.isEmpty()) return
+        if (isProtected(cleaned)) {
+            android.util.Log.w("BlockRules", "refusing to timed-block the search engine itself: $cleaned")
+            return
+        }
         val until = System.currentTimeMillis() + durationMs
         timedRules[cleaned] = maxOf(timedRules[cleaned] ?: 0L, until)
         persist(context)

@@ -84,4 +84,66 @@ class BorderlineScorerTest {
         assertEquals(0, scoreAsTitle("garden hoe"))
         assertEquals(0, scoreAsTitle("the goon squad"))
     }
+
+    // ── Medical context ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `looking up a symptom is not blocked`() {
+        listOf(
+            "vaginal discharge - symptoms and treatment",
+            "breast lump when should I see a doctor",
+            "testicular pain causes nhs",
+            "painful periods treatment",
+            "erectile dysfunction symptoms",
+            "cervical screening smear test",
+        ).forEach {
+            assertTrue(
+                "medical query '$it' must NOT block (scored ${scoreAsTitle(it)})",
+                !blocksAsTitle(it),
+            )
+        }
+    }
+
+    @Test
+    fun `medical context is a damper not a free pass`() {
+        // A porn page that happens to say "doctor" is still porn.
+        assertTrue(blocksAsTitle("free porn videos xxx doctor roleplay blowjob"))
+    }
+
+    // ── The attraction switches ──────────────────────────────────────────────────────
+
+    private val womenOff = BorderlineScorer.Settings(blockFemale = false, blockMale = true)
+    private val menOff = BorderlineScorer.Settings(blockFemale = true, blockMale = false)
+
+    @Test
+    fun `turning the women switch off lets swimwear and lingerie through`() {
+        listOf("bikini haul", "lingerie try on", "best bra for summer", "swimsuit shopping").forEach {
+            assertTrue(
+                "'$it' should pass with women's filter off (scored " +
+                    "${BorderlineScorer.score(it, null, null, womenOff)?.score ?: 0})",
+                BorderlineScorer.evaluate(it, null, null, womenOff) == null,
+            )
+        }
+        // ...but with it ON (the default), the loud ones still block.
+        assertTrue(blocksAsTitle("bikini haul"))
+    }
+
+    @Test
+    fun `switching a side off can NEVER unblock explicit porn`() {
+        // This is the whole safety property of the feature. If this test ever fails, the
+        // switches have become an escape hatch and the feature is broken.
+        listOf(
+            "free porn videos", "blowjob compilation", "milf onlyfans leak",
+            "hardcore anal xxx", "pornhub", "nude girls fucking",
+        ).forEach {
+            assertTrue("'$it' must still block with women's filter off",
+                BorderlineScorer.evaluate(it, null, null, womenOff) != null)
+            assertTrue("'$it' must still block with men's filter off",
+                BorderlineScorer.evaluate(it, null, null, menOff) != null)
+            assertTrue("'$it' must still block with both off",
+                BorderlineScorer.evaluate(
+                    it, null, null, BorderlineScorer.Settings(false, false),
+                ) != null)
+        }
+    }
 }

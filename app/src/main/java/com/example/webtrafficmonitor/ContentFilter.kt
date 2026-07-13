@@ -66,6 +66,15 @@ object FilterTuning {
     const val PER_WORD_CAP = 5       // one word can contribute at most this many times
     const val THRESHOLD = 10         // score at/above this → block
     const val TITLE_URL_MULTIPLIER = 2   // hits in the title or URL count double
+
+    // How much a SOFT gendered word is still worth when that side of the filter is switched
+    // off. Not zero - "bikini" on an actual porn page should still nudge the needle, it just
+    // shouldn't block a swimwear shop on its own. See GenderedTerms.
+    const val GENDER_OFF_MULTIPLIER = 0.25f
+
+    // Medical/clinical context found on the page (see MedicalContext) multiplies the whole
+    // score by this. Someone looking up a symptom must not be blocked.
+    const val MEDICAL_DAMPEN = 0.35f
 }
 
 
@@ -179,6 +188,80 @@ object BannedWords {
 // TO ADD ONE: lower case, single spaces, letters and digits only - it is matched against a
 // normalised copy of the page, so punctuation and hyphens in the real text don't matter
 // ("try-on haul" and "Try On Haul!!" both match "try on haul").
+// ── Who is being sexualised ──────────────────────────────────────────────────────────
+// Two switches (see AttractionFilter) let someone turn DOWN the sexualised-women or the
+// sexualised-men side of the filter. Default: both fully on.
+//
+// WHAT THIS IS FOR: a straight woman shopping for lingerie, or a gay man who has no
+// interest in bikini content, should not be fighting the filter all day. It is an
+// accessibility valve, not an escape hatch.
+//
+// WHAT IT DOES *NOT* TOUCH - and this is the important bit:
+//   Only the SOFT, suggestive words and phrases below are affected. Anything EXPLICIT
+//   ("porn", "blowjob", "milf", "onlyfans"...) keeps its full weight no matter what these
+//   switches say, because that is pornography regardless of who you're attracted to.
+//   Turning a switch off lets you look at swimwear. It does not let you look at porn.
+object GenderedTerms {
+
+    /** Suggestive terms about WOMEN's bodies/clothing. Softened when the women switch is off. */
+    val SOFT_FEMALE: Set<String> = setOf(
+        "bikini", "bikinis", "lingerie", "bra", "braless", "panties", "panty", "pantyhose",
+        "thong", "thongs", "negligee", "swimsuit", "tights", "cleavage", "busty", "bosom",
+        "boob", "boobs", "boobies", "breast", "breasts", "booty", "curves", "curvy",
+        "voluptuous", "hooters", "showgirl", "temptress", "skimpy", "garter", "underwear",
+        "topless", "milkers", "bewbs", "bewb", "boobz", "titz", "tiddies", "tiddy",
+    )
+
+    /** Suggestive terms about MEN's bodies. Softened when the men switch is off. */
+    val SOFT_MALE: Set<String> = setOf(
+        "shirtless", "abs", "sixpack", "bulge", "speedo", "speedos", "hardon", "beefcake",
+        "hunk", "hunks", "himbo", "dadbod", "musclebound",
+    )
+
+    /** Phrases that only make sense as sexualised-women content. */
+    val PHRASES_FEMALE: Set<String> = setOf(
+        "bikini haul", "lingerie haul", "underwear haul", "swimwear try on", "braless try on",
+        "no bra", "no panties", "nip slip", "nipple slip", "camel toe", "micro bikini",
+        "bikini body", "curvy model", "plus size model", "boudoir shoot",
+        "naked girls", "nude girls", "hot girls", "sexy girls", "naked women",
+    )
+
+    /** Phrases that only make sense as sexualised-men content. */
+    val PHRASES_MALE: Set<String> = setOf(
+        "shirtless men", "hot guys", "sexy men", "male stripper", "naked men",
+    )
+}
+
+
+// ── Medical / clinical context ───────────────────────────────────────────────────────
+// "vaginal discharge", "testicular lump", "breast screening" — the anatomy words are the
+// same, the intent could not be more different, and someone must never be blocked from
+// looking up a symptom.
+//
+// If any of these words appear on the page, the sexual score is heavily damped (see
+// FilterTuning.MEDICAL_DAMPEN). It is a DAMPER, not an exemption: a porn page that happens
+// to contain the word "doctor" doesn't get a free pass, it just needs more evidence.
+//
+// NOTE ON PUBLIC LISTS: there is no well-known MIT-licensed "medical context" word list -
+// the public ones (LDNOOBW and friends) are profanity lists, which is the opposite problem.
+// This is our own, so add to it freely when you find a gap.
+object MedicalContext {
+    val WORDS: Set<String> = setOf(
+        "symptom", "symptoms", "diagnosis", "diagnosed", "treatment", "treated", "infection",
+        "infected", "discharge", "itching", "itchy", "rash", "swelling", "swollen", "lump",
+        "lumps", "pain", "painful", "bleeding", "cramps", "doctor", "gp", "clinic", "clinical",
+        "nhs", "hospital", "nurse", "medical", "medicine", "prescription", "antibiotics",
+        "cancer", "screening", "smear", "biopsy", "cyst", "thrush", "yeast", "bacterial",
+        "vaginosis", "uti", "cystitis", "std", "sti", "chlamydia", "herpes", "hpv",
+        "contraception", "contraceptive", "pregnancy", "pregnant", "menstrual", "menstruation",
+        "period", "periods", "menopause", "ovulation", "fertility", "endometriosis",
+        "prostate", "testicular", "erectile", "dysfunction", "puberty", "hormone", "hormonal",
+        "surgery", "examination", "health", "healthcare", "gynaecologist", "gynecologist",
+        "urologist", "dermatologist", "mastectomy", "mammogram",
+    )
+}
+
+
 object BannedPhrases {
 
     val LOUD: Set<String> = setOf(
@@ -210,48 +293,126 @@ object BannedPhrases {
 }
 
 
+// ── Who the filter is switched on for ────────────────────────────────────────────────
+/**
+ * The two "sexualised women / sexualised men" switches. Both default ON.
+ *
+ * LOCKED OUTSIDE RELAXED MODE. In strict or super hardcore these are forced back on and
+ * cannot be changed - otherwise the first thing a bad night does is flip a switch. See
+ * [canEdit].
+ */
+object AttractionFilter {
+    private const val PREFS = "attraction_filter"
+    private const val KEY_FEMALE = "block_female"
+    private const val KEY_MALE = "block_male"
+
+    /** May the user change these right now? Only in Relaxed. */
+    fun canEdit(c: Context): Boolean = Mode.isRelaxed(c)
+
+    fun blockFemale(c: Context): Boolean =
+        if (!canEdit(c)) true else prefs(c).getBoolean(KEY_FEMALE, true)
+
+    fun blockMale(c: Context): Boolean =
+        if (!canEdit(c)) true else prefs(c).getBoolean(KEY_MALE, true)
+
+    fun setBlockFemale(c: Context, on: Boolean) {
+        if (canEdit(c)) prefs(c).edit().putBoolean(KEY_FEMALE, on).apply()
+    }
+
+    fun setBlockMale(c: Context, on: Boolean) {
+        if (canEdit(c)) prefs(c).edit().putBoolean(KEY_MALE, on).apply()
+    }
+
+    private fun prefs(c: Context) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
 // ── The scorer: text/title/URL → score + block reason ────────────────────────────────
 object BorderlineScorer {
 
     data class Result(val score: Int, val reason: String)
 
+    /**
+     * The switches in force for this scoring pass. Passed in rather than read from a cache,
+     * so flipping a switch or changing mode takes effect on the very next page.
+     */
+    data class Settings(val blockFemale: Boolean, val blockMale: Boolean) {
+        companion object {
+            val ALL_ON = Settings(true, true)
+            fun of(c: Context) =
+                Settings(AttractionFilter.blockFemale(c), AttractionFilter.blockMale(c))
+        }
+    }
+
     /** Raw score for logging/flagging; null when nothing sexual was found. */
-    fun score(title: String?, url: String?, text: String?): Result? {
-        val s = compute(title, url, text)
-        return if (s <= 0) null else Result(s, reasonFor(s))
+    fun score(title: String?, url: String?, text: String?, s: Settings = Settings.ALL_ON): Result? {
+        val v = compute(title, url, text, s)
+        return if (v <= 0) null else Result(v, reasonFor(v))
     }
 
     /** Non-null (with a block reason) only when the score reaches the block THRESHOLD. */
-    fun evaluate(title: String?, url: String?, content: String?): Result? {
-        val s = compute(title, url, content)
-        return if (s >= FilterTuning.THRESHOLD) Result(s, reasonFor(s)) else null
+    fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
+        val v = compute(title, url, content, s)
+        return if (v >= FilterTuning.THRESHOLD) Result(v, reasonFor(v)) else null
     }
 
     private fun reasonFor(score: Int): String = "Sexual / adult content (score $score)"
 
-    private fun compute(title: String?, url: String?, body: String?): Int {
+    private fun compute(title: String?, url: String?, body: String?, set: Settings): Int {
         val counted = HashMap<String, Int>()   // per-word occurrence cap, shared across fields
-        var total = 0
-        total += scoreField(tokenize(title), FilterTuning.TITLE_URL_MULTIPLIER, counted)
-        total += scoreField(tokenize(url), FilterTuning.TITLE_URL_MULTIPLIER, counted)
-        total += scoreField(tokenize(body), 1, counted)
+        var total = 0f
+        total += scoreField(tokenize(title), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
+        total += scoreField(tokenize(url), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
+        total += scoreField(tokenize(body), 1, counted, set)
         // Phrases are matched on the text as a whole, because the meaning is in the ORDER -
         // no single word of "try on haul" is bannable, and the three together plainly are.
-        total += scorePhrases(normalise(title), FilterTuning.TITLE_URL_MULTIPLIER, counted)
-        total += scorePhrases(normalise(url), FilterTuning.TITLE_URL_MULTIPLIER, counted)
-        total += scorePhrases(normalise(body), 1, counted)
-        return total
+        total += scorePhrases(normalise(title), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
+        total += scorePhrases(normalise(url), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
+        total += scorePhrases(normalise(body), 1, counted, set)
+
+        // Looking up a symptom is not looking at porn. Damp the whole score hard when the
+        // page reads as medical - a damper, not an exemption, so an actual porn page that
+        // says "doctor" once still needs only a little more evidence.
+        if (hasMedicalContext(title, body)) total *= FilterTuning.MEDICAL_DAMPEN
+
+        return Math.round(total)
     }
 
-    private fun scoreField(words: List<String>, mult: Int, counted: HashMap<String, Int>): Int {
-        var s = 0
+    private fun hasMedicalContext(title: String?, body: String?): Boolean {
+        for (w in tokenize(title)) if (w in MedicalContext.WORDS) return true
+        for (w in tokenize(body)) if (w in MedicalContext.WORDS) return true
+        return false
+    }
+
+    /**
+     * What one word is worth, after the gender switches. A SOFT gendered word is knocked
+     * down to GENDER_OFF_MULTIPLIER when its side is switched off; EXPLICIT words are never
+     * touched, so turning a switch off can never unblock pornography.
+     */
+    private fun genderMultiplier(word: String, set: Settings): Float {
+        if (!set.blockFemale && word in GenderedTerms.SOFT_FEMALE) return FilterTuning.GENDER_OFF_MULTIPLIER
+        if (!set.blockMale && word in GenderedTerms.SOFT_MALE) return FilterTuning.GENDER_OFF_MULTIPLIER
+        return 1f
+    }
+
+    private fun phraseMultiplier(phrase: String, set: Settings): Float {
+        if (!set.blockFemale && phrase in GenderedTerms.PHRASES_FEMALE) return FilterTuning.GENDER_OFF_MULTIPLIER
+        if (!set.blockMale && phrase in GenderedTerms.PHRASES_MALE) return FilterTuning.GENDER_OFF_MULTIPLIER
+        return 1f
+    }
+
+    private fun scoreField(
+        words: List<String>, mult: Int, counted: HashMap<String, Int>, set: Settings,
+    ): Float {
+        var s = 0f
         for (i in words.indices) {
             val (w, base) = weigh(words, i)
             if (base == 0) continue
             val c = counted.getOrDefault(w, 0)
             if (c >= FilterTuning.PER_WORD_CAP) continue
             counted[w] = c + 1
-            s += base * mult
+            s += base * mult * genderMultiplier(w, set)
         }
         return s
     }
@@ -327,17 +488,19 @@ object BorderlineScorer {
         return false
     }
 
-    private fun scorePhrases(text: String, mult: Int, counted: HashMap<String, Int>): Int {
-        if (text.isBlank()) return 0
-        var s = 0
-        fun run(set: Set<String>, weight: Int) {
-            for (p in set) {
+    private fun scorePhrases(
+        text: String, mult: Int, counted: HashMap<String, Int>, set: Settings,
+    ): Float {
+        if (text.isBlank()) return 0f
+        var s = 0f
+        fun run(phrases: Set<String>, weight: Int) {
+            for (p in phrases) {
                 if (!text.contains(" $p ")) continue
                 val key = "phrase:$p"
                 val c = counted.getOrDefault(key, 0)
                 if (c >= FilterTuning.PER_WORD_CAP) continue
                 counted[key] = c + 1
-                s += weight * mult
+                s += weight * mult * phraseMultiplier(p, set)
             }
         }
         run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT)

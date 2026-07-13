@@ -140,6 +140,7 @@ object AppConfig {
                 "Breathing pause: NEVER. Watched apps open straight away.",
                 "Greyscale: off. Your screen stays in colour.",
                 "Lying down or sitting in the dark changes nothing. Every app still opens.",
+                "This is the ONLY mode where the \"who is the filter for\" switches (Adult content -> Settings) can be changed. In any stricter mode they are forced fully on.",
                 "Everything in \"Always on\" above still applies - blocking does not stop in Relaxed.",
                 "You can switch out of this mode whenever you like, unless the 7-day strict lock is running.",
             )),
@@ -154,6 +155,7 @@ object AppConfig {
                 "The daily pass resets at midnight.",
                 "NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.",
                 "That is the whole point: the phone in bed, in the dark, is where this goes wrong.",
+                "The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.",
                 "Greyscale: your screen turns grey while you are lying down.",
                 "Everything in \"Always on\" above still applies.",
                 "The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.",
@@ -519,6 +521,12 @@ object AppConfig {
         "maps.google.com", "docs.google.com", "drive.google.com", "calendar.google.com",
         "mail.google.com", "translate.google.com", "scholar.google.com", "openstreetmap.org",
         "gov.uk", "nhs.uk", "who.int", "cdc.gov", "nih.gov", "nasa.gov", "europa.eu", "usa.gov",
+        // Health/medical: anatomy words are unavoidable here, and nobody should be blocked
+        // from looking up a symptom. (The scorer also damps medical context generally - see
+        // MedicalContext - but these are common enough to be worth skipping outright.)
+        "mayoclinic.org", "healthline.com", "webmd.com", "nhsinform.scot", "patient.info",
+        "medlineplus.gov", "plannedparenthood.org", "brook.org.uk", "netdoctor.co.uk",
+        "hopkinsmedicine.org", "clevelandclinic.org", "bupa.co.uk",
         "khanacademy.org", "coursera.org", "edx.org", "mit.edu", "duolingo.com",
         "notion.so", "todoist.com", "trello.com", "asana.com", "slack.com", "figma.com", "linear.app",
         "outlook.com", "outlook.office.com", "office.com", "microsoft.com", "apple.com", "icloud.com",

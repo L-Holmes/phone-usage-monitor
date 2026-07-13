@@ -656,7 +656,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // Log the content score on every web page so we can see what each one scored
         // while tuning - shows as a prefix on the log row, e.g. "[score 18] cute puppies".
         val pageScore = if (host != null && !Whitelist.isSafeDomain(this, host))
-            BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text)?.score else null
+            BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text, filterSettings())?.score else null
         val loggedTitle = if (pageScore != null) "[score $pageScore]  ${title.orEmpty()}".trim()
                           else title
 
@@ -796,6 +796,36 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun isNightGuardAllowed(pkg: String): Boolean {
         val p = pkg.lowercase()
         return NIGHT_GUARD_ALLOWED.any { p.contains(it) }
+    }
+
+    /** The gender switches, read fresh each pass so a change takes effect on the next page. */
+    private fun filterSettings() = BorderlineScorer.Settings.of(this)
+
+    /**
+     * Is the user in the middle of TYPING - i.e. is an editable field focused right now?
+     *
+     * While they are, we do not raise a NEW block. Two reasons, and the second is the nasty
+     * one:
+     *   1. Half a word is not a search. Typing "vagin" on the way to "vaginal discharge"
+     *      shouldn't slam a cover down mid-keystroke.
+     *   2. The block would be attached to the WRONG PAGE. Mid-type, the address bar is being
+     *      edited, so the URL we hold is still the PREVIOUS page's - so the escalation would
+     *      ban whatever you were on before you started typing. That is how a search engine's
+     *      own home page ends up on your ban list.
+     *
+     * A cover that is ALREADY up stays up - so this can't be used to peek at a blocked page
+     * by tapping into the address bar.
+     */
+    private fun isTypingInField(): Boolean {
+        fun walk(node: AccessibilityNodeInfo?, depth: Int): Boolean {
+            if (node == null || depth > ADDRESS_BAR_DEPTH) return false
+            if (node.isFocused && node.isEditable) return true
+            for (i in 0 until node.childCount) {
+                if (walk(node.getChild(i), depth + 1)) return true
+            }
+            return false
+        }
+        return walk(rootInActiveWindow, 0)
     }
 
     private fun blockSettled(): Boolean =
@@ -949,6 +979,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             return
         }
 
+        // Mid-type: don't raise a NEW block off half a search term, and don't pin one to the
+        // page they haven't left yet. An existing cover is left exactly where it is.
+        if (!controller.isShowing && isTypingInField()) return
+
         val host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
 
         // The heuristic scorer needs real page text to judge. Explicit matches (your ban list,
@@ -988,7 +1022,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
                // The heuristic - and ONLY the heuristic - waits for real page text.
                contentReady && (host != null || AppBlocklist.isBrowser(packageName)) ->
-                   BorderlineScorer.evaluate(title, url, content)?.reason
+                   BorderlineScorer.evaluate(title, url, content, filterSettings())?.reason
                else -> null
            }
 
@@ -996,7 +1030,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             val freshShow = !controller.isShowing
             if (freshShow) {
                 val blockScore = if (host != null)
-                    BorderlineScorer.score(title, url, content)?.score else null
+                    BorderlineScorer.score(title, url, content, filterSettings())?.score else null
                 BlockEventLog.recordWeb(this, packageName, host, url, baseReason, blockScore)
             }
 
