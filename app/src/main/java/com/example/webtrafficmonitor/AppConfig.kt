@@ -312,6 +312,153 @@ object AppConfig {
         "snapchat.com/spotlight", "tiktok.com", "reddit.com/r/popular",
     )
 
+    // === Temptations (the categories on the Temptations tab) =========================
+    // Sexual arousal is NOT here - it has its own bespoke, much heavier flow (breathing +
+    // supervised loosen + relapse reporting). Everything below shares ONE simple page
+    // (Main.kt -> showTemptation), which is deliberately small: see what it is, ride the
+    // urge out, block what feeds it, log a slip. Nothing else. Adding a category is a new
+    // entry here and nothing else - no new screen code.
+    //
+    // AI / MAINTAINER: keep `covers` in the user's own plain language. It is what lets
+    // someone recognise themselves on the page; it is not a feature list.
+    data class TemptationSpec(
+        val id: String,
+        val title: String,
+        val subtitle: String,
+        /** "Does this sound like you?" - the bullets they read to self-identify. */
+        val covers: List<String>,
+        /** BlockRules entries the "block what feeds this" switch adds/removes. */
+        val blockPatterns: List<String> = emptyList(),
+        /** Packages the same switch drops to the GREY tier (time-limited, not banned). */
+        val greyApps: List<String> = emptyList(),
+        /** One concrete thing to do instead. One. Not a menu. */
+        val insteadOf: String,
+    )
+
+    val TEMPTATIONS: List<TemptationSpec> = listOf(
+        TemptationSpec(
+            id = "scrolling",
+            title = "Endless Scrolling / Brain Rot  🤳",
+            subtitle = "Break the infinite feed loop.",
+            covers = listOf(
+                "TikTok, Reels, Shorts, Reddit feeds - anything that never ends",
+                "The \"just one more scroll\" loop",
+                "Passively consuming until your attention is shredded and you feel drained",
+                "Content built on constant novelty, to keep you hunting the next hit",
+                "Losing an hour without ever deciding to spend it",
+            ),
+            blockPatterns = SHORT_FORM_PATTERNS,
+            greyApps = listOf(
+                "com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.zhiliaoapp.musically.go",
+                "com.instagram.android", "com.reddit.frontpage", "com.snapchat.android",
+            ),
+            insteadOf = "Put the phone in another room and do the one thing you were avoiding for ten minutes.",
+        ),
+        TemptationSpec(
+            id = "binge",
+            title = "Binge Watching  📺",
+            subtitle = "Escape loops through endless viewing.",
+            covers = listOf(
+                "Netflix, YouTube, streaming, autoplay running on and on",
+                "Watching hours longer than you meant to",
+                "Using a show to escape boredom, stress, or a task you don't want to start",
+                "Autoplay and \"recommended for you\" deciding your evening for you",
+                "The gap between choosing to watch something and losing control of the night",
+            ),
+            blockPatterns = listOf(
+                "netflix.com", "hulu.com", "disneyplus.com", "primevideo.com", "twitch.tv",
+                "youtube.com/feed/recommended",
+            ),
+            greyApps = listOf("com.netflix.mediaclient", "tv.twitch.android.app"),
+            insteadOf = "Decide the ONE episode before you start, and set a timer for when it ends.",
+        ),
+        TemptationSpec(
+            id = "comparison",
+            title = "Social Comparison / Social Media  👥",
+            subtitle = "Break the comparison and validation loop.",
+            covers = listOf(
+                "Watching friends, influencers and peers post the highlight reel of their lives",
+                "FOMO - the sense that everyone else is somewhere better",
+                "Fishing for validation in likes, comments and views",
+                "Measuring your looks, money, job and progress against strangers",
+                "Coming away feeling behind, small, or quietly anxious",
+            ),
+            blockPatterns = listOf(
+                "instagram.com", "facebook.com", "x.com", "twitter.com", "linkedin.com/feed",
+            ),
+            greyApps = listOf(
+                "com.instagram.android", "com.instagram.lite", "com.facebook.katana",
+                "com.facebook.lite", "com.twitter.android", "com.pinterest",
+            ),
+            insteadOf = "Message one person you actually care about, instead of watching a hundred you don't.",
+        ),
+        TemptationSpec(
+            id = "checking",
+            title = "Phone Checking  📱",
+            subtitle = "Stop the automatic checking habit.",
+            covers = listOf(
+                "Unlocking the phone with no idea why you picked it up",
+                "Checking notifications and messages purely out of reflex",
+                "Reaching for it the second you feel bored or uncomfortable",
+                "Doing it dozens of times a day without noticing",
+                "Wanting the choice back",
+            ),
+            // Nothing to block: the pull here is the device itself, not a site. The page
+            // offers the 30-minute lockdown instead.
+            insteadOf = "Leave the phone face-down in another room for the next hour.",
+        ),
+        TemptationSpec(
+            id = "news",
+            title = "News Cycles / Existential Anxiety  📰",
+            subtitle = "Step away from endless worry.",
+            covers = listOf(
+                "Refreshing the news all day for an update that never settles anything",
+                "Reading the same bad story again and again, and doing nothing with it",
+                "Drowning in politics, disasters and problems you cannot personally touch",
+                "The loop: fear, uncertainty, check, brief relief, fear again",
+                "Being informed is fine. Being consumed by it is not.",
+            ),
+            blockPatterns = listOf(
+                "news.google.com", "cnn.com", "foxnews.com", "bbc.co.uk/news",
+                "theguardian.com", "dailymail.co.uk", "reddit.com/r/worldnews",
+            ),
+            insteadOf = "Pick one time tomorrow to read the news once, and act on nothing else until then.",
+        ),
+        TemptationSpec(
+            id = "gaming",
+            title = "Gaming & Reward Loops  🎮",
+            subtitle = "Understand digital reward cycles.",
+            covers = listOf(
+                "Games built around streaks, unlocks, levels and daily rewards",
+                "Chasing progress that only exists inside the game",
+                "\"One more run\" turning into three hours",
+                "Playing to dodge boredom, stress, or something you owe someone",
+                "The point where entertainment quietly became a compulsion",
+            ),
+            blockPatterns = listOf("poki.com", "crazygames.com", "miniclip.com", "coolmathgames.com"),
+            insteadOf = "Name what you're avoiding by playing, and do five minutes of it.",
+        ),
+        TemptationSpec(
+            id = "shopping",
+            title = "Impulse Shopping  💳",
+            subtitle = "Break the buying-for-a-feeling loop.",
+            covers = listOf(
+                "Amazon, Temu, discount sites, ads following you around",
+                "Buying because you're bored, stressed, or high on getting a deal",
+                "\"Limited time\" offers engineered to stop you thinking",
+                "The hit is the ordering and the parcel - not the thing itself",
+                "Wanting to spend on purpose again",
+            ),
+            blockPatterns = listOf(
+                "amazon.com", "amazon.co.uk", "temu.com", "ebay.com", "aliexpress.com",
+                "shein.com", "wish.com",
+            ),
+            insteadOf = "Put it in the basket and leave it there for 48 hours. Most of it dies on its own.",
+        ),
+    )
+
+    fun temptation(id: String): TemptationSpec? = TEMPTATIONS.firstOrNull { it.id == id }
+
     // === Trusted domains (heuristic scorer skipped here) =============================
     val SAFE_DOMAINS: Set<String> = setOf(
         "wikipedia.org", "wikimedia.org", "wiktionary.org", "britannica.com",

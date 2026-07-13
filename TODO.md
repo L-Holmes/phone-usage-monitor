@@ -4,7 +4,31 @@
 ------------------
 ------------------
 
-Task:
+DONE - more entries on the Temptations page
+    - All 7 categories added (scrolling, binge, comparison, checking, news, gaming, shopping),
+      with your "Covers" bullets kept as the user-facing "Does this sound like you?" list.
+    - They are DATA, not code: AppConfig.TEMPTATIONS (TemptationSpec). Adding an 8th category
+      is one entry there and nothing else - no new screen, no new function to wire.
+    - They all share ONE simple page (Main.kt -> showTemptation). Deliberately only 3 actions:
+        1. "I feel the pull right now"  -> 3 slow breaths on the orb, then "I've got through it"
+           (the button stays disabled until the breaths are actually done). Logs a RIDE.
+        2. "Block what feeds this"      -> toggle. Adds that category's curated site patterns to
+           BlockRules and drops its apps to the GREY tier (2 min/hour) - NOT a hard ban, since a
+           hard ban on Instagram just gets the feature switched off in a huff. See
+           TemptationBlocks in Blocking.kt.
+        3. "I slipped"                  -> one tap, no interrogation. Logs a SLIP.
+      Plus a "try instead" line from the spec, and a 30-min lockdown link.
+    - Phone Checking has no sites to block, so its block card is simply absent - the lockdown
+      link is its lever instead.
+    - New HabitLog (UserState.kt): flat per-category log of RIDE / SLIP. Thin on purpose - the
+      adult-content flow keeps its own rich logs (TemptationLog / RelapseLog).
+    - Adult Content keeps its own bespoke heavy flow, untouched.
+
+    NOT VERIFIED ON DEVICE - it builds, installs and launches without crashing, but I did not
+    click through the new pages: the phone was in active personal use mid-test. Worth a manual
+    pass over: the block toggle's on/off state, and the ride-it-out breathing screen.
+
+OLD Task (kept for reference):
 - want to add more entries to the 'temptations' page...
 here are my ideas for what to add;
 

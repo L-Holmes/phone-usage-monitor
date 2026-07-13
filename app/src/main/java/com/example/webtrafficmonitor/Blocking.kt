@@ -343,6 +343,41 @@ object ShortForm {
 
 
 // =====================================================================================
+// TemptationBlocks  (the "block what feeds this" switch on each Temptations page)
+// =====================================================================================
+// Exactly like ShortForm, but per category: flipping it on adds that category's curated
+// patterns to BlockRules and drops its apps to the GREY tier (time-limited, not banned -
+// a hard ban on Instagram would just get the whole feature switched off in a huff).
+// Nothing bespoke lives here; a new category is a new AppConfig.TemptationSpec.
+object TemptationBlocks {
+
+    fun hasBlocks(spec: AppConfig.TemptationSpec): Boolean =
+        spec.blockPatterns.isNotEmpty() || spec.greyApps.isNotEmpty()
+
+    /**
+     * Keyed on the PATTERNS only, never the apps: several of these apps (TikTok, Instagram)
+     * are on the built-in greylist already, so asking AppRules would report "on" before the
+     * user had touched anything.
+     */
+    fun enabled(spec: AppConfig.TemptationSpec): Boolean {
+        if (spec.blockPatterns.isEmpty()) return false
+        val rules = BlockRules.all()
+        return spec.blockPatterns.all { it in rules }
+    }
+
+    fun setEnabled(context: Context, spec: AppConfig.TemptationSpec, on: Boolean) {
+        if (on) {
+            spec.blockPatterns.forEach { BlockRules.add(context, it) }
+            spec.greyApps.forEach { AppRules.setApp(context, it, AppRules.GREY) }
+        } else {
+            spec.blockPatterns.forEach { BlockRules.remove(context, it) }
+            spec.greyApps.forEach { AppRules.remove(context, isApp = true, it) }
+        }
+    }
+}
+
+
+// =====================================================================================
 // Whitelist  (apps/domains we trust enough to skip processing; plus a greylist)
 // =====================================================================================
 // SAFE_APPS: no public scrolling feed and no arbitrary adult content - so the service

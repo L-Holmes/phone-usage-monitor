@@ -1507,16 +1507,245 @@ private fun showTemptationsTab() {
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    // Adult Content keeps its own big bespoke flow. Everything else shares the one simple
+    // page below, driven off AppConfig.TEMPTATIONS - add a category there, not here.
     list.addView(homeCard("Adult Content \uD83D\uDD1E", "Tools for the moment, and the longer game.") {
         reportBackTarget = { showTemptationsTab() }; showReportScreen()
     })
-    root.addView(list)
-    root.addView(grow())
-    root.addView(TextView(this).apply {
-        text = "More areas later."; textSize = 13f; setTextColor(0xFF9AA0A6.toInt())
-        setPadding(0, 0, 0, (8 * dp).toInt())
+    AppConfig.TEMPTATIONS.forEach { spec ->
+        list.addView(homeCard(spec.title, spec.subtitle) { showTemptation(spec) })
+    }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        isFillViewport = true
+        addView(list)
     })
     setContentWithThumb(root) { setupHomeScreen() }
+}
+
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+//  The shared Temptations page (every category EXCEPT adult content)
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+//  Kept deliberately small. Three things you can do, and no more:
+//    1. ride the urge out (breathe),
+//    2. block what feeds it,
+//    3. own up to a slip.
+//  Resist bolting extras onto this - not overwhelming the user IS the feature. Anything
+//  category-specific belongs in the AppConfig spec, never in an `if (spec.id == ...)`.
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+private var habitOrb: BreathOrbAnimator? = null
+
+private fun showTemptation(spec: AppConfig.TemptationSpec) {
+    habitOrb?.stop(); habitOrb = null
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText(spec.title))
+    root.addView(TextView(this).apply {
+        text = spec.subtitle; textSize = 15f; setTextColor(0xFF7B848C.toInt())
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+    // "Is this me?" - the bit that makes someone stop and recognise themselves.
+    val card = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (14 * dp).toInt() }
+    }
+    card.addView(TextView(this).apply {
+        text = "Does this sound like you?"; textSize = 15f
+        setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+    })
+    spec.covers.forEach { line ->
+        card.addView(TextView(this).apply {
+            text = "\u2022  $line"; textSize = 14f; setTextColor(0xFF3C4650.toInt())
+            setLineSpacing(0f, 1.15f); setPadding(0, (8 * dp).toInt(), 0, 0)
+        })
+    }
+    list.addView(card)
+
+    val rides = HabitLog.count(this, spec.id, HabitLog.RIDE)
+    val slips = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
+    list.addView(TextView(this).apply {
+        text = "$rides ridden out  \u00B7  $slips slip(s) this week"
+        textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+
+    list.addView(captionedButton("I feel the pull right now", "ride it out - it passes", 0xFF3E535C.toInt()) {
+        habitRide(spec)
+    })
+
+    if (TemptationBlocks.hasBlocks(spec)) list.addView(blockSwitch(spec))
+
+    list.addView(captionedButton("I slipped", "log it, no shame", 0xFF526D78.toInt()) {
+        habitSlip(spec)
+    })
+
+    list.addView(TextView(this).apply {
+        text = "Try instead:  ${spec.insteadOf}"
+        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        setPadding(0, (16 * dp).toInt(), 0, (6 * dp).toInt())
+    })
+    list.addView(TextView(this).apply {
+        text = "or lock everything down for 30 minutes"
+        textSize = 14f; setTextColor(0xFF48606A.toInt())
+        isClickable = true; isFocusable = true
+        setPadding(0, (8 * dp).toInt(), 0, (16 * dp).toInt())
+        setOnClickListener {
+            Lockdown.start(this@MainActivity)
+            Toast.makeText(this@MainActivity,
+                "Locked down for 30 min. Essentials still work.", Toast.LENGTH_LONG).show()
+            showTemptation(spec)
+        }
+    })
+
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(list)
+    })
+    setContentWithThumb(root) { showTemptationsTab() }
+}
+
+/** The "block what feeds this" toggle card - on/off, saying exactly what it covers. */
+private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
+    val dp = resources.displayMetrics.density
+    var on = TemptationBlocks.enabled(spec)
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (10 * dp).toInt() }
+        isClickable = true; isFocusable = true
+    }
+    val title = TextView(this).apply {
+        textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+    }
+    val sub = TextView(this).apply {
+        textSize = 13f; setTextColor(0xFFCBD3D8.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+    }
+    fun paint() {
+        title.text = if (on) "\u25CF  Blocking what feeds this" else "\u25CB  Block what feeds this"
+        val sites = spec.blockPatterns.size
+        val apps = spec.greyApps.size
+        val appBit = if (apps > 0) " and limits $apps app(s) to ${GreyUsage.LIMIT_MIN} min/hour" else ""
+        sub.text = if (on) "Blocking $sites site(s)$appBit.  Tap to turn off."
+                   else "Blocks $sites site(s)$appBit.  Tap to turn on."
+        row.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp
+            setColor(if (on) 0xFF2E7D32.toInt() else 0xFF34464E.toInt())
+        }
+    }
+    row.addView(title); row.addView(sub)
+    paint()
+    row.setOnClickListener {
+        on = !on
+        TemptationBlocks.setEnabled(this, spec, on)
+        paint()
+    }
+    return row
+}
+
+/** Ride the urge out: a few slow breaths, then the button that says you beat it. */
+private fun habitRide(spec: AppConfig.TemptationSpec) {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val totalBreaths = 3
+    val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
+    root.addView(titleText("Ride it out"))
+    root.addView(TextView(this).apply {
+        text = "The pull peaks fast, then fades. Follow the orb - $totalBreaths slow breaths."
+        textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+    })
+
+    val orb = BreathOrbView(this, 0xFF2E9E8F.toInt())     // INSCRIBE: it sits in a box here
+    root.addView(FrameLayout(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(orb, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    })
+
+    val label = TextView(this).apply {
+        text = "Breathe in"; textSize = 18f; gravity = Gravity.CENTER
+    }
+    root.addView(label)
+    val counter = TextView(this).apply {
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
+    }
+    root.addView(counter)
+
+    // Only unlocks once the breaths are actually done - otherwise it's just a tap-through.
+    val done = bigChoice("I've got through it", 0xFF2E7D32.toInt()) { habitRideDone(spec) }
+    done.isEnabled = false
+    done.alpha = 0.5f
+    root.addView(done)
+
+    habitOrb?.stop()
+    habitOrb = BreathOrbAnimator(orb, label).also { a ->
+        a.start(
+            cycles = totalBreaths,
+            onCycle = { d, t -> counter.text = if (d >= t) "Done - nicely paced" else "$d of $t done" },
+            onComplete = { label.text = ""; done.isEnabled = true; done.alpha = 1f },
+        )
+    }
+    setContentWithThumb(root) { habitOrb?.stop(); habitOrb = null; showTemptation(spec) }
+}
+
+private fun habitRideDone(spec: AppConfig.TemptationSpec) {
+    habitOrb?.stop(); habitOrb = null
+    HabitLog.record(this, spec.id, HabitLog.RIDE)
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
+    root.addView(titleText("That was you, beating it."))
+    root.addView(TextView(this).apply {
+        text = "Every urge you ride out makes the next one weaker."
+        textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
+        setPadding(0, (4 * dp).toInt(), 0, 0)
+    })
+    root.addView(PeakCurveView(this), LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+            topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt()
+        })
+    root.addView(TextView(this).apply {
+        text = "${HabitLog.count(this@MainActivity, spec.id, HabitLog.RIDE)} ridden out"
+        textSize = 15f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+    root.addView(captionedButton("Put the phone down", "closes the app", 0xFF2E7D32.toInt()) {
+        try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
+    })
+    setContentWithThumb(root) { showTemptation(spec) }
+}
+
+/** Owning a slip. One tap, no interrogation - staying easy to be honest IS the point. */
+private fun habitSlip(spec: AppConfig.TemptationSpec) {
+    HabitLog.record(this, spec.id, HabitLog.SLIP)
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val week = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
+    val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
+    root.addView(titleText("Logged."))
+    root.addView(TextView(this).apply {
+        text = "That's honesty, and it's worth more than a clean streak you had to lie for.\n\n" +
+            "$week this week. The number isn't a verdict - it's just data. Watch which way it moves."
+        textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
+        setLineSpacing(0f, 1.15f); setPadding(0, (10 * dp).toInt(), 0, 0)
+    })
+    root.addView(grow())
+    root.addView(TextView(this).apply {
+        text = "Next time, try:  ${spec.insteadOf}"
+        textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        setLineSpacing(0f, 1.15f); setPadding(0, 0, 0, (14 * dp).toInt())
+    })
+    root.addView(bigChoice("Back", 0xFF48606A.toInt()) { showTemptation(spec) })
+    setContentWithThumb(root) { showTemptation(spec) }
 }
 
 /** A clean tappable card for the home/tab screens (chevron shown when clickable). */
@@ -3628,6 +3857,8 @@ private fun startWeekStrict() {
     override fun onStop() {
         super.onStop()
         sensorMonitor?.stop(); sensorMonitor = null
+        // Don't leave a breathing orb posting frame callbacks at a screen nobody is looking at.
+        habitOrb?.stop(); habitOrb = null
         arousalLockPromptShown = false   // re-offer the lock on the arousal page once per app session
     }
 

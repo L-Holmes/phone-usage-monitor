@@ -304,6 +304,57 @@ object TemptationLog {
 }
 
 
+// =====================================================================================
+// HabitLog  (the shared log behind every Temptations category EXCEPT sexual arousal)
+// =====================================================================================
+/**
+ * One flat log of "I rode an urge out" and "I slipped", tagged with the category id from
+ * AppConfig.TEMPTATIONS. Deliberately thin: the arousal flow has its own rich logs
+ * (TemptationLog / RelapseLog) with urge levels, feelings and locations - the other
+ * categories get a count and a date, which is all their pages promise.
+ */
+object HabitLog {
+    private const val PREFS = "habit_log"
+    private const val KEY = "events"
+    private const val MAX = 5000
+    private const val SEP = "\u001F"
+
+    const val RIDE = "ride"     // urge felt, and got through it
+    const val SLIP = "slip"     // did it anyway
+
+    data class Event(val ts: Long, val category: String, val kind: String)
+
+    fun record(context: Context, category: String, kind: String) {
+        val line = listOf(System.currentTimeMillis().toString(), category, kind)
+            .joinToString(SEP) { it.replace(SEP, " ").replace("\n", " ") }
+        val list = read(context).toMutableList()
+        list.add(line)
+        while (list.size > MAX) list.removeAt(0)
+        prefs(context).edit().putString(KEY, list.joinToString("\n")).apply()
+    }
+
+    fun all(context: Context): List<Event> = read(context).mapNotNull { l ->
+        val p = l.split(SEP)
+        val ts = p.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+        Event(ts, p.getOrElse(1) { "" }, p.getOrElse(2) { "" })
+    }
+
+    fun count(context: Context, category: String, kind: String): Int =
+        all(context).count { it.category == category && it.kind == kind }
+
+    /** How many [kind] events in this category in the last [days] days. */
+    fun recent(context: Context, category: String, kind: String, days: Int): Int {
+        val since = System.currentTimeMillis() - days * 86_400_000L
+        return all(context).count { it.category == category && it.kind == kind && it.ts >= since }
+    }
+
+    private fun read(c: Context) =
+        prefs(c).getString(KEY, "").orEmpty().split("\n").filter { it.isNotEmpty() }
+    private fun prefs(c: Context) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
 // Records each "look anyway" attempt and how it ended (stopped / tomorrow / looked).
 object LoosenLog {
     private const val PREFS = "loosen_log"
