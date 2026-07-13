@@ -192,9 +192,8 @@ object SensorContext {
     /** "DARK" / "DULL" / "NORMAL" / "BRIGHT" / "unknown". */
     fun lightLabel(): String = light?.name ?: UNKNOWN
 
-    /** True if the room is at [atOrBelow] or darker. False when we simply don't know. */
-    fun isDarkerThan(atOrBelow: AppConfig.LightLevel): Boolean {
-        val l = light ?: return false
-        return l.ordinal <= atOrBelow.ordinal      // LightLevel is ordered DARK..BRIGHT
-    }
+    // NOTE: there is deliberately no plain "is it dark?" helper here. The night guard needs
+    // HYSTERESIS (block at one lux level, release at a higher one) or the cover strobes when
+    // the reading sits on the threshold - so that logic lives in the service, in
+    // PageMonitorService.darkEnoughForGuard(). Don't reintroduce a bare comparison here.
 }

@@ -146,11 +146,13 @@ object AppConfig {
         ModeSpec(id = "strict",  displayName = "Strict",
             breathingOn = true,  breathEveryOpen = false, greyscale = true,
             nightGuard = true,
-            flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DULL,
+            // DARK, not DULL: lightFlagBelow means "this band OR DARKER", so DULL was also
+            // catching an ordinary dim room. Only genuine darkness should trip Strict.
+            flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK,
             summary = listOf(
                 "Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.",
                 "The daily pass resets at midnight.",
-                "NIGHT GUARD: while you are LYING DOWN, or the room is DIM OR DARKER, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.",
+                "NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.",
                 "That is the whole point: the phone in bed, in the dark, is where this goes wrong.",
                 "Greyscale: your screen turns grey while you are lying down.",
                 "Everything in \"Always on\" above still applies.",
@@ -159,11 +161,12 @@ object AppConfig {
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
             nightGuard = true,
-            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.NORMAL,
+            // A band looser than Strict on purpose: a dim room counts here, darkness only in Strict.
+            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.DULL,
             summary = listOf(
                 "Breathing pause: EVERY single time you open a watched app. There is no daily pass.",
                 "Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.",
-                "NIGHT GUARD, harder: it triggers in ORDINARY INDOOR LIGHT or darker - not just a dim room - as well as whenever you are lying down. Only the essentials open.",
+                "NIGHT GUARD, harder: a DIM room is enough to trip it, not just full darkness - as well as whenever you are lying down. Only the essentials open.",
                 "Greyscale: your screen turns grey while you are lying down, same as Strict.",
                 "Everything in \"Always on\" above still applies.",
                 "This is Strict with the daily pass taken away, and a night guard that trips far more easily.",
@@ -179,6 +182,20 @@ object AppConfig {
         "launcher", "trebuchet", "dialer", "incallui", "telecom", "phone", "contacts",
         "messaging", "mms", "deskclock", "clock", "alarm", "camera", "maps", "waze",
     )
+
+    /** The lux ceiling of a light band - the level is "at or below" this. */
+    fun lightBandMax(level: LightLevel): Float = when (level) {
+        LightLevel.DARK -> LIGHT_DULL_MAX        // < 20 lux
+        LightLevel.DULL -> LIGHT_NORMAL_MAX      // < 80 lux
+        LightLevel.NORMAL -> LIGHT_BRIGHT_MAX    // < 400 lux
+        LightLevel.BRIGHT -> Float.MAX_VALUE
+    }
+
+    // Hysteresis for the night guard's DARK trigger. It blocks at or below the band ceiling,
+    // but does not release until the light is comfortably past it (ceiling x this). Without
+    // the gap, a reading hovering on the threshold - which is exactly what happens when the
+    // cover's own glow hits the sensor - makes the block flicker on and off.
+    const val NIGHT_GUARD_LIGHT_RELEASE = 1.6f
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
 
     /**

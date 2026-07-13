@@ -284,6 +284,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var greyscaleSensor: SensorMonitor? = null
     private var greyscaleApplied = false      // true only while WE hold greyscale on
     private var lastGreyEval = 0L
+    private var lastGuardEval = 0L
+    // Latched "it is dark": see darkEnoughForGuard. Sticky through the dead band so the cover
+    // can't strobe on a borderline reading.
+    private var guardDark = false
 
     /**
      * One SensorMonitor for the whole session. It drives THREE things now, so it runs
@@ -298,6 +302,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         m.onUpdate = {
             SensorContext.update(m)
             updateGreyscale()
+            updateNightGuard()   // posture/light can change with no accessibility event at all
         }
         greyscaleSensor = m
         m.start(slow = true)
@@ -569,13 +574,55 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (isNightGuardAllowed(pkg)) return null
 
         val lying = spec.flagLyingDown && SensorContext.lyingDown
-        val dark = SensorContext.isDarkerThan(spec.lightFlagBelow)
+        val dark = darkEnoughForGuard(spec)
         return when {
             lying && dark -> "Not while you're lying down in the dark.\nSit up, or turn a light on."
             lying -> "Not while you're lying down.\nSit up and this opens again."
             dark -> "Not in the dark.\nTurn a light on and this opens again."
             else -> null
         }
+    }
+
+    /**
+     * Is it dark enough to trip the guard? Latching, with a deliberate gap between the level
+     * that turns it ON and the level that turns it OFF - see NIGHT_GUARD_LIGHT_RELEASE. A bare
+     * threshold makes the cover strobe when the reading sits right on the line.
+     */
+    private fun darkEnoughForGuard(spec: AppConfig.ModeSpec): Boolean {
+        val lux = SensorContext.lux
+        if (lux < 0f) return false                               // no light sensor / no reading
+        val enterAt = AppConfig.lightBandMax(spec.lightFlagBelow)
+        val releaseAt = enterAt * AppConfig.NIGHT_GUARD_LIGHT_RELEASE
+        guardDark = when {
+            lux <= enterAt -> true
+            lux > releaseAt -> false
+            else -> guardDark                                    // in the dead band: hold
+        }
+        return guardDark
+    }
+
+    /**
+     * Re-check the guard whenever the SENSORS move, not just when the screen does.
+     *
+     * This is what was missing: the recheck loop only runs while a cover is already up, and
+     * lying back down fires no accessibility event at all - the screen isn't changing. So once
+     * you sat up and the cover dropped, nothing was watching, and lying down again did nothing
+     * until you switched apps and forced a fresh event. Now every sensor reading re-evaluates
+     * the app in front of you.
+     */
+    private fun updateNightGuard() {
+        if (!Mode.spec(this).nightGuard) return
+        val now = System.currentTimeMillis()
+        if (now - lastGuardEval < GUARD_EVAL_MS) return
+        lastGuardEval = now
+        if (appBlockActive) return          // already covered: the recheck loop owns it
+        if (leaving) return
+
+        // Ask the WINDOWS what's in front, never a remembered package - otherwise sitting in
+        // our own app (or the launcher) would re-cover whatever you happened to open last.
+        val pkg = currentForegroundPackage() ?: return
+        val reason = appBlockReason(pkg) ?: return
+        showAppBlock(reason, pkg)
     }
 
     private fun isNightGuardAllowed(pkg: String): Boolean {
@@ -1206,6 +1253,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // How often blocking may re-evaluate. Short: this is the gap between a banned thing
         // being on screen and the cover landing on it. Logging keeps the slower MIN_INTERVAL_MS.
         private const val BLOCK_INTERVAL_MS = 200L
+
+        // How often the night guard re-checks off the back of a sensor reading. Roughly once a
+        // second: fast enough that lying back down covers the screen almost at once, slow
+        // enough that it isn't running a window query on every accelerometer sample.
+        private const val GUARD_EVAL_MS = 900L
         private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
 
         private val IGNORED_PACKAGES = AppConfig.IGNORED_PACKAGES
