@@ -3006,11 +3006,21 @@ private fun showReportScreen() {
         addView(TextView(this@MainActivity).apply { text = "\u203A"; textSize = 22f; setTextColor(0xFFAEB6BB.toInt()) })
     })
     root.addView(top)
-    // Four main panes (weighted) + a thinner Statistics pane at the bottom.
+    // The main panes (weighted) + a thinner Statistics pane at the bottom.
+    //
+    // "I'm going to look anyway" is DELIBERATELY NOT HERE. A permanent button turns the wall
+    // into a door with a handle, and every urge eventually tries the handle. It now appears
+    // ONLY when the user has already started trying to tear the guard down (uninstall,
+    // device admin, switching monitoring off, escaping a locked strict mode) - see the big
+    // comment on BypassWatch, and the offer pane a few lines below. Do not put it back.
     root.addView(reportPane("Report an app/site", 0xFF34464E.toInt()) { onReportAppSite() })
     root.addView(reportPane("I feel temptation", 0xFF3E535C.toInt()) { onFeelTemptation() })
-    root.addView(reportPane("I'm going to look anyway", 0xFF48606A.toInt()) { onLookAnyway() })
     root.addView(reportPane("Report relapse", 0xFF526D78.toInt()) { onReportRelapse() })
+
+    // THE HONEST EXIT. Only on the table because they just reached for the destructive one.
+    if (BypassWatch.isArmed(this)) {
+        root.addView(bypassOfferPane())
+    }
     root.addView(reportPane("Statistics", 0xFF5E7A86.toInt()) { showStatsMenu() }.apply {
         textSize = 16f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt())
@@ -3024,6 +3034,54 @@ private fun showReportScreen() {
         setOnClickListener { showAdultSettings() }
     })
     setContentWithThumb(root) { reportBackTarget() }
+}
+
+/**
+ * The supervised "look anyway" offer, shown ONLY while BypassWatch is armed - i.e. only
+ * after the user has actually gone for the uninstall / device-admin / monitoring-off route,
+ * or tried to escape a locked strict mode.
+ *
+ * The wording names what they just did, on purpose. Pretending not to have noticed would be
+ * strange and a bit insulting; they know what they were doing. The offer is: you're going to
+ * get there anyway, so take the door that leaves the guard standing behind you.
+ */
+private fun bypassOfferPane(): View {
+    val dp = resources.displayMetrics.density
+    val reason = BypassWatch.lastReason(this)
+    val card = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp
+            setColor(0xFF3B2F2A.toInt())
+            setStroke((2 * dp).toInt(), 0xFFB1541F.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (8 * dp).toInt() }
+        isClickable = true; isFocusable = true
+        setOnClickListener { onLookAnyway() }
+    }
+    card.addView(TextView(this).apply {
+        text = "Before you pull it all down"
+        textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+    })
+    card.addView(TextView(this).apply {
+        text = buildString {
+            if (reason != null) append("A moment ago, $reason.\n\n")
+            append("If you're going to look, do it the honest way instead: a wait, a written ")
+            append("commitment, a fixed window, and the guard still standing afterwards.\n\n")
+            append("It costs you one of your ${LoosenLimit.LIFETIME_MAX} lifetime unlocks. ")
+            append("Breaking the app costs you everything you've built.")
+        }
+        textSize = 13f; setTextColor(0xFFE0D6D0.toInt()); setLineSpacing(0f, 1.2f)
+        setPadding(0, (8 * dp).toInt(), 0, (10 * dp).toInt())
+    })
+    card.addView(TextView(this).apply {
+        text = "I'm going to look anyway  ›"
+        textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFE8A87C.toInt())
+    })
+    return card
 }
 
 /**
@@ -3770,6 +3828,9 @@ private fun loosenUnlock() {
     LoosenLimit.consume(this)
     LoosenWait.end(this)
     LoosenWindow.start(this, loosenDuration * 60 * 1000L)
+    // They took the honest exit. Take the offer back off the table - it must not still be
+    // sitting there afterwards, or it stops being a last resort and becomes a menu item.
+    BypassWatch.disarm(this)
     loosenUnlockedScreen()
 }
 
@@ -4878,6 +4939,22 @@ private fun startWeekStrict() {
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
         content.addView(homeCard("Manage block rules", "Add or remove blocked sites and apps.") { showManageRules() })
         content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
+        // The supervised loosen flow is no longer reachable from the adult-content page (see
+        // BypassWatch). It lives here so it can still be tested without staging a fake
+        // uninstall attempt.
+        content.addView(homeCard("\"I'm going to look anyway\" flow",
+            "Hidden from users unless they're caught trying to bypass. Test it here.") {
+            onLookAnyway()
+        })
+        content.addView(homeCard("Bypass watch",
+            if (BypassWatch.isArmed(this))
+                "ARMED - ${BypassWatch.remaining(this) / 60_000} min left · ${BypassWatch.totalAttempts(this)} attempt(s) ever"
+            else
+                "Not armed · ${BypassWatch.totalAttempts(this)} attempt(s) ever. Tap to arm it.") {
+            BypassWatch.record(this, "you armed it from Developer tools")
+            Toast.makeText(this, "Bypass watch armed for 30 min", Toast.LENGTH_SHORT).show()
+            setupMainScreen()
+        })
         content.addView(homeCard("Clear block rules", "Wipe all block rules and strikes.") {
             BlockRules.clear(this); BlockEscalation.clear(this); AppTimedBlock.clear(this)
             Toast.makeText(this, "Block rules cleared", Toast.LENGTH_SHORT).show()
@@ -5142,6 +5219,9 @@ private fun startWeekStrict() {
                 if (Mode.setMode(this@MainActivity, chosen)) {
                     Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
                 } else {
+                    // Refused: they're locked into strict and just tried to get out of it.
+                    // That's a bypass attempt - see BypassWatch.
+                    BypassWatch.record(this@MainActivity, BypassWatch.Reason.LEAVE_STRICT)
                     Toast.makeText(this@MainActivity, "Strict mode is locked - can't switch back yet", Toast.LENGTH_SHORT).show()
                     sp.setSelection(curIdx())
                 }

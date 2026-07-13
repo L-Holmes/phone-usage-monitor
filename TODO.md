@@ -1,25 +1,6 @@
 
-------------------------------
 
-Right, big overhall now:
-If user is in regular mode, then we need a way for someone to disable blocks that are related specifically to women...
-    - or at the very least make all that stuff a lot less intense so they can look at bikinis and what not...
-    - this should be in the settings section of the adult content section.
-    - so basically we'll also need to identify somewhere in the code thigs specific to blocking pages / searches linked to women specficially in a sexual content... (and vice versa for men.. so maybe two toggle switches which default to 'on'?
-    - don't need to make this really obvious to the user, its a setting that I imagine only a select number of people will change.
-    (if in stricter modes, they can't toggle...)
-basically; I'll also want a flagged side list of things that are "attracted to women" only .. (like  so women can shop for lingerie etc.) 
 
-Also, do we have code in place for identifying specific scenarios? 
-Things like 'v*gin* discharge'... (things that a women might type?). 
-If there are publically available lists / codes that already do that then use them, if they're MIT etc..
-and/or add our own list...
-
-Also also, our code seems to block as I'm searching, which is a bit annoying.. like if I type into the search bar even 'vagin' then it blocks...
-is there anyway to wait till ive hit search? as otherwise it'll block the wrong page (the previous / current page, not the one with the search on it..)
-
-Also also also, when doing that, I managed to get google.com/ blocked... 
-google.com/ should never get blocked (but variations-- i.e. for a specific google image search, should! but just not all of google!)
 
 ------------------------------
 
@@ -124,6 +105,15 @@ Add 'founder mode'
 
 ^^^^^^^^^^^
 Perhaps the above could be "down the line" things to add later.... 
+
+
+===============================
+
+Later:
+
+Make the entire app translateable. 
+- have an extremely obvoius list of translate files so its easy to update them / add new entries.
+    - (also could we have validatoin in the ./deploy stage or whatever or during the final build stage I guess that checks if all languages have the same key entries? and f they don't state the differences. (assume english is the master one)
 
 
 
@@ -284,3 +274,145 @@ Questions for user testing:
 - Is the 'complete lock out' good for really addicted users?
     - How restricted should it be? (e.g.allow for only static images etc?)
     - I-> i dont want to go too far and have them bypass my app you see!
+
+
+
+====================================================================================
+====================================================================================
+====================================================================================
+====================================================================================
+====================================================================================
+====================================================================================
+
+# WILL POWER NOTES
+
+
+Picture of people you care about
+
+(Before which risk like downloading new app...(Probs riskiest!)) 
+
+
+Stop the habit of bringing phone in the in the first place
+
+How can I positively reward?
+
+Spin the wheel to win??!?
+
+
+=====
+
+Let them do it, but make them wait.
+(Longer each time?)
+And they urge surf whilst waiting. 
+
+===
+Exposure therapy of some kind?? ;
+
+
+The problem:
+```
+Does science show of there's a way you can pre pare that mindset? 
+Because I feel in the moment you'll lverlook everything and be like "it's just one one off event that will have no consequences or I don't care about those consequences"
+```
+
+
+"Describe your brain state..."
+"Think of the horniness you feel...
+The relief" 
+
+
+Do not just think "porn is bad." While calm, sit down and write a highly detailed, brutally honest description of the exact feeling you have 5 minutes after giving in. Describe the brain fog, the heavy posture, the isolation, and the frustration. Read this specific script every morning. You are training your brain to associate the trigger with the end of the video, not the beginning.
+
+
+---
+
+run a mental simulation. Visualize your exact trigger environment (e.g., lying in bed alone at night with your phone). Intentionally conjure up a fake, micro-urge. Then, mentally practice running your reframe ("This is just a corporate product trying to steal my time"). 
+
+
+Ulyses contract;
+
+Named after Ulysses, who tied himself to the ship's mast so he couldn't steer into the Sirens).
+
+(Is the blockers we use)
+
+The thought "just this once" is not my actual opinion. It is a chemical reflex of a starving dopamine loop. When you hear that voice in the moment, you don't argue with it. You just label it: "Ah, there's the 'just this once' glitch. Right on cue."
+
+"I'm a man. I'm strong"
+
+
+
+"Imagine yourself lying there"...
+
+
+======
+2 seconds rule: 
+
+ 1. Fire the 2-Second Script
+   Seconds 0–2
+   Do not pause to weigh the pros and cons. Instantly deploy a pre-rehearsed, non-negotiable verbal or mental refusal. For digital or behavioral urges, this is a hard, internal phrase like: "System error. Not an option." If someone is offering you a physical substance, it is a firm, pre-practiced "No thanks, I don't do that anymore." The key is zero hesitation—delaying even three seconds allows the rationalizing brain to take over and grant permission.
+ 2. Sever Proximity Immediately
+   Seconds 2–10
+   Distance is the highest predictor of resistance. Close the laptop, drop the phone face down, or physically walk out of the room. If you are in a social setting, stand up and go to the bathroom. You must break the visual and physical loop. Your brain cannot de-escalate the dopamine spike while you are actively staring at the cue.
+ 3. Drop the Anchor (The 15-Minute Wall)
+   Minutes 1–15
+   When you are offered a craving, your brain chemistry experiences a sharp, agonizing peak. But neurologically, intense cravings are self-limiting. They typically peak and begin to decay within 15 minutes if no further fuel is given. Tell yourself: "I can use this in 15 minutes if I still want to, but I have to wait out this clock first." This tricks the "hot state" brain into thinking it isn't being deprived forever, it is just delayed.
+ 4. Engage an Incompatible Response
+   Minutes 2–15
+   Do not just sit there trying not to think about it. Engage in a physical action that makes using impossible or highly uncomfortable. Do 20 pushups, step into a freezing cold shower, or call an accountability partner. This introduces a competing physical sensory input that disrupts the neurological craving loop.
+
+### Why This Beats Willpower
+When you try to use willpower while staring directly at a craving, you are trying to fight a chemical fire with a paper fan. This protocol works because it switches the battlefield from **internal thought** to **external action**.
+
+
+====
+
++ It's not a relief
+- It's curiosity that you don't have to cure
+
+====
+Defo let them, but monitored with strict time and then run the other pron filter to ensure they get no actually non clothed Ness.. 
+
+
+====
+It stemmed from curiosity... 
+
+
+---
+- Location (home)
+- emotional state (lonely, depressed, uncomfortable.. etc.)
+- ==> curiosity
+- intend to go in to find softcore novelty, which [they] class as 'non harmful'
+- escalates from there..
+
+So:
+- reduce location / detect location and add greater blocks
+- enforce habit- don't ever bring your phone... Xyz..
+- try and fix emotional state.
+- solve the curiosity!?!
+- prevent novelty
+- --> let them [initially] pick from pre defined small list... Never add novelty...
+
+
+-------
+Maybe, we give them options.
+
+
+If they choose the "man" option, they get a reward of some kind on screen. 
+
+They then can unlock other forms of entertainment- YouTube etc!? 
+Games etc? 
+
+
+
+====
+
+Don't log the first moment necessarily.
+Log the thing that leads to the moment. 
+
+
+====================================================================================
+====================================================================================
+====================================================================================
+====================================================================================
+====================================================================================
+====================================================================================

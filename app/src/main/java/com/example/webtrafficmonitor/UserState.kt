@@ -183,6 +183,110 @@ object Mode {
 }
 
 
+// #####################################################################################
+// #                                                                                   #
+// #   BypassWatch  —  WHY "I'M GOING TO LOOK ANYWAY" IS NOT ON THE MENU               #
+// #                                                                                   #
+// #   THE PROBLEM WE ARE SOLVING                                                       #
+// #   The supervised "look anyway" flow (a wait, a written commitment, a hard cap of   #
+// #   one a day and 3 for life) is a GOOD thing to have. But sitting on the adult-     #
+// #   content page as a permanent button, it is also an invitation. It turns a wall    #
+// #   into a door with a handle, and every urge eventually tries the handle.           #
+// #                                                                                   #
+// #   THE RULE                                                                         #
+// #   The button is GONE from the normal UI. It is not offered, not hinted at, not     #
+// #   discoverable. It only appears once the user has already, unambiguously, started  #
+// #   trying to TEAR THE GUARD DOWN — and then it is offered as the better option they #
+// #   were about to skip past.                                                         #
+// #                                                                                   #
+// #   WHAT COUNTS AS "TRYING TO TEAR IT DOWN" (see BypassWatch.Reason)                 #
+// #     • opening our entry in Settings to UNINSTALL or FORCE STOP the app             #
+// #     • opening the DEVICE ADMIN page to deactivate the uninstall lock               #
+// #     • opening the ACCESSIBILITY page for our service (i.e. to switch monitoring off)#
+// #     • opening the "appear on top" permission page (i.e. to kill the block cover)   #
+// #     • trying to drop out of a locked strict mode                                   #
+// #     • wiping the ban list / block rules                                            #
+// #   Those are all already DETECTED and bounced by the app. We now also record them.  #
+// #                                                                                   #
+// #   WHY THIS IS THE RIGHT TRADE                                                      #
+// #   Someone at that point is going to get what they want one way or another — the    #
+// #   app cannot physically stop a determined person with root and a factory reset.    #
+// #   The only question is whether they do it by DESTROYING the guard (and losing      #
+// #   every streak, log and protection, probably for good) or by taking a supervised,  #
+// #   time-limited, counted window and keeping the guard standing afterwards. Offering  #
+// #   the honest exit exactly at the moment they reach for the dishonest one is the     #
+// #   whole point.                                                                     #
+// #                                                                                   #
+// #   It stays offered for OFFER_WINDOW_MS after the attempt, then goes away again.    #
+// #   (The loosen flow's own limits — one a day, 3 for life — still apply on top. This #
+// #   makes it HARDER to reach, never easier.)                                         #
+// #                                                                                   #
+// #   The button also lives permanently in Developer tools, so it can be tested        #
+// #   without having to fake a bypass attempt.                                         #
+// #                                                                                   #
+// #####################################################################################
+object BypassWatch {
+
+    private const val PREFS = "bypass_watch"
+    private const val KEY_AT = "last_attempt_at"
+    private const val KEY_REASON = "last_reason"
+    private const val KEY_COUNT = "total"
+
+    /** How long an attempt keeps the honest exit on the table. */
+    const val OFFER_WINDOW_MS = 30L * 60 * 1000
+
+    /** The things that count. Kept as text so the reason can be shown back to the user. */
+    object Reason {
+        const val UNINSTALL = "you opened the uninstall / force-stop screen"
+        const val DEVICE_ADMIN = "you went to turn off the uninstall lock"
+        const val ACCESSIBILITY = "you went to switch monitoring off"
+        const val OVERLAY = "you went to take away the block screen's permission"
+        const val LEAVE_STRICT = "you tried to drop out of strict mode"
+        const val WIPE_RULES = "you tried to wipe your own ban list"
+    }
+
+    // Sitting on the Settings uninstall page fires accessibility events continuously, so a
+    // naive record() would count one visit as fifty attempts and hammer SharedPreferences.
+    // One visit = one attempt: the same reason inside this window is the same attempt.
+    private const val DEDUPE_MS = 60_000L
+    private var lastReasonAt = 0L
+    private var lastReasonSeen: String? = null
+
+    /** Record an attempt. Safe to call on every event - repeats collapse into one. */
+    @Synchronized
+    fun record(ctx: Context, reason: String) {
+        val now = System.currentTimeMillis()
+        val repeat = reason == lastReasonSeen && now - lastReasonAt < DEDUPE_MS
+        lastReasonSeen = reason
+        lastReasonAt = now
+
+        val p = prefs(ctx)
+        val edit = p.edit()
+            .putLong(KEY_AT, now)              // always refresh the window
+            .putString(KEY_REASON, reason)
+        if (!repeat) edit.putInt(KEY_COUNT, p.getInt(KEY_COUNT, 0) + 1)
+        edit.apply()
+    }
+
+    /** Is the honest exit currently on the table? */
+    fun isArmed(ctx: Context): Boolean = remaining(ctx) > 0
+
+    fun remaining(ctx: Context): Long =
+        (prefs(ctx).getLong(KEY_AT, 0L) + OFFER_WINDOW_MS - System.currentTimeMillis())
+            .coerceAtLeast(0L)
+
+    fun lastReason(ctx: Context): String? = prefs(ctx).getString(KEY_REASON, null)
+
+    fun totalAttempts(ctx: Context): Int = prefs(ctx).getInt(KEY_COUNT, 0)
+
+    /** Called when they take the offer (or it lapses), so it isn't left sitting there. */
+    fun disarm(ctx: Context) = prefs(ctx).edit().remove(KEY_AT).apply()
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
 // =====================================================================================
 // BreathingGate  (how often the app-open breathing pause is allowed to fire)
 // =====================================================================================

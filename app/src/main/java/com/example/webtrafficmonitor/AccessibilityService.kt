@@ -263,9 +263,30 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** The uninstall-guard page in front, or null. */
+    private fun ourUninstallScreen(): AppConfig.PageMatch? =
+        AppConfig.UNINSTALL_GUARD_PAGES.firstOrNull { pageMatches(it) }
+
     /** True when the Settings screen in front matches any uninstall-guard page. */
-    private fun isOurUninstallScreen(): Boolean =
-        AppConfig.UNINSTALL_GUARD_PAGES.any { pageMatches(it) }
+    private fun isOurUninstallScreen(): Boolean = ourUninstallScreen() != null
+
+    /**
+     * Landing on one of these screens is not an accident - you do not open "Device admin" by
+     * mistake. We bounce them home as before, but we also REMEMBER it, because that is what
+     * puts the supervised "look anyway" exit on the table for the next half hour. See the big
+     * comment on BypassWatch: the point is to catch them reaching for the destructive option
+     * and offer the honest one instead.
+     */
+    private fun recordBypassAttempt(page: AppConfig.PageMatch) {
+        val label = page.label.lowercase()
+        val reason = when {
+            "admin" in label -> BypassWatch.Reason.DEVICE_ADMIN
+            "accessibility" in label || "monitoring" in label -> BypassWatch.Reason.ACCESSIBILITY
+            "overlay" in label || "top" in label -> BypassWatch.Reason.OVERLAY
+            else -> BypassWatch.Reason.UNINSTALL
+        }
+        BypassWatch.record(this, reason)
+    }
 
 
 
@@ -508,12 +529,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
-        // Uninstall guard: while the lock is on, bounce out of our own
-        // App-info / uninstall / "deactivate admin" pages in Settings.
-        if (UninstallGuard.isAdminActive(this) && packageName == "com.android.settings") {
-            if (isOurUninstallScreen()) {
-                performGlobalAction(GLOBAL_ACTION_HOME)
-                return
+        // Uninstall guard: while the lock is on, bounce out of our own App-info / uninstall /
+        // "deactivate admin" pages in Settings.
+        //
+        // The RECORDING happens whether or not the lock is on: reaching for the uninstall
+        // button is the signal we care about, and someone without the lock enabled is if
+        // anything closer to actually going through with it. Bouncing still needs the lock.
+        if (packageName == "com.android.settings") {
+            val guardPage = ourUninstallScreen()
+            if (guardPage != null) {
+                recordBypassAttempt(guardPage)
+                if (UninstallGuard.isAdminActive(this)) {
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    return
+                }
             }
         }
         // Optional user lock: keep them off the Colour-correction page so they can't turn

@@ -215,6 +215,8 @@ object AppConfig {
         "Greylisted apps (TikTok, Instagram and friends) get ${GreyUsage.LIMIT_MIN} minutes per hour, then they close.",
         "\"Ride out the urge\" lockdown: ${Lockdown.DURATION_MS / 60_000} minutes where only the essentials - calls, texts, alarms, maps - will open. It cannot be cancelled early.",
         "Unlocking a relaxed window is limited: once a day, and only ${LoosenLimit.LIFETIME_MAX} times ever.",
+        "There is no \"let me look anyway\" button. It is not on any screen, on purpose - a button like that is just a door with a handle, and sooner or later the urge tries the handle.",
+        "It IS still there, but you only get offered it if you go for the uninstall button, the device-admin lock, the monitoring switch, or try to escape a locked strict mode. Reach for the destructive option and you'll be offered the honest one instead - a wait, a written commitment, a fixed window, and everything still standing afterwards.",
         "The app never presses Back for you. Blocking covers the screen and offers you the way out; it never navigates your browser behind your back.",
     )
 

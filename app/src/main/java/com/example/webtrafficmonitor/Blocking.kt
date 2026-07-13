@@ -216,7 +216,9 @@ object BlockRules {
         persist(context)
     }
 
+    /** Wiping your own ban list is a bypass attempt like any other - see BypassWatch. */
     fun clear(context: Context) {
+        BypassWatch.record(context, BypassWatch.Reason.WIPE_RULES)
         rules.clear()
         timedRules.clear()
         persist(context)
