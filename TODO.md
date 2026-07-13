@@ -1,79 +1,33 @@
 
-it should be under the 'productuvity' page.. not deep in the settings of the adult content... also the
-  habits estimate should be minutes / hours per day... between like <15 mins ~30 mins, ~45mins ~ 1 hour
-  ~ 2 hour.. etc. up to like >4 hours.. (depending on the thing of course... lets be reasonable...)..
-  also, in testing, my app doesn't seem to detect any of these: 1) variations of bad words.. e.g. like
-  'nake' (short for naked)-- please think of common shortenings / variations (like nekked) or whatever..
-  for sexual words, and monitor for them... be sensible with the scoring .. something like 'nake' for
-  instance ins't used for anything else so is obvoius bad... but others may be used in other contexts..
-  (2) phrases like 'try on haul' don't seem to be caught.. or 'nip slip' or things like 'no pants', 'no
-  leggings' etc.. please think of at least 30 for each of those and add them in.. think what people may
-  be typing to get around things.. and please just polish and make professional the whole dopamine
-  baseline page- it doesn't look cohesive its a bit confusing.. there is no singl
-   e button that shows a list of how the score is calculated... I got blocked on an app from
-Claude Code has been suspended. Run `fg` to bring Claude Code back. i did was 10 opens of one app in a
-Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input. added the new metrics and self input of
-  things, which I also exxpect to be in the productivity page.. you know, about potential mone made per hour, houry wages.. etc. please add your own that you feel are needed and appropriate..
+------------------------------
 
-------------------
+Right, big overhall now:
+If user is in regular mode, then we need a way for someone to disable blocks that are related specifically to women...
+    - or at the very least make all that stuff a lot less intense so they can look at bikinis and what not...
+    - this should be in the settings section of the adult content section.
+    - so basically we'll also need to identify somewhere in the code thigs specific to blocking pages / searches linked to women specficially in a sexual content... (and vice versa for men.. so maybe two toggle switches which default to 'on'?
+    - don't need to make this really obvious to the user, its a setting that I imagine only a select number of people will change.
+    (if in stricter modes, they can't toggle...)
+basically; I'll also want a flagged side list of things that are "attracted to women" only .. (like  so women can shop for lingerie etc.) 
+
+Also, do we have code in place for identifying specific scenarios? 
+Things like 'v*gin* discharge'... (things that a women might type?). 
+If there are publically available lists / codes that already do that then use them, if they're MIT etc..
+and/or add our own list...
+
+Also also, our code seems to block as I'm searching, which is a bit annoying.. like if I type into the search bar even 'vagin' then it blocks...
+is there anyway to wait till ive hit search? as otherwise it'll block the wrong page (the previous / current page, not the one with the search on it..)
+
+Also also also, when doing that, I managed to get google.com/ blocked... 
+google.com/ should never get blocked (but variations-- i.e. for a specific google image search, should! but just not all of google!)
+
+------------------------------
+
 ------------------
 ------------------
 ------------------
 
 TODO NEXT:
-
-- dopamine baseline masurement
-    TODO- bulk this idea out...
-    --> How is the dopamine baseline calculated?
-        --> time spent... (obvoiusly weight this higher than the others!)
-            == worst ===
-            - adult content (what our app blocks)
-            - tiktok / youtube shorts / insta reels / ... fast paced video content (have seperate functions for like 'is_on_fast_paced_video' so we can update it as time goes on seperately.., same for all these, if we could detect these things off their seperate apps or from the websites that would be ideal!)
-            - social media, fast paced ones...: snapchat / etc
-            - live things.. like twitch etc.
-            - reddit / forums/ news etc.
-            - long form video content (youtube)
-            - ??? (you fill in the rest)
-            - ... impulse / instant gratitfication.. like amazon.. temu.. door dash.. uber eats.. etc. 
-            - ... gambling..
-            - ... mobile gaming.. 
-            == least worst ==
-
-            have an algorithm where if they spend like x amount of time, they get 'y' multiplier... lets have the max at like if you spend 4 hours or more, then they get the max multiplier...
-            sort of linear before then.. perhaps slightly curved to punish higher amounts more... 
-        --> Phone unlocks per hour... 
-        --> time of day (late night particularly bad... then early morning as soon as wake.. mid of day not as bad)
-        --> "Urgent Open" Metric (velocity_to_open): Did they unlock their phone and immediately open TikTok within 2 seconds?
-        --> High checks of a particular app per hour... (e.g. opening snapchat 50 times in an hour..)
-        - less interactions = generally better... not constrnatly scrolling or tapping screen..
-        - delay between the wakeup (e.g. an alarm going off- is that possible to detect?) and using apps. e.g. any of the tiktok / snapchat / reddit /youtube video immediately after waking is very bad!
-        - use led down is quite bad (we already capture the sensor data for that)
-        - use in the dark is quite bad as well (we already capture the sensor data for that)
-
-        - put the algorithm in a really obvious place with obvoius text description so manual intervention can be done by devs!
-        -----
-        then have 'anti rules' (these are obviously much less affective and take a lot longer to 'decrease' the dopamine baseline...
-        - time spent with screen off, no media playing... 
-        ----
-        - display this as a line chart over time.
-        - also as like a vertical scale which says the percentile in, then says like good, bad, very poor, etc.
-    - optional manual input
-        (don't use this to count towards the score... or perhaps have a seperate section that clearly says this is an estimate of your dopamine baseline based of user inputted habits...)
-        * **Screen-Free Reflection / Mind-Wandering** (Yoga, walking alone, sitting doing nothing, meditation, staring out a window)
-        - light / anerobic excercise (like walking etc)
-        * **Intense Physical Training** (Weightlifting, running, sports, high-intensity workouts)
-        - making money.. / working on business / planning on how business / side income etc. / **High-Leverage Building** (Working towards a future business, strategic planning, building projects, financial management) / - Working towards future goals (business, career, money, planning, learning)
-        * **Active Creation** (Writing, painting, playing an instrument, cooking, woodworking)
-        - other - Deep work / focused work
-        * **Deep Offline Focus** (Reading a physical book, studying complex topics, deep work without a screen)
-        * **In-Person Socializing** (Spending quality time with family, friends, or partners without phones)
-        * **Restorative Sleep / Deep Rest** (NOT naps, non-sleep deep rest protocols)
-        - diet / consumables... ## Health Inputs Healthy eating Caffeine Alcohol Other substanc
-    - can click a button with guidence on how see how to lower the threshold.
-        - then have a seperate section that is specifically targetted towards their data...
-
-
-- exnted the ucrrent landing screen / general productivity related things:; 
 
 - There are likely other paths to clear history in Firefox that won't hit these exact strings — e.g. "Clear browsing data on quit" in settings, deleting a single history entry via long-press, or per-site "Delete" from the history list. This blocks the main "Delete browsing data" flow you captured. If you monitor another path, send me its title/content dump and I'll add the keywords.
 
@@ -98,12 +52,6 @@ MANUAL TODO:
 
 
 ------------------------------
-
----
-
-I'll also want a flagged side list of things that are "attracted to women" only .. (like  so women can shop for lingerie etc.) 
-
-
 ----
 
 
