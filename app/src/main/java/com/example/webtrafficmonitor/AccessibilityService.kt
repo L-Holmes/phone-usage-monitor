@@ -116,13 +116,21 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var breathing: BreathingOverlay? = null
     private var lastForegroundPkgForBreathing: String? = null
 
-    private var lastProcessedAt = 0L
+    private var lastProcessedAt = 0L      // gates LOGGING (cheap to be slow)
+    private var lastBlockEvalAt = 0L      // gates BLOCKING (must be quick)
     private var lastLogSignature: String? = null
     private var lastGoBackAt = 0L
+    // Set when the user taps "Go back", cleared by the next evaluation. It is the ONLY thing
+    // that lets the "still the same blocked page" status line appear - so the line is always
+    // an answer to a tap, never unprompted commentary.
+    private var awaitingBackResult = false
+    // True from the moment "Go to home screen" is tapped until we're actually gone. Blocks any
+    // re-evaluation from tearing the cover down early and exposing the page.
+    private var leaving = false
     // The host the current page-block cover is showing for (drives the
     // "still blocked / different page" status lines and dismiss escalation).
     private var shownBlockHost: String? = null
-    private var shownBlockUrl: String? = null       
+    private var shownBlockUrl: String? = null
     private var armedAt = 0L   // when the current blocked page first armed; used to "settle" before banning
 
     private var lastPackage: String? = null
@@ -396,8 +404,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
 
         val now = System.currentTimeMillis()
-        if (now - lastProcessedAt < MIN_INTERVAL_MS) return
-        lastProcessedAt = now
+
+        // Blocking now runs on a MUCH shorter leash than logging. The old single 700ms gate
+        // ran both, and it is why a banned word gave you a clear look at the results before
+        // the cover landed, and why a page you'd already banned took a beat to be covered on
+        // reopen. A window CHANGE (new page, app resumed) never waits at all.
+        val stateChange = type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        if (!stateChange && now - lastBlockEvalAt < BLOCK_INTERVAL_MS) return
+        lastBlockEvalAt = now
 
         // Known-safe app (maps, messaging, banking, utilities…): no public feed and
         // no arbitrary web content worth scanning - skip the read/scan/screenshot/log
@@ -445,6 +459,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // Also passes the URL + on-screen text so "dog" in a search URL or all
         // over an image-results page is caught, not just in the title.
         evaluateBlock(packageName, host, rawTitle, text, lastFullUrl ?: lastUrl)
+
+        // ---- Everything below is LOGGING, which can afford the slow 700ms gate. ----
+        if (now - lastProcessedAt < MIN_INTERVAL_MS) return
+        lastProcessedAt = now
 
         // Logging: skip noise apps, and don't record the same page repeatedly.
         if (packageName in NOT_LOGGED_PACKAGES) return
@@ -561,6 +579,32 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * We still cannot force the app off recents; the re-cover-on-reopen blocking is what
      * actually stops them coming back.
      */
+    /**
+     * "Go to home screen" on a block cover.
+     *
+     * Ordering is the whole point here, and it is load-bearing:
+     *
+     *  1. The cover STAYS UP for the entire exit. Hiding it first (which is what we used to
+     *     do) uncovered the blocked page for the few frames it took Home to animate in - so
+     *     the last thing you saw on the way out was the exact thing you were trying not to
+     *     look at. Cover comes off LAST, once Home is already in front.
+     *  2. The browser is handed a fresh tab BEFORE we leave, so reopening it does not drop
+     *     you straight back onto the blocked page. This is the behaviour Stay Focused has.
+     *     We cannot close the offending tab - Android exposes no API for it - but we can make
+     *     sure it is not the one in front.
+     */
+    private fun leaveBlockedPage(pkg: String, controller: OverlayController) {
+        leaving = true
+        if (AppBlocklist.isBrowser(pkg)) sendBrowserHome(pkg)
+        mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, LEAVE_REDIRECT_MS)
+        mainHandler.postDelayed({
+            controller.hide()
+            shownBlockHost = null
+            shownBlockUrl = null
+            leaving = false
+        }, LEAVE_HIDE_MS)
+    }
+
     private fun exitToHome(pkg: String? = null, redirectBrowser: Boolean = false) {
         val target = pkg ?: lastPackage
         val redirecting = redirectBrowser && target != null && AppBlocklist.isBrowser(target)
@@ -599,6 +643,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     ) {
         val controller = overlay ?: return
 
+        // Mid-exit: the cover is being held up on purpose until Home lands. Do not touch it.
+        if (leaving) return
+
         // Loosen window: content/page blocks are suspended (the orb + image friction
         // still apply). Re-locks automatically the moment the window expires.
         if (LoosenWindow.isActive(this)) {
@@ -614,15 +661,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // away, image viewer open). For browsers, fall back to the REMEMBERED host
         // of the current page - this is the fix for "pressed back onto the same
         // blocked page and nothing happened".
-        var host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
+        val host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
 
-        // Tab switcher / "jump back in" previews expose a tab's URL but no readable
-        // PAGE TEXT - you're looking at a thumbnail, not visiting the page. So when a
-        // browser gives us a host with no page content, suppress web blocking; a real
-        // visit always has text. (Fixes Firefox blocking you on the open-tabs grid.)
-        if (host != null && AppBlocklist.isBrowser(packageName) && content.isNullOrBlank()) {
-            host = null
-        }
+        // Tab switcher / "jump back in" previews expose a tab's URL but no readable PAGE TEXT -
+        // you're looking at a thumbnail, not visiting the page. A real visit always has text.
+        //
+        // This USED to null out the host entirely, which disabled ALL web blocking until the
+        // page's text had loaded - that is why reopening a browser sat on a page you'd already
+        // banned left it readable for several seconds. Now it only gags the HEURISTIC SCORER
+        // (the one that genuinely needs text to judge, and the one that was false-positiving on
+        // the tab grid). An EXPLICIT match - your own ban list, or a known adult domain - fires
+        // off the URL alone, instantly, text or no text.
+        val contentReady = !content.isNullOrBlank()
 
         // Greylist time-tracking: accumulate foreground time for a greylisted app or
         // host so the per-hour limit can be enforced.
@@ -654,7 +704,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                    GreyUsage.isOverLimit(this, host) ->
                        "That's your ${GreyUsage.LIMIT_MIN} min for this hour - $host opens again soon"
                host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
-               (host != null || AppBlocklist.isBrowser(packageName)) ->
+               // The heuristic - and ONLY the heuristic - waits for real page text.
+               contentReady && (host != null || AppBlocklist.isBrowser(packageName)) ->
                    BorderlineScorer.evaluate(title, url, content)?.reason
                else -> null
            }
@@ -667,20 +718,24 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 BlockEventLog.recordWeb(this, packageName, host, url, baseReason, blockScore)
             }
 
-            // Live status so the user is never lost while mashing Back:
-            val status = when {
-                freshShow -> null
-                host != null && host == shownBlockHost ->
-                    "You went BACK - this is still the SAME blocked page.\nKeep pressing Back, or exit the app."
-                shownBlockHost != null ->
-                    "You're now on a DIFFERENT page - but it's blocked too.\nKeep pressing Back, or exit the app."
-                else -> null
+            // The "you went BACK..." line is a RESPONSE TO A TAP, never ambient commentary.
+            // It used to be recomputed on every re-evaluation, so it appeared (and stuck) on
+            // pages the user had never pressed Back on. Now it is only produced when awaiting-
+            // BackResult says the user actually tapped the link, and it is flashed - see below.
+            val backStatus = if (!freshShow && awaitingBackResult) {
+                awaitingBackResult = false
+                if (host != null && host == shownBlockHost)
+                    "Still the SAME blocked page. Press Back again, or go home."
+                else
+                    "That's a DIFFERENT page - but it's blocked too. Press Back again, or go home."
+            } else {
+                null
             }
             // A DIFFERENT page just became the blocked one -> restart the settle timer.
             if (url != shownBlockUrl) armedAt = System.currentTimeMillis()
             shownBlockHost = host
             shownBlockUrl = url
-            val reason = if (status == null) baseReason else "$baseReason\n\n$status"
+            val reason = baseReason
 
             if (freshShow) {
                 // Every NEW block screen (page rules included, not just images) now
@@ -704,6 +759,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
                         lastGoBackAt = tapAt
+                        awaitingBackResult = true    // arms the status line for the NEXT evaluation
                         // Only ban a page that has STAYED blocked (real), not one that
                         // merely flickered mid-transition.
                         if (blockSettled()) shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }
@@ -712,18 +768,19 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 },
                 onLeave = {
                     if (blockSettled()) shownBlockHost?.let { escalateWebBlock(it, shownBlockUrl) }
-                    exitToHome(packageName, redirectBrowser = true)
-                    controller.hide()
-                    shownBlockHost = null
-                    shownBlockUrl = null
+                    leaveBlockedPage(packageName, controller)
                 },
                 onReport = {
                     // do nothing
                 },
             )
-            // show() only sets the text on first display; keep the status line live.
+            // show() only sets the text on first display; keep the reason live.
             if (!freshShow) controller.setReason(reason)
+            backStatus?.let { controller.flashStatus(it) }
         } else {
+            // Back landed somewhere clean: the tap is answered, so disarm the status line
+            // rather than letting it fire on whatever gets blocked next.
+            awaitingBackResult = false
             if (!appBlockActive) {
                 controller.hide()
                 shownBlockHost = null
@@ -1044,11 +1101,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // navigating back through history, so innocent previous pages aren't banned.
         private const val BAN_SETTLE_MS = 1500L
 
-        // "Leave" on a browser: hand it a blank page, give it a moment to take the
+        // "Leave" on a browser: hand it a fresh tab, give it a moment to take the
         // intent, then go Home. (The background-activity-start restriction added in
         // Android 10 doesn't bite us - holding SYSTEM_ALERT_WINDOW exempts the app.)
         private val BROWSER_HOME_URL = AppConfig.BROWSER_HOME_URL
         private const val BROWSER_HOME_DELAY_MS = 250L
+
+        // Leaving a blocked page. The cover must outlive the Home animation, or the page it
+        // is covering flashes back into view on the way out - see leaveBlockedPage.
+        private const val LEAVE_REDIRECT_MS = 220L   // let the browser take the new-tab intent
+        private const val LEAVE_HIDE_MS = 900L       // cover comes off only once Home is in front
+
+        // How often blocking may re-evaluate. Short: this is the gap between a banned thing
+        // being on screen and the cover landing on it. Logging keeps the slower MIN_INTERVAL_MS.
+        private const val BLOCK_INTERVAL_MS = 200L
         private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
 
         private val IGNORED_PACKAGES = AppConfig.IGNORED_PACKAGES

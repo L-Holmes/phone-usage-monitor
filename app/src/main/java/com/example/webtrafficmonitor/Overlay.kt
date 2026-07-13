@@ -115,7 +115,11 @@ class OverlayController(private val context: Context) {
         overlay.findViewById<TextView>(R.id.block_reason).text = reason
         // Typed as View, not Button: "go back" and "report" are quiet TextView links now,
         // and only "leave" is still an actual Button.
-        overlay.findViewById<View>(R.id.btn_go_back).setOnClickListener { onGoBack() }
+        val goBack = overlay.findViewById<View>(R.id.btn_go_back)
+        goBack.setOnClickListener {
+            pressAnimation(it)
+            onGoBack()
+        }
         overlay.findViewById<View>(R.id.btn_leave).setOnClickListener { onLeave() }
         overlay.findViewById<View>(R.id.btn_report).setOnClickListener { onReport() }
 
@@ -166,6 +170,29 @@ class OverlayController(private val context: Context) {
     /** Update just the cover's reason text (used by the live block countdown). */
     fun setReason(reason: String) {
         view?.findViewById<TextView>(R.id.block_reason)?.text = reason
+    }
+
+    /**
+     * Show [message] on the status line and FLASH it.
+     *
+     * Only ever called when the user has actually tapped "Go back" - the status line stays
+     * empty otherwise. The flash restarts on every tap, even if the text is identical, so a
+     * user mashing Back on a page that won't budge can SEE that each press registered and the
+     * cover re-checked. Without that it looks frozen and they assume the button is broken.
+     */
+    fun flashStatus(message: String) {
+        val status = view?.findViewById<TextView>(R.id.block_status) ?: return
+        status.animate().cancel()
+        status.text = message
+        status.alpha = 0f
+        status.animate().alpha(1f).setDuration(160).start()
+    }
+
+    /** A quick squeeze so a tap on a plain TextView link still feels like a button press. */
+    private fun pressAnimation(v: View) {
+        v.animate().cancel()
+        v.scaleX = 0.92f; v.scaleY = 0.92f; v.alpha = 0.55f
+        v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(180).start()
     }
 
     private fun overlayType(): Int =

@@ -4,174 +4,10 @@
 ------------------
 ------------------
 
-DONE - more entries on the Temptations page
-    - All 7 categories added (scrolling, binge, comparison, checking, news, gaming, shopping),
-      with your "Covers" bullets kept as the user-facing "Does this sound like you?" list.
-    - They are DATA, not code: AppConfig.TEMPTATIONS (TemptationSpec). Adding an 8th category
-      is one entry there and nothing else - no new screen, no new function to wire.
-    - They all share ONE simple page (Main.kt -> showTemptation). Deliberately only 3 actions:
-        1. "I feel the pull right now"  -> 3 slow breaths on the orb, then "I've got through it"
-           (the button stays disabled until the breaths are actually done). Logs a RIDE.
-        2. "Block what feeds this"      -> toggle. Adds that category's curated site patterns to
-           BlockRules and drops its apps to the GREY tier (2 min/hour) - NOT a hard ban, since a
-           hard ban on Instagram just gets the feature switched off in a huff. See
-           TemptationBlocks in Blocking.kt.
-        3. "I slipped"                  -> one tap, no interrogation. Logs a SLIP.
-      Plus a "try instead" line from the spec, and a 30-min lockdown link.
-    - Phone Checking has no sites to block, so its block card is simply absent - the lockdown
-      link is its lever instead.
-    - New HabitLog (UserState.kt): flat per-category log of RIDE / SLIP. Thin on purpose - the
-      adult-content flow keeps its own rich logs (TemptationLog / RelapseLog).
-    - Adult Content keeps its own bespoke heavy flow, untouched.
-
-    NOT VERIFIED ON DEVICE - it builds, installs and launches without crashing, but I did not
-    click through the new pages: the phone was in active personal use mid-test. Worth a manual
-    pass over: the block toggle's on/off state, and the ride-it-out breathing screen.
-
-OLD Task (kept for reference):
-- want to add more entries to the 'temptations' page...
-here are my ideas for what to add;
-
-```
-list.addView(homeCard("Endless Scrolling / Brain Rot 🤳", "Break the infinite feed loop.") {
-        /*
-         * Overview:
-         * This section tackles the modern problem of endless, low-effort content consumption.
-         *
-         * Covers:
-         * - TikTok, Instagram Reels, YouTube Shorts, Reddit feeds, forums, and other infinite scroll platforms
-         * - The "just one more scroll" loop
-         * - Passive consumption that fragments attention and leaves users feeling mentally drained
-         * - Short-form content designed around constant novelty and dopamine seeking
-         * - The feeling of losing time while consuming content without intention
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-    list.addView(homeCard("Binge Watching 📺", "Escape loops through endless viewing.") {
-        /*
-         * Overview:
-         * This section tackles long-form passive entertainment consumption.
-         *
-         * Covers:
-         * - Netflix, YouTube videos, streaming platforms, and autoplay loops
-         * - Watching for hours longer than intended
-         * - Using shows/videos as an escape from boredom, discomfort, stress, or difficult tasks
-         * - The difference between intentional entertainment and losing control of viewing time
-         * - Autoplay and recommendation systems encouraging continued consumption
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-    list.addView(homeCard("Social Comparison / Social Media 👥", "Break the comparison and validation loop.") {
-        /*
-         * Overview:
-         * This section tackles the psychological effects of comparing yourself to others online.
-         *
-         * Covers:
-         * - Seeing friends, acquaintances, influencers, and peers presenting curated versions of their lives
-         * - FOMO (fear of missing out)
-         * - Seeking validation through likes, comments, views, and social approval
-         * - Comparing achievements, appearance, lifestyle, and status against others
-         * - Feeling behind, inadequate, or anxious after consuming social media content
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-    list.addView(homeCard("Phone Checking 📱", "Stop the automatic checking habit.") {
-        /*
-         * Overview:
-         * This section tackles compulsive phone checking and unconscious device habits.
-         *
-         * Covers:
-         * - Unlocking the phone repeatedly without a clear purpose
-         * - Checking notifications, messages, and apps out of habit
-         * - Picking up the phone during moments of boredom or discomfort
-         * - The automatic reflex of reaching for the phone throughout the day
-         * - Rebuilding awareness and control over phone usage
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-    list.addView(homeCard("News Cycles / Existential Anxiety 📰", "Step away from endless worry.") {
-        /*
-         * Overview:
-         * This section tackles unhealthy news consumption and anxiety caused by constant exposure to world events.
-         *
-         * Covers:
-         * - Obsessively checking news updates throughout the day
-         * - Consuming negative stories repeatedly without taking meaningful action
-         * - Feeling overwhelmed by global events, politics, disasters, and problems outside personal control
-         * - The cycle of fear, uncertainty, checking, and temporary relief
-         * - Separating being informed from being consumed by information
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-    list.addView(homeCard("Gaming & Reward Loops 🎮", "Understand digital reward cycles.") {
-        /*
-         * Overview:
-         * This section tackles gaming habits driven by reward systems and progression loops.
-         *
-         * Covers:
-         * - Games designed around achievements, unlocks, streaks, levels, and rewards
-         * - Chasing progress and dopamine hits through virtual goals
-         * - Playing longer than intended
-         * - Using gaming to avoid boredom, stress, or responsibilities
-         * - Recognising when entertainment becomes a compulsive reward loop
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-    list.addView(homeCard("Impulse Shopping 💳", "Break the buying-for-a-feeling loop.") {
-        /*
-         * Overview:
-         * This section tackles online shopping driven by impulse and instant gratification.
-         *
-         * Covers:
-         * - Amazon, Temu, discount sites, ads, and constant product exposure
-         * - Buying because of boredom, excitement, stress, or the feeling of getting a deal
-         * - Limited-time offers and recommendation systems encouraging unnecessary purchases
-         * - The dopamine hit of ordering and receiving packages
-         * - Building more intentional spending habits
-         */
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
-    })
-
-
-```
-
-obviously for each, we'll want to wire in functions specific to each of the new pages..
-then create the pages (e.g. a bit like the sexual arousal page.. but much simpler) for each... keep them more basic though- think what would actually be helpful. We don't want to overwhelm them or give too many options.
-(I can always add more later...)
-
-
 TODO NEXT:
-- add N slip to list of rules...
 
-DONE - breathing animation
-    - Auto-start: was hung off a single OnGlobalLayoutListener, and driven by ValueAnimator -
-      which completes INSTANTLY when the system animator duration scale is 0 (battery saver,
-      "Remove animations", Developer Options). That is the "sometimes doesn't start" bug. Now
-      driven by Choreographer + our own clock, started from two independent triggers.
-    - Backup: "If nothing happens, tap to enter" flashes on entry; a 1.5s watchdog re-shows it
-      and lets a tap through if the orb genuinely never moved, so you can never be trapped.
-    - Fills the screen again: BreathOrbView takes an OrbFill - COVER for the big overlay
-      (reaches the corners), INSCRIBE (unchanged) for the boxed in-app arousal pages.
-    - Lag: the orb was allocating a new RadialGradient every single frame. It is now built
-      once per resize and scaled with a matrix, and the loop runs at ~30fps not 60.
-    - 2FA: breathing is now FIRST OPEN PER APP PER DAY (BreathingGate), so tabbing to an
-      authenticator no longer re-gates you. Super hardcore breathes on every open.
-
-    !! NOT DONE - "if they swipe off / close the app, it is then reset".
-       Android gives an accessibility service no dependable "app was swiped away" signal.
-       Backgrounded-but-alive apps have no visible window, and a cold-start heuristic is
-       useless for the apps we gate (Fenix is single-activity, so resume and fresh launch
-       look identical). Options: leave the daily pass as-is, or take PACKAGE_USAGE_STATS
-       and watch for ACTIVITY_DESTROYED, then call BreathingGate.reset(pkg) - that is the
-       only hook needed. See the KNOWN GAP note on BreathingGate in UserState.kt.
-
-- when in strict mode, make it so that the user cannot use any non-whitelisted apps when lying down or if they are in the dark, as determined by out existing sensor data.
+- when in strict mode, make it so that the user cannot use any non-whitelisted apps (e.g. whatsapp) when lying down or if they are in the dark, as determined by out existing sensor data.
+    (block the app with our block screen- saying the user can't use it whilst [in a dark place] / [lying down]
     - Also, add them to our log when the user fails / slips / is detected to be looking at bad conent (i.e. a page block or self reported etc). so that we can see the trends in that data as well..
     - (and of course in our summary / graph tables add those as a graph and in the summary say that 'the light level is usually..' and 'your screen rotation is usually (upright / led down)
 
@@ -254,6 +90,7 @@ MANUAL TODO:
    - Coping-rehearsal scenarios can live here too.
    - Need to keep themselves busy!
    - No tracking needed on this — they'll know where they're at.
+- add N slip to list of rules...
 
 
 
@@ -310,23 +147,6 @@ Add 'founder mode'
 (Same app for ease?)
 
 ======
-Still thinking I might have a super duper strict mode... 
-Where I block people out of all non whitelisted apps until they re-enable the screen monitoring... 
-
-
-======
-You know the things where we have true or false to toggle depending on the mode (relaxed or strict)?
-
-Can we integrate the gyroscope into that? 
-And the light sensor? 
-
-So if gyroscope is active:
-- definitely go more strict
-- (have a super strict mode?)
-- yeah I think turn on super strict mode... (Don't allow any non whitelisted apps??) 
-
-====================================================================
-
 
 - Donors have no adds.
 - we give extra founder mode help to them...
@@ -363,16 +183,6 @@ Perhaps the above could be "down the line" things to add later....
 -------
 
 
-DONT DO SOFTCORE mode...
-    - thats just wrong..
-    - if they're about to go.. 
-    - just only block super strict things.. but maybe turn off certain things so that they can access stuff?!?!?!
-
-
-MAKE THEM WAIT 5 MINUTES! (OR 10... or 20... or 30! and then ask again- like food eating addiction theory...)
-
-
-
 -------
 ????
 
@@ -382,13 +192,6 @@ Then even perhaps a seperate config / file(s) for like preference things like al
 ---------
 
 
-NEXT TODOS:
-- integrate the whitelisting of trusted domains
-- Add my own custom words blocklist(?)   (seperate from the main list.. somewhere obvious in the code for me to edit.. like a constant at the top...)
-    - for strict mode...
-    - like bkni etc.
-
-------------------------------------------------------------------------------------
 
 
 # way down the line:

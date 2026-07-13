@@ -214,11 +214,17 @@ object AppConfig {
     const val GREYSCALE_ONLY_WHEN_LYING = true   // true: only while lying down; false: whole strict session
 
     // === Leaving a blocked browser ===================================================
-    // Where a browser is sent when the user taps "Close app" on a block cover. The point
-    // is to get the browser OFF the blocked page, so reopening it lands somewhere neutral
-    // and the user can close the offending tab in peace. "about:blank" costs no data; a
-    // real URL (e.g. "https://duckduckgo.com") also works if you'd rather land on a page.
-    const val BROWSER_HOME_URL = "about:blank"
+    // Where a browser is sent when the user taps "Go to home screen" on a block cover. The
+    // point is to get the browser OFF the blocked page, so REOPENING it lands somewhere
+    // neutral instead of straight back on it - the behaviour Stay Focused has.
+    //
+    // Must be a URL the browser will accept from an external ACTION_VIEW intent, which means
+    // http/https. Do NOT put "about:blank" here: browsers only register intent filters for
+    // http/https/BROWSABLE, so an about: URL is silently dropped and the redirect does
+    // nothing at all. (That was the bug - the exit "worked" but you came back to the same
+    // page.) DuckDuckGo is deliberately the landing page: it's the one browser/search this
+    // app leaves unblocked.
+    const val BROWSER_HOME_URL = "https://duckduckgo.com"
 
     // === Uninstall / device-admin passcode ==========================================
     const val UNINSTALL_PASSCODE = "666666"
