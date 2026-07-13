@@ -73,6 +73,10 @@ dependencies {
     // Bundles libonnxruntime.so for every phone ABI automatically. (MIT licensed.)
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
 
+    // Plain JVM unit tests. BorderlineScorer is pure Kotlin (no Android), so the content
+    // filter can be tested properly on the host - see BorderlineScorerTest.
+    testImplementation("junit:junit:4.13.2")
+
     androidTestImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

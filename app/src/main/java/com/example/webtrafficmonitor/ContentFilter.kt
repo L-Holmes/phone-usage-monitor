@@ -57,6 +57,11 @@ object FilterTuning {
     const val SUBTLE_WEIGHT = 2
     const val DUAL_SEXUAL_WEIGHT = 3
 
+    // PHRASES (see BannedPhrases). A LOUD phrase in a title is meant to block on its own:
+    // 7 x TITLE_URL_MULTIPLIER = 14, comfortably over THRESHOLD.
+    const val PHRASE_LOUD_WEIGHT = 7
+    const val PHRASE_SOFT_WEIGHT = 3
+
     const val CONTEXT_WINDOW = 4     // a DUAL word counts only if an indicator is this near
     const val PER_WORD_CAP = 5       // one word can contribute at most this many times
     const val THRESHOLD = 10         // score at/above this → block
@@ -112,8 +117,96 @@ object BannedWords {
         "tease", "teen", "teens", "thick", "tight", "toy", "toys", "vixen", "wet", "women",
     )
 
+    // ── EVASION SPELLINGS ────────────────────────────────────────────────────────────
+    // Deliberate misspellings, shortenings and slang used to get around a filter. These
+    // are folded into the tiers below, so they score exactly like the word they stand in
+    // for.
+    //
+    // NOTE what you do NOT need to list here: leetspeak and stretched letters. The scorer
+    // normalises every token before matching (see deleet / collapse in BorderlineScorer),
+    // so "p0rn", "pr0n", "s3x", "b00bs", "pooorn" and "seeexy" all already resolve to
+    // words that are in the lists above. Only add genuinely DIFFERENT spellings here.
+    //
+    // Everything in this set has no real innocent use, so it sits at EXPLICIT weight.
+    // If you add something with an innocent meaning (e.g. "goon", "hoe"), put it in
+    // VARIANT_DUAL instead - it will then only score next to another sexual word.
+    val VARIANT_EXPLICIT: Set<String> = setOf(
+        // naked / nude
+        "nake", "nakey", "nekked", "nekkid", "nakd", "nekid", "nood", "noods", "nudez", "nudz",
+        // porn
+        "pron", "prn0", "pr0no", "prnhub", "pornhub", "xnxx", "xvideos", "redtube", "youporn",
+        "brazzers", "spankbang", "motherless", "xhamster",
+        // sex
+        "seggs", "secks", "sechs", "sexo", "sexx", "sexxx",
+        // breasts
+        "bewbs", "bewb", "boobz", "titz", "tiddies", "tiddy", "tittys", "milkers",
+        // masturbation / the community's own words
+        "fap", "fapping", "fapped", "faps", "fapper", "coom", "coomer", "cooming",
+        "masterbate", "masterbating", "masterbation", "masturbait", "gooner",
+        "cumz", "cummin", "jizz", "jizzed",
+        // anatomy misspellings
+        "pussi", "pusy", "pusssy", "vajayjay", "coochie", "cooter", "phuck", "fukk",
+        // adult platforms / genres
+        "onlyfanz", "onlyfan", "fansly", "chaturbate", "stripchat", "camsoda", "myfreecams",
+        "hentia", "hentay", "ahegao", "ecchi", "futanari", "futa", "doujin", "doujinshi",
+        "rule34", "r34", "lewds", "lewding", "nudify", "deepnude", "thot", "thots", "thotty",
+    )
+
+    // Evasion spellings that DO have innocent uses. Context-gated, like any DUAL word, so
+    // they score NOTHING on their own. Keep this list tight: every entry here is a word
+    // that appears on ordinary pages, and the only thing saving us is the context rule.
+    // ("edge" and "cake" were tried and pulled - far too common to be worth the noise.)
+    val VARIANT_DUAL: Set<String> = setOf(
+        "goon", "gooning", "goonin", "edging", "thicc", "thicce", "phat",
+        "hoe", "hoes", "buns", "melons", "smash",
+    )
+
     // Any non-dual sexual word "switches on" a nearby dual word.
-    val INDICATORS: Set<String> = EXPLICIT + STRONG + SUBTLE
+    val INDICATORS: Set<String> = EXPLICIT + STRONG + SUBTLE + VARIANT_EXPLICIT
+}
+
+
+// ── Phrases ──────────────────────────────────────────────────────────────────────────
+// The word tiers can only ever see ONE word at a time, which is why "try on haul",
+// "nip slip" and "no leggings" all sailed straight through: not one of those words is
+// banned on its own, and they never will be. Phrases are matched against the page text as
+// a whole, so word ORDER carries the meaning.
+//
+// LOUD  = the phrase itself is the giveaway. One of these in a title blocks on its own.
+// SOFT  = leans adult, but has a real innocent life (a genuine fashion haul). Needs help
+//         from something else on the page to reach the threshold.
+//
+// TO ADD ONE: lower case, single spaces, letters and digits only - it is matched against a
+// normalised copy of the page, so punctuation and hyphens in the real text don't matter
+// ("try-on haul" and "Try On Haul!!" both match "try on haul").
+object BannedPhrases {
+
+    val LOUD: Set<String> = setOf(
+        // the "technically clothed" genre
+        "nip slip", "nipple slip", "wardrobe malfunction", "accidental exposure",
+        "see through", "see thru", "sheer top", "sheer dress", "nothing underneath",
+        "no panties", "no underwear", "no bra", "no pants", "no leggings", "no clothes",
+        "without underwear", "without a bra", "without panties", "braless try on",
+        // haul / try-on as a delivery vehicle
+        "try on haul", "tryon haul", "lingerie haul", "bikini haul", "sheer haul",
+        "transparent haul", "underwear haul", "nude haul", "see through haul",
+        "mesh haul", "micro bikini",
+        // the obvious ones
+        "leaked nudes", "leaked onlyfans", "onlyfans leak", "sex tape", "adult film",
+        "free porn", "porn site", "live cam", "cam girls", "webcam girls", "camel toe",
+        "thirst trap", "hidden cam", "spy cam", "strip tease", "pole dance",
+        "naked girls", "nude girls", "hot girls", "sexy girls", "naked women",
+        "only fans", "adult content", "not safe for work",
+    )
+
+    val SOFT: Set<String> = setOf(
+        "try on", "tryon", "haul video", "clothing haul", "fashion haul", "swimsuit haul",
+        "tight dress", "short skirt", "mini skirt", "crop top", "yoga pants", "leggings haul",
+        "gym fit", "workout fit", "body check", "before and after body", "beach body",
+        "bikini body", "hot tub", "shower scene", "bed scene", "massage video",
+        "asmr girl", "girl next door", "curvy model", "plus size model", "fitness model",
+        "swimwear try on", "boudoir shoot", "glamour shoot", "photo shoot bikini",
+    )
 }
 
 
@@ -142,20 +235,18 @@ object BorderlineScorer {
         total += scoreField(tokenize(title), FilterTuning.TITLE_URL_MULTIPLIER, counted)
         total += scoreField(tokenize(url), FilterTuning.TITLE_URL_MULTIPLIER, counted)
         total += scoreField(tokenize(body), 1, counted)
+        // Phrases are matched on the text as a whole, because the meaning is in the ORDER -
+        // no single word of "try on haul" is bannable, and the three together plainly are.
+        total += scorePhrases(normalise(title), FilterTuning.TITLE_URL_MULTIPLIER, counted)
+        total += scorePhrases(normalise(url), FilterTuning.TITLE_URL_MULTIPLIER, counted)
+        total += scorePhrases(normalise(body), 1, counted)
         return total
     }
 
     private fun scoreField(words: List<String>, mult: Int, counted: HashMap<String, Int>): Int {
         var s = 0
         for (i in words.indices) {
-            val w = words[i]
-            val base = when {
-                w in BannedWords.EXPLICIT -> FilterTuning.EXPLICIT_WEIGHT
-                w in BannedWords.STRONG   -> FilterTuning.STRONG_WEIGHT
-                w in BannedWords.SUBTLE   -> FilterTuning.SUBTLE_WEIGHT
-                w in BannedWords.DUAL     -> if (hasIndicatorNear(words, i)) FilterTuning.DUAL_SEXUAL_WEIGHT else 0
-                else -> 0
-            }
+            val (w, base) = weigh(words, i)
             if (base == 0) continue
             val c = counted.getOrDefault(w, 0)
             if (c >= FilterTuning.PER_WORD_CAP) continue
@@ -165,20 +256,113 @@ object BorderlineScorer {
         return s
     }
 
+    /**
+     * The weight of word [i], trying the token as written AND its normalised form, so
+     * "p0rn" / "pooorn" / "PORN" all land on "porn". Returns the form that matched (for the
+     * per-word cap) and its weight.
+     */
+    private fun weigh(words: List<String>, i: Int): Pair<String, Int> {
+        for (w in candidates(words[i])) {
+            val base = when {
+                w in BannedWords.EXPLICIT -> FilterTuning.EXPLICIT_WEIGHT
+                w in BannedWords.VARIANT_EXPLICIT -> FilterTuning.EXPLICIT_WEIGHT
+                w in BannedWords.STRONG -> FilterTuning.STRONG_WEIGHT
+                w in BannedWords.SUBTLE -> FilterTuning.SUBTLE_WEIGHT
+                w in BannedWords.DUAL || w in BannedWords.VARIANT_DUAL ->
+                    if (hasIndicatorNear(words, i)) FilterTuning.DUAL_SEXUAL_WEIGHT else 0
+                else -> 0
+            }
+            if (base > 0) return w to base
+        }
+        return words[i] to 0
+    }
+
+    /** The spellings we'll accept for one token: as typed, de-leeted, and de-stretched. */
+    private fun candidates(token: String): List<String> {
+        val out = ArrayList<String>(3)
+        out.add(token)
+        val d = deleet(token)
+        if (d != token) out.add(d)
+        val c = collapse(d)
+        if (c != d && c != token) out.add(c)
+        return out
+    }
+
+    /** Digit/symbol substitutions: p0rn -> porn, s3x -> sex, b00bs -> boobs. */
+    private fun deleet(s: String): String {
+        val sb = StringBuilder(s.length)
+        for (ch in s) {
+            sb.append(
+                when (ch) {
+                    '0' -> 'o'; '1' -> 'i'; '3' -> 'e'; '4' -> 'a'
+                    '5' -> 's'; '7' -> 't'; '@' -> 'a'; '$' -> 's'
+                    else -> ch
+                },
+            )
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Stretched letters: "pooorn" -> "porn", "seeexy" -> "sexy". Runs collapse all the way
+     * to ONE letter, which does mangle honest doubles ("boobs" -> "bobs") - that's fine,
+     * because candidates() checks the word as typed as well, and "boobs" matches there.
+     */
+    private fun collapse(s: String): String {
+        if (s.length < 3) return s
+        val sb = StringBuilder(s.length)
+        for (i in s.indices) {
+            if (i == 0 || s[i] != s[i - 1]) sb.append(s[i])
+        }
+        return sb.toString()
+    }
+
     private fun hasIndicatorNear(words: List<String>, i: Int): Boolean {
         val lo = maxOf(0, i - FilterTuning.CONTEXT_WINDOW)
         val hi = minOf(words.lastIndex, i + FilterTuning.CONTEXT_WINDOW)
         for (j in lo..hi) {
             if (j == i) continue
-            if (words[j] in BannedWords.INDICATORS) return true
+            if (candidates(words[j]).any { it in BannedWords.INDICATORS }) return true
         }
         return false
     }
 
-    /** Lowercase, split on anything that isn't a letter, keep whole words of length ≥ 2. */
+    private fun scorePhrases(text: String, mult: Int, counted: HashMap<String, Int>): Int {
+        if (text.isBlank()) return 0
+        var s = 0
+        fun run(set: Set<String>, weight: Int) {
+            for (p in set) {
+                if (!text.contains(" $p ")) continue
+                val key = "phrase:$p"
+                val c = counted.getOrDefault(key, 0)
+                if (c >= FilterTuning.PER_WORD_CAP) continue
+                counted[key] = c + 1
+                s += weight * mult
+            }
+        }
+        run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT)
+        run(BannedPhrases.SOFT, FilterTuning.PHRASE_SOFT_WEIGHT)
+        return s
+    }
+
+    /**
+     * The page as one padded, single-spaced, letters-and-digits-only string, so a phrase can
+     * be found with a plain " phrase " contains(). The padding is what gives us word
+     * boundaries for free: " no bra " will not match inside "piano brand".
+     */
+    private fun normalise(s: String?): String {
+        if (s.isNullOrEmpty()) return ""
+        return " " + s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
+    }
+
+    /**
+     * Lowercase, split on anything that isn't a letter or DIGIT, keep tokens of length >= 2.
+     * Digits are kept deliberately: strip them and "p0rn" tokenises to "p"/"rn" and no
+     * amount of de-leeting can save it.
+     */
     private fun tokenize(s: String?): List<String> {
         if (s.isNullOrEmpty()) return emptyList()
-        return s.lowercase().split(Regex("[^a-z]+")).filter { it.length >= 2 }
+        return s.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 2 }
     }
 }
 

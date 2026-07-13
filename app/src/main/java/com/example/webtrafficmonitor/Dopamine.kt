@@ -570,32 +570,119 @@ object LifeInputs {
 
     private const val PREFS = "life_inputs"
 
-    /** Each is "how many times in the last 7 days", 0..7. Order = roughly most restorative first. */
-    val HABITS: List<Pair<String, String>> = listOf(
-        "deep_rest" to "Restorative sleep / deep rest (not naps)",
-        "offline_focus" to "Deep offline focus (physical book, studying, screen-free work)",
-        "training" to "Intense physical training (weights, running, sport)",
-        "building" to "High-leverage building (business, career, planning, learning)",
-        "creation" to "Active creation (writing, music, cooking, making things)",
-        "in_person" to "In-person socialising, phones away",
-        "reflection" to "Screen-free reflection (walking alone, meditation, sitting doing nothing)",
-        "light_exercise" to "Light exercise (a walk, anything gentle)",
-        "healthy_eating" to "Ate well, no bingeing",
+    /**
+     * One option on a habit's scale. [credit] is how much of that habit's full value this
+     * option is worth, 0..1 - so the scales can be different lengths and still add up fairly.
+     */
+    data class Option(val label: String, val credit: Float)
+
+    /**
+     * A habit, and the answer scale that actually suits it.
+     *
+     * TYPICAL DAY, not "days last week". The scales are per-habit on purpose: eight hours of
+     * sleep is a good day and eight hours of meditation is not a thing, so they cannot share
+     * a scale. Full credit is set at a level that is GOOD, not heroic - the point is to
+     * describe an ordinary decent day, not to make everyone score 20%.
+     */
+    data class Habit(val key: String, val label: String, val hint: String, val options: List<Option>)
+
+    private fun mins(vararg pairs: Pair<String, Float>) = pairs.map { Option(it.first, it.second) }
+
+    val HABITS: List<Habit> = listOf(
+        Habit("deep_rest", "Sleep", "Actual sleep, on a typical night. Not naps.",
+            mins(
+                "under 5h" to 0f, "5-6h" to 0.25f, "6-7h" to 0.6f,
+                "7-8h" to 1f, "8h+" to 1f,
+            )),
+        Habit("offline_focus", "Deep offline focus",
+            "A physical book, studying, screen-free work.",
+            mins(
+                "none" to 0f, "<15 min" to 0.2f, "~30 min" to 0.45f, "~45 min" to 0.65f,
+                "~1 hour" to 0.85f, "2 hours+" to 1f,
+            )),
+        Habit("training", "Intense physical training",
+            "Weights, running, sport - the hard stuff.",
+            mins(
+                "none" to 0f, "<15 min" to 0.25f, "~30 min" to 0.6f,
+                "~45 min" to 0.85f, "1 hour+" to 1f,
+            )),
+        Habit("building", "High-leverage building",
+            "Business, career, planning, learning - work on your future.",
+            mins(
+                "none" to 0f, "<30 min" to 0.2f, "~1 hour" to 0.5f,
+                "~2 hours" to 0.8f, "3 hours+" to 1f,
+            )),
+        Habit("creation", "Active creation",
+            "Writing, music, cooking, making things.",
+            mins(
+                "none" to 0f, "<15 min" to 0.2f, "~30 min" to 0.5f,
+                "~1 hour" to 0.8f, "2 hours+" to 1f,
+            )),
+        Habit("in_person", "In-person time, phones away",
+            "Real time with people, not messaging them.",
+            mins(
+                "none" to 0f, "<30 min" to 0.25f, "~1 hour" to 0.55f,
+                "~2 hours" to 0.85f, "3 hours+" to 1f,
+            )),
+        Habit("reflection", "Screen-free reflection",
+            "Walking alone, meditation, sitting doing nothing. Boredom counts.",
+            mins(
+                "none" to 0f, "<15 min" to 0.35f, "~30 min" to 0.7f,
+                "~45 min" to 0.9f, "1 hour+" to 1f,
+            )),
+        Habit("light_exercise", "Light movement",
+            "A walk. Anything gentle. Being on your feet.",
+            mins(
+                "none" to 0f, "<15 min" to 0.2f, "~30 min" to 0.5f,
+                "~1 hour" to 0.8f, "2 hours+" to 1f,
+            )),
+        Habit("healthy_eating", "Eating",
+            "Not a duration - just how the day went.",
+            listOf(
+                Option("Binged / junk", 0f), Option("Mixed", 0.4f),
+                Option("Mostly good", 0.75f), Option("Clean", 1f),
+            )),
+        Habit("caffeine", "Caffeine",
+            "After about midday it costs you sleep, which costs you tomorrow.",
+            listOf(
+                Option("None", 1f), Option("1 cup, early", 0.9f), Option("2-3 cups", 0.6f),
+                Option("Lots / late in the day", 0.15f),
+            )),
+        Habit("alcohol", "Alcohol",
+            "Wrecks deep sleep even when it helps you drop off.",
+            listOf(
+                Option("None", 1f), Option("1 drink", 0.7f),
+                Option("2-3 drinks", 0.35f), Option("More", 0f),
+            )),
     )
 
-    fun get(c: Context, key: String): Int = prefs(c).getInt(key, 0)
-    fun set(c: Context, key: String, daysOfSeven: Int) =
-        prefs(c).edit().putInt(key, daysOfSeven.coerceIn(0, 7)).apply()
-    fun anySet(c: Context): Boolean = HABITS.any { get(c, it.first) > 0 }
+    /** The stored option INDEX for a habit (defaults to the worst/none end of the scale). */
+    fun get(c: Context, key: String): Int = prefs(c).getInt(key, defaultIndex(key))
+    fun set(c: Context, key: String, index: Int) {
+        val h = habit(key) ?: return
+        prefs(c).edit().putInt(key, index.coerceIn(0, h.options.lastIndex)).apply()
+    }
+
+    fun habit(key: String): Habit? = HABITS.firstOrNull { it.key == key }
+    fun optionOf(key: String, index: Int): Option? =
+        habit(key)?.options?.getOrNull(index)
+
+    fun anySet(c: Context) = HABITS.any { get(c, it.key) != defaultIndex(it.key) }
+
+    // Caffeine and alcohol default to "none", which is the GOOD end - so someone who never
+    // opens this page isn't quietly assumed to be drinking. Everything else defaults to 0.
+    private fun defaultIndex(key: String) = 0
 
     /**
      * A 0-100 "restorative habits" estimate. Higher = better, which is the OPPOSITE direction
      * to the dopamine score - deliberately, so the two can never be confused for each other.
      */
     fun estimate(c: Context): Int {
-        val max = HABITS.size * 7
-        val got = HABITS.sumOf { get(c, it.first) }
-        return if (max == 0) 0 else (got * 100 / max)
+        if (HABITS.isEmpty()) return 0
+        val total = HABITS.sumOf { h ->
+            (optionOf(h.key, get(c, h.key))?.credit ?: 0f).toDouble()
+        }
+        return Math.round(total / HABITS.size * 100).toInt()
     }
 
     private fun prefs(c: Context) =

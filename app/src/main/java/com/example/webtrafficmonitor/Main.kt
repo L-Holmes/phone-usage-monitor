@@ -448,7 +448,9 @@ private fun showStatsMenu() {
     val root = vbox(pad)
     root.addView(titleText("Statistics"))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    list.addView(pickCard("Dopamine baseline") { showDopamine() })
+    // NOTE: "Dopamine baseline" deliberately does NOT live here. It is a whole-phone,
+    // whole-life measure, not an adult-content one, so it belongs on the Productivity page -
+    // see showProductivity(). Don't move it back in here.
     list.addView(pickCard("Progress & reward") { showProgress() })
     list.addView(pickCard("Where & how it happens") { showContextStats() })
     list.addView(pickCard("Temptation patterns") { showTemptationStats() })
@@ -460,7 +462,20 @@ private fun showStatsMenu() {
     setContentWithThumb(root) { showReportScreen() }
 }
 
+/** A quiet teal text link, used under the cards on the Productivity page. */
+private fun smallLink(label: String, dp: Float, onClick: () -> Unit): TextView =
+    TextView(this).apply {
+        text = label; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFF2E9E8F.toInt())
+        isClickable = true; isFocusable = true
+        setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
+        setOnClickListener { onClick() }
+    }
+
 // ── About you: optional numbers, used ONLY to make the cost concrete ────────
+private var aboutYouBack: () -> Unit = { setupHomeScreen() }
+private var lifeInputsBack: () -> Unit = { showProductivity() }
+
 private fun showAboutYou() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
@@ -469,7 +484,7 @@ private fun showAboutYou() {
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
     })
-    setContentWithThumb(root) { setupHomeScreen() }
+    setContentWithThumb(root) { aboutYouBack() }
 
     c.addView(TextView(this).apply {
         text = "Optional. We use this only to estimate what the lost time is actually costing " +
@@ -533,7 +548,7 @@ private fun showDopamine() {
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
     })
-    setContentWithThumb(root) { showStatsMenu() }
+    setContentWithThumb(root) { showProductivity() }
 
     if (!r.hasData) {
         c.addView(TextView(this).apply {
@@ -601,15 +616,156 @@ private fun showDopamine() {
         }
     }
 
+    c.addView(statHeader("MORE", dp))
+    c.addView(captionedButton("How is this calculated?", "every rule, and what it's worth",
+        0xFF34464E.toInt()) { showDopamineMaths() })
     c.addView(captionedButton("How do I bring this down?", "what actually moves the number",
         0xFF3E535C.toInt()) { showDopamineGuidance() })
     c.addView(captionedButton("Your habits estimate", "self-reported · does NOT affect the score above",
-        0xFF52796F.toInt()) { showLifeInputs() })
+        0xFF52796F.toInt()) { lifeInputsBack = { showDopamine() }; showLifeInputs() })
     c.addView(TextView(this).apply {
-        text = "This is a rough model, not a medical measurement. It exists to make a pattern " +
-            "visible, nothing more."
+        text = "A rough model, not a medical measurement. It exists to make a pattern visible, " +
+            "nothing more."
         textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
-        setPadding(0, (12 * dp).toInt(), 0, (16 * dp).toInt())
+        setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
+    })
+}
+
+// ── "How is this calculated?" - every rule, in one list, in plain English ───
+//
+// AI / MAINTAINER: this screen is GENERATED from DopamineTuning. If you change a weight or
+// a threshold in Dopamine.kt, this page follows automatically - there is nothing to edit
+// here. Do NOT hard-code a number into this screen; read it from the tuning object, or the
+// page will start lying the first time someone retunes the algorithm.
+private fun showDopamineMaths() {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val t = DopamineTuning
+    val root = vbox(pad)
+    root.addView(titleText("How it's calculated"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showDopamine() }
+
+    c.addView(TextView(this).apply {
+        text = "Every rule below adds points to a daily total, capped at 100. Higher is worse. " +
+            "Nothing here is hidden from you."
+        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
+        setPadding(0, 0, 0, (4 * dp).toInt())
+    })
+
+    fun rule(title: String, worth: String, body: String) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp; setColor(0xFFF4F6F8.toInt())
+            }
+            val p = (14 * dp).toInt(); setPadding(p, (12 * dp).toInt(), p, (12 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (10 * dp).toInt() }
+        }
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        }
+        head.addView(TextView(this).apply {
+            text = title; textSize = 15f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF1F2933.toInt())
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        head.addView(TextView(this).apply {
+            text = worth; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFFB3261E.toInt())
+        })
+        card.addView(head)
+        card.addView(TextView(this).apply {
+            text = body; textSize = 13f; setTextColor(0xFF4A4F54.toInt())
+            setLineSpacing(0f, 1.15f); setPadding(0, (5 * dp).toInt(), 0, 0)
+        })
+        c.addView(card)
+    }
+
+    c.addView(statHeader("1 · TIME SPENT — THE BIG ONE", dp))
+    c.addView(TextView(this).apply {
+        text = "Each category is worth points at a full dose. A \"full dose\" is " +
+            "${t.DOSE_MAX_HOURS.toInt()} hours or more in a day. Below that it scales up on a " +
+            "curve, so the fourth hour costs you more than the first."
+        textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+    })
+    DopamineCategory.values()
+        .filter { it != DopamineCategory.OTHER }
+        .sortedByDescending { t.CATEGORY_POINTS[it] ?: 0f }
+        .forEach { cat ->
+            val pts = Math.round(t.CATEGORY_POINTS[cat] ?: 0f)
+            c.addView(TextView(this).apply {
+                text = "•  ${cat.label} — up to $pts points"
+                textSize = 14f; setTextColor(0xFF3C4650.toInt())
+                setPadding(0, (7 * dp).toInt(), 0, 0)
+            })
+        }
+    c.addView(TextView(this).apply {
+        text = "Example: 2 hours of ${DopamineCategory.FAST_VIDEO.label.lowercase()} is half the " +
+            "maximum dose, which on the curve is about " +
+            "${Math.round(t.doseMultiplier(2f) * 100)}% of " +
+            "${Math.round(t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f)} points ≈ " +
+            "${Math.round(t.doseMultiplier(2f) * (t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f))} points."
+        textSize = 12f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        setPadding(0, (10 * dp).toInt(), 0, 0)
+    })
+
+    c.addView(statHeader("2 · EVERYTHING ELSE", dp))
+    rule("When you did it",
+        "×${t.LATE_NIGHT_MULTIPLIER} / ×${t.JUST_WOKE_MULTIPLIER}",
+        "Time spent between ${t.LATE_NIGHT_FROM}:00 and 0${t.LATE_NIGHT_TO}:00 is multiplied by " +
+            "${t.LATE_NIGHT_MULTIPLIER} — you pay twice, once for the hit and once for the sleep. " +
+            "Use in the first ${t.JUST_WOKE_WINDOW_MIN} minutes after waking is multiplied by " +
+            "${t.JUST_WOKE_MULTIPLIER}.")
+    rule("Phone unlocks", "up to ${Math.round(t.UNLOCKS_MAX_POINTS)}",
+        "Nothing below ${Math.round(t.UNLOCKS_PER_HOUR_OK)} an hour. Full points at " +
+            "${Math.round(t.UNLOCKS_PER_HOUR_BAD)} an hour or more.")
+    rule("Straight-in opens", "up to ${Math.round(t.URGENT_OPEN_MAX_POINTS)}",
+        "${Math.round(t.URGENT_OPEN_POINTS)} points each time you unlock the phone and are inside " +
+            "a feed within ${t.URGENT_OPEN_SECONDS} seconds. No decision happened there.")
+    rule("Compulsive checking", "up to ${Math.round(t.CHECKS_MAX_POINTS)}",
+        "Based on the MOST times you opened any single app within one hour. Nothing below " +
+            "${t.CHECKS_PER_HOUR_OK} opens; full points at ${t.CHECKS_PER_HOUR_BAD}.")
+    rule("Scrolling / tapping rate", "up to ${Math.round(t.INTERACTIONS_MAX_POINTS)}",
+        "Interactions per minute of screen time. Nothing below ${Math.round(t.INTERACTIONS_PER_MIN_OK)}/min " +
+            "(that's reading). Full points at ${Math.round(t.INTERACTIONS_PER_MIN_BAD)}/min (that's thumbing a feed).")
+    rule("Lying down", "up to ${Math.round(t.LYING_MAX_POINTS)}",
+        "Full points at ${t.POSTURE_FULL_HOURS.toInt()} hours of phone use lying down.")
+    rule("In the dark", "up to ${Math.round(t.DARK_MAX_POINTS)}",
+        "Full points at ${t.POSTURE_FULL_HOURS.toInt()} hours of phone use in a dark room.")
+
+    c.addView(statHeader("3 · WHAT TAKES POINTS OFF", dp))
+    c.addView(TextView(this).apply {
+        text = "Time with the screen off — up to ${Math.round(t.SCREEN_OFF_MAX_POINTS)} points back, " +
+            "with full credit at ${t.SCREEN_OFF_FULL_HOURS.toInt()} waking hours off the phone.\n\n" +
+            "That is deliberately small. A calm evening does not undo a four-hour binge, and a " +
+            "score that pretended it did would be no use to you."
+        textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+    })
+
+    c.addView(statHeader("4 · WHAT THE NUMBER IS CALLED", dp))
+    listOf(0, 15, 30, 45, 60, 80).forEach { lo ->
+        c.addView(TextView(this).apply {
+            text = "•  $lo+  ·  ${t.band(lo)}"
+            textSize = 14f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(t.bandColour(lo)); setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+    }
+
+    c.addView(statHeader("WHAT WE CAN'T MEASURE", dp))
+    c.addView(TextView(this).apply {
+        text = "Being straight with you about the holes:\n\n" +
+            "• We cannot tell when you woke up. Android gives us no alarm signal, so we treat " +
+            "your first unlock after a ${t.WAKE_GAP_HOURS.toInt()}+ hour gap as \"just woke up\". " +
+            "Nap and it'll misfire.\n\n" +
+            "• Screen-off credit doesn't know whether a podcast is playing. Seeing that needs a " +
+            "permission this app deliberately doesn't take."
+        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        setPadding(0, 0, 0, (24 * dp).toInt())
     })
 }
 
@@ -734,7 +890,7 @@ private fun showLifeInputs() {
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
     })
-    setContentWithThumb(root) { showDopamine() }
+    setContentWithThumb(root) { lifeInputsBack() }
 
     val banner = TextView(this).apply {
         text = "This does NOT affect your dopamine baseline.\n\nIt's self-reported, so it can't - " +
@@ -750,8 +906,8 @@ private fun showLifeInputs() {
     c.addView(banner)
 
     val scoreLabel = TextView(this).apply {
-        textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
-        setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
+        textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+        setPadding(0, (16 * dp).toInt(), 0, (2 * dp).toInt())
     }
     fun paintScore() {
         scoreLabel.text = "Restorative habits: ${LifeInputs.estimate(this)} / 100"
@@ -759,36 +915,69 @@ private fun showLifeInputs() {
     paintScore()
     c.addView(scoreLabel)
     c.addView(TextView(this).apply {
-        text = "Days out of the last 7:"
-        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
+        text = "On a typical day."
+        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
     })
 
-    LifeInputs.HABITS.forEach { (key, label) ->
+    // Each habit gets the scale that suits IT: sleep in hours, meditation in minutes,
+    // caffeine in cups. A shared 0-7 slider was the wrong shape for all of them.
+    LifeInputs.HABITS.forEach { habit ->
         c.addView(TextView(this).apply {
-            text = label; textSize = 14f; setTextColor(0xFF1F2933.toInt())
-            setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
+            text = habit.label; textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF1F2933.toInt()); setPadding(0, (18 * dp).toInt(), 0, (1 * dp).toInt())
         })
-        val value = TextView(this).apply {
-            textSize = 13f; setTextColor(0xFF7B848C.toInt())
-        }
-        val seek = android.widget.SeekBar(this).apply {
-            max = 7
-            progress = LifeInputs.get(this@MainActivity, key)
-            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) {
-                    value.text = "$p day${if (p == 1) "" else "s"}"
-                    if (fromUser) { LifeInputs.set(this@MainActivity, key, p); paintScore() }
-                }
-                override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
-                override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
-            })
-        }
-        value.text = "${seek.progress} day${if (seek.progress == 1) "" else "s"}"
-        c.addView(value)
-        c.addView(seek)
+        c.addView(TextView(this).apply {
+            text = habit.hint; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+            setPadding(0, 0, 0, (8 * dp).toInt())
+        })
+        c.addView(optionChips(habit) { paintScore() })
     }
     c.addView(View(this), LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, (24 * dp).toInt()))
+        ViewGroup.LayoutParams.MATCH_PARENT, (28 * dp).toInt()))
+}
+
+/** A row of tappable pills - one per option on this habit's scale. Selected one is filled. */
+private fun optionChips(habit: LifeInputs.Habit, onChange: () -> Unit): View {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    val chips = mutableListOf<TextView>()
+    var selected = LifeInputs.get(this, habit.key)
+
+    fun paint() {
+        chips.forEachIndexed { i, chip ->
+            val on = i == selected
+            chip.setTextColor(if (on) 0xFFFFFFFF.toInt() else 0xFF5A6068.toInt())
+            chip.setTypeface(chip.typeface, if (on) Typeface.BOLD else Typeface.NORMAL)
+            chip.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp
+                setColor(if (on) 0xFF52796F.toInt() else 0x00000000)
+                setStroke((1.2f * dp).toInt(), if (on) 0xFF52796F.toInt() else 0xFFCFD5D9.toInt())
+            }
+        }
+    }
+
+    habit.options.forEachIndexed { i, opt ->
+        val chip = TextView(this).apply {
+            text = opt.label
+            textSize = 12f
+            gravity = Gravity.CENTER
+            val px = (6 * dp).toInt(); val py = (9 * dp).toInt()
+            setPadding(px, py, px, py)
+            isClickable = true; isFocusable = true
+            layoutParams = LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = if (i == habit.options.lastIndex) 0 else (5 * dp).toInt() }
+            setOnClickListener {
+                selected = i
+                LifeInputs.set(this@MainActivity, habit.key, i)
+                paint(); onChange()
+            }
+        }
+        chips.add(chip)
+        row.addView(chip)
+    }
+    paint()
+    return row
 }
 
 // ── Where & how it happens: posture + light at the moment things go wrong ───
@@ -1806,7 +1995,7 @@ private fun setupHomeScreen() {
         setTypeface(typeface, Typeface.BOLD)
         isClickable = true; isFocusable = true
         setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
-        setOnClickListener { showAboutYou() }
+        setOnClickListener { aboutYouBack = { setupHomeScreen() }; showAboutYou() }
     }
     hero.addView(bigStat); hero.addView(subStat); hero.addView(lifeStat)
     hero.addView(otherStat); hero.addView(aboutYouLink)
@@ -1943,6 +2132,52 @@ private fun showProductivity() {
     sfSwitch.setOnCheckedChangeListener { _, checked -> ShortForm.setEnabled(this, checked); refreshSf() }
     refreshSf()
     content.addView(sfCard)
+
+    // ── Dopamine baseline: a whole-phone measure, so it belongs here and not buried in
+    //    the adult-content statistics.
+    val todayScore = DopamineScore.of(DopamineLog.today(this))
+    content.addView(sectionTitle("Your dopamine baseline"))
+    val dopCard = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
+        }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        isClickable = true; isFocusable = true
+        setOnClickListener { showDopamine() }
+    }
+    dopCard.addView(TextView(this).apply {
+        text = if (todayScore.hasData) "${todayScore.score}" else "–"
+        textSize = 34f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (todayScore.hasData) todayScore.colour else 0xFF9AA0A6.toInt())
+        includeFontPadding = false
+    })
+    dopCard.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((14 * dp).toInt(), 0, 0, 0)
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        addView(TextView(this@MainActivity).apply {
+            text = if (todayScore.hasData) todayScore.band else "Still measuring"
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = "out of 100 today · higher is more fried"
+            textSize = 12f; setTextColor(0xFF7B848C.toInt())
+        })
+    })
+    dopCard.addView(TextView(this).apply {
+        text = "›"; textSize = 22f; setTextColor(0xFFB0B5BA.toInt())
+    })
+    content.addView(dopCard)
+
+    content.addView(smallLink("Your habits estimate  ›", dp) {
+        lifeInputsBack = { showProductivity() }; showLifeInputs()
+    })
+    content.addView(smallLink("About you — hourly rate, what your time is worth  ›", dp) {
+        aboutYouBack = { showProductivity() }; showAboutYou()
+    })
 
     // Your next year as days
     content.addView(sectionTitle("Your next year"))
