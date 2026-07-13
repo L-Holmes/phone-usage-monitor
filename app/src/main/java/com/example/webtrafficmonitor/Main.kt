@@ -1507,7 +1507,7 @@ private fun showTemptationsTab() {
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    list.addView(homeCard("Sexual arousal  \u2642\uFE0F\u2640\uFE0F", "Tools for the moment, and the longer game.") {
+    list.addView(homeCard("Adult Content \uD83D\uDD1E", "Tools for the moment, and the longer game.") {
         reportBackTarget = { showTemptationsTab() }; showReportScreen()
     })
     root.addView(list)

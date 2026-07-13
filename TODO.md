@@ -4,9 +4,125 @@
 ------------------
 ------------------
 
+Task:
+- want to add more entries to the 'temptations' page...
+here are my ideas for what to add;
+
+```
+list.addView(homeCard("Endless Scrolling / Brain Rot 🤳", "Break the infinite feed loop.") {
+        /*
+         * Overview:
+         * This section tackles the modern problem of endless, low-effort content consumption.
+         *
+         * Covers:
+         * - TikTok, Instagram Reels, YouTube Shorts, Reddit feeds, forums, and other infinite scroll platforms
+         * - The "just one more scroll" loop
+         * - Passive consumption that fragments attention and leaves users feeling mentally drained
+         * - Short-form content designed around constant novelty and dopamine seeking
+         * - The feeling of losing time while consuming content without intention
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+    list.addView(homeCard("Binge Watching 📺", "Escape loops through endless viewing.") {
+        /*
+         * Overview:
+         * This section tackles long-form passive entertainment consumption.
+         *
+         * Covers:
+         * - Netflix, YouTube videos, streaming platforms, and autoplay loops
+         * - Watching for hours longer than intended
+         * - Using shows/videos as an escape from boredom, discomfort, stress, or difficult tasks
+         * - The difference between intentional entertainment and losing control of viewing time
+         * - Autoplay and recommendation systems encouraging continued consumption
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+    list.addView(homeCard("Social Comparison / Social Media 👥", "Break the comparison and validation loop.") {
+        /*
+         * Overview:
+         * This section tackles the psychological effects of comparing yourself to others online.
+         *
+         * Covers:
+         * - Seeing friends, acquaintances, influencers, and peers presenting curated versions of their lives
+         * - FOMO (fear of missing out)
+         * - Seeking validation through likes, comments, views, and social approval
+         * - Comparing achievements, appearance, lifestyle, and status against others
+         * - Feeling behind, inadequate, or anxious after consuming social media content
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+    list.addView(homeCard("Phone Checking 📱", "Stop the automatic checking habit.") {
+        /*
+         * Overview:
+         * This section tackles compulsive phone checking and unconscious device habits.
+         *
+         * Covers:
+         * - Unlocking the phone repeatedly without a clear purpose
+         * - Checking notifications, messages, and apps out of habit
+         * - Picking up the phone during moments of boredom or discomfort
+         * - The automatic reflex of reaching for the phone throughout the day
+         * - Rebuilding awareness and control over phone usage
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+    list.addView(homeCard("News Cycles / Existential Anxiety 📰", "Step away from endless worry.") {
+        /*
+         * Overview:
+         * This section tackles unhealthy news consumption and anxiety caused by constant exposure to world events.
+         *
+         * Covers:
+         * - Obsessively checking news updates throughout the day
+         * - Consuming negative stories repeatedly without taking meaningful action
+         * - Feeling overwhelmed by global events, politics, disasters, and problems outside personal control
+         * - The cycle of fear, uncertainty, checking, and temporary relief
+         * - Separating being informed from being consumed by information
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+    list.addView(homeCard("Gaming & Reward Loops 🎮", "Understand digital reward cycles.") {
+        /*
+         * Overview:
+         * This section tackles gaming habits driven by reward systems and progression loops.
+         *
+         * Covers:
+         * - Games designed around achievements, unlocks, streaks, levels, and rewards
+         * - Chasing progress and dopamine hits through virtual goals
+         * - Playing longer than intended
+         * - Using gaming to avoid boredom, stress, or responsibilities
+         * - Recognising when entertainment becomes a compulsive reward loop
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+    list.addView(homeCard("Impulse Shopping 💳", "Break the buying-for-a-feeling loop.") {
+        /*
+         * Overview:
+         * This section tackles online shopping driven by impulse and instant gratification.
+         *
+         * Covers:
+         * - Amazon, Temu, discount sites, ads, and constant product exposure
+         * - Buying because of boredom, excitement, stress, or the feeling of getting a deal
+         * - Limited-time offers and recommendation systems encouraging unnecessary purchases
+         * - The dopamine hit of ordering and receiving packages
+         * - Building more intentional spending habits
+         */
+        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+    })
+
+
+```
+
+obviously for each, we'll want to wire in functions specific to each of the new pages..
+then create the pages (e.g. a bit like the sexual arousal page.. but much simpler) for each... keep them more basic though- think what would actually be helpful. We don't want to overwhelm them or give too many options.
+(I can always add more later...)
+
 
 TODO NEXT:
-- rename 'sexual arousal' to 'adult content'
 - add N slip to list of rules...
 
 DONE - breathing animation
@@ -342,6 +458,12 @@ beacons:
     - OR even if they're using data?
     - because if we know home wifi... then we know where they are..
         - (home wifi ip may change though!)
+
+
+
+================
+- maybe the user will want to have their phone on holiday for like google maps and what not..
+    - so maybe block web browsing, only allow google maps, waze... maybe spotify? (maybe I let them choose?)
 
 
 ---------------------
