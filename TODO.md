@@ -1,4 +1,72 @@
 
+Why have you got rid of the red yellow green scale?!??! I liked that! I said add a scale for every sensor with seperate green red yellows specific what w eexpect in that room!
+so the bedroom, since we're crrently testing with two sensors, should have the bedroom sensor red to green scale, and the one for the bathroom!
+(but of course the red to green fwill be different for all!) then bathroom also thas those two..
+
+
+
+
+with the last few calibration things.. just literally ask the user to walk around their house and click big button in the middle for 'false reading'..
+then a button at the right saying 'done tagging false readings...'
+
+----
+
+
+
+----
+
+also insead of true or false, can we have true, false, or maybe? 
+like if they're in the bed ... or say very close to the sensor.. then we do true..
+if they're elsewear in the room... the signals aren't as strong / certain.. we say maybe...
+
+
+----
+
+also i feel youve messed up your own algorithm..
+
+e.g. just testing myself..
+when im in the bedroom, it mostly stays around <= 63... around 90% of the time..
+i don't know what the other sensor is as you don't make that clear in the UI like you should...
+I go downstairs it says like 70 and thinks we're in the room?
+
+---
+
+basically, use averages, look at patterns, remove outliers... 
+
+
+-------
+
+also get them to walk around the room for a bit... 
+so then we can get some readings and then ignore outliers... 
+
+-------
+
+please also show the pattern match for approach the room as that seems wrong as well....
+e.g. show the last 6 reading, from both sensors, that we expect when approach the room for [route 1] and [route 2], then show the last 6 recorded readings so that we can compare
+
+
+you have to make it easy for me to debug what data is wrong, as it still isn't working- when im downstairs its wrong..
+
+also remove all those seperate room checks that you have at the end... (a) you are clearly only tagging that specific range... because if Im say downstairs and then move my phone a little.. it thinks im in the room again!!!
+pattern match is all over the place, since you clearly are matching on a single value... 
+also again,, the signal just went -- and then i had to press back and then back onto it in order to recalibrate...
+
+
+basically you aren't fixing what i said and its no closer to working..
+
+
+
+
+-------
+
+also get them to walk around the room for a bit... 
+so then we can get some readings and then ignore outliers... 
+
+
+
+
+
+
 add a section / page in the app 'how we determine what room you're in'...
 make a basic bullet pointed list on all the ways we detect?
 (no silly bold or etc, just super basic)
@@ -12,6 +80,14 @@ make a basic bullet pointed list on all the ways we detect?
 - We learn the pattern of you about to enter the room from different angles.
 ---> we then look through the past few seconds' data, and analyse it against those patterns to see if you've recently 
     entered the room
+- We take multiple readings in the room, and then look for outliers and then remove them...
+
+
+======
+
+also, seperately a guide on where to put the sensors...
+e.g. always want it to be closest to where they will be most at risk (e.g. in their bed, if in the bedroom) [this is key! very key!]
+e.g. like if in bathroom, could put at back of a cupboard, or on a shelf.. (just a few ideas of best main places- don't go crazy)
 
 
 ------------------------------
