@@ -7,6 +7,16 @@
 
     <uses-permission android:name="android.permission.INTERNET"/> <!-- used for loading in the banned urls list. -->
 
+    <!-- Room beacons (KKM K11, see RoomBeacons.kt). BLUETOOTH_SCAN deliberately has NO
+         android:usesPermissionFlags="neverForLocation": with that flag Android 12+
+         silently strips beacon frames out of scan results, which is our entire signal.
+         Because we scan without it, fine location must be declared (and granted) too. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <!-- Lets us detect installed browsers at runtime (see AppBlocklist.refresh).
          This is a visibility declaration, not a permission. -->
     <queries>
