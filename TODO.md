@@ -1,34 +1,17 @@
 
-NO! 
-SHOULD always take reading from all sensors! then use them to build a complex mapping of rules for when in the room!
-also remove the 'its wrong right now fix this spot', come on you are doing this yourself!
---> It should be for the user.. ask them to walk around the house to common places that are near the room (e.g. just outside, neighboruring rooms, above or below... and show false very subtly if still false.. then true really obvoius if not..
-    - and tag all of them... just the one time..
+add a section / page in the app 'how we determine what room you're in'...
+make a basic bullet pointed list on all the ways we detect?
+(no silly bold or etc, just super basic)
+- e.g. 
 
-Then in my debug... all this IN when louder... just reomve all that text, its useless!
-For each you should show bars representing all of the sensors, and then only when they're all in green will it say true!
-
-
-Basically its still really bad with false detects.. and it doesnt even look like youve added this additional calibration... 
-also.. did you dod hte addtitional rearch? Like thinking what the signal is like just before they go through the door (i.e. *entering the bedroom*), 
-vs. what the signal is like when they're downstairs... just before... we need to look at all data points... and then look at the current data.. then use that to determine whether we think they're in the room or not...
+## Primary options for checking you're in the room
+- We measure the current signal strength from all sensors in order to triangulate your position
 
 
-look at a range of recent values... rather than just one...
-
-then seperatealy, also during the calibration stage..
-
-get them to walk into the banned room and then go and sit/lie in a common spot. 
-perhaps like 2 different times, approaching from different angles (e.g. walk up stairs to bedroom then lie on bed... or start at other upstairs room then across landing to room and then sit in chair...'
-
-
-also, again seperate from the above, ask them twice to sit in places where they will be most tempted  into slight vaiations / holding phone at different angles (as this is the most key place...)
-
-also after testing for a while, sometimes it seems to not update... it says like heard: 59 seconds ago and just keeps tikcing up.
-then i pressed back then just clicked on the room detectoin page and that seemed to put it back into actoin.
-i shouldn't have to do that to re-trigger it, its important that all the time its being refreshed.
-
-
+## Backup data options to triple check you are in the room
+- We learn the pattern of you about to enter the room from different angles.
+---> we then look through the past few seconds' data, and analyse it against those patterns to see if you've recently 
+    entered the room
 
 
 ------------------------------
