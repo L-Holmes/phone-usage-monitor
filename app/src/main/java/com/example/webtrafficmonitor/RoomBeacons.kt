@@ -8,12 +8,15 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.util.Log
+import android.view.View
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.sqrt
@@ -25,39 +28,61 @@ import kotlin.math.sqrt
 //  Each room gets a beacon that shouts its identity over BLE; the phone only listens
 //  and measures loudness (RSSI, dBm, closer to 0 = nearer). No pairing, no KKM app.
 //
-//  CALIBRATION (the set-up wizard) records labelled fingerprints - what EVERY assigned
-//  beacon sounds like - from many tagged places: static spots inside the room, the
-//  "temptation spots" where the phone actually gets used, two real ENTRY WALKS (a
-//  continuous trace of the approach → through the door → settling, so the data
-//  contains what the signal looks like just before entering vs. standing somewhere
-//  that merely sounds similar), and a tagged tour of the common OUTSIDE places
-//  (doorway, neighbouring room, directly above/below, hallway).
+//  Rooms are user-defined (2-8, one beacon each). CALIBRATION (the wizard) records
+//  the FULL SET of every assigned beacon's level at each place: static spots, the
+//  "temptation spots" where the phone actually gets used (flagged core=true - only
+//  these can produce a 'true'), a 15 s walk around the room, and user-tagged "false
+//  reading" spots from a roam around the house.
 //
-//  DECISION (RoomPresence) is a set of independent rule CHECKS - one bar each in the
-//  debug UI - and the room is IN only when every check is green:
-//    1. Beacon heard      - the room's beacon was heard within TIMEOUT_MS.
-//    2. Signal level      - 3-second MEDIAN of the beacon (a range of recent values,
-//                           not one reading) is above the quietest calibrated in-room
-//                           level minus slack.
-//    3. Partner beacon    - the OTHER room's beacon currently sounds like it sounded
-//                           from inside this room (range learned in calibration).
-//                           This is what kills "downstairs directly under the bedroom":
-//                           there the partner sounds wrong even when the own beacon
-//                           sounds right.
-//    4. Pattern match     - k-nearest-neighbours vote of the current all-beacon vector
-//                           against every calibrated spot (inside AND outside labels).
-//    5. No floor change   - barometer: air pressure moves ~0.12 hPa per metre, so
-//                           going up/down a floor is a sharp step. Right after one,
-//                           becoming IN is blocked briefly (rooms don't change floor -
-//                           you did). Skipped on phones with no barometer.
-//    6. Held steady       - the combined answer must persist FLIP_MS before flipping.
+//  DECISION (RoomPresence) is PAIRWISE: the current tuple of all beacons' levels is
+//  matched against the recorded spots, where distance = the WORST single-beacon
+//  difference - a spot only matches when EVERY beacon agrees. Four answers:
+//    true              - the tuple matches a core (usage) spot within TRUE_DIST.
+//    maybe (probs is)  - it matches somewhere inside the room within NEAR_DIST.
+//    maybe (probs not) - only vaguely close to anything inside (≤ FAR_DIST).
+//    false             - own beacon silent/out of its amber band, the tuple matches
+//                        a tagged false spot better than any inside spot, or it
+//                        matches nothing recorded inside at all.
 //
-//  IDENTITY: beacons are identified by Bluetooth MAC (fixed on beacon hardware).
+//  Robustness rules used everywhere:
+//    - live levels come from a per-beacon 1D KALMAN FILTER (BeaconScanner.kalmanRssi):
+//      the industry-standard way to strip the noise out of raw BLE RSSI - a single
+//      reading never drives anything;
+//    - the UI also shows a 6 s outlier-trimmed average per beacon (robustRssi);
+//    - calibration data has its outliers trimmed before zones are built;
+//    - answers must hold FLIP_MS before they change (silent debounce).
 // =====================================================================================
 object RoomBeacons {
 
-    /** The rooms we track. Order = display order. */
-    val ROOMS = listOf("bedroom", "bathroom")
+    /** Default rooms; the real list is user-editable (2-8 rooms, one beacon each). */
+    private val DEFAULT_ROOMS = listOf("bedroom", "bathroom")
+    const val MAX_ROOMS = 8
+
+    /** The rooms being tracked. Order = display order. */
+    fun rooms(context: Context): List<String> {
+        val raw = prefs(context).getString("rooms", null) ?: return DEFAULT_ROOMS
+        return try {
+            val arr = JSONArray(raw)
+            val list = (0 until arr.length()).map { arr.getString(it) }
+            if (list.isEmpty()) DEFAULT_ROOMS else list
+        } catch (t: Throwable) { DEFAULT_ROOMS }
+    }
+
+    fun addRoom(context: Context, name: String): Boolean {
+        val clean = name.trim().lowercase()
+        val current = rooms(context)
+        if (clean.isEmpty() || clean in current || current.size >= MAX_ROOMS) return false
+        setRooms(context, current + clean)
+        return true
+    }
+
+    fun removeRoom(context: Context, room: String) {
+        setBeaconMac(context, room, null)   // clears its beacon + samples
+        setRooms(context, rooms(context).filter { it != room })
+    }
+
+    private fun setRooms(context: Context, list: List<String>) =
+        prefs(context).edit().putString("rooms", JSONArray(list).toString()).apply()
 
     /** A beacon not heard for this long counts as absent (K11 default interval ~1 s). */
     const val TIMEOUT_MS = 10_000L
@@ -65,15 +90,51 @@ object RoomBeacons {
     /** How long each static sample / find-the-beacon scan collects for. */
     const val SAMPLE_MS = 3_000L
 
-    /** Window for the live "recent values" median that all checks use. */
-    const val MEDIAN_WINDOW_MS = 3_000L
+    /** Tagging a false reading is quick - one second. */
+    const val TAG_MS = 1_000L
 
     /** Treated as the reading when a beacon isn't heard at all. */
     const val SILENT_DBM = -100
 
-    /** One calibration point: where the user was, in or out, and what every assigned
-     *  beacon sounded like from there (MAC -> RSSI). Entry walks record one per second. */
-    class Sample(val label: String, val inRoom: Boolean, val readings: Map<String, Int>)
+    // Band slacks are aligned with RoomPresence's distance thresholds so the meters
+    // agree with the verdict (a 'true' can only fire while the needles show super).
+    /** Zone construction: SUPER green = core (temptation) readings, trimmed, ± this. */
+    const val SUPER_SLACK_DB = 4
+
+    /** Zone construction: green = all in-room readings (outliers trimmed) ± this. */
+    const val GREEN_SLACK_DB = 3
+
+    /** Zone construction: amber = all in-room readings including the tails ± this.
+     *  Deliberately wide: the tail ends of the in-room range are where downstairs /
+     *  next-door readings overlap, so they only ever count as "uncertain", never as
+     *  proof of being in the room. */
+    const val AMBER_SLACK_DB = 6
+
+    /** One calibration point. core=true marks the temptation/at-the-beacon readings
+     *  that define the green ("definitely in") zone. Traces record one per second. */
+    class Sample(val label: String, val inRoom: Boolean, val readings: Map<String, Int>, val core: Boolean = false)
+
+    /** Per-room, per-beacon expected ranges, three tiers deep. Outside amber = red. */
+    data class Zone(
+        val superLo: Int, val superHi: Int,   // core (temptation) readings: "definitely in"
+        val greenLo: Int, val greenHi: Int,   // solid in-room readings: "probably in"
+        val amberLo: Int, val amberHi: Int,   // the tails: "uncertain" - never proof of in
+    ) {
+        /** 2 = super green, 1 = green, 0 = amber, -1 = red. openTop = the room's OWN
+         *  beacon: being even closer than the calibrated core is always super green. */
+        fun state(value: Int, openTop: Boolean = false): Int = when {
+            openTop -> when {
+                value >= superLo -> 2
+                value >= greenLo -> 1
+                value >= amberLo -> 0
+                else -> -1
+            }
+            value in superLo..superHi -> 2
+            value in greenLo..greenHi -> 1
+            value in amberLo..amberHi -> 0
+            else -> -1
+        }
+    }
 
     // ── Per-room config (SharedPreferences "room_beacons") ───────────────────────────
     private const val PREFS = "room_beacons"
@@ -85,16 +146,51 @@ object RoomBeacons {
     fun setBeaconMac(context: Context, room: String, mac: String?) {
         val old = beaconMac(context, room)
         val e = prefs(context).edit()
-        if (mac == null) e.remove("$room.mac").remove("$room.samples")
+        if (mac == null) e.remove("$room.mac").remove("$room.mac2").remove("$room.samples")
         else {
             e.putString("$room.mac", mac)
-            // A different physical beacon invalidates the old calibration.
             if (mac != old) e.remove("$room.samples")
         }
-        // Legacy keys from the first (two-far-ends) cut of this feature.
-        e.remove("$room.farA").remove("$room.farB")
+        e.remove("$room.farA").remove("$room.farB")   // legacy keys from the first cut
         e.apply()
     }
+
+    // ── Dual-sensor mode: two beacons per room, at opposite ends, for tighter
+    //    readings. The second beacon is just one more entry in the tuple everywhere.
+    fun dualMode(context: Context): Boolean = prefs(context).getBoolean("dual", false)
+    fun setDualMode(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean("dual", on).apply()
+
+    fun beaconMac2(context: Context, room: String): String? =
+        prefs(context).getString("$room.mac2", null)
+
+    fun setBeaconMac2(context: Context, room: String, mac: String?) {
+        val old = beaconMac2(context, room)
+        val e = prefs(context).edit()
+        if (mac == null) e.remove("$room.mac2")
+        else {
+            e.putString("$room.mac2", mac)
+            if (mac != old) e.remove("$room.samples")
+        }
+        e.apply()
+    }
+
+    /** All assigned beacons (both slots of every room), own room's first, with the
+     *  room each belongs to. */
+    fun assignedBeacons(context: Context, firstRoom: String): List<Pair<String, String>> =
+        (listOf(firstRoom) + rooms(context).filter { it != firstRoom })
+            .flatMap { r ->
+                listOfNotNull(
+                    beaconMac(context, r)?.let { r to it },
+                    beaconMac2(context, r)?.let { r to it },
+                )
+            }
+
+    /** Every assigned beacon MAC in the house, both slots of every room. */
+    fun allAssignedMacs(context: Context): List<String> =
+        rooms(context).flatMap { r ->
+            listOfNotNull(beaconMac(context, r), beaconMac2(context, r))
+        }.distinct()
 
     // Samples are re-read every UI tick, so cache the parse keyed on the raw string.
     private val sampleCache = HashMap<String, Pair<String, List<Sample>>>()
@@ -110,6 +206,7 @@ object RoomBeacons {
                 Sample(
                     o.getString("label"), o.getBoolean("in"),
                     r.keys().asSequence().associateWith { r.getInt(it) },
+                    o.optBoolean("c", false),
                 )
             }
         } catch (t: Throwable) { Log.w("RoomBeacons", "bad samples for $room: ${t.message}"); emptyList() }
@@ -120,13 +217,12 @@ object RoomBeacons {
     fun setSamples(context: Context, room: String, samples: List<Sample>) {
         val arr = JSONArray()
         for (s in samples) arr.put(
-            JSONObject().put("label", s.label).put("in", s.inRoom)
+            JSONObject().put("label", s.label).put("in", s.inRoom).put("c", s.core)
                 .put("r", JSONObject().apply { s.readings.forEach { (k, v) -> put(k, v) } }),
         )
         prefs(context).edit().putString("$room.samples", arr.toString()).apply()
     }
 
-    /** Appends samples - used by the tagged outside tour. */
     fun addSample(context: Context, room: String, sample: Sample) =
         setSamples(context, room, samples(context, room) + sample)
 
@@ -135,9 +231,36 @@ object RoomBeacons {
         return samples(context, room).any { it.inRoom && it.readings.containsKey(own) }
     }
 
+    /** Drop the extreme 10% at each end (needs 5+ values) - the outlier filter. */
+    fun trimOutliers(sorted: List<Int>): List<Int> {
+        if (sorted.size < 5) return sorted
+        val k = sorted.size / 10 + 1
+        return sorted.subList(k.coerceAtMost(sorted.size / 2 - 1).coerceAtLeast(0),
+            (sorted.size - k).coerceAtLeast(sorted.size / 2 + 1))
+    }
+
+    /** The expected range of beacon `mac` as heard from inside `room`, or null until
+     *  calibrated. Super green from the core (temptation / at-the-beacon) readings,
+     *  green from the trimmed in-room readings, amber from the untrimmed tails. */
+    fun zone(context: Context, room: String, mac: String): Zone? {
+        val inside = samples(context, room).filter { it.inRoom }
+        val all = inside.mapNotNull { it.readings[mac] }.sorted()
+        if (all.isEmpty()) return null
+        val trimmedAll = trimOutliers(all)
+        val coreVals = inside.filter { it.core }.mapNotNull { it.readings[mac] }.sorted()
+        val core = trimOutliers(if (coreVals.isNotEmpty()) coreVals else trimmedAll)
+        val aLo = all.first() - AMBER_SLACK_DB
+        val aHi = all.last() + AMBER_SLACK_DB
+        val gLo = (trimmedAll.first() - GREEN_SLACK_DB).coerceAtLeast(aLo)
+        val gHi = (trimmedAll.last() + GREEN_SLACK_DB).coerceAtMost(aHi)
+        val sLo = (core.first() - SUPER_SLACK_DB).coerceAtLeast(gLo)
+        val sHi = (core.last() + SUPER_SLACK_DB).coerceAtMost(gHi)
+        return Zone(sLo, sHi, gLo, gHi, aLo, aHi)
+    }
+
     // ── Permissions ──────────────────────────────────────────────────────────────────
     // Android 12+ uses BLUETOOTH_SCAN, and because we infer location from beacons the
-    // manifest deliberately does NOT set neverForLocation (setting it makes Android
+    // manifest deliberately does NOT set neverForLocation (that flag makes Android
     // silently filter beacon frames out of scan results) - so fine location is needed
     // too. Pre-12 only needs location (the old BLUETOOTH permissions are install-time).
     fun requiredPermissions(): Array<String> =
@@ -156,109 +279,167 @@ object RoomBeacons {
 
 
 // =====================================================================================
-//  RoomPresence  -  the rule engine: sensors in, per-check verdicts out.
+//  RoomPresence  -  the rule engine: sensors in, true / maybe / false out.
 // =====================================================================================
 object RoomPresence {
 
-    /** A flip of the combined answer must hold this long before it's believed. */
+    /** true / maybe (probs is) / maybe (probs not) / false. */
+    enum class Verdict { IN, MAYBE_IN, MAYBE_OUT, OUT }
+
+    /** A verdict change must hold this long before it's believed (applied silently). */
     const val FLIP_MS = 1_500L
 
-    /** Signal-level check: allowed this far below the quietest calibrated in-room level. */
-    const val SIGNAL_SLACK_DB = 4
-
-    /** Partner check: allowed this far outside the partner's calibrated in-room range. */
-    const val PARTNER_SLACK_DB = 8
-
-    /** After a barometer floor change, becoming IN is blocked for this long. */
+    /** After a barometer floor change, turning true is blocked for this long. */
     const val FLOOR_HOLD_MS = 8_000L
 
-    /** One rule's verdict. state: 1 = green, 0 = grey (no data - doesn't block), -1 = red. */
+    // Pairwise-distance thresholds (dB). The distance between "now" and a recorded
+    // spot is the WORST per-beacon difference: readings come in tuples (one value per
+    // beacon), and a spot only matches when EVERY beacon is close to what was recorded
+    // there. That's what separates "downstairs" (own beacon plausible, partner 9 dB
+    // off) from "far end of the room" (both beacons match the far-end recording) -
+    // independent per-beacon ranges cannot make that distinction. Works for any
+    // number of beacons.
+    const val TRUE_DIST = 4.0    // this close to a CORE (usage-spot) recording → true
+    const val NEAR_DIST = 7.0    // this close to any inside recording → maybe (probs is)
+    const val FAR_DIST = 10.0    // this close → maybe (probs not); beyond → false
+    const val OUT_MARGIN = 3.0   // nearest-outside beats nearest-inside by this → false
+
+    // The recent-average booster: alongside the instantaneous distances we keep a
+    // ~10 s history of them. If the recent average is good AND consistent (small
+    // spread), we trust it - so a brief wobble can't drop a solid 'true', and a
+    // steady borderline reading gets credited with its consistency.
+    const val TREND_WINDOW_MS = 10_000L
+    const val TREND_MIN_POINTS = 6
+    const val TREND_MAX_SPREAD = 4.0
+
+    /** One rule's verdict. state: 1 green, 0 grey (no data - doesn't block), -1 red. */
     data class Check(val label: String, val state: Int, val value: String)
+
+    /** One beacon's meter on a room card: its learned zones + where it is right now. */
+    data class MeterData(
+        val label: String,
+        val mac: String,
+        val current: Int?,
+        val zone: RoomBeacons.Zone?,
+        val state: Int,
+        val openTop: Boolean,
+    )
 
     data class Status(
         val room: String,
-        val inRoom: Boolean,
+        val verdict: Verdict,
         val assigned: Boolean,
         val calibrated: Boolean,
-        val rssi: Int?,          // 3 s median of the room's own beacon
-        val rawRssi: Int?,       // latest single reading
-        val ageMs: Long?,        // since last heard
-        val checks: List<Check>, // empty until calibrated
+        val rssi: Int?,          // Kalman-filtered level of the room's own beacon
+        val rawRssi: Int?,
+        val ageMs: Long?,
+        val meters: List<MeterData>,
+        val checks: List<Check>,
         val summary: String,     // only used while not set up
     )
 
-    private val lastIn = HashMap<String, Boolean>()
+    private val lastVerdict = HashMap<String, Verdict>()
     private val pendingSince = HashMap<String, Long>()
-    fun reset() { lastIn.clear(); pendingSince.clear() }
+    // Per-room history of (time, dInCore, dInAny) for the recent-average booster.
+    private val trend = HashMap<String, ArrayDeque<Triple<Long, Double, Double>>>()
+    fun reset() { lastVerdict.clear(); pendingSince.clear(); trend.clear() }
+
+    /** Windowed mean of a distance series, or null unless it has enough points AND is
+     *  consistent (max-min spread within TREND_MAX_SPREAD). */
+    private fun steadyAverage(values: List<Double>): Double? {
+        if (values.size < TREND_MIN_POINTS) return null
+        val mn = values.min(); val mx = values.max()
+        if (mx - mn > TREND_MAX_SPREAD) return null
+        return values.average()
+    }
 
     fun evaluate(context: Context, scanner: BeaconScanner, pressure: PressureMonitor?): Map<String, Status> {
         val now = System.currentTimeMillis()
         val statuses = LinkedHashMap<String, Status>()
+        val dInByRoom = HashMap<String, Double>()
+        val current = currentVector(context, scanner)
 
-        for (room in RoomBeacons.ROOMS) {
+        for (room in RoomBeacons.rooms(context)) {
             val mac = RoomBeacons.beaconMac(context, room)
             if (mac == null) {
-                lastIn[room] = false; pendingSince.remove(room)
-                statuses[room] = Status(room, false, false, false, null, null, null, emptyList(),
-                    "No beacon assigned - run set-up.")
+                lastVerdict[room] = Verdict.OUT; pendingSince.remove(room)
+                statuses[room] = Status(room, Verdict.OUT, false, false, null, null, null,
+                    emptyList(), emptyList(), "No beacon assigned - run set-up.")
                 continue
             }
             val b = scanner.beacon(mac)
             val age = b?.let { now - it.lastSeen }
-            val med = scanner.medianRssi(mac, RoomBeacons.MEDIAN_WINDOW_MS)
-            val samples = RoomBeacons.samples(context, room)
-            val inOwn = samples.filter { it.inRoom }.mapNotNull { it.readings[mac] }
-            if (inOwn.isEmpty()) {
-                lastIn[room] = false; pendingSince.remove(room)
-                statuses[room] = Status(room, false, true, false, med, b?.rssi, age, emptyList(),
-                    "Beacon assigned - run set-up to calibrate.")
+            val kal = scanner.kalmanRssi(mac)
+            if (!RoomBeacons.isCalibrated(context, room)) {
+                lastVerdict[room] = Verdict.OUT; pendingSince.remove(room)
+                statuses[room] = Status(room, Verdict.OUT, true, false, kal, b?.rssi, age,
+                    emptyList(), emptyList(), "Beacon assigned - run set-up to calibrate.")
                 continue
             }
 
-            val was = lastIn[room] ?: false
-            val checks = mutableListOf<Check>()
+            val was = lastVerdict[room] ?: Verdict.OUT
 
-            // 1. Beacon heard recently.
-            val heard = b != null && age!! <= RoomBeacons.TIMEOUT_MS
+            // Meters are DISPLAY plus one hard rule each: a beacon heard at a level
+            // outside its amber band was never heard like that from inside → false.
+            // Own-room beacons (both, in dual mode) are open-topped.
+            val ownMacs = setOfNotNull(mac, RoomBeacons.beaconMac2(context, room))
+            val meters = RoomBeacons.assignedBeacons(context, room).map { (beaconRoom, m) ->
+                val zone = RoomBeacons.zone(context, room, m)
+                val cur = scanner.kalmanRssi(m)
+                val openTop = m in ownMacs
+                val state = when {
+                    zone == null -> 0
+                    cur == null && !openTop -> 0
+                    else -> zone.state(cur ?: RoomBeacons.SILENT_DBM, openTop)
+                }
+                val second = m == RoomBeacons.beaconMac2(context, beaconRoom)
+                MeterData(
+                    "${beaconRoom.replaceFirstChar { it.uppercase() }} beacon${if (second) " B" else ""}",
+                    m, cur, zone, state, openTop,
+                )
+            }
+
+            val checks = mutableListOf<Check>()
+            val heard = (b != null && age!! <= RoomBeacons.TIMEOUT_MS) ||
+                meters.any { it.openTop && it.current != null }
             checks += Check("Beacon heard", if (heard) 1 else -1,
                 if (age == null) "never" else "${age / 1000}s ago")
 
-            // 2. Signal level: 3 s median vs the quietest calibrated in-room level.
-            val floor = inOwn.minOrNull()!! - SIGNAL_SLACK_DB
-            val level = med ?: RoomBeacons.SILENT_DBM
-            checks += Check("Signal level", if (heard && level >= floor) 1 else -1,
-                "$level dBm · room ≥ $floor")
+            // The pairwise core: how far is the current tuple from the nearest
+            // recorded spot of each kind? (Worst per-beacon difference, in dB.)
+            val samples = RoomBeacons.samples(context, room)
+            val dInCore = samples.filter { it.inRoom && it.core }.minOfOrNull { distance(current, it) }
+            val dInAny = samples.filter { it.inRoom }.minOfOrNull { distance(current, it) }
+            val dOut = samples.filter { !it.inRoom }.minOfOrNull { distance(current, it) }
 
-            // 3. Partner beacon: from inside this room the OTHER beacon has a known
-            //    loudness range; outside spots that fool check 2 (e.g. the floor
-            //    below) put the partner outside that range.
-            val otherMac = RoomBeacons.ROOMS.filter { it != room }
-                .mapNotNull { RoomBeacons.beaconMac(context, it) }.firstOrNull()
-            var partnerState = 0; var partnerValue = "no data yet"
-            if (otherMac != null) {
-                val inOther = samples.filter { it.inRoom }.mapNotNull { it.readings[otherMac] }
-                if (inOther.isNotEmpty()) {
-                    val lo = inOther.minOrNull()!! - PARTNER_SLACK_DB
-                    val hi = inOther.maxOrNull()!! + PARTNER_SLACK_DB
-                    val curO = scanner.medianRssi(otherMac, RoomBeacons.MEDIAN_WINDOW_MS) ?: RoomBeacons.SILENT_DBM
-                    partnerState = if (curO in lo..hi) 1 else -1
-                    partnerValue = "$curO dBm · room $lo..$hi"
-                }
+            // Recent-average booster: a good AND consistent last-10s average counts
+            // as much as the instant value (so wobbles don't flap the answer).
+            val hist = trend.getOrPut(room) { ArrayDeque() }
+            if (dInCore != null && dInAny != null) hist.addLast(Triple(now, dInCore, dInAny))
+            while (hist.isNotEmpty() && hist.first().first < now - TREND_WINDOW_MS) hist.removeFirst()
+            val avgCore = steadyAverage(hist.map { it.second })
+            val avgAny = steadyAverage(hist.map { it.third })
+            val effCore = listOfNotNull(dInCore, avgCore).minOrNull()
+            val effAny = listOfNotNull(dInAny, avgAny).minOrNull()
+
+            effAny?.let { dInByRoom[room] = it }
+            val spotState = when {
+                effAny == null -> 0
+                dOut != null && dOut + OUT_MARGIN <= effAny -> -1
+                effAny <= NEAR_DIST && (dOut == null || effAny + OUT_MARGIN <= dOut) -> 1
+                else -> 0
             }
-            checks += Check("Partner beacon", partnerState, partnerValue)
+            checks += Check("Nearest known spot", spotState,
+                "in ${fmt(dInAny)}${avgAny?.let { " (avg ${fmt(it)})" } ?: ""} · " +
+                    "usage ${fmt(dInCore)}${avgCore?.let { " (avg ${fmt(it)})" } ?: ""} · " +
+                    "out ${fmt(dOut)} dB")
 
-            // 4. Pattern match: kNN vote against every calibrated spot.
-            val vote = fingerprintVote(context, room, scanner)
-            checks += Check("Pattern match",
-                when { vote == null -> 0; vote.first -> 1; else -> -1 },
-                vote?.second ?: "not enough data")
-
-            // 5. Barometer: just changed floors → hold off on flipping IN (skipped
-            //    while already IN, and on phones without the sensor).
+            var floorOk = true
             if (pressure?.available == true) {
                 val ago = pressure.shiftAgoMs()
                 val recentShift = ago != null && ago < FLOOR_HOLD_MS
-                checks += Check("No floor change", if (was || !recentShift) 1 else -1,
+                floorOk = was == Verdict.IN || !recentShift
+                checks += Check("No floor change", if (floorOk) 1 else -1,
                     when {
                         ago == null -> "steady"
                         recentShift -> "changed ${ago / 1000}s ago"
@@ -266,121 +447,121 @@ object RoomPresence {
                     })
             }
 
-            // Only all-green makes the candidate IN...
-            val candidate = checks.none { it.state == -1 }
-
-            // 6. ...and the candidate must hold FLIP_MS before the answer flips.
-            val inNow: Boolean
-            val steady: Check
-            if (candidate == was) {
-                pendingSince.remove(room); inNow = was
-                steady = Check("Held steady", 1, "stable")
-            } else {
-                val since = pendingSince.getOrPut(room) { now }
-                if (now - since >= FLIP_MS) {
-                    pendingSince.remove(room); inNow = candidate
-                    steady = Check("Held steady", 1, "confirmed")
-                } else {
-                    inNow = was
-                    steady = Check("Held steady", 0, "confirming ${(FLIP_MS - (now - since) + 999) / 1000}s…")
-                }
+            // The ladder, all pairwise (instant OR steady recent average, whichever is
+            // better): match a usage spot → true; anywhere inside → probs is; vaguely
+            // close → probs not; match a tagged/outside spot better, match nothing,
+            // or ANY beacon heard outside its learned band → false.
+            var candidate = when {
+                !heard || meters.any { it.state == -1 } -> Verdict.OUT
+                effAny == null -> Verdict.OUT
+                dOut != null && dOut + OUT_MARGIN <= effAny -> Verdict.OUT
+                effCore != null && effCore <= TRUE_DIST -> Verdict.IN
+                effAny <= NEAR_DIST -> Verdict.MAYBE_IN
+                effAny <= FAR_DIST -> Verdict.MAYBE_OUT
+                else -> Verdict.OUT
             }
-            checks += steady
-            lastIn[room] = inNow
-            statuses[room] = Status(room, inNow, true, true, med, b?.rssi, age, checks, "")
+            if (candidate == Verdict.IN && !floorOk) candidate = Verdict.MAYBE_IN
+
+            // Debounce (silent): the change must persist before it's believed.
+            val verdict: Verdict
+            if (candidate == was) { pendingSince.remove(room); verdict = was }
+            else {
+                val since = pendingSince.getOrPut(room) { now }
+                if (now - since >= FLIP_MS) { pendingSince.remove(room); verdict = candidate }
+                else verdict = was
+            }
+            lastVerdict[room] = verdict
+            statuses[room] = Status(room, verdict, true, true, kal, b?.rssi, age, meters, checks, "")
         }
 
-        // Exclusivity: if more than one room is all-green, the best pattern match
-        // keeps IN and the rest go false (their Pattern-match bar says why).
-        val claiming = statuses.values.filter { it.inRoom }
+        // Exclusivity: if several rooms are IN, the best (nearest) inside match keeps
+        // IN and the rest drop to "maybe (probs is)".
+        val claiming = statuses.values.filter { it.verdict == Verdict.IN }
         if (claiming.size > 1) {
-            val dists = claiming.associate {
-                it.room to (fingerprintDistance(context, it.room, scanner) ?: Double.MAX_VALUE)
-            }
-            val winner = claiming.minByOrNull { dists[it.room]!! }!!
+            val winner = claiming.minByOrNull { dInByRoom[it.room] ?: Double.MAX_VALUE }!!
             for (s in claiming) {
                 if (s.room == winner.room) continue
-                lastIn[s.room] = false; pendingSince.remove(s.room)
-                statuses[s.room] = s.copy(
-                    inRoom = false,
-                    checks = s.checks.map {
-                        if (it.label == "Pattern match") it.copy(state = -1, value = "fits ${winner.room} better") else it
-                    },
-                )
+                lastVerdict[s.room] = Verdict.MAYBE_IN; pendingSince.remove(s.room)
+                statuses[s.room] = s.copy(verdict = Verdict.MAYBE_IN)
             }
         }
         return statuses
     }
 
-    // What every assigned beacon sounds like right now, as 3 s medians (a range of
-    // recent values, not an instant), silence = SILENT_DBM.
-    private fun currentVector(context: Context, scanner: BeaconScanner): Map<String, Double> {
-        val macs = RoomBeacons.ROOMS.mapNotNull { RoomBeacons.beaconMac(context, it) }.distinct()
-        return macs.associateWith { mac ->
-            (scanner.medianRssi(mac, RoomBeacons.MEDIAN_WINDOW_MS) ?: RoomBeacons.SILENT_DBM).toDouble()
-        }
-    }
+    private fun fmt(d: Double?): String = d?.let { "%.0f".format(it) } ?: "-"
 
-    // kNN vote: compare the current vector against every calibrated spot (inside and
-    // outside - static spots, temptation spots, entry-walk trace points, tour tags),
-    // take the 3 nearest, majority label wins (nearest breaks ties). Needs 2+ beacons
-    // and both labels present; returns null otherwise (the check goes grey).
-    // Second value = the nearest spot's label, shown on the bar.
-    private fun fingerprintVote(context: Context, room: String, scanner: BeaconScanner): Pair<Boolean, String>? {
-        val current = currentVector(context, scanner)
-        if (current.size < 2) return null
-        val spots = RoomBeacons.samples(context, room).filter { it.readings.size >= 2 }
-        if (spots.none { it.inRoom } || spots.none { !it.inRoom }) return null
-        val ranked = spots.map { spot -> spot to distance(current, spot) }.sortedBy { it.second }
-        val k = minOf(3, ranked.size)
-        val inVotes = ranked.take(k).count { it.first.inRoom }
-        val vote = if (2 * inVotes == k) ranked.first().first.inRoom else 2 * inVotes > k
-        return vote to ranked.first().first.label
-    }
+    // What every assigned beacon sounds like right now (Kalman levels, silence = floor).
+    private fun currentVector(context: Context, scanner: BeaconScanner): Map<String, Double> =
+        RoomBeacons.allAssignedMacs(context)
+            .associateWith { mac -> (scanner.kalmanRssi(mac) ?: RoomBeacons.SILENT_DBM).toDouble() }
 
-    /** Distance from the live vector to the room's nearest INSIDE spot (for tie-breaks). */
-    private fun fingerprintDistance(context: Context, room: String, scanner: BeaconScanner): Double? {
-        val current = currentVector(context, scanner)
-        if (current.size < 2) return null
-        val inSpots = RoomBeacons.samples(context, room).filter { it.inRoom && it.readings.size >= 2 }
-        if (inSpots.isEmpty()) return null
-        return inSpots.minOf { distance(current, it) }
-    }
-
+    // Chebyshev distance: the WORST single-beacon difference between the live tuple
+    // and a recorded spot. A spot only counts as matched when every beacon agrees.
     private fun distance(current: Map<String, Double>, spot: RoomBeacons.Sample): Double {
-        var sum = 0.0
+        var worst = 0.0
         for ((mac, cur) in current) {
-            val d = cur - (spot.readings[mac] ?: RoomBeacons.SILENT_DBM)
-            sum += d * d
+            val d = Math.abs(cur - (spot.readings[mac] ?: RoomBeacons.SILENT_DBM))
+            if (d > worst) worst = d
         }
-        return sqrt(sum / current.size)
+        return worst
     }
 }
 
 
 // =====================================================================================
-//  BeaconScanner  -  listens for BLE advertisements and keeps per-beacon state + history.
+//  BeaconScanner  -  BLE listener with per-beacon history and a self-healing watchdog.
 // =====================================================================================
-// Passive listener only: never connects, never pairs. ensureScanning() is the one
-// entry point to call from a UI tick: it starts the scan, and also CYCLES it when it
-// has gone quiet or old - Android silently downgrades/kills long-running unfiltered
-// scans (~30 min cap on many stacks), which shows up as "heard Ns ago" climbing
-// forever. Restarts respect a cool-down because Android hard-throttles apps that
-// start scans more than 5 times in 30 s. lastScanError / advertsPerSec exist so the
-// UI can PROVE data is (or is not) flowing.
+// Passive listener only: never connects, never pairs. Call ensureScanning() from a UI
+// tick: it starts the scan and also CYCLES it when it stops delivering - Android
+// silently downgrades/kills long-running unfiltered scans, and a downgraded scan can
+// keep trickling OTHER devices' adverts while the beacons vanish, so the watchdog
+// also checks the beacons we EXPECT to hear (expectedMacs). Restarts respect a
+// cool-down because Android hard-throttles >5 scan starts per 30 s.
 class BeaconScanner(context: Context) {
+
+    companion object {
+        // 1D Kalman filter tuning. R = measurement noise variance (raw BLE RSSI
+        // jitters with a std of roughly 5 dB → 25). Q = how much the TRUE signal is
+        // allowed to drift per second (walking through a doorway moves it ~5-10 dB/s,
+        // so the filter must not be so smooth that it lags a real room change).
+        const val KALMAN_R = 25.0
+        const val KALMAN_Q_PER_SEC = 4.0
+    }
 
     /** Everything we know about one advertising device. */
     class Beacon(val mac: String) {
         var name: String? = null
         var rssi: Int = 0                 // latest raw reading, dBm
-        var smoothedRssi: Double = 0.0    // EMA - display only; decisions use medians
+        var smoothedRssi: Double = 0.0    // EMA - display/sort only
         var lastSeen: Long = 0L
         var txPower: Int? = null
         var iBeaconUuid: String? = null
         var count: Long = 0
-        // (timestamp, raw rssi) of recent adverts - feeds the windowed medians.
+        // (timestamp, raw rssi) of recent adverts - feeds trimmed means + sequences.
         val history = ArrayDeque<Pair<Long, Int>>()
+        // Kalman filter state: the level estimate, its uncertainty, and when it was
+        // last updated (gaps grow the uncertainty so fresh data re-dominates).
+        var kEstimate = 0.0
+        var kVariance = 0.0
+        var kInitialised = false
+        var kUpdatedAt = 0L
+
+        fun kalmanUpdate(measurement: Int, now: Long) {
+            if (!kInitialised) {
+                kEstimate = measurement.toDouble(); kVariance = KALMAN_R
+                kInitialised = true; kUpdatedAt = now
+                return
+            }
+            // Predict: uncertainty grows with time since the last advert (capped so a
+            // long-lost beacon doesn't overflow; it just becomes "trust the new data").
+            val dt = ((now - kUpdatedAt).coerceIn(0, 5_000)) / 1000.0
+            kVariance += KALMAN_Q_PER_SEC * dt
+            // Correct: blend the measurement in, weighted by the two uncertainties.
+            val gain = kVariance / (kVariance + KALMAN_R)
+            kEstimate += gain * (measurement - kEstimate)
+            kVariance *= (1 - gain)
+            kUpdatedAt = now
+        }
     }
 
     private val adapter: BluetoothAdapter? =
@@ -395,6 +576,9 @@ class BeaconScanner(context: Context) {
     var onUpdate: (() -> Unit)? = null
     private var lastEmit = 0L
 
+    /** The beacons the caller expects to keep hearing; feeds the watchdog. */
+    @Volatile var expectedMacs: Set<String> = emptySet()
+
     // Advert timestamps from the last few seconds - the UI's "is data flowing" proof.
     private val recent = ArrayDeque<Long>()
     val advertsPerSec: Double
@@ -407,17 +591,38 @@ class BeaconScanner(context: Context) {
     val isBluetoothOn: Boolean get() = adapter?.isEnabled == true
     val isScanning: Boolean get() = scanning
 
-    /** Snapshot of all beacons heard this session, strongest first. */
     fun all(): List<Beacon> = synchronized(beacons) { beacons.values.sortedByDescending { it.smoothedRssi } }
 
     fun beacon(mac: String): Beacon? = synchronized(beacons) { beacons[mac] }
 
-    /** Median raw RSSI over the last windowMs - "a range of recent values, not one". */
-    fun medianRssi(mac: String, windowMs: Long): Int? = synchronized(beacons) {
+    /** The Kalman-filtered current level - what all live decisions and meters use.
+     *  Null when the beacon was never heard or has been silent past the timeout. */
+    fun kalmanRssi(mac: String): Int? = synchronized(beacons) {
+        val b = beacons[mac] ?: return@synchronized null
+        if (!b.kInitialised) return@synchronized null
+        if (System.currentTimeMillis() - b.lastSeen > RoomBeacons.TIMEOUT_MS) return@synchronized null
+        Math.round(b.kEstimate).toInt()
+    }
+
+    /** Robust current level: trimmed mean (middle 60%) of the last windowMs. */
+    fun robustRssi(mac: String, windowMs: Long = 6_000): Int? = synchronized(beacons) {
         val b = beacons[mac] ?: return@synchronized null
         val cutoff = System.currentTimeMillis() - windowMs
         val vals = b.history.filter { it.first >= cutoff }.map { it.second }.sorted()
-        if (vals.isEmpty()) null else vals[vals.size / 2]
+        if (vals.isEmpty()) return@synchronized null
+        val k = vals.size / 5
+        Math.round(vals.subList(k, vals.size - k).average()).toInt()
+    }
+
+    /** The last `steps` seconds as one-second medians, oldest first; null = silent second. */
+    fun recentSeq(mac: String, steps: Int, stepMs: Long = 1_000): List<Int?> = synchronized(beacons) {
+        val b = beacons[mac] ?: return@synchronized List(steps) { null }
+        val now = System.currentTimeMillis()
+        (steps - 1 downTo 0).map { i ->
+            val to = now - i * stepMs
+            val vals = b.history.filter { it.first in (to - stepMs)..to }.map { it.second }.sorted()
+            if (vals.isEmpty()) null else vals[vals.size / 2]
+        }
     }
 
     private val callback = object : ScanCallback() {
@@ -429,6 +634,7 @@ class BeaconScanner(context: Context) {
                 val b = beacons.getOrPut(mac) { Beacon(mac).apply { smoothedRssi = result.rssi.toDouble() } }
                 b.rssi = result.rssi
                 b.smoothedRssi = 0.7 * b.smoothedRssi + 0.3 * result.rssi
+                b.kalmanUpdate(result.rssi, now)
                 b.lastSeen = now
                 b.count++
                 b.history.addLast(now to result.rssi)
@@ -451,15 +657,17 @@ class BeaconScanner(context: Context) {
         }
     }
 
-    /** Call freely from a UI tick: starts the scan if needed, and cycles a scan that
-     *  has gone silent (>8 s with nothing at all) or old (>10 min), because Android
-     *  quietly stops delivering to long-lived scans. Cool-down protected. */
+    /** Call freely from a UI tick. Cycles the scan when: nothing at all heard for 8 s,
+     *  the beacons we EXPECT are all silent for 15 s (downgraded scans keep trickling
+     *  other devices), or the scan is older than 5 min. Cool-down protected. */
     fun ensureScanning() {
         val now = System.currentTimeMillis()
         if (scanning) {
-            val silent = lastResultAt > 0 && now - lastResultAt > 8_000
-            val old = now - scanStartedAt > 10 * 60_000
-            if (!silent && !old) return
+            val globallySilent = lastResultAt > 0 && now - lastResultAt > 8_000
+            val expectedSilent = expectedMacs.isNotEmpty() && now - scanStartedAt > 15_000 &&
+                expectedMacs.all { mac -> (beacon(mac)?.lastSeen ?: 0L) < now - 15_000 }
+            val old = now - scanStartedAt > 5 * 60_000
+            if (!globallySilent && !expectedSilent && !old) return
             if (now - lastStartAttempt < 12_000) return
             stop()
         }
@@ -495,9 +703,7 @@ class BeaconScanner(context: Context) {
         try { adapter?.bluetoothLeScanner?.stopScan(callback) } catch (_: Throwable) {}
     }
 
-    // The K11 can broadcast Apple's iBeacon format: manufacturer 0x004C, payload
-    // 0x02 0x15 + 16-byte UUID + major + minor + calibrated tx power. Optional
-    // garnish (identity comes from the MAC).
+    // iBeacon frame parse - optional garnish (identity comes from the MAC).
     private fun parseIBeacon(result: ScanResult): Pair<String, Int>? {
         val data = result.scanRecord?.getManufacturerSpecificData(0x004C) ?: return null
         if (data.size < 23 || data[0] != 0x02.toByte() || data[1] != 0x15.toByte()) return null
@@ -518,7 +724,7 @@ class BeaconScanner(context: Context) {
 // Air pressure moves ~0.12 hPa per metre of height, so going up or down a floor is a
 // fast ~0.3-0.4 hPa step. Absolute pressure is useless (weather swings are far
 // bigger), but a step between "now" and "~20 s ago" is a reliable "you just changed
-// floors" signal - used to briefly block a room from turning IN right after one.
+// floors" signal - used to briefly block a room from turning true right after one.
 class PressureMonitor(context: Context) : SensorEventListener {
 
     companion object {
@@ -549,15 +755,6 @@ class PressureMonitor(context: Context) : SensorEventListener {
     /** ms since the last detected floor change, or null if none seen this session. */
     fun shiftAgoMs(): Long? = if (lastShiftAt == 0L) null else System.currentTimeMillis() - lastShiftAt
 
-    /** Estimated height change between ~20 s ago and now, metres (+ = up). Null = no data. */
-    val heightDeltaM: Float?
-        get() {
-            val now = System.currentTimeMillis()
-            val recent = median(now - 3_000, now) ?: return null
-            val past = median(now - 25_000, now - 15_000) ?: return null
-            return (past - recent) * 8.4f   // pressure falls as you rise: ~8.4 m per hPa
-        }
-
     override fun onSensorChanged(e: SensorEvent) {
         val now = System.currentTimeMillis()
         synchronized(history) {
@@ -574,5 +771,68 @@ class PressureMonitor(context: Context) : SensorEventListener {
     private fun median(from: Long, to: Long): Float? = synchronized(history) {
         val vals = history.filter { it.first in from..to }.map { it.second }.sorted()
         if (vals.isEmpty()) null else vals[vals.size / 2]
+    }
+}
+
+
+// =====================================================================================
+//  SignalMeterView  -  one beacon's red / amber / green scale for one room.
+// =====================================================================================
+// A horizontal dBm scale (-100 left … -35 right). Red everywhere except this room's
+// learned bands: amber = seen in the room at all (outliers trimmed, ± slack), green =
+// the core readings (temptation spots / at the beacon). The dark needle is the live
+// robust level. Zones differ per room AND per beacon - that's the point.
+class SignalMeterView(context: Context) : View(context) {
+
+    private var current: Int? = null
+    private var zone: RoomBeacons.Zone? = null
+    private var openTop = false   // own beacon: closer than green is still green
+
+    fun update(current: Int?, zone: RoomBeacons.Zone?, openTop: Boolean) {
+        this.current = current; this.zone = zone; this.openTop = openTop
+        invalidate()
+    }
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(canvas: Canvas) {
+        val dp = resources.displayMetrics.density
+        val minDbm = -100f; val maxDbm = -35f
+        val x0 = 10 * dp; val x1 = width - 10 * dp
+        val barTop = 3 * dp; val barBot = barTop + 16 * dp
+        fun x(v: Float) = x0 + (x1 - x0) * ((v.coerceIn(minDbm, maxDbm) - minDbm) / (maxDbm - minDbm))
+
+        paint.style = Paint.Style.FILL
+        paint.color = 0x33C0392B   // red base: anywhere not proven in-room
+        canvas.drawRoundRect(x0, barTop, x1, barBot, 8 * dp, 8 * dp, paint)
+
+        val z = zone
+        if (z != null) {
+            // Own beacon (openTop): the bands run all the way to the loud end -
+            // anything closer than the calibrated core is always super green.
+            val amberHiX = if (openTop) x1 else x(z.amberHi.toFloat())
+            val greenHiX = if (openTop) x1 else x(z.greenHi.toFloat())
+            val superHiX = if (openTop) x1 else x(z.superHi.toFloat())
+            paint.color = 0x55E0A800   // amber: the uncertain tails
+            canvas.drawRect(x(z.amberLo.toFloat()), barTop, amberHiX, barBot, paint)
+            paint.color = 0x4D2E9E44   // green: solid in-room readings
+            canvas.drawRect(x(z.greenLo.toFloat()), barTop, greenHiX, barBot, paint)
+            paint.color = 0xF21B5E20.toInt()   // SUPER green (dark): the usage-spot readings
+            canvas.drawRect(x(z.superLo.toFloat()), barTop, superHiX, barBot, paint)
+            text.textSize = 9 * dp; text.textAlign = Paint.Align.CENTER; text.color = 0xFF52606A.toInt()
+            canvas.drawText("${z.superLo}", x(z.superLo.toFloat()), barBot + 12 * dp, text)
+            if (!openTop) canvas.drawText("${z.superHi}", x(z.superHi.toFloat()), barBot + 12 * dp, text)
+        }
+
+        current?.let {
+            paint.color = 0xFF1F2933.toInt()
+            val cx = x(it.toFloat())
+            canvas.drawRoundRect(cx - 1.5f * dp, barTop - 3 * dp, cx + 1.5f * dp, barBot + 3 * dp, 2 * dp, 2 * dp, paint)
+        }
+
+        text.textSize = 8 * dp; text.color = 0xFF9AA0A6.toInt()
+        text.textAlign = Paint.Align.LEFT; canvas.drawText("-100", x0, barBot + 12 * dp, text)
+        text.textAlign = Paint.Align.RIGHT; canvas.drawText("-35", x1, barBot + 12 * dp, text)
     }
 }

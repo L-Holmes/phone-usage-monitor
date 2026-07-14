@@ -5124,11 +5124,11 @@ private fun startWeekStrict() {
     }
 
     // ── Room detection (KKM K11 beacons) ─────────────────────────────────────
-    // One card per room: the true/false pill, a big live dBm readout, and one BAR PER
-    // CHECK (beacon heard / signal level / partner beacon / pattern match / barometer /
-    // held steady) - the room only reads true when every bar is green. Set-up is the
-    // guided wizard below (find both beacons, static + temptation spots, two entry
-    // walks, tagged outside tour). Rule engine: RoomBeacons.kt.
+    // One card per room (rooms are user-defined, 2-8 beacons): a true / maybe (probs
+    // is) / maybe (probs not) / false pill, a big live dBm readout, one red-amber-
+    // green meter PER BEACON (zones learned per room), and the check bars. The
+    // decision is PAIRWISE: the current tuple of all beacons' levels is matched
+    // against recorded spots - see RoomBeacons.kt.
     private fun showRoomBeaconDebug() {
         if (!RoomBeacons.hasPermissions(this)) {
             showPrereq(
@@ -5150,8 +5150,13 @@ private fun startWeekStrict() {
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         content.addView(titleText("Room detection"))
 
+        content.addView(Button(this).apply {
+            text = "How we determine what room you're in ›"; setAllCaps(false)
+            setOnClickListener { showRoomHowItWorks() }
+        })
+
         // Scan health, always visible: the "is data actually flowing" line.
-        val scanLine = TextView(this).apply { textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (6 * dp).toInt()) }
+        val scanLine = TextView(this).apply { textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (4 * dp).toInt(), 0, (6 * dp).toInt()) }
         content.addView(scanLine)
 
         fun warnLine(msg: String, onClick: () -> Unit) = TextView(this).apply {
@@ -5190,43 +5195,74 @@ private fun startWeekStrict() {
                 textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
             }
             val sub = TextView(this@MainActivity).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()) }
+            val metersBox = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+            val meterRows = mutableListOf<Pair<TextView, SignalMeterView>>()
             val checksBox = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
-            val rows = mutableListOf<Triple<LinearLayout, TextView, TextView>>()
+            val checkRows = mutableListOf<Triple<LinearLayout, TextView, TextView>>()
             val summary = TextView(this@MainActivity).apply { textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0) }
             val setupBtn = Button(this@MainActivity).apply { setAllCaps(false) }
         }
-        val cards = RoomBeacons.ROOMS.map { RoomCard(it) }
+        val cards = RoomBeacons.rooms(this).map { RoomCard(it) }
 
-        // One bar per check: coloured green (pass) / red (fail) / grey (no data).
-        // The pill only says true when every bar is green - that IS the rule.
+        // One labelled red/amber/green meter per beacon, zones specific to this room.
+        fun renderMeters(card: RoomCard, meters: List<RoomPresence.MeterData>) {
+            if (card.meterRows.size != meters.size) {
+                card.metersBox.removeAllViews(); card.meterRows.clear()
+                repeat(meters.size) {
+                    val label = TextView(this).apply {
+                        textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+                        setPadding(0, (6 * dp).toInt(), 0, 0)
+                    }
+                    val meter = SignalMeterView(this).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, (38 * dp).toInt(),
+                        )
+                    }
+                    card.meterRows.add(label to meter)
+                    card.metersBox.addView(label); card.metersBox.addView(meter)
+                }
+            }
+            meters.forEachIndexed { i, m ->
+                val (label, meter) = card.meterRows[i]
+                val avg6 = scanner.robustRssi(m.mac, 6_000)
+                label.text = "${m.label}:  ${m.current?.let { "$it dBm" } ?: "not heard"}" +
+                    (avg6?.let { "  ·  6s avg $it" } ?: "")
+                label.setTextColor(when (m.state) {
+                    2 -> 0xFF1B5E20.toInt(); 1 -> 0xFF2E7D32.toInt()
+                    -1 -> 0xFFC0392B.toInt(); else -> 0xFF9A7B00.toInt()
+                })
+                meter.update(m.current, m.zone, m.openTop)
+            }
+        }
+
         fun renderChecks(card: RoomCard, checks: List<RoomPresence.Check>) {
-            if (card.rows.size != checks.size) {
-                card.checksBox.removeAllViews(); card.rows.clear()
+            if (card.checkRows.size != checks.size) {
+                card.checksBox.removeAllViews(); card.checkRows.clear()
                 repeat(checks.size) {
                     val label = TextView(this).apply {
                         textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
                         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                     }
-                    val value = TextView(this).apply { textSize = 12f; setTextColor(0xFFFFFFFF.toInt()) }
+                    val value = TextView(this).apply { textSize = 11f; setTextColor(0xFFFFFFFF.toInt()) }
                     val bar = LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                        val p = (8 * dp).toInt(); setPadding((10 * dp).toInt(), p, (10 * dp).toInt(), p)
+                        val p = (7 * dp).toInt(); setPadding((10 * dp).toInt(), p, (10 * dp).toInt(), p)
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                         ).apply { topMargin = (4 * dp).toInt() }
                         addView(label); addView(value)
                     }
-                    card.rows.add(Triple(bar, label, value))
+                    card.checkRows.add(Triple(bar, label, value))
                     card.checksBox.addView(bar)
                 }
             }
             checks.forEachIndexed { i, c ->
-                val (bar, label, value) = card.rows[i]
+                val (bar, label, value) = card.checkRows[i]
                 label.text = c.label
                 value.text = c.value
                 bar.background = GradientDrawable().apply {
                     cornerRadius = 10 * dp
-                    setColor(when (c.state) { 1 -> 0xFF2E9E44.toInt(); -1 -> 0xFFC0392B.toInt(); else -> 0xFFB9C0C6.toInt() })
+                    setColor(when (c.state) { 1 -> 0xFF2E9E44.toInt(); -1 -> 0xFFC0392B.toInt(); else -> 0xFFE0A800.toInt() })
                 }
             }
         }
@@ -5250,6 +5286,7 @@ private fun startWeekStrict() {
             header.addView(card.pill)
             box.addView(header)
             box.addView(card.big); box.addView(card.sub)
+            box.addView(card.metersBox)
             box.addView(card.checksBox); box.addView(card.summary)
 
             val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (6 * dp).toInt(), 0, 0) }
@@ -5263,12 +5300,17 @@ private fun startWeekStrict() {
                     AlertDialog.Builder(this@MainActivity)
                         .setTitle("Reset ${roomTitle(card.room)}?")
                         .setMessage(
-                            "Forgets which beacon belongs to this room and all of its calibration - " +
-                                "you'd redo the set-up. The beacon itself isn't touched.",
+                            "Reset forgets this room's beacon and calibration (you'd redo " +
+                                "set-up). Remove deletes the room from the list entirely. " +
+                                "The beacon hardware itself isn't touched either way.",
                         )
                         .setPositiveButton("Reset") { _, _ ->
                             RoomBeacons.setBeaconMac(this@MainActivity, card.room, null)
                             RoomPresence.reset()
+                        }
+                        .setNeutralButton("Remove room") { _, _ ->
+                            RoomBeacons.removeRoom(this@MainActivity, card.room)
+                            showRoomBeaconDebug()
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
@@ -5277,6 +5319,43 @@ private fun startWeekStrict() {
             box.addView(buttons)
             content.addView(box)
         }
+
+        // Rooms are user-defined: anywhere from 2 to 8 beacons depending on the house.
+        content.addView(Button(this).apply {
+            text = "Add a room…"; setAllCaps(false)
+            setOnClickListener {
+                val input = EditText(this@MainActivity).apply {
+                    hint = "Room name (e.g. office)"
+                    val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+                }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Add a room")
+                    .setView(input)
+                    .setPositiveButton("Add") { _, _ ->
+                        if (RoomBeacons.addRoom(this@MainActivity, input.text.toString())) showRoomBeaconDebug()
+                        else Toast.makeText(this@MainActivity,
+                            "Couldn't add that (empty, duplicate, or ${RoomBeacons.MAX_ROOMS}-room limit)",
+                            Toast.LENGTH_LONG).show()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        })
+
+        // Dual-sensor mode: two beacons per room, opposite ends, for tighter readings.
+        content.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+            addView(TextView(this@MainActivity).apply {
+                text = "Dual sensors per room (two per room, opposite ends - rooms need re-setup after switching)"
+                textSize = 13f; setTextColor(0xFF52606A.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(android.widget.Switch(this@MainActivity).apply {
+                isChecked = RoomBeacons.dualMode(this@MainActivity)
+                setOnCheckedChangeListener { _, on -> RoomBeacons.setDualMode(this@MainActivity, on) }
+            })
+        })
 
         // Raw feed of every advertiser - developer diagnostics only, hidden until asked.
         val feed = TextView(this).apply {
@@ -5303,6 +5382,7 @@ private fun startWeekStrict() {
             val now = System.currentTimeMillis()
             btWarn.visibility = if (scanner.isBluetoothOn) View.GONE else View.VISIBLE
             locWarn.visibility = if (locationOn()) View.GONE else View.VISIBLE
+            scanner.expectedMacs = RoomBeacons.allAssignedMacs(this).toSet()
             if (scanner.isBluetoothOn) scanner.ensureScanning()
             press.start()   // idempotent; restarts the barometer after onStop
             val err = scanner.lastScanError
@@ -5320,16 +5400,28 @@ private fun startWeekStrict() {
             val statuses = RoomPresence.evaluate(this, scanner, press)
             for (card in cards) {
                 val st = statuses[card.room] ?: continue
-                card.pill.text = if (st.inRoom) "  true  " else "  false  "
+                card.pill.text = when (st.verdict) {
+                    RoomPresence.Verdict.IN -> "  true  "
+                    RoomPresence.Verdict.MAYBE_IN -> "  maybe (probs is)  "
+                    RoomPresence.Verdict.MAYBE_OUT -> "  maybe (probs not)  "
+                    RoomPresence.Verdict.OUT -> "  false  "
+                }
                 card.pill.background = GradientDrawable().apply {
-                    cornerRadius = 20 * dp; setColor(if (st.inRoom) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
+                    cornerRadius = 20 * dp
+                    setColor(when (st.verdict) {
+                        RoomPresence.Verdict.IN -> 0xFF2E9E44.toInt()
+                        RoomPresence.Verdict.MAYBE_IN -> 0xFFE0A800.toInt()
+                        RoomPresence.Verdict.MAYBE_OUT -> 0xFF8A6D3B.toInt()
+                        RoomPresence.Verdict.OUT -> 0xFF9AA0A6.toInt()
+                    })
                 }
                 card.big.text = st.rssi?.let { "$it dBm" } ?: "–– dBm"
                 card.sub.text = when {
                     !st.assigned -> "No beacon assigned"
                     st.rssi == null -> "Beacon assigned, not heard yet"
-                    else -> "3s median · raw ${st.rawRssi} dBm"
+                    else -> "Kalman-filtered · raw ${st.rawRssi} dBm"
                 }
+                renderMeters(card, st.meters)
                 renderChecks(card, st.checks)
                 card.summary.text = st.summary
                 card.summary.visibility = if (st.summary.isEmpty()) View.GONE else View.VISIBLE
@@ -5366,48 +5458,80 @@ private fun startWeekStrict() {
         }
     }
 
-    /** One place the set-up wizard asks the user to be. */
-    private data class CalSpot(val title: String, val instruction: String, val skippable: Boolean = false)
+    // Plain-language explanation page. Deliberately basic - simple bullets, no styling.
+    private fun showRoomHowItWorks() {
+        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("How we determine what room you're in"))
+        fun section(t: String) = root.addView(TextView(this).apply {
+            text = t; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
+        })
+        fun bullets(t: String) = root.addView(TextView(this).apply {
+            text = t; textSize = 14f; setTextColor(0xFF3A434B.toInt())
+        })
+        section("Primary checks")
+        bullets(
+            "- We measure the current signal strength from every beacon in the house at once (any number of beacons, one per room).\n" +
+                "- Raw Bluetooth readings are noisy, so every signal is run through a Kalman filter - a rolling estimate that strips the noise out. A single reading never drives the answer.\n" +
+                "- Readings come as a set - one value per beacon - and during set-up we record what that whole set looks like from many spots inside and outside each room.\n" +
+                "- A spot only counts as matched when EVERY beacon is close to what was recorded there. One beacon looking right while another is off means you're somewhere else that merely resembles the room.\n" +
+                "- 'true' only when the current set matches one of the spots where you'd actually use the phone. Being even closer to the room's beacon than usual always counts.",
+        )
+        section("Backup checks")
+        bullets(
+            "- When the picture is mixed you get 'maybe (probs is)' or 'maybe (probs not)', depending on how close the current readings are to anything recorded inside the room.\n" +
+                "- The 'false reading' spots you tag are remembered: match one of those better than any inside spot and the answer is false.\n" +
+                "- Outliers are removed from the calibration data before the expected ranges are built.\n" +
+                "- A barometer check notices when you've just gone up or down a floor and blocks 'true' right after.\n" +
+                "- The answer has to hold steady for a moment before it changes, so one noisy reading can't flip it.",
+        )
+        section("Where to put the sensors")
+        bullets(
+            "- Put each beacon closest to where the risk actually is. In a bedroom: at the bed - the headboard or bedside table. This is the most important rule.\n" +
+                "- In a bathroom: the back of a cupboard, or a shelf near where the phone would get used.\n" +
+                "- Anywhere works as long as it never moves. If you move a beacon, redo the set-up.",
+        )
+        val scroll = ScrollView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            isFillViewport = true; addView(root)
+        }
+        setContentWithThumb(scroll) { showRoomBeaconDebug() }
+    }
+
+    /** One place the set-up wizard asks the user to be. core = defines super green + true. */
+    private data class CalSpot(val title: String, val instruction: String, val core: Boolean = false)
 
     private val insideSpots = listOf(
-        CalSpot("Right next to the beacon", "Stand about an arm's length from this room's beacon."),
+        CalSpot("Right next to the beacon", "Stand about an arm's length from this room's beacon.", core = true),
         CalSpot("Middle of the room", "Stand in the middle of the room."),
         CalSpot("Far corner", "Go to the far corner or edge of the room - as far from the beacon as it gets."),
         CalSpot("Opposite far corner", "Now a different far corner or edge of the room."),
     )
 
     // The most important readings of all: where the phone would ACTUALLY get used.
+    // These are the spots that can produce a 'true'.
     private val temptationSpots = listOf(
-        CalSpot("Where you'd actually use the phone", "Sit or lie EXACTLY where you'd really use the phone in this room - on the bed, in the chair. Get comfortable and hold the phone the way you really would."),
-        CalSpot("Same place, held differently", "Stay there, but change it up: other hand, resting on your lap, lying back - a realistic variation of the same spot."),
-    )
-
-    // The tagged outside tour: the common near-the-room places, each recorded once.
-    private val tourSpots = listOf(
-        CalSpot("Just outside the door", "Stand just outside the room, with the door how it usually sits."),
-        CalSpot("Neighbouring room", "Go into the room next door (or the nearest other room)."),
-        CalSpot("Directly above or below", "If your home has another floor: stand directly ABOVE or BELOW the room - radio goes straight through floors, so this is the spot that fools it. No other floor? Skip.", skippable = true),
-        CalSpot("Hallway / landing", "Stand in the hallway or landing you normally pass through near this room."),
+        CalSpot("Where you'd actually use the phone", "Sit or lie EXACTLY where you'd really use the phone in this room - on the bed, in the chair. Get comfortable and hold the phone the way you really would.", core = true),
+        CalSpot("Same place, held differently", "Stay there, but change it up: other hand, resting on your lap, lying back - a realistic variation of the same spot.", core = true),
     )
 
     // ── Room set-up wizard ────────────────────────────────────────────────────
-    // One instruction per screen, big text. Steps: find this room's beacon, find the
-    // other room's beacon (detection needs the pattern across BOTH - mandatory), place
-    // both, 4 static spots, 2 temptation spots, 2 real entry walks (a continuous trace
-    // of approach → through the door → settled, so the data holds what the signal
-    // looks like just before entering), then the tagged outside tour with a live
-    // it-should-be-false indicator. Every recording captures ALL beacons at once.
+    // One instruction per screen, big text. Flow: find this room's beacon (skipped if
+    // already known), make sure at least one other room's beacon exists (the pairwise
+    // matching needs 2+), place all beacons, 6 spots (statics + temptation), a 15 s
+    // walk around the room, then a free-roam pass around the house tagging false
+    // readings. Every recording captures ALL beacons at once - the values come as a
+    // set, and that set is what gets matched later.
     private fun showRoomSetup(room: String) {
         val roomName = room.replaceFirstChar { it.uppercase() }
-        val other = RoomBeacons.ROOMS.first { it != room }
-        val otherName = other.replaceFirstChar { it.uppercase() }
+        val roomsNow = RoomBeacons.rooms(this)
         val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
         val scanner = beaconScanner ?: BeaconScanner(this).also { beaconScanner = it }
         val press = pressureMon ?: PressureMonitor(this).also { pressureMon = it }
         press.start()
         beaconUi?.removeCallbacksAndMessages(null)
         val ui = Handler(Looper.getMainLooper()); beaconUi = ui
-        val total = 12
         val collected = mutableListOf<RoomBeacons.Sample>()
 
         fun bigBody(t: String) = TextView(this).apply {
@@ -5438,14 +5562,17 @@ private fun startWeekStrict() {
             setContentWithThumb(scroll) { ui.removeCallbacksAndMessages(null); showRoomBeaconDebug() }
         }
         fun tick(intervalMs: Long, body: () -> Unit) {
+            // Re-post BEFORE the body runs: if the body navigates to another wizard
+            // page (which clears this handler), the pending repost is cleared with it.
             ui.post(object : Runnable {
-                override fun run() { body(); ui.postDelayed(this, intervalMs) }
+                override fun run() { ui.postDelayed(this, intervalMs); body() }
             })
         }
-        // What every assigned beacon sounds like right now (3 s medians).
+        scanner.expectedMacs = RoomBeacons.allAssignedMacs(this).toSet()
+        // What every assigned beacon sounds like right now - always the FULL set.
         fun snapshotReadings(): Map<String, Int> =
-            RoomBeacons.ROOMS.mapNotNull { RoomBeacons.beaconMac(this, it) }.distinct()
-                .mapNotNull { m -> scanner.medianRssi(m, RoomBeacons.MEDIAN_WINDOW_MS)?.let { m to it } }
+            RoomBeacons.allAssignedMacs(this)
+                .mapNotNull { m -> scanner.kalmanRssi(m)?.let { m to it } }
                 .toMap()
         fun ownMac() = RoomBeacons.beaconMac(this, room)
         fun liveTick(live: TextView) = tick(300) {
@@ -5453,7 +5580,7 @@ private fun startWeekStrict() {
             val mac = ownMac()
             val b = mac?.let { scanner.beacon(it) }
             val fresh = b != null && System.currentTimeMillis() - b.lastSeen <= RoomBeacons.TIMEOUT_MS
-            live.text = if (fresh) "beacon: ${scanner.medianRssi(mac!!, RoomBeacons.MEDIAN_WINDOW_MS) ?: b!!.rssi} dBm" else "beacon: not heard"
+            live.text = if (fresh) "beacon: ${scanner.kalmanRssi(mac!!) ?: b!!.rssi} dBm" else "beacon: not heard"
             live.setTextColor(if (fresh) 0xFF1F2933.toInt() else 0xFFB00020.toInt())
         }
 
@@ -5461,15 +5588,15 @@ private fun startWeekStrict() {
             RoomPresence.reset()
             val all = RoomBeacons.samples(this, room)
             val nIn = all.count { it.inRoom }; val nOut = all.size - nIn
+            val remaining = roomsNow.filter { it != room && !RoomBeacons.isCalibrated(this, it) }
             val summary = buildString {
-                append("Recorded $nIn inside readings and $nOut outside readings - static spots, ")
-                append("your real usage spots, two entry walks and the outside tour.\n\n")
-                append("$roomName now only reads true when EVERY bar on its card is green: beacon ")
-                append("heard, signal level, the $otherName beacon sounding right, the overall ")
-                append("pattern matching an inside spot, no floor change just now, and the answer ")
-                append("holding steady.")
-                if (!RoomBeacons.isCalibrated(this@MainActivity, other)) {
-                    append("\n\n➜ Now run \"Set up this room\" on the $otherName card too.")
+                append("Recorded $nIn inside readings and $nOut outside readings - your real usage ")
+                append("spots, a walk around the room, and your tagged spots.\n\n")
+                append("$roomName reads true only when the whole set of beacon readings matches one ")
+                append("of your usage spots; maybe (probs is / probs not) when it's near the room's ")
+                append("other recordings; false when it matches a tagged spot or nothing at all.")
+                if (remaining.isNotEmpty()) {
+                    append("\n\n➜ Still to set up: ${remaining.joinToString(", ")}.")
                 }
             }
             show("Set-up complete · $roomName", "$roomName is ready",
@@ -5477,21 +5604,19 @@ private fun startWeekStrict() {
                 bigChoice("Finish", 0xFF2E7D32.toInt()) { showRoomBeaconDebug() })
         }
 
-        // ── Phase: tagged outside tour (live indicator: subtle false / loud TRUE) ──
-        lateinit var goTour: (Int) -> Unit
-        goTour = fun(i: Int) {
-            if (i >= tourSpots.size) { finishPage(); return }
-            val spot = tourSpots[i]
-            val indicator = TextView(this).apply { gravity = Gravity.CENTER; setPadding(0, (12 * dp).toInt(), 0, (12 * dp).toInt()) }
-            val tagBtn = bigChoice("Tag: I'm at this spot (hold still 3 s)", 0xFF2E9E8F.toInt()) {}
-            val skipBtn = if (!spot.skippable) null else Button(this).apply {
-                text = "Skip - no other floor"; setAllCaps(false); setOnClickListener { goTour(i + 1) }
-            }
+        // ── Phase: free-roam around the house, tagging false readings ─────────────
+        fun goRoam() {
+            // Persist everything so far - the live indicator below runs on the full set.
+            RoomBeacons.setSamples(this, room, collected)
+            RoomPresence.reset()
+            val indicator = TextView(this).apply { gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt()) }
             var tagging = false
+            val tagBtn = bigChoice("TAG FALSE READING HERE", 0xFFB00020.toInt()) {}
+            val doneBtn = Button(this).apply { text = "Done tagging false readings"; setAllCaps(false) }
             tagBtn.setOnClickListener {
                 if (tagging) return@setOnClickListener
-                tagging = true; tagBtn.isEnabled = false; skipBtn?.isEnabled = false
-                val end = System.currentTimeMillis() + RoomBeacons.SAMPLE_MS
+                tagging = true; tagBtn.isEnabled = false
+                val end = System.currentTimeMillis() + RoomBeacons.TAG_MS
                 ui.post(object : Runnable {
                     override fun run() {
                         val left = end - System.currentTimeMillis()
@@ -5500,85 +5625,84 @@ private fun startWeekStrict() {
                             ui.postDelayed(this, 200)
                             return
                         }
-                        // Silence is data too: an empty snapshot means "hear nothing
-                        // from anywhere", which is a perfectly good outside fingerprint.
+                        tagging = false; tagBtn.isEnabled = true; tagBtn.text = "TAG FALSE READING HERE"
                         RoomBeacons.addSample(this@MainActivity, room,
-                            RoomBeacons.Sample(spot.title, false, snapshotReadings()))
+                            RoomBeacons.Sample("Tagged false reading", false, snapshotReadings()))
                         RoomPresence.reset()
-                        Toast.makeText(this@MainActivity, "${spot.title} tagged ✓", Toast.LENGTH_SHORT).show()
-                        goTour(i + 1)
+                        Toast.makeText(this@MainActivity, "Tagged as NOT in the $roomName ✓", Toast.LENGTH_SHORT).show()
                     }
                 })
             }
-            val views = mutableListOf<View>(bigBody(spot.instruction), indicator, tagBtn)
-            skipBtn?.let { views.add(it) }
-            show("Step 12 of $total · outside tour ${i + 1}/${tourSpots.size} · $roomName", spot.title, *views.toTypedArray())
+            doneBtn.setOnClickListener { finishPage() }
+            tagBtn.visibility = View.GONE   // appears only while the reading is wrong
+            show("Set up · $roomName · roam & tag", "Walk around the house",
+                bigBody(
+                    "Walk around the REST of the house - stay OUT of the $roomName. Visit the " +
+                        "sneaky places: directly above or below the room, the landing or hallway, " +
+                        "and the rooms next door.\n\n" +
+                        "Watch the reading below. Whenever it says anything other than false, a " +
+                        "red button appears - stand still and press it to teach that spot.",
+                ),
+                indicator, tagBtn, doneBtn)
             tick(400) {
                 scanner.ensureScanning(); press.start()
                 val st = RoomPresence.evaluate(this, scanner, press)[room]
-                if (st?.inRoom == true) {
-                    indicator.text = "IT THINKS YOU'RE IN THE ${roomName.uppercase()}!\nThat's wrong - tag this spot to teach it."
-                    indicator.textSize = 22f; indicator.setTypeface(indicator.typeface, Typeface.BOLD)
-                    indicator.setTextColor(0xFFB00020.toInt())
-                } else {
-                    indicator.text = "false ✓  (correct - you're outside)"
-                    indicator.textSize = 13f; indicator.setTypeface(null, Typeface.NORMAL)
-                    indicator.setTextColor(0xFF9AA0A6.toInt())
+                val wrongHere = st?.verdict != null && st.verdict != RoomPresence.Verdict.OUT
+                if (!tagging) tagBtn.visibility = if (wrongHere) View.VISIBLE else View.GONE
+                when (st?.verdict) {
+                    RoomPresence.Verdict.IN -> {
+                        indicator.text = "IT THINKS YOU'RE IN THE ${roomName.uppercase()}!\nThat's wrong - press the red button."
+                        indicator.textSize = 22f; indicator.setTypeface(indicator.typeface, Typeface.BOLD)
+                        indicator.setTextColor(0xFFB00020.toInt())
+                    }
+                    RoomPresence.Verdict.MAYBE_IN, RoomPresence.Verdict.MAYBE_OUT -> {
+                        val which = if (st.verdict == RoomPresence.Verdict.MAYBE_IN) "probs is" else "probs not"
+                        indicator.text = "MAYBE ($which)\nBorderline here - press the red button to teach it."
+                        indicator.textSize = 18f; indicator.setTypeface(indicator.typeface, Typeface.BOLD)
+                        indicator.setTextColor(0xFFB07800.toInt())
+                    }
+                    else -> {
+                        indicator.text = "false ✓  (correct)"
+                        indicator.textSize = 13f; indicator.setTypeface(null, Typeface.NORMAL)
+                        indicator.setTextColor(0xFF9AA0A6.toInt())
+                    }
                 }
             }
         }
 
-        // ── Phase: entry walks (continuous trace, labelled by your two taps) ──────
-        lateinit var goWalk: (Int) -> Unit
-        goWalk = fun(w: Int) {
-            if (w >= 2) {
-                // Persist everything recorded so far, so the tour's live indicator
-                // (and the final detection) runs on the full data set.
-                RoomBeacons.setSamples(this, room, collected)
-                RoomPresence.reset()
-                goTour(0)
-                return
-            }
+        // ── Phase: 15 s walk around the room (outliers get trimmed later) ─────────
+        fun goWander() {
             val mac = ownMac() ?: run { showRoomBeaconDebug(); return }
-            val intro = if (w == 0)
-                "Go to somewhere you'd naturally come FROM - the bottom of the stairs, or " +
-                    "another room.\n\nThen walk to the $roomName at a normal pace, step in, and " +
-                    "settle where you'd usually sit or lie (e.g. on the bed).\n\nTap the big " +
-                    "button the moment you STEP THROUGH the door, and again once you're settled."
-            else
-                "Once more, but a DIFFERENT route and a DIFFERENT final spot - e.g. start " +
-                    "from another room, cross the landing, and settle in the chair instead of " +
-                    "the bed.\n\nSame two taps: stepping through the door, then settled."
             val live = liveLine()
+            val countdown = bigCountdown()
             val prog = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); gravity = Gravity.CENTER }
-            var phase = 0   // 0 = not started, 1 = approaching (outside), 2 = inside
-            var outPts = 0; var inPts = 0
-            val bigBtn = bigChoice("Start walking", 0xFF2E9E8F.toInt()) {}
-            bigBtn.setOnClickListener {
-                when (phase) {
-                    0 -> { phase = 1; bigBtn.text = "I JUST STEPPED IN" }
-                    1 -> { phase = 2; bigBtn.text = "I'm settled - finish this walk" }
-                    else -> goWalk(w + 1)
-                }
+            var wandering = false
+            var got = 0
+            val startBtn = bigChoice("Start - walk around the room", 0xFF2E9E8F.toInt()) {}
+            val end = longArrayOf(0)
+            startBtn.setOnClickListener {
+                if (wandering) return@setOnClickListener
+                wandering = true; startBtn.isEnabled = false
+                end[0] = System.currentTimeMillis() + 15_000
             }
-            show("Step ${10 + w} of $total · $roomName", "Walk in and settle - route ${w + 1}",
-                bigBody(intro), live, prog, bigBtn)
+            show("Set up · $roomName · walk the room", "Walk around the room for 15 s",
+                bigBody(
+                    "Wander slowly around the whole room - along the walls, past the furniture. " +
+                        "This gives lots of readings so the odd weird one can be spotted and ignored.",
+                ),
+                live, countdown, prog, startBtn)
             liveTick(live)
             tick(1_000) {
-                if (phase == 0) return@tick
-                val inside = phase == 2
+                if (!wandering) return@tick
+                val left = end[0] - System.currentTimeMillis()
+                if (left <= 0) { goRoam(); return@tick }
+                countdown.text = "${(left + 999) / 1000}"
                 val readings = snapshotReadings()
-                // Inside points must actually contain the room's own beacon, or we'd
-                // teach the pattern that silence looks like being in the room.
-                val usable = readings.isNotEmpty() && (!inside || readings.containsKey(mac))
-                if (usable && (if (inside) inPts else outPts) < 40) {
-                    collected.add(RoomBeacons.Sample(
-                        if (inside) "Route ${w + 1} - inside" else "Route ${w + 1} - approaching",
-                        inside, readings,
-                    ))
-                    if (inside) inPts++ else outPts++
+                if (readings.containsKey(mac) && got < 20) {
+                    collected.add(RoomBeacons.Sample("Walking around the room", true, readings))
+                    got++
                 }
-                prog.text = "recorded $outPts approach + $inPts inside points"
+                prog.text = "recorded $got readings"
             }
         }
 
@@ -5586,7 +5710,7 @@ private fun startWeekStrict() {
         lateinit var goSpot: (Int) -> Unit
         goSpot = fun(i: Int) {
             val spots = insideSpots + temptationSpots
-            if (i >= spots.size) { goWalk(0); return }
+            if (i >= spots.size) { goWander(); return }
             val spot = spots[i]
             val mac = ownMac() ?: run { showRoomBeaconDebug(); return }
             val live = liveLine()
@@ -5616,51 +5740,61 @@ private fun startWeekStrict() {
                             sampling = false; sampleBtn.isEnabled = true; countdown.text = ""
                             Toast.makeText(this@MainActivity, "Lost the beacon mid-sample - try again", Toast.LENGTH_LONG).show()
                         } else {
-                            collected.add(RoomBeacons.Sample(spot.title, true, readings))
+                            collected.add(RoomBeacons.Sample(spot.title, true, readings, core = spot.core))
                             Toast.makeText(this@MainActivity, "${spot.title}: ${readings[mac]} dBm ✓", Toast.LENGTH_SHORT).show()
                             goSpot(i + 1)
                         }
                     }
                 })
             }
-            val phaseName = if (i < insideSpots.size) "inside the room" else "your real spots"
-            show("Step ${i + 4} of $total · $roomName · $phaseName", spot.title,
-                bigBody(spot.instruction + if (i < insideSpots.size) "\n\nHold the phone in your hand like you'd normally use it." else ""),
+            show("Set up · $roomName · spot ${i + 1} of ${spots.size}", spot.title,
+                bigBody(spot.instruction + if (!spot.core) "\n\nHold the phone in your hand like you'd normally use it." else ""),
                 live, countdown, sampleBtn)
             liveTick(live)
         }
 
         fun placePage() {
-            show("Step 3 of $total · place both beacons", "Put BOTH beacons in their rooms",
+            val dual = RoomBeacons.dualMode(this)
+            val placements = roomsNow.mapNotNull { r ->
+                if (RoomBeacons.beaconMac(this, r) == null) null
+                else if (RoomBeacons.beaconMac2(this, r) != null)
+                    "· ${r.replaceFirstChar { c -> c.uppercase() }}: sensor A at the risk spot, sensor B at the opposite end"
+                else "· ${r.replaceFirstChar { c -> c.uppercase() }} beacon → in the $r"
+            }.joinToString("\n")
+            show("Set up · $roomName · place the beacons", "Put EVERY beacon in its room",
                 bigBody(
-                    "$roomName beacon → somewhere in the $roomName.\n" +
-                        "$otherName beacon → somewhere in the $otherName.\n\n" +
-                        "Wherever each will permanently live - a shelf, the bedside table, on top " +
-                        "of a cupboard. Not central is fine: the calibration is for those exact " +
-                        "positions.\n\nOne rule: move a beacon later and you redo the set-up.\n\n" +
-                        "Come back here with your phone once both are in place.",
+                    "KEY RULE: put each beacon closest to where the risk actually is - bedroom: " +
+                        "at the bed (headboard or bedside table); bathroom: back of a cupboard or " +
+                        "a shelf near where the phone would get used." +
+                        (if (dual) "\nIn dual mode the second sensor goes at the OPPOSITE end of the room." else "") +
+                        "\n\n" + placements + "\n\n" +
+                        "They must never move once calibrated - if you move one later, redo the " +
+                        "set-up.\n\nCome back here with your phone once they're all in place.",
                 ),
-                bigChoice("Both are in place - start calibrating", 0xFF2E9E8F.toInt()) { collected.clear(); goSpot(0) })
+                bigChoice("All in place - start calibrating", 0xFF2E9E8F.toInt()) { collected.clear(); goSpot(0) })
         }
 
         // Finds one room's beacon (hold-against-phone → strongest → confirm). Reused
-        // for this room (step 1) and the other room (step 2), hence the parameters.
-        lateinit var assignFlow: (String, String, () -> Unit) -> Unit
-        fun confirmPage(target: String, step: String, candidate: BeaconScanner.Beacon, onDone: () -> Unit) {
+        // for whichever room/slot needs one; second = the room's B sensor (dual mode).
+        lateinit var assignFlow: (String, String, Boolean, () -> Unit) -> Unit
+        fun confirmPage(target: String, step: String, second: Boolean, candidate: BeaconScanner.Beacon, onDone: () -> Unit) {
             val targetName = target.replaceFirstChar { it.uppercase() }
+            val slotName = if (second) "second $targetName sensor" else "$targetName beacon"
             show(step, "Found it",
                 bigBody(
                     "Strongest signal right now:\n\n${candidate.name ?: "unnamed beacon"}\n${candidate.mac}\n" +
                         "${Math.round(candidate.smoothedRssi)} dBm\n\nIs that the beacon in your hand?",
                 ),
-                bigChoice("Yes - this is the $targetName beacon", 0xFF2E7D32.toInt()) {
-                    RoomBeacons.setBeaconMac(this, target, candidate.mac)
+                bigChoice("Yes - this is the $slotName", 0xFF2E7D32.toInt()) {
+                    if (second) RoomBeacons.setBeaconMac2(this, target, candidate.mac)
+                    else RoomBeacons.setBeaconMac(this, target, candidate.mac)
+                    scanner.expectedMacs = RoomBeacons.allAssignedMacs(this).toSet()
                     onDone()
                 },
-                Button(this).apply { text = "No - scan again"; setAllCaps(false); setOnClickListener { assignFlow(target, step, onDone) } })
+                Button(this).apply { text = "No - scan again"; setAllCaps(false); setOnClickListener { assignFlow(target, step, second, onDone) } })
         }
 
-        assignFlow = fun(target: String, step: String, onDone: () -> Unit) {
+        assignFlow = fun(target: String, step: String, second: Boolean, onDone: () -> Unit) {
             val targetName = target.replaceFirstChar { it.uppercase() }
             val countdown = bigCountdown()
             val live = TextView(this).apply {
@@ -5677,8 +5811,10 @@ private fun startWeekStrict() {
                 }
                 scanner.ensureScanning()
                 finding = true; startBtn.isEnabled = false
-                val otherMacs = RoomBeacons.ROOMS.filter { it != target }
-                    .mapNotNull { RoomBeacons.beaconMac(this, it) }.toSet()
+                // Every beacon already assigned anywhere (except this very slot's
+                // current value) is off-limits - can't reuse one beacon twice.
+                val currentSlot = if (second) RoomBeacons.beaconMac2(this, target) else RoomBeacons.beaconMac(this, target)
+                val otherMacs = RoomBeacons.allAssignedMacs(this).toSet() - setOfNotNull(currentSlot)
                 val begin = System.currentTimeMillis()
                 val end = begin + RoomBeacons.SAMPLE_MS
                 ui.post(object : Runnable {
@@ -5699,19 +5835,20 @@ private fun startWeekStrict() {
                                 Toast.LENGTH_LONG).show()
                             strongest != null && strongest.mac in otherMacs &&
                                 strongest.smoothedRssi > best.smoothedRssi + 6 -> Toast.makeText(this@MainActivity,
-                                "The beacon in your hand is already assigned to the other room. To swap them, Reset that room first.",
+                                "The beacon in your hand is already assigned to another room. To swap them, Reset that room first.",
                                 Toast.LENGTH_LONG).show()
                             best.smoothedRssi < -55 -> Toast.makeText(this@MainActivity,
                                 "Strongest device is only ${Math.round(best.smoothedRssi)} dBm - too weak to be touching the phone. Press the beacon against the phone's back and try again.",
                                 Toast.LENGTH_LONG).show()
-                            else -> confirmPage(target, step, best, onDone)
+                            else -> confirmPage(target, step, second, best, onDone)
                         }
                     }
                 })
             }
-            show(step, "Find the $targetName beacon",
+            show(step, if (second) "Find the second $targetName sensor" else "Find the $targetName beacon",
                 bigBody(
-                    "1. Make sure the beacon is switched on: hold its button for ~3 seconds until " +
+                    (if (second) "This one will live at the OTHER end of the $target.\n\n" else "") +
+                        "1. Make sure the beacon is switched on: hold its button for ~3 seconds until " +
                         "its light blinks. (Brand new? Pull the battery tab out first.)\n\n" +
                         "2. Hold the beacon flat against the BACK of your phone.\n\n" +
                         "3. Keep it there and press Start.",
@@ -5726,42 +5863,57 @@ private fun startWeekStrict() {
             }
         }
 
-        // Both beacons must be assigned before calibration - the rule checks need the
-        // pattern across both, so calibrating with one would bake in its blindness.
-        fun otherBeaconPage() {
-            if (RoomBeacons.beaconMac(this, other) != null) {
-                show("Step 2 of $total · $otherName beacon", "$otherName beacon ✓",
-                    bigBody(
-                        "The $otherName beacon is already assigned. Detection uses the signal " +
-                            "pattern of BOTH beacons, so it takes part in this calibration too.",
-                    ),
-                    bigChoice("Continue", 0xFF2E9E8F.toInt()) { placePage() })
-            } else {
-                show("Step 2 of $total · $otherName beacon", "Now the $otherName beacon",
-                    bigBody(
-                        "One beacon alone can't tell \"in the $roomName\" from \"directly above or " +
-                            "below it on another floor\" - radio goes straight through floors. So the " +
-                            "app checks the pattern across BOTH beacons, and both must be set up " +
-                            "before calibrating.\n\nGo and get the $otherName beacon now.",
-                    ),
-                    bigChoice("I'm holding it - find this beacon", 0xFF2E9E8F.toInt()) {
-                        assignFlow(other, "Step 2 of $total · $otherName beacon") { placePage() }
-                    })
+        // The pairwise matching needs at least TWO beacons in the house. Anything
+        // already assigned is skipped silently - no redundant questions.
+        fun afterOwnBeacon() {
+            val assignedTotal = RoomBeacons.allAssignedMacs(this).size
+            val next = roomsNow.firstOrNull { it != room && RoomBeacons.beaconMac(this, it) == null }
+            if (assignedTotal >= 2 || next == null) { placePage(); return }
+            val nextName = next.replaceFirstChar { it.uppercase() }
+            show("Set up · $roomName · second beacon", "Now the $nextName beacon",
+                bigBody(
+                    "One beacon alone can't tell \"in the $roomName\" from \"directly above or " +
+                        "below it on another floor\" - radio goes straight through floors. The app " +
+                        "matches the whole SET of beacon readings, so at least one more room's " +
+                        "beacon must be set up before calibrating.\n\nGo and get the $nextName " +
+                        "beacon now.",
+                ),
+                bigChoice("I'm holding it - find this beacon", 0xFF2E9E8F.toInt()) {
+                    assignFlow(next, "Set up · $roomName · second beacon", false) { placePage() }
+                })
+        }
+
+        // Dual mode: this room needs its B sensor (opposite end) before moving on.
+        fun maybeOwnSecond() {
+            if (!RoomBeacons.dualMode(this) || RoomBeacons.beaconMac2(this, room) != null) {
+                afterOwnBeacon(); return
             }
+            show("Set up · $roomName · sensor B", "This room gets TWO sensors",
+                bigBody(
+                    "Dual-sensor mode is on: the $roomName gets a second sensor at the OPPOSITE " +
+                        "end of the room, which makes the readings much more distinctive.\n\n" +
+                        "Go and get the second $roomName sensor now.",
+                ),
+                bigChoice("I'm holding it - find this sensor", 0xFF2E9E8F.toInt()) {
+                    assignFlow(room, "Set up · $roomName · sensor B", true) { afterOwnBeacon() }
+                })
         }
 
         val existing = RoomBeacons.beaconMac(this, room)
-        if (existing == null) assignFlow(room, "Step 1 of $total · $roomName beacon") { otherBeaconPage() }
-        else show("Set up · $roomName", "Set up $roomName",
-            bigBody(
-                "This room already has a beacon assigned ($existing).\n\n" +
-                    "Keep it and just redo the calibration walk, or start from scratch?",
-            ),
-            bigChoice("Keep beacon - continue", 0xFF2E9E8F.toInt()) { otherBeaconPage() },
-            Button(this).apply {
-                text = "Start over - pick the beacon again"; setAllCaps(false)
-                setOnClickListener { assignFlow(room, "Step 1 of $total · $roomName beacon") { otherBeaconPage() } }
-            })
+        when {
+            existing == null -> assignFlow(room, "Set up · $roomName · find beacon", false) { maybeOwnSecond() }
+            !RoomBeacons.isCalibrated(this, room) -> maybeOwnSecond()   // assigned during another room's set-up
+            else -> show("Recalibrate · $roomName", "Recalibrate $roomName",
+                bigBody(
+                    "This room is already set up. Keep the same beacon and redo the calibration " +
+                        "walk, or start from scratch?",
+                ),
+                bigChoice("Keep beacon - recalibrate", 0xFF2E9E8F.toInt()) { maybeOwnSecond() },
+                Button(this).apply {
+                    text = "Start over - pick the beacon again"; setAllCaps(false)
+                    setOnClickListener { assignFlow(room, "Set up · $roomName · find beacon", false) { maybeOwnSecond() } }
+                })
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
