@@ -1,4 +1,37 @@
 
+- home page 14 day trend score still doesn't show...
+    - it still says 'the 14 day trend appears here' .. it shouldn't. 
+    - it should look like the grame that shows when you click on it where it says like '1\n Calm', but instead of 'calm' it just says 'adensoine apprentice (remove the just 'apprentie', we'll just have one full name...)
+    - plus rmemove the learn more... just let them click on it... remove all that 7-day average text..remove the 'baseline today:' text..
+- for the one underneaht: hours on the phone..
+    - again, show a line graph rather than bar chart, and why is the goal higher? come on, labled axis... stupid graph you're better than that! and set a baseline goal, of something sensible like <1 hour per day...
+    - should be for phone usage (and then hiddenly exclde usage of whitelisted apps).. but dont add extra text keep the open page minimal..
+    - also for the 'a year at this pace'...
+        - show a graph, of their total usage, so far this year, cumulative, going up and up, and then show the dotted line showing where it'll end up.
+        - then fix the graphics... the 'of your waking life' is in between the circile overlapping it looks silly.. bold things like £4463...
+    - also don't have text saying 'your goal: ...' that should be on the productuvity page... 
+        - you should only refelct that goal through these graphs...
+- and again, don't forget... for all of these, if we don't have enough data yet... show the example! (based off your estimates / research of average usage!)
+- also:
+    - can we take inspiration from strava in genenral? and like duolingo? 
+    so for our line graph on the opening page, make it like a strava one.. so like this week, 
+        - time wasted, money wasted,  etc. (all the tihngs we estimate)
+        - with like the day of the week.. (mon, tue, wed), so we don't have to label axis... 
+        - and then the month, for the main page, but only once they've been using more than 2 months! (Jan, March, May, etc.)
+        - then on the productivity page, the same but what they have reclaimed... 
+
+
+
+--------------------------------------- 
+
+achievements:
+- like strava or duolingo
+    - have a page showing all the differnet achievements they can unlock...
+
+- then like short term ones:
+    - ike one for 'least phone usage this week',
+    - 'least usage week ever'
+    - 'says without relapse (for if they looked at adult content prevoiusly and had been using those features..)
 
 ------------------------------
 
@@ -28,7 +61,6 @@ MANUAL TODO:
 
 ------------------------------
 ----
-
 
 
 
