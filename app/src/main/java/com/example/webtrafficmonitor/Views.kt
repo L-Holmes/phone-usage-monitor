@@ -984,3 +984,75 @@ class DopamineScaleView(context: Context, private val score: Int) : View(context
         canvas.drawCircle(cx, y, 8f * dp, markerRing)
     }
 }
+
+
+// =====================================================================================
+// UsageBarChartView  (bars of hours per day/month, with an optional goal line)
+// =====================================================================================
+/**
+ * A simple bar chart for the home page's usage graphs. [values] are hours (one bar
+ * each, oldest first; NaN = no data for that slot, drawn as a faint stub). [labels]
+ * are sparse x-axis labels, same length as values, empty string = no label. [goal]
+ * (hours) draws a dashed line: bars at or under it are green, over it amber→red.
+ */
+class UsageBarChartView(
+    context: Context,
+    private val values: FloatArray,
+    private val labels: List<String>,
+    private val goal: Float?,
+) : View(context) {
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(canvas: Canvas) {
+        if (values.isEmpty()) return
+        val dp = resources.displayMetrics.density
+        val padL = 26 * dp; val padB = 16 * dp; val padT = 6 * dp
+        val x0 = padL; val x1 = width - 4 * dp
+        val yBase = height - padB; val yTop = padT
+        val maxVal = maxOf(values.filter { !it.isNaN() }.maxOrNull() ?: 1f, goal ?: 0f, 1f) * 1.15f
+        fun y(v: Float) = yBase - (yBase - yTop) * (v / maxVal)
+
+        // y axis: 0 and the max hour tick
+        text.textSize = 9 * dp; text.color = 0xFF9AA0A6.toInt(); text.textAlign = Paint.Align.RIGHT
+        canvas.drawText("0h", padL - 4 * dp, yBase, text)
+        val topTick = Math.round(maxVal / 1.15f)
+        canvas.drawText("${topTick}h", padL - 4 * dp, y(topTick.toFloat()) + 3 * dp, text)
+        paint.color = 0x22000000; paint.strokeWidth = 1 * dp
+        canvas.drawLine(x0, yBase, x1, yBase, paint)
+
+        val n = values.size
+        val slot = (x1 - x0) / n
+        val barW = slot * 0.66f
+        for (i in 0 until n) {
+            val cx = x0 + slot * i + slot / 2
+            val v = values[i]
+            if (v.isNaN()) {
+                paint.color = 0x14000000
+                canvas.drawRoundRect(cx - barW / 2, yBase - 3 * dp, cx + barW / 2, yBase, 2 * dp, 2 * dp, paint)
+            } else {
+                paint.color = when {
+                    goal == null -> 0xFF2E9E8F.toInt()
+                    v <= goal -> 0xFF2E9E44.toInt()
+                    v <= goal * 1.5f -> 0xFFE0A800.toInt()
+                    else -> 0xFFC0392B.toInt()
+                }
+                canvas.drawRoundRect(cx - barW / 2, y(v), cx + barW / 2, yBase, 2 * dp, 2 * dp, paint)
+            }
+            val label = labels.getOrNull(i).orEmpty()
+            if (label.isNotEmpty()) {
+                text.textAlign = Paint.Align.CENTER; text.color = 0xFF9AA0A6.toInt()
+                canvas.drawText(label, cx, height - 4 * dp, text)
+            }
+        }
+
+        goal?.let { g ->
+            paint.color = 0xFF1F2933.toInt(); paint.strokeWidth = 1.5f * dp
+            var x = x0
+            while (x < x1) { canvas.drawLine(x, y(g), minOf(x + 5 * dp, x1), y(g), paint); x += 9 * dp }
+            text.textAlign = Paint.Align.LEFT; text.color = 0xFF1F2933.toInt()
+            canvas.drawText("goal", x0 + 2 * dp, y(g) - 3 * dp, text)
+        }
+    }
+}

@@ -716,3 +716,88 @@ object AboutYou {
     private fun prefs(c: Context) =
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
+
+
+// =====================================================================================
+// DopamineRank  (the belt system: hold a low baseline over time to rank up)
+// =====================================================================================
+/**
+ * A prestige ladder over the daily dopamine score, CoD-prestige / dojo-belt style.
+ * The top ranks are EARNED BY TIME: not "a good day", but a low baseline HELD for
+ * weeks. The bottom ranks come straight from the recent average, so a rough week
+ * demotes you quickly but climbing back is a long game - that asymmetry is the point.
+ *
+ * Rank rules (checked top-down, first match wins):
+ *   Monk     - 60+ day streak of scores ≤ 25
+ *   Guru     - 30+ day streak of scores ≤ 30
+ *   Sensei   - 14+ day streak of scores ≤ 35
+ *   Disciple -  7+ day streak of scores ≤ 40
+ *   Apprentice - 7-day average < 40
+ *   Drifter    - 7-day average < 50
+ *   Twitchy    - 7-day average < 60
+ *   Doomscroller - 7-day average < 75
+ *   Fried      - 7-day average ≥ 75
+ * A "streak" walks back from today; days with no data are skipped (they neither
+ * count nor break it), a data day above the threshold breaks it.
+ */
+data class DopamineRankResult(
+    val title: String,
+    val colour: Int,
+    val detail: String,       // one line: what earned it / what's next
+    val hasData: Boolean,
+)
+
+object DopamineRank {
+
+    private data class Belt(val title: String, val streakDays: Int, val maxScore: Int, val colour: Int)
+
+    // Earned belts, best first. Colours darken as you climb.
+    private val BELTS = listOf(
+        Belt("Monk", 60, 25, 0xFF1B5E20.toInt()),
+        Belt("Guru", 30, 30, 0xFF2E7D32.toInt()),
+        Belt("Sensei", 14, 35, 0xFF2E9E8F.toInt()),
+        Belt("Disciple", 7, 40, 0xFF3E7CB1.toInt()),
+    )
+
+    fun of(context: Context): DopamineRankResult {
+        val history = DopamineLog.history(context, 90)
+        val scored = history.map { d -> DopamineScore.of(d).let { if (it.hasData) it.score else -1 } }
+        if (scored.none { it >= 0 }) return DopamineRankResult(
+            "Unranked", 0xFF9AA0A6.toInt(),
+            "Use the phone for a day and your rank appears here.", false)
+
+        // Streak per threshold: newest-first walk; no-data days are skipped.
+        fun streak(maxScore: Int): Int {
+            var n = 0
+            for (s in scored.asReversed()) {
+                if (s < 0) continue
+                if (s > maxScore) break
+                n++
+            }
+            return n
+        }
+
+        for ((i, belt) in BELTS.withIndex()) {
+            if (streak(belt.maxScore) >= belt.streakDays) {
+                val next = BELTS.getOrNull(i - 1)
+                val detail = if (next == null) "The top of the mountain. Keep sitting on it."
+                else "${belt.streakDays}+ days with a baseline ≤ ${belt.maxScore}. " +
+                    "Next: ${next.title} - ${next.streakDays} days ≤ ${next.maxScore}."
+                return DopamineRankResult(belt.title, belt.colour, detail, true)
+            }
+        }
+
+        // No belt yet: rank straight off the recent average, and show the path in.
+        val recent = scored.takeLast(7).filter { it >= 0 }
+        val avg = if (recent.isEmpty()) scored.last { it >= 0 } else recent.average().toInt()
+        val entry = BELTS.last()
+        val path = "Next: ${entry.title} - ${entry.streakDays} days ≤ ${entry.maxScore} (streak so far: ${streak(entry.maxScore)})."
+        return when {
+            avg < 40 -> DopamineRankResult("Apprentice", 0xFF52796F.toInt(), "7-day average $avg. $path", true)
+            avg < 50 -> DopamineRankResult("Drifter", 0xFF9A7B00.toInt(), "7-day average $avg. $path", true)
+            avg < 60 -> DopamineRankResult("Twitchy", 0xFFB07800.toInt(), "7-day average $avg. $path", true)
+            avg < 75 -> DopamineRankResult("Doomscroller", 0xFFC0392B.toInt(), "7-day average $avg. $path", true)
+            else -> DopamineRankResult("Fried", 0xFF8E1600.toInt(), "7-day average $avg. It only goes up from here. $path", true)
+        }
+    }
+}

@@ -477,6 +477,7 @@ private fun smallLink(label: String, dp: Float, onClick: () -> Unit): TextView =
 
 // ── About you: optional numbers, used ONLY to make the cost concrete ────────
 private var aboutYouBack: () -> Unit = { setupHomeScreen() }
+private var dopamineBack: () -> Unit = { showProductivity() }
 private var lifeInputsBack: () -> Unit = { showProductivity() }
 
 private fun showAboutYou() {
@@ -551,7 +552,7 @@ private fun showDopamine() {
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
     })
-    setContentWithThumb(root) { showProductivity() }
+    setContentWithThumb(root) { dopamineBack() }
 
     if (!r.hasData) {
         c.addView(TextView(this).apply {
@@ -1940,6 +1941,11 @@ private fun showRecentBlocks() {
 
 // ── Report screen: 4 equal full-width panes ────────────────────────────────
 // ── Disguised home: a productivity face; the addiction tools live behind a tab ─
+// Order, deliberately: the dopamine baseline + rank first (the thing to care about),
+// then the usage graphs (what it costs), then the two big doors (Productivity,
+// Temptations), dev tools, the status console, and a tiny about link. The old
+// "what you've reclaimed" stats and the cost projector live in showScrollCost()
+// inside Productivity now.
 private fun setupHomeScreen() {
     onHomeScreen = true; onTemptationsTab = false; onReportScreen = false; onDevScreen = false
     subBack = null
@@ -1948,19 +1954,250 @@ private fun setupHomeScreen() {
     stopRideTimer(); stopLoosenTimer(); entriesJob?.cancel()
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+    val teal = 0xFF2E9E8F.toInt()
 
-    // Gentle warning banner if the app isn't protected yet.
-    if (!(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
-        content.addView(uninstallBanner())
+    // ── 1. Dopamine baseline: rank badge + gauge + trend. Tap for the full page. ──
+    val today = DopamineScore.of(DopamineLog.today(this))
+    val rank = DopamineRank.of(this)
+    val dopCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        isClickable = true; isFocusable = true
+        setOnClickListener { dopamineBack = { setupHomeScreen() }; showDopamine() }
+    }
+    dopCard.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        addView(TextView(this@MainActivity).apply {
+            text = rank.title.uppercase(); textSize = 24f
+            setTypeface(typeface, Typeface.BOLD); setTextColor(rank.colour)
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = "learn more ›"; textSize = 13f; setTextColor(0xFF2E9E8F.toInt()); setTypeface(typeface, Typeface.BOLD)
+        })
+    })
+    dopCard.addView(TextView(this).apply {
+        text = rank.detail; textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, (10 * dp).toInt())
+    })
+    val history14 = DopamineLog.history(this, 14)
+    val scores14 = history14.map { DopamineScore.of(it).score.toFloat() }.toFloatArray()
+    dopCard.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        addView(DopamineScaleView(this@MainActivity, today.score), LinearLayout.LayoutParams((46 * dp).toInt(), (132 * dp).toInt()))
+        if (scores14.count { it > 0f } >= 2) {
+            addView(TrendView(this@MainActivity, scores14), LinearLayout.LayoutParams(0, (132 * dp).toInt(), 1f).apply {
+                marginStart = (12 * dp).toInt()
+            })
+        } else {
+            addView(TextView(this@MainActivity).apply {
+                text = "The 14-day trend appears here after a couple of days of normal phone use."
+                textSize = 13f; setTextColor(0xFF9AA0A6.toInt()); gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(0, (132 * dp).toInt(), 1f)
+            })
+        }
+    })
+    dopCard.addView(TextView(this).apply {
+        text = if (today.hasData) "Baseline today: ${today.score} · ${today.band}" else "Baseline today: still measuring"
+        textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0)
+    })
+    content.addView(dopCard)
+
+    // ── 2. Usage graphs: real tracked screen-on time, and what it costs. ──────
+    val history90 = DopamineLog.history(this, 90)
+    fun hoursOf(day: DopamineDay): Float =
+        if (DopamineScore.of(day).hasData) day.screenOnSeconds / 3600f else Float.NaN
+    val goalHours = UsageGoal.hoursPerDay(this)
+
+    val daily = history14.map { hoursOf(it) }.toFloatArray()
+    if (daily.any { !it.isNaN() }) {
+        content.addView(sectionTitle("Hours on the phone - last 14 days"))
+        val labels14 = history14.mapIndexed { i, d ->
+            if (i % 3 == 0 || i == history14.size - 1) d.date.takeLast(2) else ""
+        }
+        content.addView(UsageBarChartView(this, daily, labels14, goalHours),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
+        if (goalHours != null) {
+            val dataDays = daily.filter { !it.isNaN() }
+            val under = dataDays.count { it <= goalHours }
+            content.addView(TextView(this).apply {
+                text = "Goal ${fmtHours(goalHours)} a day · under it $under of ${dataDays.size} days"
+                textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+            })
+        }
+
+        // Monthly: average hours per day, per calendar month (up to ~3 months of data).
+        val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        val byMonth = history90.filter { DopamineScore.of(it).hasData }
+            .groupBy { it.date.substring(0, 7) }.toSortedMap()
+        if (byMonth.size >= 2) {
+            content.addView(sectionTitle("Average hours per day, by month"))
+            val monthly = byMonth.values.map { days -> days.map { it.screenOnSeconds / 3600f }.average().toFloat() }.toFloatArray()
+            val monthLabels = byMonth.keys.map { monthNames[it.substring(5, 7).toInt() - 1] }
+            content.addView(UsageBarChartView(this, monthly, monthLabels, goalHours),
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
+        }
+
+        // The year: your recent pace projected forward, as time and money.
+        val recentDays = history90.takeLast(30).map { hoursOf(it) }.filter { !it.isNaN() }
+        val avgDaily = if (recentDays.isNotEmpty()) recentDays.average().toFloat() else 0f
+        if (avgDaily > 0f) {
+            content.addView(sectionTitle("A year at this pace"))
+            val rate = AboutYou.effectiveHourly(this)
+            val yearHours = avgDaily * 365.0
+            val wakingDaysYr = Math.round(yearHours / Usage.WAKING_HOURS)
+            val gbpYr = Math.round(yearHours * rate)
+            val yearCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+                val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
+            val yearDonut = WastedDonutView(this)
+            yearDonut.setFraction(avgDaily / Usage.WAKING_HOURS)
+            yearCard.addView(yearDonut, LinearLayout.LayoutParams((132 * dp).toInt(), (132 * dp).toInt()).apply {
+                gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = (6 * dp).toInt()
+            })
+            yearCard.addView(TextView(this).apply {
+                text = "$wakingDaysYr waking days a year"; textSize = 24f
+                setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt())
+            })
+            yearCard.addView(TextView(this).apply {
+                text = "≈ £$gbpYr a year of your time, at ${fmtHours(avgDaily)} a day"
+                textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+            })
+            if (goalHours != null && goalHours < avgDaily) {
+                val savedGbp = Math.round((avgDaily - goalHours) * 365.0 * rate)
+                val goalDays = Math.round(goalHours * 365.0 / Usage.WAKING_HOURS)
+                yearCard.addView(TextView(this).apply {
+                    text = "At your ${fmtHours(goalHours)}/day goal: $goalDays waking days - clawing back £$savedGbp a year"
+                    textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+                    setTypeface(typeface, Typeface.BOLD); setPadding(0, (6 * dp).toInt(), 0, 0)
+                })
+            }
+            content.addView(yearCard)
+        }
+    } else {
+        content.addView(sectionTitle("Your usage"))
+        content.addView(TextView(this).apply {
+            text = "Graphs of your real phone time - per day, per month, and what a year of it " +
+                "costs - appear here after a day or two of normal use."
+            textSize = 13f; setTextColor(0xFF7B848C.toInt())
+        })
+    }
+    content.addView(smallLink(if (goalHours == null) "Set a usage goal  ›" else "Your goal: ${fmtHours(goalHours)} a day - change  ›", dp) {
+        showUsageGoal()
+    })
+
+    // ── 3. The two big doors ────────────────────────────────────────────────
+    fun bigDoor(label: String, colour: Int, onClick: () -> Unit) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(colour) }
+        val p = (18 * dp).toInt(); setPadding(p, (16 * dp).toInt(), p, (16 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (14 * dp).toInt() }
+        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
+        addView(TextView(this@MainActivity).apply {
+            text = label; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        addView(TextView(this@MainActivity).apply { text = "→"; textSize = 22f; setTextColor(0xFFFFFFFF.toInt()) })
+    }
+    content.addView(bigDoor("Productivity", teal) { showProductivity() })
+    content.addView(bigDoor("Temptations", 0xFF3E535C.toInt()) { showTemptationsTab() })
+
+    // ── 4. Dev tools (only when dev mode is on) ─────────────────────────────
+    if (AppConfig.DEV_MODE) {
+        content.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp; setStroke((1 * dp).toInt(), 0xFFB0B6BB.toInt()); setColor(0x00000000)
+            }
+            val p = (14 * dp).toInt(); setPadding(p, (12 * dp).toInt(), p, (12 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (12 * dp).toInt() }
+            isClickable = true; isFocusable = true; setOnClickListener { setupMainScreen() }
+            addView(TextView(this@MainActivity).apply {
+                text = "🔧  Dev tools"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF5A6068.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(TextView(this@MainActivity).apply { text = "›"; textSize = 20f; setTextColor(0xFF9AA0A6.toInt()) })
+        })
     }
 
-    // ── FIRST: what you've reclaimed (reward, don't punish) ─────────────────
+    // permission/status console, then the quietest possible about link
+    content.addView(permissionConsole())
+    content.addView(TextView(this).apply {
+        text = "About & privacy"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        gravity = Gravity.CENTER; isClickable = true; isFocusable = true
+        setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        setOnClickListener { showAboutPage() }
+    })
+
+    val root = ScrollView(this).apply {
+        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        isFillViewport = true
+        addView(content)
+    }
+    setContentNoThumb(root)   // the landing screen - nothing behind it to go back to
+}
+
+private fun fmtHours(h: Float): String {
+    val m = Math.round(h * 60)
+    return if (m % 60 == 0) "${m / 60}h" else "${m / 60}h ${m % 60}m"
+}
+
+// ── Usage goal: pick a daily phone-time target; the home graphs draw it. ──────
+private fun showUsageGoal() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText("Usage goal"))
+    root.addView(TextView(this).apply {
+        text = "Pick how much time on the phone per day you'd be happy with. The home-page " +
+            "graphs draw the goal as a line: days under it go green, days over it don't."
+        textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, 0, 0, (14 * dp).toInt())
+    })
+    val current = UsageGoal.minutesPerDay(this)
+    val label = TextView(this).apply {
+        textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFF1F2933.toInt())
+        setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+    }
+    // 15-minute steps from 15 min to 8 h.
+    val seek = android.widget.SeekBar(this).apply {
+        max = 31
+        progress = (((if (current > 0) current else 120) / 15) - 1).coerceIn(0, 31)
+    }
+    fun minutesOf(p: Int) = (p + 1) * 15
+    fun refreshLabel() { label.text = fmtHours(minutesOf(seek.progress) / 60f) + " a day" }
+    seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) { refreshLabel() }
+        override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+        override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+    })
+    root.addView(label); root.addView(seek)
+    refreshLabel()
+    root.addView(bigChoice("Set goal", 0xFF2E7D32.toInt()) {
+        UsageGoal.setMinutesPerDay(this, minutesOf(seek.progress))
+        Toast.makeText(this, "Goal set: ${fmtHours(minutesOf(seek.progress) / 60f)} a day", Toast.LENGTH_SHORT).show()
+        setupHomeScreen()
+    })
+    if (current > 0) root.addView(Button(this).apply {
+        text = "Remove the goal"; setAllCaps(false)
+        setOnClickListener { UsageGoal.clear(this@MainActivity); setupHomeScreen() }
+    })
+    setContentWithThumb(root) { setupHomeScreen() }
+}
+
+// ── What the scroll costs: the projector + reclaimed stats (moved off the home page). ──
+private fun showScrollCost() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+    content.addView(titleText("What the scroll costs you"))
+
     val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
     val s = Progress.snapshot(this)
-    content.addView(TextView(this).apply {
-        text = "What you've reclaimed"; textSize = 24f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
-        setPadding(0, 0, 0, (12 * dp).toInt())
-    })
     if (s.hasData) {
         content.addView(statBigCard("${s.reclaimedHours}h", "reclaimed so far",
             "about ${Progress.EST_MIN_PER_WIN} min back for every urge you rode out", teal))
@@ -1971,8 +2208,7 @@ private fun setupHomeScreen() {
             "ride out your first urge and your reclaimed time starts here", teal))
     }
 
-    // ── The graphic: what the scroll costs, over a number of years ──────────
-    content.addView(sectionTitle("What the scroll costs you"))
+    content.addView(sectionTitle("The projector"))
     val hero = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
@@ -1998,7 +2234,7 @@ private fun setupHomeScreen() {
         setTypeface(typeface, Typeface.BOLD)
         isClickable = true; isFocusable = true
         setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
-        setOnClickListener { aboutYouBack = { setupHomeScreen() }; showAboutYou() }
+        setOnClickListener { aboutYouBack = { showScrollCost() }; showAboutYou() }
     }
     hero.addView(bigStat); hero.addView(subStat); hero.addView(lifeStat)
     hero.addView(otherStat); hero.addView(aboutYouLink)
@@ -2012,51 +2248,6 @@ private fun setupHomeScreen() {
     hero.addView(yearSeek)
     content.addView(hero)
 
-    // ── big "Productivity" button (everything else lives behind it) ─────────
-    content.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(teal) }
-        val p = (18 * dp).toInt(); setPadding(p, (16 * dp).toInt(), p, (16 * dp).toInt())
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (14 * dp).toInt() }
-        isClickable = true; isFocusable = true; setOnClickListener { showProductivity() }
-        addView(TextView(this@MainActivity).apply {
-            text = "Productivity"; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        addView(TextView(this@MainActivity).apply { text = "\u2192"; textSize = 22f; setTextColor(0xFFFFFFFF.toInt()) })
-    })
-
-    // ── tools, then temptations ─────────────────────────────────────────────
-    content.addView(TextView(this).apply {
-        text = "TOOLS"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
-        setPadding((2 * dp).toInt(), (22 * dp).toInt(), 0, (6 * dp).toInt())
-    })
-    content.addView(homeCard("Temptations", "Manage urges and stay on track.") { showTemptationsTab() })
-
-    // ── About & privacy (moved off the dev page) ────────────────────────────
-    content.addView(homeCard("About & privacy", "How this app works and what it stores.") { showAboutPage() })
-
-    // ── Dev tools (only when dev mode is on) ────────────────────────────────
-    if (AppConfig.DEV_MODE) {
-        content.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp; setStroke((1 * dp).toInt(), 0xFFB0B6BB.toInt()); setColor(0x00000000)
-            }
-            val p = (14 * dp).toInt(); setPadding(p, (12 * dp).toInt(), p, (12 * dp).toInt())
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (12 * dp).toInt() }
-            isClickable = true; isFocusable = true; setOnClickListener { setupMainScreen() }
-            addView(TextView(this@MainActivity).apply {
-                text = "\uD83D\uDD27  Dev tools"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF5A6068.toInt())
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            addView(TextView(this@MainActivity).apply { text = "\u203A"; textSize = 20f; setTextColor(0xFF9AA0A6.toInt()) })
-        })
-    }
-
-    // permission/status console, at the bottom of the opening page
-    content.addView(permissionConsole())
-
     fun refresh() {
         val min = Usage.minutes(this); val yrs = Usage.years(this)
         val perYearHours = min * 365.0 / 60.0
@@ -2067,8 +2258,8 @@ private fun setupHomeScreen() {
         val gbpTotal = gbpYr * yrs
         donut.setFraction((min / (Usage.WAKING_HOURS * 60f)))
         bigStat.text = "${Math.round(wakingDaysYr)} waking days a year"
-        subStat.text = "\u2248 \u00a3$gbpYr a year of your time"
-        lifeStat.text = "Over $yrs year${if (yrs == 1) "" else "s"}: about ${String.format("%.1f", totalWakingYears)} years of waking life - and \u00a3$gbpTotal"
+        subStat.text = "≈ £$gbpYr a year of your time"
+        lifeStat.text = "Over $yrs year${if (yrs == 1) "" else "s"}: about ${String.format("%.1f", totalWakingYears)} years of waking life - and £$gbpTotal"
         minLabel.text = "$min minutes a day on short video & feeds"
         yearLabel.text = "Looking $yrs year${if (yrs == 1) "" else "s"} ahead"
 
@@ -2077,13 +2268,13 @@ private fun setupHomeScreen() {
         val eveningsWithPeople = Math.round(perYearHours / 3.0)   // ~3hr an evening
         val booksRead = Math.round(perYearHours / 8.0)            // ~8hr a book
         otherStat.text = "That same year is also:\n" +
-            "$gymSessions hours of training  \u00b7  $eveningsWithPeople evenings with people  \u00b7  " +
+            "$gymSessions hours of training  ·  $eveningsWithPeople evenings with people  ·  " +
             "about $booksRead books"
 
         aboutYouLink.text = if (AboutYou.hasData(this))
-            "Valued at \u00a3$rate/hr, from your numbers  \u00b7  change"
+            "Valued at £$rate/hr, from your numbers  ·  change"
         else
-            "Add your hourly rate to see what it's really costing you  \u203a"
+            "Add your hourly rate to see what it's really costing you  ›"
     }
 
     val seekListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
@@ -2104,7 +2295,7 @@ private fun setupHomeScreen() {
         isFillViewport = true
         addView(content)
     }
-    setContentNoThumb(root)   // the landing screen - nothing behind it to go back to
+    setContentWithThumb(root) { showProductivity() }
     refresh()
 }
 
@@ -2136,6 +2327,10 @@ private fun showProductivity() {
     refreshSf()
     content.addView(sfCard)
 
+    // The cost projector + reclaimed stats used to live on the landing page; they moved
+    // here so the landing page can stay graphs-only.
+    content.addView(homeCard("What the scroll costs", "The projector: minutes per day → years and £ - plus what you\u0027ve reclaimed.") { showScrollCost() })
+
     // ── Dopamine baseline: a whole-phone measure, so it belongs here and not buried in
     //    the adult-content statistics.
     val todayScore = DopamineScore.of(DopamineLog.today(this))
@@ -2149,7 +2344,7 @@ private fun showProductivity() {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         isClickable = true; isFocusable = true
-        setOnClickListener { showDopamine() }
+        setOnClickListener { dopamineBack = { showProductivity() }; showDopamine() }
     }
     dopCard.addView(TextView(this).apply {
         text = if (todayScore.hasData) "${todayScore.score}" else "–"
@@ -2952,13 +3147,11 @@ private fun showProtocol7Day() {
 }
 
 private fun showReportScreen() {
-    // On the highest-risk page: offer the uninstall lock once per session (unless in dev
-    // mode, or it's already on). Returns to this page when the user enables or skips.
-    if (!AppConfig.DEV_MODE && !arousalLockPromptShown &&
-        !(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
-        arousalLockPromptShown = true
-        showLockPrompt { showReportScreen() }
-        return
+    // On the highest-risk page: a centred "this app isn't protected yet" popup, EVERY
+    // time the page opens while the uninstall lock is off (the risk doesn't go away
+    // because you dismissed it once). The X closes it; the page renders underneath.
+    if (!(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
+        showUnprotectedPopup()
     }
     onReportScreen = true
     subBack = null
@@ -4754,7 +4947,6 @@ private fun startWeekStrict() {
         beaconScanner?.stop(); pressureMon?.stop()
         // Don't leave a breathing orb posting frame callbacks at a screen nobody is looking at.
         habitOrb?.stop(); habitOrb = null
-        arousalLockPromptShown = false   // re-offer the lock on the arousal page once per app session
     }
 
     @Suppress("DEPRECATION")
@@ -4778,10 +4970,9 @@ private fun startWeekStrict() {
     // The first two are required; until both are on you can't reach the main
     // screen, and disabling either later sends you straight back here.
 
-    // The uninstall-lock prompt now shows only during FIRST setup (persisted below) and
-    // when entering the arousal page - never on every reopen. That, plus not rebuilding on
-    // resume, is what keeps you on the page you left. Home shows a gentle banner instead.
-    private var arousalLockPromptShown = false
+    // The full-screen uninstall-lock prompt shows only during FIRST setup (persisted
+    // below). The arousal page instead shows a dismissible centred popup EVERY time it
+    // opens while unprotected (showUnprotectedPopup) - the home page nags nowhere.
     private fun lockPromptSeen(): Boolean =
         getSharedPreferences("setup", Context.MODE_PRIVATE).getBoolean("lock_prompt_seen", false)
     private fun markLockPromptSeen() =
@@ -4839,35 +5030,44 @@ private fun startWeekStrict() {
         }
     }
 
-    // Amber warning banner for the home screen; taps through to the lock prompt.
-    private fun uninstallBanner(): View {
+    // "This app isn't protected yet" - a centred popup shown on the adult-content page
+    // (showReportScreen) every time it opens while the uninstall lock is off. X to close.
+    private fun showUnprotectedPopup() {
         val dp = resources.displayMetrics.density
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        val dialog = AlertDialog.Builder(this).create()
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp; setColor(0xFFFFF3E0.toInt()); setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+                cornerRadius = 18 * dp; setColor(0xFFFFF8EC.toInt()); setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
             }
-            val p = (13 * dp).toInt(); setPadding(p, p, p, p)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = (14 * dp).toInt() }
-            isClickable = true; isFocusable = true
-            setOnClickListener { showLockPrompt { setupHomeScreen() } }
-            addView(TextView(this@MainActivity).apply {
-                text = "\u26A0"; textSize = 22f; setPadding(0, 0, (12 * dp).toInt(), 0); setTextColor(0xFFB8860B.toInt())
-            })
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(this@MainActivity).apply {
-                    text = "This app isn't protected yet"; textSize = 15f
-                    setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
-                })
-                addView(TextView(this@MainActivity).apply {
-                    text = "Tap to turn on the uninstall lock so you can't delete it in a weak moment."
-                    textSize = 12f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
-                })
-            })
+            val p = (18 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, p)
         }
+        card.addView(TextView(this).apply {
+            text = "\u2715"; textSize = 18f; setTextColor(0xFF8A6D3B.toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { gravity = Gravity.END }
+            val t = (8 * dp).toInt(); setPadding(t, t, t, t)
+            isClickable = true; isFocusable = true
+            setOnClickListener { dialog.dismiss() }
+        })
+        card.addView(TextView(this).apply {
+            text = "\u26A0  This app isn't protected yet"; textSize = 17f
+            setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+        })
+        card.addView(TextView(this).apply {
+            text = "Without the uninstall lock you can delete this app in a weak moment - " +
+                "and this page is exactly where those moments happen."
+            textSize = 13f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
+        })
+        card.addView(bigChoice("Turn on the uninstall lock", 0xFF2E7D32.toInt()) {
+            dialog.dismiss()
+            UninstallGuard.setEnabled(this, true)
+            startActivity(UninstallGuard.activationIntent(this))
+        })
+        dialog.setView(card)
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0x00000000))
+        dialog.show()
     }
 
     // The uninstall-lock prompt, reused by: first-setup gate, the arousal page, and the
@@ -5391,8 +5591,13 @@ private fun startWeekStrict() {
                 err != null -> "Scan problem (Android error $err) - retrying automatically…"
                 else -> {
                     val heard = scanner.all().count { now - it.lastSeen <= RoomBeacons.TIMEOUT_MS }
+                    val guard = when {
+                        RoomGuard.activeRoom != null -> "guard BLOCKING (${RoomGuard.activeRoom})"
+                        RoomGuard.armed -> "guard armed"
+                        else -> "guard idle (needs strict mode + a calibrated room)"
+                    }
                     "Scanning · ${String.format("%.1f", scanner.advertsPerSec)} adverts/s from $heard devices" +
-                        (if (press.available) " · barometer on" else " · no barometer")
+                        (if (press.available) " · barometer on" else " · no barometer") + " · " + guard
                 }
             }
             scanLine.setTextColor(if (err != null || !scanner.isBluetoothOn) 0xFFB00020.toInt() else 0xFF7B848C.toInt())
@@ -5485,6 +5690,13 @@ private fun startWeekStrict() {
                 "- Outliers are removed from the calibration data before the expected ranges are built.\n" +
                 "- A barometer check notices when you've just gone up or down a floor and blocks 'true' right after.\n" +
                 "- The answer has to hold steady for a moment before it changes, so one noisy reading can't flip it.",
+        )
+        section("What happens in strict mode")
+        bullets(
+            "- Once at least one room is set up and Bluetooth permissions are granted, strict mode turns on the room guard automatically.\n" +
+                "- While the app is confident you're in a protected room, every app except the essentials (calls, texts, clock, camera, maps, home screen) is covered by a block screen naming the room.\n" +
+                "- Step out of the room and everything unlocks by itself within a couple of seconds.\n" +
+                "- If the beacons can't be heard, or permissions are missing, nothing is blocked - the guard never locks you out on a guess.",
         )
         section("Where to put the sensors")
         bullets(
@@ -6027,6 +6239,16 @@ private fun startWeekStrict() {
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
                 val chosen = AppConfig.MODES.getOrNull(pos)?.id ?: return
                 if (chosen == Mode.current(this@MainActivity)) return
+                // Super hardcore needs the uninstall lock first - a mode this strict is
+                // pointless if the app can just be deleted in a weak moment.
+                if (chosen == Mode.SUPERHARDCORE &&
+                    !(UninstallGuard.isEnabled(this@MainActivity) && UninstallGuard.isAdminActive(this@MainActivity))) {
+                    Toast.makeText(this@MainActivity,
+                        "Super hardcore needs the uninstall lock on first", Toast.LENGTH_LONG).show()
+                    sp.setSelection(curIdx())
+                    showLockPrompt { }
+                    return
+                }
                 if (Mode.setMode(this@MainActivity, chosen)) {
                     Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
                 } else {

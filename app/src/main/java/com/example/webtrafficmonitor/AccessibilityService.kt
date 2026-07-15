@@ -212,18 +212,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /**
      * Built-in guards for in-app screens we never want reachable. Currently:
-     * Firefox Focus's privacy settings, where the "stealth" option blocks
-     * screenshots and would blind the screen capture.
+     * Firefox Focus's privacy settings (the "stealth" option blocks screenshots and
+     * would blind the screen capture), and every Firefox screen that can clear
+     * browsing history - see AppConfig.FIREFOX_HISTORY_CLEAR_SCREENS, which is THE
+     * place to update keywords when a Firefox update changes a screen's wording.
      *
      * Only ever called off the web (host == null), so a web page that merely
-     * mentions the keyword can't trip it. To add another guarded screen, copy the
-     * if-block and change the package / keywords.
+     * mentions the keyword can't trip it.
      */
     private fun appScreenBlock(packageName: String, title: String?, content: String?): String? {
         val t = title?.lowercase().orEmpty()
         val c = content?.lowercase().orEmpty()
         for (g in AppConfig.SCREEN_GUARDS) {
             if (g.pkg != packageName) continue
+            if (g.superHardcoreOnly && !Mode.isSuperHardcore(this)) continue
             val hitTitle = g.titleKeywords.any { it in t }
             val hitContent = g.contentKeywords.any { it in c }
             if (hitTitle || hitContent) return g.reason
@@ -300,6 +302,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         DomainBlocklist.warmUp(this)
         startGreyscaleWatch()
         startScreenWatch()
+        // Beacon room guard: arms itself only while strict + a room is calibrated +
+        // scan permissions granted, and idles otherwise. Entering/leaving a protected
+        // room fires no accessibility event, so it re-evaluates the foreground app
+        // itself - same shape as the night guard's sensor callback.
+        RoomGuard.start(this) { updateRoomGuard() }
     }
 
     // ═════════════════════════════════════════════════════════════════════════════════
@@ -734,6 +741,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun appBlockReason(pkg: String?): String? {
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
         nightGuardReason(pkg)?.let { return it }
+        roomGuardReason(pkg)?.let { return it }
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
             return "Locked down - ride out the urge"
         }
@@ -825,6 +833,41 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun isNightGuardAllowed(pkg: String): Boolean {
         val p = pkg.lowercase()
         return NIGHT_GUARD_ALLOWED.any { p.contains(it) }
+    }
+
+    /**
+     * THE ROOM GUARD. In strict (and super hardcore), while the beacons say you are in a
+     * protected room - in the bedroom, at the risk spots you calibrated - nothing but the
+     * essentials opens. RoomGuard does the sensing (and fails OPEN, like the night guard);
+     * this just turns its verdict into a cover with a room-specific message. Same
+     * essentials whitelist as the night guard: calls, texts, clock, camera, maps, home.
+     */
+    private fun roomGuardReason(pkg: String?): String? {
+        if (pkg == null || pkg == packageName) return null       // never cover ourselves
+        val room = RoomGuard.activeRoom ?: return null
+        if (isNightGuardAllowed(pkg)) return null
+        val roomName = room.replaceFirstChar { it.uppercase() }
+        return "Protected room: you're in the $roomName.\n" +
+            "In strict mode only calls, texts and other essentials open here.\n" +
+            "Step out of the $roomName and everything unlocks."
+    }
+
+    /**
+     * Re-check whenever the ROOM VERDICT moves, not just when the screen does. Walking
+     * into the bedroom mid-scroll fires no accessibility event - without this, the cover
+     * would only appear on the next app switch. Mirror of updateNightGuard.
+     */
+    private fun updateRoomGuard() {
+        if (appBlockActive) {
+            // A cover is up. If it was OURS and you left the room, the recheck loop will
+            // clear it within RECHECK_MS via appBlockReason returning null - nothing to do.
+            return
+        }
+        if (leaving) return
+        if (RoomGuard.activeRoom == null) return
+        val pkg = currentForegroundPackage() ?: return
+        val reason = appBlockReason(pkg) ?: return
+        showAppBlock(reason, pkg)
     }
 
     /** The gender switches, read fresh each pass so a change takes effect on the next page. */
@@ -1395,6 +1438,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(recheck)
+        RoomGuard.stop()
         greyscaleSensor?.stop(); greyscaleSensor = null
         if (greyscaleApplied) { Greyscale.setEnabled(this, false); greyscaleApplied = false }
         overlay?.hide()

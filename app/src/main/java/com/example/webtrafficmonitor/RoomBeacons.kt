@@ -353,7 +353,10 @@ object RoomPresence {
         return values.average()
     }
 
-    fun evaluate(context: Context, scanner: BeaconScanner, pressure: PressureMonitor?): Map<String, Status> {
+    /** [key] namespaces the debounce/trend state per caller: the debug page and the
+     *  all-day RoomGuard evaluate with DIFFERENT scanners (different histories), so
+     *  sharing hysteresis state between them would make the two fight. */
+    fun evaluate(context: Context, scanner: BeaconScanner, pressure: PressureMonitor?, key: String = "ui"): Map<String, Status> {
         val now = System.currentTimeMillis()
         val statuses = LinkedHashMap<String, Status>()
         val dInByRoom = HashMap<String, Double>()
@@ -361,8 +364,9 @@ object RoomPresence {
 
         for (room in RoomBeacons.rooms(context)) {
             val mac = RoomBeacons.beaconMac(context, room)
+            val sk = "$key:$room"
             if (mac == null) {
-                lastVerdict[room] = Verdict.OUT; pendingSince.remove(room)
+                lastVerdict[sk] = Verdict.OUT; pendingSince.remove(sk)
                 statuses[room] = Status(room, Verdict.OUT, false, false, null, null, null,
                     emptyList(), emptyList(), "No beacon assigned - run set-up.")
                 continue
@@ -371,13 +375,13 @@ object RoomPresence {
             val age = b?.let { now - it.lastSeen }
             val kal = scanner.kalmanRssi(mac)
             if (!RoomBeacons.isCalibrated(context, room)) {
-                lastVerdict[room] = Verdict.OUT; pendingSince.remove(room)
+                lastVerdict[sk] = Verdict.OUT; pendingSince.remove(sk)
                 statuses[room] = Status(room, Verdict.OUT, true, false, kal, b?.rssi, age,
                     emptyList(), emptyList(), "Beacon assigned - run set-up to calibrate.")
                 continue
             }
 
-            val was = lastVerdict[room] ?: Verdict.OUT
+            val was = lastVerdict[sk] ?: Verdict.OUT
 
             // Meters are DISPLAY plus one hard rule each: a beacon heard at a level
             // outside its amber band was never heard like that from inside → false.
@@ -414,7 +418,7 @@ object RoomPresence {
 
             // Recent-average booster: a good AND consistent last-10s average counts
             // as much as the instant value (so wobbles don't flap the answer).
-            val hist = trend.getOrPut(room) { ArrayDeque() }
+            val hist = trend.getOrPut(sk) { ArrayDeque() }
             if (dInCore != null && dInAny != null) hist.addLast(Triple(now, dInCore, dInAny))
             while (hist.isNotEmpty() && hist.first().first < now - TREND_WINDOW_MS) hist.removeFirst()
             val avgCore = steadyAverage(hist.map { it.second })
@@ -464,13 +468,13 @@ object RoomPresence {
 
             // Debounce (silent): the change must persist before it's believed.
             val verdict: Verdict
-            if (candidate == was) { pendingSince.remove(room); verdict = was }
+            if (candidate == was) { pendingSince.remove(sk); verdict = was }
             else {
-                val since = pendingSince.getOrPut(room) { now }
-                if (now - since >= FLIP_MS) { pendingSince.remove(room); verdict = candidate }
+                val since = pendingSince.getOrPut(sk) { now }
+                if (now - since >= FLIP_MS) { pendingSince.remove(sk); verdict = candidate }
                 else verdict = was
             }
-            lastVerdict[room] = verdict
+            lastVerdict[sk] = verdict
             statuses[room] = Status(room, verdict, true, true, kal, b?.rssi, age, meters, checks, "")
         }
 
@@ -481,7 +485,7 @@ object RoomPresence {
             val winner = claiming.minByOrNull { dInByRoom[it.room] ?: Double.MAX_VALUE }!!
             for (s in claiming) {
                 if (s.room == winner.room) continue
-                lastVerdict[s.room] = Verdict.MAYBE_IN; pendingSince.remove(s.room)
+                lastVerdict["$key:${s.room}"] = Verdict.MAYBE_IN; pendingSince.remove("$key:${s.room}")
                 statuses[s.room] = s.copy(verdict = Verdict.MAYBE_IN)
             }
         }
@@ -504,6 +508,110 @@ object RoomPresence {
             if (d > worst) worst = d
         }
         return worst
+    }
+}
+
+
+// =====================================================================================
+//  RoomGuard  -  the all-day enforcement watcher (strict mode + protected rooms).
+// =====================================================================================
+/**
+ * Owned by the accessibility service. While the GATE is open - mode is strict or
+ * stricter, at least one room fully set up, Bluetooth-scanning permissions granted -
+ * it keeps a low-power BeaconScanner + PressureMonitor running and evaluates
+ * RoomPresence every couple of seconds. [activeRoom] is the room the phone is
+ * currently in; the service blocks every non-essential app while it is non-null.
+ *
+ * Engages on a verdict of IN (true), and once engaged it LATCHES through "maybe
+ * (probs is)" - shifting around in bed must not flap the cover - releasing only when
+ * the verdict drops to "maybe (probs not)" or false (i.e. you actually left).
+ *
+ * Fails OPEN, same doctrine as the night guard: no permission, Bluetooth off, no
+ * calibration, no reading → no block. Locking someone out of their phone on a guess
+ * is worse than missing one scroll. (Android also delivers no unfiltered scan
+ * results while the screen is off - which is fine: blocking only matters with the
+ * screen on, and readings resume within a second or two of waking.)
+ */
+object RoomGuard {
+
+    private const val EVAL_MS = 2_000L     // presence evaluation cadence while armed
+    private const val GATE_MS = 15_000L    // cadence of the should-this-run-at-all check
+
+    /** The protected room the phone is in right now, or null. Read by the service. */
+    @Volatile var activeRoom: String? = null; private set
+
+    /** True while the gate is open and the scanner is listening (for debug UIs). */
+    @Volatile var armed: Boolean = false; private set
+
+    private var scanner: BeaconScanner? = null
+    private var pressure: PressureMonitor? = null
+    private var handler: android.os.Handler? = null
+    private var lastGateCheck = 0L
+    private var gateOpen = false
+
+    /** Idempotent. [onChange] fires on the main thread whenever [activeRoom] changes. */
+    fun start(context: Context, onChange: (() -> Unit)? = null) {
+        if (handler != null) return
+        val app = context.applicationContext
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        handler = h
+        h.post(object : Runnable {
+            override fun run() {
+                tick(app, onChange)
+                h.postDelayed(this, if (gateOpen) EVAL_MS else GATE_MS)
+            }
+        })
+    }
+
+    fun stop() {
+        handler?.removeCallbacksAndMessages(null); handler = null
+        scanner?.stop(); scanner = null
+        pressure?.stop(); pressure = null
+        activeRoom = null; armed = false; gateOpen = false; lastGateCheck = 0L
+    }
+
+    private fun strictOrStricter(context: Context): Boolean =
+        Mode.current(context) != Mode.RELAXED
+
+    private fun tick(app: Context, onChange: (() -> Unit)?) {
+        val now = System.currentTimeMillis()
+        if (now - lastGateCheck >= GATE_MS || !gateOpen) {
+            lastGateCheck = now
+            gateOpen = strictOrStricter(app) &&
+                RoomBeacons.hasPermissions(app) &&
+                RoomBeacons.rooms(app).any { RoomBeacons.isCalibrated(app, it) }
+        }
+        if (!gateOpen) {
+            scanner?.stop(); scanner = null
+            pressure?.stop(); pressure = null
+            armed = false
+            setRoom(null, onChange)
+            return
+        }
+
+        val sc = scanner ?: BeaconScanner(app).also { it.lowPower = true; scanner = it }
+        val pr = pressure ?: PressureMonitor(app).also { pressure = it }
+        pr.start()
+        sc.expectedMacs = RoomBeacons.allAssignedMacs(app).toSet()
+        sc.ensureScanning()
+        armed = sc.isScanning
+
+        val statuses = RoomPresence.evaluate(app, sc, pr, key = "guard")
+        val inRoom = statuses.values.firstOrNull { it.verdict == RoomPresence.Verdict.IN }?.room
+        val held = activeRoom
+        val next = when {
+            inRoom != null -> inRoom
+            // Latched: stay engaged through "probs is"; release below that.
+            held != null && statuses[held]?.verdict == RoomPresence.Verdict.MAYBE_IN -> held
+            else -> null
+        }
+        setRoom(next, onChange)
+    }
+
+    private fun setRoom(room: String?, onChange: (() -> Unit)?) {
+        if (room == activeRoom) return
+        activeRoom = room
+        onChange?.invoke()
     }
 }
 
@@ -578,6 +686,10 @@ class BeaconScanner(context: Context) {
 
     /** The beacons the caller expects to keep hearing; feeds the watchdog. */
     @Volatile var expectedMacs: Set<String> = emptySet()
+
+    /** Balanced scan mode instead of low-latency: fewer readings (one every ~1-2 s is
+     *  plenty for the all-day room guard) at a fraction of the battery cost. */
+    @Volatile var lowPower: Boolean = false
 
     // Advert timestamps from the last few seconds - the UI's "is data flowing" proof.
     private val recent = ArrayDeque<Long>()
@@ -682,7 +794,7 @@ class BeaconScanner(context: Context) {
         val scanner = adapter?.takeIf { it.isEnabled }?.bluetoothLeScanner ?: return false
         return try {
             val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setScanMode(if (lowPower) ScanSettings.SCAN_MODE_BALANCED else ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                 .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
                 .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)

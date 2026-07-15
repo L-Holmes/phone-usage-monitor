@@ -165,10 +165,14 @@ object Mode {
     /**
      * Change the mode. While the strict lock is active any LOOSENING is refused (returns
      * false) - so you can go strict -> superhardcore, but not back down to relaxed.
-     * Tightening is always allowed.
+     * Super hardcore additionally REQUIRES the uninstall lock to be active: a mode this
+     * strict is pointless if the app can just be deleted in a weak moment. Callers should
+     * check the same condition first to give a useful message (see modeSpinner).
      */
     fun setMode(ctx: Context, mode: String): Boolean {
         if (isLocked(ctx) && rank(mode) < rank(STRICT)) return false
+        if (mode == SUPERHARDCORE &&
+            !(UninstallGuard.isEnabled(ctx) && UninstallGuard.isAdminActive(ctx))) return false
         prefs(ctx).edit().putString(KEY_MODE, mode).apply()
         return true
     }
@@ -697,4 +701,24 @@ object CustomOptions {
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// UsageGoal  (the user's own "phone time per day" target, drawn on the home graphs)
+// =====================================================================================
+object UsageGoal {
+    private const val PREFS = "usage_goal"
+    private const val KEY_MIN = "minutes_per_day"
+
+    /** Target minutes of screen-on time per day; 0 = no goal set. */
+    fun minutesPerDay(c: Context): Int = prefs(c).getInt(KEY_MIN, 0)
+    fun setMinutesPerDay(c: Context, v: Int) =
+        prefs(c).edit().putInt(KEY_MIN, v.coerceIn(0, 24 * 60)).apply()
+    fun clear(c: Context) = prefs(c).edit().remove(KEY_MIN).apply()
+    fun hoursPerDay(c: Context): Float? =
+        minutesPerDay(c).takeIf { it > 0 }?.let { it / 60f }
+
+    private fun prefs(c: Context) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

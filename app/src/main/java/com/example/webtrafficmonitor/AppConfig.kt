@@ -163,15 +163,17 @@ object AppConfig {
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
             nightGuard = true,
-            // A band looser than Strict on purpose: a dim room counts here, darkness only in Strict.
-            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.DULL,
+            // DARK here too (2026-07-15). This used to be DULL ("a dim room counts"), but
+            // lightFlagBelow means "this band OR DARKER", so DULL tripped the guard in an
+            // ordinary 35-lux evening room. Only genuine darkness should block, in every mode.
+            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK,
             summary = listOf(
                 "Breathing pause: EVERY single time you open a watched app. There is no daily pass.",
                 "Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.",
-                "NIGHT GUARD, harder: a DIM room is enough to trip it, not just full darkness - as well as whenever you are lying down. Only the essentials open.",
+                "NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - same triggers as Strict.",
                 "Greyscale: your screen turns grey while you are lying down, same as Strict.",
                 "Everything in \"Always on\" above still applies.",
-                "This is Strict with the daily pass taken away, and a night guard that trips far more easily.",
+                "This is Strict with the daily pass taken away.",
             )),
     )
 
@@ -578,24 +580,67 @@ object AppConfig {
     // ═══════════════════════════════════════════════════════════════════════════════
 
     // (1) In-app screens blocked by the overlay (matched off-web, host == null).
-    data class ScreenGuard(val pkg: String, val titleKeywords: List<String>, val contentKeywords: List<String>, val reason: String)
+    // superHardcoreOnly: the guard is enforced only while the mode is Super hardcore.
+    data class ScreenGuard(val pkg: String, val titleKeywords: List<String>, val contentKeywords: List<String>, val reason: String, val superHardcoreOnly: Boolean = false)
 
-    // Toggle: when true, the "Delete browsing data" screen and its confirmation dialog are
-    // blocked so browsing history can't be cleared. Flip to false to allow clearing.
+    // Toggle: when true, every Firefox screen that can clear browsing history is blocked
+    // WHILE IN SUPER HARDCORE (the guards carry superHardcoreOnly). Flip to false to
+    // remove the guards entirely.
     const val DISABLE_DELETE_HISTORY = true
+
+    // Every Firefox build we guard. Add flavours here (e.g. "org.mozilla.firefox_beta")
+    // and they inherit ALL the history-clearing blocks below automatically.
+    val FIREFOX_PACKAGES: List<String> = listOf(
+        "org.mozilla.firefox", "org.mozilla.firefox_beta", "org.mozilla.fenix",
+    )
+
+    // ─── Firefox screens that can clear browsing history ──────────────────────────
+    // DEVS: when a Firefox update changes a screen and it stops being blocked, open the
+    // screen on the phone, find its row in this app's own monitor log, and refresh the
+    // keywords below from the dump. Each entry lists the page's captured title/content
+    // verbatim (2026-07-15, Firefox stable) so you can see exactly what was matched.
+    // Matching: same package + ANY title keyword OR ANY content keyword (lowercase
+    // substring), and only on non-web screens - a web page mentioning "history" can't trip it.
+    val FIREFOX_HISTORY_CLEAR_SCREENS: List<Triple<String, List<String>, List<String>>> = listOf(
+        // label                     title keywords                      content keywords
+        // "Delete browsing data" settings screen. Dump: title "Delete browsing data";
+        // content "Open tabs / Browsing history / Cookies and site data / Cached images
+        // and files / Site permissions / Downloads / Delete browsing data".
+        // (Also matches the old confirm dialog "…delete the selected browsing data".)
+        Triple("Delete browsing data",
+            listOf("delete browsing data", "delete the selected browsing data"),
+            listOf("delete browsing data", "delete the selected browsing data")),
+        // "Delete browsing data on quit" settings screen. Dump: title "Delete browsing
+        // data on quit"; content "Automatically deletes browsing data when you select
+        // \"Quit\" from the main menu…". Covered by the substrings above too, but kept
+        // as its own entry so it survives if the wording of either screen drifts apart.
+        Triple("Delete browsing data on quit",
+            listOf("delete browsing data on quit"),
+            listOf("delete browsing data on quit", "automatically deletes browsing data")),
+        // The "Time range to delete" dialog (History screen → bin icon). Dump: title
+        // "Time range to delete"; content "Removes history (including history
+        // synchronised from other devices) / Last hour / Today and yesterday / Everything".
+        Triple("Time range to delete",
+            listOf("time range to delete"),
+            listOf("time range to delete", "removes history (including history synchronised")),
+        // The History screen itself - it has per-item delete and the bin icon, so the
+        // whole screen is blocked. Dump: title "History"; content "History / Recently
+        // closed tabs / N tabs / No history here". ("history" alone as a title keyword
+        // is safe: these guards only run on Firefox's own non-web screens.)
+        Triple("History screen",
+            listOf("history"),
+            listOf("recently closed tabs", "no history here")),
+    )
 
     val SCREEN_GUARDS: List<ScreenGuard> = mutableListOf<ScreenGuard>().apply {
         add(ScreenGuard("org.mozilla.focus", listOf("privacy"), listOf("stealth"),
             "Firefox Focus stealth/privacy settings are blocked"))
         if (DISABLE_DELETE_HISTORY) {
-            // The settings screen ("Delete browsing data") AND the confirm dialog
-            // ("Firefox will delete the selected browsing data. / Cancel / Delete").
-            val delTitles = listOf("delete browsing data", "delete the selected browsing data")
-            val delContent = listOf("delete browsing data", "delete the selected browsing data")
-            add(ScreenGuard("org.mozilla.firefox", delTitles, delContent,
-                "Clearing browsing history is disabled"))
-            add(ScreenGuard("org.mozilla.fenix", delTitles, delContent,
-                "Clearing browsing history is disabled"))
+            for (pkg in FIREFOX_PACKAGES) for ((label, titles, content) in FIREFOX_HISTORY_CLEAR_SCREENS) {
+                add(ScreenGuard(pkg, titles, content,
+                    "Clearing browsing history is disabled in Super hardcore ($label)",
+                    superHardcoreOnly = true))
+            }
         }
     }
 

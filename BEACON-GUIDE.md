@@ -2,6 +2,44 @@
 
 What's built, how the detection works, and the testing walkthrough.
 
+## Round 9 (2026-07-15): strict-mode enforcement is live
+
+The beacons now do their actual job. **RoomGuard** (in `RoomBeacons.kt`) is an
+all-day watcher owned by the accessibility service:
+
+- **When it arms**: mode is strict (or super hardcore), at least one room is
+  fully set up, and the Bluetooth-scanning permissions are granted. Otherwise it
+  idles — no scanning, no battery, no blocking. It re-checks that gate every
+  15 s, and scans in low-power balanced mode (not the debug page's low-latency).
+- **What it does**: evaluates room presence every 2 s. On a verdict of `true`
+  it sets the active room; every non-essential app then gets the block cover
+  with a room-specific message ("Protected room: you're in the Bedroom. In
+  strict mode only calls, texts and other essentials open here. Step out of the
+  Bedroom and everything unlocks."). The essentials whitelist is the night
+  guard's: dialer, SMS, contacts, clock/alarm, camera, maps, launcher. Once
+  engaged it latches through "maybe (probs is)" — shifting around in bed can't
+  flap the cover — and releases when you genuinely leave (probs-not / false),
+  at which point the cover clears itself within ~half a second.
+- **Fails open**, same doctrine as the night guard: Bluetooth off, permissions
+  missing, beacons silent, no calibration → no block. It never locks you out on
+  a guess. (Android delivers no unfiltered scan results while the screen is off;
+  that's fine — blocking only matters with the screen on, and readings resume a
+  second or two after waking.)
+- Walking into a protected room mid-scroll is caught without any app switch:
+  the guard's own tick re-evaluates the foreground app, mirroring the night
+  guard's sensor callback.
+- The debug page's scan-health line now shows the guard state: `guard idle
+  (needs strict mode + a calibrated room)` / `guard armed` / `guard BLOCKING
+  (bedroom)`. The debug page and the guard keep separate hysteresis states
+  (they scan independently), so having the page open doesn't fight the guard.
+- The in-app "How we determine…" page gained a "What happens in strict mode"
+  section.
+
+**To test**: set up the bedroom, switch to Strict on the home page, open any
+non-essential app, walk into the bedroom and lie on the bed → cover appears
+naming the room within a few seconds; walk out → it clears on its own. Calls
+and texts keep working throughout.
+
 ## What changed in round 8 (2026-07-14)
 
 - **Stairs regression explained + fixed.** Round 7 dropped the "partner beacon
@@ -192,16 +230,15 @@ cards page, the wizard, the how-it-works page.
 2. Scan health line should read like `Scanning · 5.8 adverts/s from 7 devices ·
    barometer on` with moving numbers.
 3. **Bedroom → "Set up this room"**: find bedroom beacon → find bathroom beacon
-   → place both (bed!) → 6 spots (4 static + 2 temptation) → 30 s room wander →
-   2 entry walks → free-roam & tag. Budget ~12 minutes, once.
-4. Card check: in bed → both meters green, pattern green → **true**. Standing in
+   → place both (bed!) → 6 spots (4 static + 2 temptation) → 15 s room wander →
+   free-roam & tag. Budget ~8 minutes, once.
+4. Card check: in bed → both meters super green → **true**. Standing in
    a far corner → probably **maybe** (that's by design — true means the risk
    spot). Outside → **false**.
 5. **Regression test**: downstairs under the bedroom. The bathroom-beacon meter
-   and/or the pattern bar should go red → false (worst case maybe, never true).
-   If not: open "Patterns" on the bedroom card and compare the live sequence to
-   the expected ones — that shows exactly which data is off — and redo the roam
-   pass making sure to stand there and tag it.
+   and/or the known-spots bar should go red → false (worst case maybe, never true).
+   If not: the "Nearest known spot" bar shows the live in/usage/out distances —
+   that tells you which data is off — and one tag standing right there fixes it.
 6. **Bathroom → "Set up this room"** (goes straight into calibration — no
    redundant questions).
 

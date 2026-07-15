@@ -1,13 +1,10 @@
 
+
 ------------------------------
 
 ------------------
 ------------------
 ------------------
-
-TODO NEXT:
-
-- There are likely other paths to clear history in Firefox that won't hit these exact strings — e.g. "Clear browsing data on quit" in settings, deleting a single history entry via long-press, or per-site "Delete" from the history list. This blocks the main "Delete browsing data" flow you captured. If you monitor another path, send me its title/content dump and I'll add the keywords.
 
 LATER:
 - LINK UP HTE PLUGIN
