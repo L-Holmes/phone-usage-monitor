@@ -697,21 +697,38 @@ object AboutYou {
     private const val PREFS = "about_you"
     private const val KEY_WAGE = "hourly_wage"
     private const val KEY_SIDE = "side_hourly"
+    private const val KEY_WAGE_YR = "annual_wage"
+    private const val KEY_SIDE_YR = "annual_side"
 
     /** UK median-ish. Used when the user hasn't told us theirs. */
     const val DEFAULT_HOURLY_GBP = 12
 
-    fun hourlyWage(c: Context): Int = prefs(c).getInt(KEY_WAGE, 0)
-    fun setHourlyWage(c: Context, v: Int) = prefs(c).edit().putInt(KEY_WAGE, v.coerceIn(0, 1000)).apply()
+    /** Full-time working hours in a year (~37.5 h × 52) - the annual↔hourly bridge. */
+    const val HOURS_PER_YEAR = 1950
 
-    fun sideHourly(c: Context): Int = prefs(c).getInt(KEY_SIDE, 0)
-    fun setSideHourly(c: Context, v: Int) = prefs(c).edit().putInt(KEY_SIDE, v.coerceIn(0, 1000)).apply()
+    // The UI asks PER YEAR now ("£28,000" is how people actually know their income).
+    // The old per-hour keys are kept as a read-only fallback for anyone who already
+    // entered them, converted through HOURS_PER_YEAR.
+    fun annualWage(c: Context): Int = prefs(c).getInt(KEY_WAGE_YR, 0)
+        .takeIf { it > 0 } ?: (prefs(c).getInt(KEY_WAGE, 0) * HOURS_PER_YEAR)
+    fun setAnnualWage(c: Context, v: Int) =
+        prefs(c).edit().putInt(KEY_WAGE_YR, v.coerceIn(0, 10_000_000)).apply()
 
-    fun hasData(c: Context) = hourlyWage(c) > 0 || sideHourly(c) > 0
+    fun annualSide(c: Context): Int = prefs(c).getInt(KEY_SIDE_YR, 0)
+        .takeIf { it > 0 } ?: (prefs(c).getInt(KEY_SIDE, 0) * HOURS_PER_YEAR)
+    fun setAnnualSide(c: Context, v: Int) =
+        prefs(c).edit().putInt(KEY_SIDE_YR, v.coerceIn(0, 10_000_000)).apply()
 
-    /** The rate we value an hour at: theirs if they gave us one, else our default. */
+    fun hasData(c: Context) = annualWage(c) > 0 || annualSide(c) > 0
+
+    /** What we value a year of their time at: theirs if given, else the default rate. */
+    fun effectiveAnnual(c: Context): Int =
+        maxOf(annualWage(c), annualSide(c)).takeIf { it > 0 }
+            ?: (DEFAULT_HOURLY_GBP * HOURS_PER_YEAR)
+
+    /** The per-hour rate every projection uses, derived from the annual figure. */
     fun effectiveHourly(c: Context): Int =
-        maxOf(hourlyWage(c), sideHourly(c)).takeIf { it > 0 } ?: DEFAULT_HOURLY_GBP
+        Math.round(effectiveAnnual(c).toFloat() / HOURS_PER_YEAR).coerceAtLeast(1)
 
     private fun prefs(c: Context) =
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -742,6 +759,7 @@ object AboutYou {
  */
 data class DopamineRankResult(
     val title: String,
+    val longTitle: String,    // the flavour name ("Adenosine Apprentice")
     val colour: Int,
     val detail: String,       // one line: what earned it / what's next
     val hasData: Boolean,
@@ -749,22 +767,24 @@ data class DopamineRankResult(
 
 object DopamineRank {
 
-    private data class Belt(val title: String, val streakDays: Int, val maxScore: Int, val colour: Int)
+    private data class Belt(val title: String, val longTitle: String, val streakDays: Int, val maxScore: Int, val colour: Int)
 
     // Earned belts, best first. Colours darken as you climb.
     private val BELTS = listOf(
-        Belt("Monk", 60, 25, 0xFF1B5E20.toInt()),
-        Belt("Guru", 30, 30, 0xFF2E7D32.toInt()),
-        Belt("Sensei", 14, 35, 0xFF2E9E8F.toInt()),
-        Belt("Disciple", 7, 40, 0xFF3E7CB1.toInt()),
+        Belt("Monk", "Melatonin Monk", 60, 25, 0xFF1B5E20.toInt()),
+        Belt("Guru", "Grounded Guru", 30, 30, 0xFF2E7D32.toInt()),
+        Belt("Sensei", "Serotonin Sensei", 14, 35, 0xFF2E9E8F.toInt()),
+        Belt("Disciple", "Dopamine Disciple", 7, 40, 0xFF3E7CB1.toInt()),
     )
 
     fun of(context: Context): DopamineRankResult {
         val history = DopamineLog.history(context, 90)
         val scored = history.map { d -> DopamineScore.of(d).let { if (it.hasData) it.score else -1 } }
+        // Day one is already a rank: installing the thing that watches the habit IS the
+        // first step of the journey, and it should read that way, not as "unranked".
         if (scored.none { it >= 0 }) return DopamineRankResult(
-            "Unranked", 0xFF9AA0A6.toInt(),
-            "Use the phone for a day and your rank appears here.", false)
+            "Initiate", "The Journey Begins", 0xFF2E9E8F.toInt(),
+            "Step one - noticing - is done. A day of normal phone use unlocks your real rank.", false)
 
         // Streak per threshold: newest-first walk; no-data days are skipped.
         fun streak(maxScore: Int): Int {
@@ -783,7 +803,7 @@ object DopamineRank {
                 val detail = if (next == null) "The top of the mountain. Keep sitting on it."
                 else "${belt.streakDays}+ days with a baseline ≤ ${belt.maxScore}. " +
                     "Next: ${next.title} - ${next.streakDays} days ≤ ${next.maxScore}."
-                return DopamineRankResult(belt.title, belt.colour, detail, true)
+                return DopamineRankResult(belt.title, belt.longTitle, belt.colour, detail, true)
             }
         }
 
@@ -793,11 +813,11 @@ object DopamineRank {
         val entry = BELTS.last()
         val path = "Next: ${entry.title} - ${entry.streakDays} days ≤ ${entry.maxScore} (streak so far: ${streak(entry.maxScore)})."
         return when {
-            avg < 40 -> DopamineRankResult("Apprentice", 0xFF52796F.toInt(), "7-day average $avg. $path", true)
-            avg < 50 -> DopamineRankResult("Drifter", 0xFF9A7B00.toInt(), "7-day average $avg. $path", true)
-            avg < 60 -> DopamineRankResult("Twitchy", 0xFFB07800.toInt(), "7-day average $avg. $path", true)
-            avg < 75 -> DopamineRankResult("Doomscroller", 0xFFC0392B.toInt(), "7-day average $avg. $path", true)
-            else -> DopamineRankResult("Fried", 0xFF8E1600.toInt(), "7-day average $avg. It only goes up from here. $path", true)
+            avg < 40 -> DopamineRankResult("Apprentice", "Adenosine Apprentice", 0xFF52796F.toInt(), "7-day average $avg. $path", true)
+            avg < 50 -> DopamineRankResult("Drifter", "Dopamine Drifter", 0xFF9A7B00.toInt(), "7-day average $avg. $path", true)
+            avg < 60 -> DopamineRankResult("Twitchy", "The Twitchy Thumb", 0xFFB07800.toInt(), "7-day average $avg. $path", true)
+            avg < 75 -> DopamineRankResult("Doomscroller", "Certified Doomscroller", 0xFFC0392B.toInt(), "7-day average $avg. $path", true)
+            else -> DopamineRankResult("Fried", "Fully Fried", 0xFF8E1600.toInt(), "7-day average $avg. It only goes up from here. $path", true)
         }
     }
 }

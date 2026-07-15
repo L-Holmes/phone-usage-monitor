@@ -493,7 +493,8 @@ private fun showAboutYou() {
     c.addView(TextView(this).apply {
         text = "Optional. We use this only to estimate what the lost time is actually costing " +
             "you — nothing here leaves your phone, and nothing here is shared.\n\n" +
-            "Leave it blank and we'll assume £${AboutYou.DEFAULT_HOURLY_GBP}/hr."
+            "Leave it blank and we'll assume £${AboutYou.DEFAULT_HOURLY_GBP * AboutYou.HOURS_PER_YEAR / 1000}k a year " +
+            "(£${AboutYou.DEFAULT_HOURLY_GBP}/hr). Everything on the home page updates the moment you type."
         textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (16 * dp).toInt())
     })
@@ -510,7 +511,7 @@ private fun showAboutYou() {
         c.addView(EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             setText(get().takeIf { it > 0 }?.toString().orEmpty())
-            hint = "£ per hour"
+            hint = "£ per year"
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) {
                     set(s?.toString()?.toIntOrNull() ?: 0)
@@ -521,12 +522,14 @@ private fun showAboutYou() {
         })
     }
 
-    moneyRow("What you earn an hour",
-        "Your day job, after tax if you like. Whatever feels true.",
-        { AboutYou.hourlyWage(this) }, { AboutYou.setHourlyWage(this, it) })
-    moneyRow("What your own time is worth an hour",
-        "Side income, a business you're building, freelance. If this is higher than your wage, we use it.",
-        { AboutYou.sideHourly(this) }, { AboutYou.setSideHourly(this, it) })
+    moneyRow("What you earn a year",
+        "Your day job, after tax if you like. Only know your hourly rate? " +
+            "About ${AboutYou.HOURS_PER_YEAR} working hours make a year - £15/hr ≈ £29,000.",
+        { AboutYou.annualWage(this) }, { AboutYou.setAnnualWage(this, it) })
+    moneyRow("Side income a year (optional)",
+        "A business you're building, freelance work. Don't know? LEAVE IT BLANK - " +
+            "a guess here just skews your numbers. If it's higher than your wage, we use it.",
+        { AboutYou.annualSide(this) }, { AboutYou.setAnnualSide(this, it) })
 
     c.addView(TextView(this).apply {
         text = "\nWhy we ask: \"3 hours a day\" is abstract and easy to shrug off. " +
@@ -1979,6 +1982,10 @@ private fun setupHomeScreen() {
         })
     })
     dopCard.addView(TextView(this).apply {
+        text = rank.longTitle; textSize = 13f; setTypeface(typeface, Typeface.BOLD or Typeface.ITALIC)
+        setTextColor(rank.colour)
+    })
+    dopCard.addView(TextView(this).apply {
         text = rank.detail; textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, (10 * dp).toInt())
     })
     val history14 = DopamineLog.history(this, 14)
@@ -2004,88 +2011,99 @@ private fun setupHomeScreen() {
     })
     content.addView(dopCard)
 
-    // ── 2. Usage graphs: real tracked screen-on time, and what it costs. ──────
+    // ── 2. Usage graphs: real tracked screen-on time - or, before any exists, a
+    //    clearly-labelled EXAMPLE, so a brand-new user immediately sees what the page
+    //    becomes instead of an empty promise. The example uses their real £ numbers
+    //    (AboutYou) and goal, so entering either updates it live.
     val history90 = DopamineLog.history(this, 90)
     fun hoursOf(day: DopamineDay): Float =
         if (DopamineScore.of(day).hasData) day.screenOnSeconds / 3600f else Float.NaN
     val goalHours = UsageGoal.hoursPerDay(this)
+    val realDaily = history14.map { hoursOf(it) }.toFloatArray()
+    val hasUsage = realDaily.any { !it.isNaN() }
+    // A believable fortnight around the ~4-5 h/day average; fixed values, so the page
+    // doesn't shimmer between opens.
+    val daily = if (hasUsage) realDaily
+        else floatArrayOf(3.6f, 4.4f, 5.1f, 3.2f, 4.8f, 6.0f, 5.4f, 3.9f, 4.2f, 5.6f, 4.9f, 3.4f, 4.6f, 5.2f)
+    fun exampleTag() = TextView(this).apply {
+        text = "EXAMPLE - your real usage replaces this after a day or two"
+        textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB07800.toInt())
+        setPadding(0, (2 * dp).toInt(), 0, 0)
+    }
 
-    val daily = history14.map { hoursOf(it) }.toFloatArray()
-    if (daily.any { !it.isNaN() }) {
-        content.addView(sectionTitle("Hours on the phone - last 14 days"))
-        val labels14 = history14.mapIndexed { i, d ->
-            if (i % 3 == 0 || i == history14.size - 1) d.date.takeLast(2) else ""
-        }
-        content.addView(UsageBarChartView(this, daily, labels14, goalHours),
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
-        if (goalHours != null) {
-            val dataDays = daily.filter { !it.isNaN() }
-            val under = dataDays.count { it <= goalHours }
-            content.addView(TextView(this).apply {
-                text = "Goal ${fmtHours(goalHours)} a day · under it $under of ${dataDays.size} days"
-                textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
-            })
-        }
-
-        // Monthly: average hours per day, per calendar month (up to ~3 months of data).
-        val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-        val byMonth = history90.filter { DopamineScore.of(it).hasData }
-            .groupBy { it.date.substring(0, 7) }.toSortedMap()
-        if (byMonth.size >= 2) {
-            content.addView(sectionTitle("Average hours per day, by month"))
-            val monthly = byMonth.values.map { days -> days.map { it.screenOnSeconds / 3600f }.average().toFloat() }.toFloatArray()
-            val monthLabels = byMonth.keys.map { monthNames[it.substring(5, 7).toInt() - 1] }
-            content.addView(UsageBarChartView(this, monthly, monthLabels, goalHours),
-                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
-        }
-
-        // The year: your recent pace projected forward, as time and money.
-        val recentDays = history90.takeLast(30).map { hoursOf(it) }.filter { !it.isNaN() }
-        val avgDaily = if (recentDays.isNotEmpty()) recentDays.average().toFloat() else 0f
-        if (avgDaily > 0f) {
-            content.addView(sectionTitle("A year at this pace"))
-            val rate = AboutYou.effectiveHourly(this)
-            val yearHours = avgDaily * 365.0
-            val wakingDaysYr = Math.round(yearHours / Usage.WAKING_HOURS)
-            val gbpYr = Math.round(yearHours * rate)
-            val yearCard = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
-                val p = (16 * dp).toInt(); setPadding(p, p, p, p)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            }
-            val yearDonut = WastedDonutView(this)
-            yearDonut.setFraction(avgDaily / Usage.WAKING_HOURS)
-            yearCard.addView(yearDonut, LinearLayout.LayoutParams((132 * dp).toInt(), (132 * dp).toInt()).apply {
-                gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = (6 * dp).toInt()
-            })
-            yearCard.addView(TextView(this).apply {
-                text = "$wakingDaysYr waking days a year"; textSize = 24f
-                setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt())
-            })
-            yearCard.addView(TextView(this).apply {
-                text = "≈ £$gbpYr a year of your time, at ${fmtHours(avgDaily)} a day"
-                textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
-            })
-            if (goalHours != null && goalHours < avgDaily) {
-                val savedGbp = Math.round((avgDaily - goalHours) * 365.0 * rate)
-                val goalDays = Math.round(goalHours * 365.0 / Usage.WAKING_HOURS)
-                yearCard.addView(TextView(this).apply {
-                    text = "At your ${fmtHours(goalHours)}/day goal: $goalDays waking days - clawing back £$savedGbp a year"
-                    textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
-                    setTypeface(typeface, Typeface.BOLD); setPadding(0, (6 * dp).toInt(), 0, 0)
-                })
-            }
-            content.addView(yearCard)
-        }
-    } else {
-        content.addView(sectionTitle("Your usage"))
+    content.addView(sectionTitle("Hours on the phone - last 14 days"))
+    val labels14 = if (hasUsage) history14.mapIndexed { i, d ->
+        if (i % 3 == 0 || i == history14.size - 1) d.date.takeLast(2) else ""
+    } else List(14) { "" }
+    content.addView(UsageBarChartView(this, daily, labels14, goalHours),
+        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
+    if (!hasUsage) content.addView(exampleTag())
+    if (goalHours != null) {
+        val dataDays = daily.filter { !it.isNaN() }
+        val under = dataDays.count { it <= goalHours }
         content.addView(TextView(this).apply {
-            text = "Graphs of your real phone time - per day, per month, and what a year of it " +
-                "costs - appear here after a day or two of normal use."
-            textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            text = "Goal ${fmtHours(goalHours)} a day · under it $under of ${dataDays.size} days"
+            textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
         })
     }
+
+    // Monthly: average hours per day, per calendar month.
+    val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    val byMonth = history90.filter { DopamineScore.of(it).hasData }
+        .groupBy { it.date.substring(0, 7) }.toSortedMap()
+    if (hasUsage && byMonth.size >= 2) {
+        content.addView(sectionTitle("Average hours per day, by month"))
+        val monthly = byMonth.values.map { days -> days.map { it.screenOnSeconds / 3600f }.average().toFloat() }.toFloatArray()
+        val monthLabels = byMonth.keys.map { monthNames[it.substring(5, 7).toInt() - 1] }
+        content.addView(UsageBarChartView(this, monthly, monthLabels, goalHours),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
+    } else if (!hasUsage) {
+        content.addView(sectionTitle("Average hours per day, by month"))
+        val thisMonth = SimpleDateFormat("MM", Locale.UK).format(Date()).toInt() - 1
+        val monthLabels = (2 downTo 0).map { monthNames[(thisMonth - it + 12) % 12] }
+        content.addView(UsageBarChartView(this, floatArrayOf(4.9f, 4.4f, 4.7f), monthLabels, goalHours),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
+        content.addView(exampleTag())
+    }
+
+    // The year: recent pace projected forward, as time and money (their real £ rate).
+    val recentDays = history90.takeLast(30).map { hoursOf(it) }.filter { !it.isNaN() }
+    val avgDaily = if (hasUsage && recentDays.isNotEmpty()) recentDays.average().toFloat() else 4.6f
+    content.addView(sectionTitle("A year at this pace"))
+    val rate = AboutYou.effectiveHourly(this)
+    val yearHours = avgDaily * 365.0
+    val wakingDaysYr = Math.round(yearHours / Usage.WAKING_HOURS)
+    val gbpYr = Math.round(yearHours * rate)
+    val yearCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+    val yearDonut = WastedDonutView(this)
+    yearDonut.setFraction(avgDaily / Usage.WAKING_HOURS)
+    yearCard.addView(yearDonut, LinearLayout.LayoutParams((132 * dp).toInt(), (132 * dp).toInt()).apply {
+        gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = (6 * dp).toInt()
+    })
+    yearCard.addView(TextView(this).apply {
+        text = "$wakingDaysYr waking days a year"; textSize = 24f
+        setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt())
+    })
+    yearCard.addView(TextView(this).apply {
+        text = "≈ £$gbpYr a year of your time, at ${fmtHours(avgDaily)} a day"
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+    })
+    if (goalHours != null && goalHours < avgDaily) {
+        val savedGbp = Math.round((avgDaily - goalHours) * 365.0 * rate)
+        val goalDays = Math.round(goalHours * 365.0 / Usage.WAKING_HOURS)
+        yearCard.addView(TextView(this).apply {
+            text = "At your ${fmtHours(goalHours)}/day goal: $goalDays waking days - clawing back £$savedGbp a year"
+            textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+            setTypeface(typeface, Typeface.BOLD); setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+    }
+    if (!hasUsage) yearCard.addView(exampleTag().apply { gravity = Gravity.CENTER })
+    content.addView(yearCard)
     content.addView(smallLink(if (goalHours == null) "Set a usage goal  ›" else "Your goal: ${fmtHours(goalHours)} a day - change  ›", dp) {
         showUsageGoal()
     })
@@ -2272,7 +2290,7 @@ private fun showScrollCost() {
             "about $booksRead books"
 
         aboutYouLink.text = if (AboutYou.hasData(this))
-            "Valued at £$rate/hr, from your numbers  ·  change"
+            "Valued at £${AboutYou.effectiveAnnual(this)}/yr, from your numbers  ·  change"
         else
             "Add your hourly rate to see what it's really costing you  ›"
     }
@@ -2426,7 +2444,7 @@ private fun showTemptationsTab() {
     // Adult Content keeps its own big bespoke flow. Everything else shares the one simple
     // page below, driven off AppConfig.TEMPTATIONS - add a category there, not here.
     list.addView(homeCard("Adult Content \uD83D\uDD1E", "Tools for the moment, and the longer game.") {
-        reportBackTarget = { showTemptationsTab() }; showReportScreen()
+        reportBackTarget = { showTemptationsTab() }; showReportScreen(offerLock = true)
     })
     AppConfig.TEMPTATIONS.forEach { spec ->
         list.addView(homeCard(spec.title, spec.subtitle) { showTemptation(spec) })
@@ -3146,11 +3164,11 @@ private fun showProtocol7Day() {
     setContentWithThumb(root) { showProtocol() }
 }
 
-private fun showReportScreen() {
-    // On the highest-risk page: a centred "this app isn't protected yet" popup, EVERY
-    // time the page opens while the uninstall lock is off (the risk doesn't go away
-    // because you dismissed it once). The X closes it; the page renders underneath.
-    if (!(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
+private fun showReportScreen(offerLock: Boolean = false) {
+    // The centred "this app isn't protected yet" popup shows every time the page is
+    // ENTERED from the Temptations menu (offerLock = true) while the uninstall lock is
+    // off - but not on thumb-back returns from sub-pages, or it nags on every hop.
+    if (offerLock && !(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
         showUnprotectedPopup()
     }
     onReportScreen = true
@@ -3213,10 +3231,9 @@ private fun showReportScreen() {
     root.addView(reportPane("I feel temptation", 0xFF3E535C.toInt()) { onFeelTemptation() })
     root.addView(reportPane("Report relapse", 0xFF526D78.toInt()) { onReportRelapse() })
 
-    // THE HONEST EXIT. Only on the table because they just reached for the destructive one.
-    if (BypassWatch.isArmed(this)) {
-        root.addView(bypassOfferPane())
-    }
+    // THE HONEST EXIT deliberately does NOT live on this page any more. It appears as
+    // its own full screen (showBypassOffer) at the moment of a bypass attempt - see
+    // maybeShowBypassOffer(). A card sitting here read as a permanent door handle.
     root.addView(reportPane("Statistics", 0xFF5E7A86.toInt()) { showStatsMenu() }.apply {
         textSize = 16f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt())
@@ -3232,37 +3249,39 @@ private fun showReportScreen() {
     setContentWithThumb(root) { reportBackTarget() }
 }
 
+/** The arming timestamp the offer has already been shown for - once per attempt. */
+private var bypassOfferShownFor = 0L
+
 /**
- * The supervised "look anyway" offer, shown ONLY while BypassWatch is armed - i.e. only
- * after the user has actually gone for the uninstall / device-admin / monitoring-off route,
- * or tried to escape a locked strict mode.
+ * Show the supervised "look anyway" offer if a bypass attempt just happened and it
+ * hasn't been shown for THIS arming yet. Returns true if it took the screen. It fires
+ * at the moment of the attempt (mode spinner) or on the next app open (Settings-side
+ * attempts like uninstall / device admin) - never as a card sitting on a page.
+ */
+private fun maybeShowBypassOffer(): Boolean {
+    if (!BypassWatch.isArmed(this)) return false
+    val at = BypassWatch.armedAt(this)
+    if (at == bypassOfferShownFor) return false
+    bypassOfferShownFor = at
+    showBypassOffer()
+    return true
+}
+
+/**
+ * The supervised "look anyway" offer, its own full screen, shown ONLY right after the
+ * user has actually gone for the uninstall / device-admin / monitoring-off route, or
+ * tried to escape a locked strict mode.
  *
  * The wording names what they just did, on purpose. Pretending not to have noticed would be
  * strange and a bit insulting; they know what they were doing. The offer is: you're going to
  * get there anyway, so take the door that leaves the guard standing behind you.
  */
-private fun bypassOfferPane(): View {
-    val dp = resources.displayMetrics.density
+private fun showBypassOffer() {
+    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val reason = BypassWatch.lastReason(this)
-    val card = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp
-            setColor(0xFF3B2F2A.toInt())
-            setStroke((2 * dp).toInt(), 0xFFB1541F.toInt())
-        }
-        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (8 * dp).toInt() }
-        isClickable = true; isFocusable = true
-        setOnClickListener { onLookAnyway() }
-    }
-    card.addView(TextView(this).apply {
-        text = "Before you pull it all down"
-        textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
-    })
-    card.addView(TextView(this).apply {
+    val root = vbox(pad)
+    root.addView(titleText("Before you pull it all down"))
+    root.addView(TextView(this).apply {
         text = buildString {
             if (reason != null) append("A moment ago, $reason.\n\n")
             append("If you're going to look, do it the honest way instead: a wait, a written ")
@@ -3270,14 +3289,16 @@ private fun bypassOfferPane(): View {
             append("It costs you one of your ${LoosenLimit.LIFETIME_MAX} lifetime unlocks. ")
             append("Breaking the app costs you everything you've built.")
         }
-        textSize = 13f; setTextColor(0xFFE0D6D0.toInt()); setLineSpacing(0f, 1.2f)
-        setPadding(0, (8 * dp).toInt(), 0, (10 * dp).toInt())
+        textSize = 15f; setTextColor(0xFF3A434B.toInt()); setLineSpacing(0f, 1.25f)
+        setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
     })
-    card.addView(TextView(this).apply {
-        text = "I'm going to look anyway  ›"
-        textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFE8A87C.toInt())
+    root.addView(grow())
+    root.addView(bigChoice("I'm going to look anyway  ›", 0xFFB1541F.toInt()) { onLookAnyway() })
+    root.addView(Button(this).apply {
+        text = "Not now"; setAllCaps(false)
+        setOnClickListener { setupHomeScreen() }
     })
-    return card
+    setContentWithThumb(root) { setupHomeScreen() }
 }
 
 /**
@@ -5000,6 +5021,9 @@ private fun startWeekStrict() {
 
     private fun updateScreen() {
         val step = currentStep()
+        // A bypass attempt in Settings (uninstall, device admin, monitoring-off) can't
+        // show UI from the service; it lands here on the next app open, once per attempt.
+        if (step == Step.READY && maybeShowBypassOffer()) { shownStep = step; return }
         if (step == Step.READY && shownStep == Step.READY) {
             renderStatus()   // already on the main screen - just refresh the dots
             return
@@ -6253,10 +6277,12 @@ private fun startWeekStrict() {
                     Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
                 } else {
                     // Refused: they're locked into strict and just tried to get out of it.
-                    // That's a bypass attempt - see BypassWatch.
+                    // That's a bypass attempt - see BypassWatch. The honest-exit offer
+                    // shows immediately, at the moment of the attempt.
                     BypassWatch.record(this@MainActivity, BypassWatch.Reason.LEAVE_STRICT)
                     Toast.makeText(this@MainActivity, "Strict mode is locked - can't switch back yet", Toast.LENGTH_SHORT).show()
                     sp.setSelection(curIdx())
+                    maybeShowBypassOffer()
                 }
             }
             override fun onNothingSelected(p: AdapterView<*>?) {}

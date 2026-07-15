@@ -281,6 +281,9 @@ object BypassWatch {
 
     fun lastReason(ctx: Context): String? = prefs(ctx).getString(KEY_REASON, null)
 
+    /** When the current arming happened - lets the UI show its offer once per arming. */
+    fun armedAt(ctx: Context): Long = prefs(ctx).getLong(KEY_AT, 0L)
+
     fun totalAttempts(ctx: Context): Int = prefs(ctx).getInt(KEY_COUNT, 0)
 
     /** Called when they take the offer (or it lapses), so it isn't left sitting there. */
