@@ -185,7 +185,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun pickWithCustomScreen(
         title: String, base: List<String>, category: String?,
-        onBack: (() -> Unit)?, onPick: (String) -> Unit,
+        onBack: (() -> Unit)?, subtitle: String? = null, onPick: (String) -> Unit,
     ) {
         val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
         val root = LinearLayout(this).apply {
@@ -194,6 +194,10 @@ class MainActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         root.addView(titleText(title))
+        if (subtitle != null) root.addView(TextView(this).apply {
+            text = subtitle; textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            setPadding(0, 0, 0, (8 * dp).toInt())
+        })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val customs = category?.let { CustomOptions.all(this, it) } ?: emptyList()
         var cs = (base + customs).distinct().map { metaFor(category ?: "", it) }
@@ -624,6 +628,8 @@ private fun showDopamine() {
     }
 
     c.addView(statHeader("MORE", dp))
+    c.addView(captionedButton("The ranks", "every level, and what it takes to reach them",
+        0xFF2E7D32.toInt()) { showDopamineRanks() })
     c.addView(captionedButton("How is this calculated?", "every rule, and what it's worth",
         0xFF34464E.toInt()) { showDopamineMaths() })
     c.addView(captionedButton("How do I bring this down?", "what actually moves the number",
@@ -640,6 +646,51 @@ private fun showDopamine() {
 
 // ── "How is this calculated?" - every rule, in one list, in plain English ───
 //
+// The prestige ladder, best first, with what each level takes. The current rank is
+// highlighted. Generated from DopamineRank.levels() so it can't drift from the rules.
+private fun showDopamineRanks() {
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText("The ranks"))
+    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
+    })
+    setContentWithThumb(root) { showDopamine() }
+
+    c.addView(TextView(this).apply {
+        text = "Hold a low baseline and you climb. The belts are earned by TIME - not one " +
+            "good day, but weeks of them. A rough week drops you fast; climbing back is " +
+            "the long game. That's the point."
+        textSize = 14f; setTextColor(0xFF52606A.toInt()); setLineSpacing(0f, 1.2f)
+        setPadding(0, 0, 0, (12 * dp).toInt())
+    })
+    val current = DopamineRank.of(this).longTitle
+    for (level in DopamineRank.levels()) {
+        val mine = level.longTitle == current
+        c.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp
+                setColor(if (mine) 0xFFEFF7EF.toInt() else 0xFFF4F6F8.toInt())
+                if (mine) setStroke((2 * dp).toInt(), level.colour)
+            }
+            val p = (14 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, (10 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = (8 * dp).toInt() }
+            addView(TextView(this@MainActivity).apply {
+                text = level.longTitle + (if (mine) "   ← you" else "")
+                textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(level.colour)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = level.requirement; textSize = 13f; setTextColor(0xFF52606A.toInt())
+                setPadding(0, (2 * dp).toInt(), 0, 0)
+            })
+        })
+    }
+}
+
 // AI / MAINTAINER: this screen is GENERATED from DopamineTuning. If you change a weight or
 // a threshold in Dopamine.kt, this page follows automatically - there is nothing to edit
 // here. Do NOT hard-code a number into this screen; read it from the tuning object, or the
@@ -1943,6 +1994,60 @@ private fun showRecentBlocks() {
 }
 
 // ── Report screen: 4 equal full-width panes ────────────────────────────────
+// ── Bottom navigation (strava-style): icon + label, subtle pill on the selected tab.
+//    Lives on the three top-level pages; replaces the old big Productivity/Temptations
+//    buttons that sat on the landing page.
+private fun withBottomBar(content: View, selected: Int): View {
+    val dp = resources.displayMetrics.density
+    val wrap = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    wrap.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+    wrap.addView(View(this).apply { setBackgroundColor(0x14000000) },
+        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt().coerceAtLeast(1)))
+    val teal = 0xFF2E9E8F.toInt(); val grey = 0xFF9AA0A6.toInt()
+    val bar = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setBackgroundColor(0xFFFFFFFF.toInt())
+        setPadding((8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
+    }
+    val tabs = listOf(
+        Triple(R.drawable.ic_nav_overview, "Overview") { setupHomeScreen() },
+        Triple(R.drawable.ic_nav_productivity, "Productivity") { showProductivity() },
+        Triple(R.drawable.ic_nav_temptations, "Temptations") { showTemptationsTab() },
+    )
+    tabs.forEachIndexed { i, (icon, label, go) ->
+        val sel = i == selected
+        val colour = if (sel) teal else grey
+        bar.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = (10 * dp).toInt(); marginEnd = (10 * dp).toInt()
+            }
+            if (sel) background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 14 * dp; setColor(0x142E9E8F)
+            }
+            val pv = (6 * dp).toInt(); setPadding(0, pv, 0, pv)
+            isClickable = true; isFocusable = true
+            setOnClickListener { if (!sel) go() }
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(icon); setColorFilter(colour)
+            }, LinearLayout.LayoutParams((24 * dp).toInt(), (24 * dp).toInt()).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = label; textSize = 11f; setTextColor(colour); gravity = Gravity.CENTER
+                if (sel) setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_HORIZONTAL; topMargin = (2 * dp).toInt()
+            })
+        })
+    }
+    wrap.addView(bar)
+    return wrap
+}
+
 // ── Disguised home: a productivity face; the addiction tools live behind a tab ─
 // Order, deliberately: the dopamine baseline + rank first (the thing to care about),
 // then the usage graphs (what it costs), then the two big doors (Productivity,
@@ -1959,9 +2064,17 @@ private fun setupHomeScreen() {
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
     val teal = 0xFF2E9E8F.toInt()
 
-    // ── 1. Dopamine baseline: rank badge + gauge + trend. Tap for the full page. ──
+    // ── 1. Productivity score: gauge + score + full rank name + the 14-day trend.
+    //    The trend line wears the gauge's band colours (a bad stretch goes red), and
+    //    scrubbing it updates the readout line - in the page, never a toast.
     val today = DopamineScore.of(DopamineLog.today(this))
     val rank = DopamineRank.of(this)
+    val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.UK)
+    val weekdayFmt = SimpleDateFormat("EEE", Locale.UK)
+    val niceDateFmt = SimpleDateFormat("EEE d MMM", Locale.UK)
+    fun niceDate(iso: String): String =
+        try { niceDateFmt.format(dayFmt.parse(iso)!!) } catch (_: Throwable) { iso }
+    content.addView(homeHeading("Your productivity score", "weekly overview"))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
@@ -1972,157 +2085,191 @@ private fun setupHomeScreen() {
     }
     dopCard.addView(LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        addView(TextView(this@MainActivity).apply {
-            text = rank.title.uppercase(); textSize = 24f
-            setTypeface(typeface, Typeface.BOLD); setTextColor(rank.colour)
+        addView(DopamineScaleView(this@MainActivity, today.score), LinearLayout.LayoutParams((46 * dp).toInt(), (150 * dp).toInt()))
+        addView(LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((14 * dp).toInt(), 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            addView(TextView(this@MainActivity).apply {
+                text = if (today.hasData) "${today.score}" else "–"
+                textSize = 44f; setTypeface(typeface, Typeface.BOLD); includeFontPadding = false
+                setTextColor(if (today.hasData) today.colour else 0xFF9AA0A6.toInt())
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = rank.longTitle; textSize = 17f
+                setTypeface(typeface, Typeface.BOLD); setTextColor(rank.colour)
+            })
         })
-        addView(TextView(this@MainActivity).apply {
-            text = "learn more ›"; textSize = 13f; setTextColor(0xFF2E9E8F.toInt()); setTypeface(typeface, Typeface.BOLD)
-        })
-    })
-    dopCard.addView(TextView(this).apply {
-        text = rank.longTitle; textSize = 13f; setTypeface(typeface, Typeface.BOLD or Typeface.ITALIC)
-        setTextColor(rank.colour)
-    })
-    dopCard.addView(TextView(this).apply {
-        text = rank.detail; textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, (10 * dp).toInt())
     })
     val history14 = DopamineLog.history(this, 14)
-    val scores14 = history14.map { DopamineScore.of(it).score.toFloat() }.toFloatArray()
-    dopCard.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        addView(DopamineScaleView(this@MainActivity, today.score), LinearLayout.LayoutParams((46 * dp).toInt(), (132 * dp).toInt()))
-        if (scores14.count { it > 0f } >= 2) {
-            addView(TrendView(this@MainActivity, scores14), LinearLayout.LayoutParams(0, (132 * dp).toInt(), 1f).apply {
-                marginStart = (12 * dp).toInt()
-            })
-        } else {
-            addView(TextView(this@MainActivity).apply {
-                text = "The 14-day trend appears here after a couple of days of normal phone use."
-                textSize = 13f; setTextColor(0xFF9AA0A6.toInt()); gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(0, (132 * dp).toInt(), 1f)
-            })
+    val realScores = history14.map { DopamineScore.of(it).let { r -> if (r.hasData) r.score.toFloat() else Float.NaN } }
+    val haveTrend = realScores.count { !it.isNaN() } >= 4
+    // Example trend: ORGANIC (plateaus, one big drop, small wobbles) descending from
+    // its peak to end EXACTLY on today's real score, so the graph always finishes on
+    // the number shown beside it.
+    val trendEnd = if (today.hasData) today.score.toFloat() else 26f
+    val trendStart = (trendEnd + 42f).coerceAtMost(92f)
+    val organic = floatArrayOf(1.00f, 0.97f, 0.84f, 0.88f, 0.70f, 0.45f, 0.52f, 0.48f, 0.30f, 0.34f, 0.18f, 0.22f, 0.08f, 0f)
+    val trendScores = if (haveTrend) realScores.toFloatArray()
+        else FloatArray(14) { i -> trendEnd + (trendStart - trendEnd) * organic[i] }
+    val trendLabels = history14.mapIndexed { i, d ->
+        if (i % 3 == 0 || i == history14.size - 1) {
+            try { weekdayFmt.format(dayFmt.parse(d.date)!!) } catch (_: Throwable) { "" }
+        } else ""
+    }
+    val trendColours = IntArray(trendScores.size) { i ->
+        if (trendScores[i].isNaN()) 0xFF9AA0A6.toInt()
+        else DopamineTuning.bandColour(Math.round(trendScores[i]))
+    }
+    val trendChart = StatLineChartView(this, trendScores, trendLabels, unit = "",
+        gridStep = 25f, segmentColours = trendColours)
+    val trendInfo = scrubLabel()
+    trendChart.onScrub = { i ->
+        val d = history14.getOrNull(i)
+        if (d != null) trendInfo.text = when {
+            !haveTrend -> readoutText("${niceDate(d.date)} · ",
+                "${Math.round(trendScores[i])}", "\n[Example data]", trendColours[i])
+            else -> {
+                val r = DopamineScore.of(d)
+                if (r.hasData) readoutText("${niceDate(d.date)} · ", "${r.score} (${r.band})", "", r.colour)
+                else readoutText("${niceDate(d.date)} · ", "no data that day", "", 0xFF9AA0A6.toInt())
+            }
         }
-    })
-    dopCard.addView(TextView(this).apply {
-        text = if (today.hasData) "Baseline today: ${today.score} · ${today.band}" else "Baseline today: still measuring"
-        textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0)
-    })
+    }
+    dopCard.addView(trendChart, LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, (120 * dp).toInt()).apply { topMargin = (6 * dp).toInt() })
+    dopCard.addView(trendInfo)
+    if (!haveTrend) dopCard.addView(exampleTag())
     content.addView(dopCard)
 
-    // ── 2. Usage graphs: real tracked screen-on time - or, before any exists, a
-    //    clearly-labelled EXAMPLE, so a brand-new user immediately sees what the page
-    //    becomes instead of an empty promise. The example uses their real £ numbers
-    //    (AboutYou) and goal, so entering either updates it live.
+    // ── 2. Usage, strava-style. Metric: screen-on time. EVERY chart falls back to
+    //    labelled EXAMPLE data whenever its real data is missing OR too thin to mean
+    //    anything - and examples always use the real £ rate and goal, because the same
+    //    graphs get the real arrays later.
     val history90 = DopamineLog.history(this, 90)
     fun hoursOf(day: DopamineDay): Float =
         if (DopamineScore.of(day).hasData) day.screenOnSeconds / 3600f else Float.NaN
-    val goalHours = UsageGoal.hoursPerDay(this)
-    val realDaily = history14.map { hoursOf(it) }.toFloatArray()
-    val hasUsage = realDaily.any { !it.isNaN() }
-    // A believable fortnight around the ~4-5 h/day average; fixed values, so the page
-    // doesn't shimmer between opens.
-    val daily = if (hasUsage) realDaily
-        else floatArrayOf(3.6f, 4.4f, 5.1f, 3.2f, 4.8f, 6.0f, 5.4f, 3.9f, 4.2f, 5.6f, 4.9f, 3.4f, 4.6f, 5.2f)
-    fun exampleTag() = TextView(this).apply {
-        text = "EXAMPLE - your real usage replaces this after a day or two"
-        textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB07800.toInt())
-        setPadding(0, (2 * dp).toInt(), 0, 0)
-    }
+    // Sensible default baseline: under an hour a day. A user-set goal replaces it.
+    val goalHours = UsageGoal.hoursPerDay(this) ?: 1f
+    val rate = AboutYou.effectiveHourly(this)
 
-    content.addView(sectionTitle("Hours on the phone - last 14 days"))
-    val labels14 = if (hasUsage) history14.mapIndexed { i, d ->
-        if (i % 3 == 0 || i == history14.size - 1) d.date.takeLast(2) else ""
-    } else List(14) { "" }
-    content.addView(UsageBarChartView(this, daily, labels14, goalHours),
-        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
-    if (!hasUsage) content.addView(exampleTag())
-    if (goalHours != null) {
-        val dataDays = daily.filter { !it.isNaN() }
-        val under = dataDays.count { it <= goalHours }
-        content.addView(TextView(this).apply {
-            text = "Goal ${fmtHours(goalHours)} a day · under it $under of ${dataDays.size} days"
-            textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
-        })
+    // This week: same card treatment as the year chart - legend, readout, stat row.
+    val week = history90.takeLast(7)
+    val realWeek = week.map { hoursOf(it) }.toFloatArray()
+    val weekIsReal = realWeek.count { !it.isNaN() } >= 2 && realWeek.filter { !it.isNaN() }.sum() >= 0.5f
+    val weekVals = if (weekIsReal) realWeek else floatArrayOf(3.1f, 2.8f, 4.9f, 4.6f, 1.9f, 5.8f, 3.4f)
+    val weekLabels = week.map { d ->
+        try { weekdayFmt.format(dayFmt.parse(d.date)!!) } catch (_: Throwable) { "" }
     }
+    val weekTotal = weekVals.filter { !it.isNaN() }.sum()
+    content.addView(homeHeading("Phone usage", "This week"))
+    content.addView(chartStatCard(
+        weekVals, weekLabels,
+        stats = listOf(
+            fmtHours(weekTotal) to "time wasted",
+            "£${Math.round(weekTotal * rate)}" to "money wasted",
+        ),
+        goal = goalHours, gridStep = 1f, minorStep = 0.5f,
+        legendMain = "— this week",
+        exampleMsg = if (weekIsReal) null else "EXAMPLE - your real usage replaces this after a day or two",
+        pointInfo = { i, v, _ ->
+            val d = week.getOrNull(i)
+            when {
+                d == null -> ""
+                !weekIsReal -> readoutText("${niceDate(d.date)} · ",
+                    "${fmtHours(v)} (£${Math.round(v * rate)})", "\n[Example data]", teal)
+                v.isNaN() -> readoutText("${niceDate(d.date)} · ", "no data", "", 0xFF9AA0A6.toInt())
+                else -> readoutText("${niceDate(d.date)} · ",
+                    "${fmtHours(v)} (£${Math.round(v * rate)})", "", teal)
+            }
+        },
+    ))
 
-    // Monthly: average hours per day, per calendar month.
+    // By month - only once there's more than two months of real data (or as the example).
     val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     val byMonth = history90.filter { DopamineScore.of(it).hasData }
         .groupBy { it.date.substring(0, 7) }.toSortedMap()
-    if (hasUsage && byMonth.size >= 2) {
-        content.addView(sectionTitle("Average hours per day, by month"))
-        val monthly = byMonth.values.map { days -> days.map { it.screenOnSeconds / 3600f }.average().toFloat() }.toFloatArray()
-        val monthLabels = byMonth.keys.map { monthNames[it.substring(5, 7).toInt() - 1] }
-        content.addView(UsageBarChartView(this, monthly, monthLabels, goalHours),
+    val hasUsage = history90.sumOf { d -> hoursOf(d).takeIf { !it.isNaN() }?.toDouble() ?: 0.0 } >= 1.0
+    if ((hasUsage && byMonth.size > 2) || !hasUsage) {
+        content.addView(homeHeading("Phone usage", "By month"))
+        val monthly: FloatArray; val monthLabels: List<String>
+        if (hasUsage) {
+            monthly = byMonth.values.map { days -> days.sumOf { it.screenOnSeconds }.toFloat() / 3600f }.toFloatArray()
+            monthLabels = byMonth.keys.map { monthNames[it.substring(5, 7).toInt() - 1] }
+        } else {
+            val thisMonth = SimpleDateFormat("MM", Locale.UK).format(Date()).toInt() - 1
+            monthly = floatArrayOf(136f, 104f, 121f)
+            monthLabels = (2 downTo 0).map { monthNames[(thisMonth - it + 12) % 12] }
+        }
+        val monthChart = StatLineChartView(this, monthly, monthLabels, goal = goalHours * 30)
+        val monthInfo = scrubLabel()
+        monthChart.onScrub = { i ->
+            val v = monthly.getOrNull(i)
+            if (v != null) monthInfo.text = readoutText(
+                "${monthLabels.getOrNull(i) ?: ""} · ",
+                "${fmtHours(v)} (£${Math.round(v * rate)})",
+                if (hasUsage) "" else "\n[Example data]", teal)
+        }
+        content.addView(monthChart,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
-    } else if (!hasUsage) {
-        content.addView(sectionTitle("Average hours per day, by month"))
-        val thisMonth = SimpleDateFormat("MM", Locale.UK).format(Date()).toInt() - 1
-        val monthLabels = (2 downTo 0).map { monthNames[(thisMonth - it + 12) % 12] }
-        content.addView(UsageBarChartView(this, floatArrayOf(4.9f, 4.4f, 4.7f), monthLabels, goalHours),
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
-        content.addView(exampleTag())
+        content.addView(monthInfo)
+        if (!hasUsage) content.addView(exampleTag())
     }
 
-    // The year: recent pace projected forward, as time and money (their real £ rate).
+    // This year: ONE line, climbing organically day by day, that turns grey and dotted
+    // at today - the projection to December. Same card and same behaviour whether the
+    // arrays are example or real: the graph just plots what it's given.
     val recentDays = history90.takeLast(30).map { hoursOf(it) }.filter { !it.isNaN() }
-    val avgDaily = if (hasUsage && recentDays.isNotEmpty()) recentDays.average().toFloat() else 4.6f
-    content.addView(sectionTitle("A year at this pace"))
-    val rate = AboutYou.effectiveHourly(this)
-    val yearHours = avgDaily * 365.0
-    val wakingDaysYr = Math.round(yearHours / Usage.WAKING_HOURS)
-    val gbpYr = Math.round(yearHours * rate)
-    val yearCard = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
-        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    val realAvg = if (recentDays.isNotEmpty()) recentDays.average().toFloat() else 0f
+    // Real mode needs SUBSTANTIAL data (two weeks, a real amount per day) - a few thin
+    // days must not oust the example with a meaningless near-zero line.
+    val yearIsReal = recentDays.size >= 14 && realAvg >= 0.5f
+    val avgDaily = if (yearIsReal) realAvg else 3.9f
+    content.addView(homeHeading("Phone usage overview", "This year"))
+    val dayOfYear = SimpleDateFormat("D", Locale.UK).format(Date()).toInt().coerceIn(1, 365)
+    // Organic daily increments: calm stretches, weekend spikes, the odd binge - so the
+    // cumulative line climbs unevenly like a real one (fixed pattern, no shimmer).
+    val organicDay = floatArrayOf(0.5f, 0.7f, 0.6f, 1.6f, 1.9f, 0.8f, 0.6f, 0.4f, 1.1f, 1.4f, 0.5f, 0.9f, 2.0f, 0.7f)
+    val yearNow = SimpleDateFormat("yyyy", Locale.UK).format(Date())
+    val doyFmt = SimpleDateFormat("D", Locale.UK)
+    val realByDoy = HashMap<Int, Float>()
+    if (yearIsReal) for (d in history90) {
+        val h = hoursOf(d); if (h.isNaN() || !d.date.startsWith(yearNow)) continue
+        try { realByDoy[doyFmt.format(dayFmt.parse(d.date)!!).toInt()] = h } catch (_: Throwable) {}
     }
-    val yearDonut = WastedDonutView(this)
-    yearDonut.setFraction(avgDaily / Usage.WAKING_HOURS)
-    yearCard.addView(yearDonut, LinearLayout.LayoutParams((132 * dp).toInt(), (132 * dp).toInt()).apply {
-        gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = (6 * dp).toInt()
-    })
-    yearCard.addView(TextView(this).apply {
-        text = "$wakingDaysYr waking days a year"; textSize = 24f
-        setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt())
-    })
-    yearCard.addView(TextView(this).apply {
-        text = "≈ £$gbpYr a year of your time, at ${fmtHours(avgDaily)} a day"
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
-    })
-    if (goalHours != null && goalHours < avgDaily) {
-        val savedGbp = Math.round((avgDaily - goalHours) * 365.0 * rate)
-        val goalDays = Math.round(goalHours * 365.0 / Usage.WAKING_HOURS)
-        yearCard.addView(TextView(this).apply {
-            text = "At your ${fmtHours(goalHours)}/day goal: $goalDays waking days - clawing back £$savedGbp a year"
-            textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
-            setTypeface(typeface, Typeface.BOLD); setPadding(0, (6 * dp).toInt(), 0, 0)
-        })
+    var running = 0f
+    val soFar = FloatArray(dayOfYear) { i ->
+        running += realByDoy[i + 1] ?: (avgDaily * organicDay[i % organicDay.size])
+        running
     }
-    if (!hasUsage) yearCard.addView(exampleTag().apply { gravity = Gravity.CENTER })
-    content.addView(yearCard)
-    content.addView(smallLink(if (goalHours == null) "Set a usage goal  ›" else "Your goal: ${fmtHours(goalHours)} a day - change  ›", dp) {
-        showUsageGoal()
-    })
-
-    // ── 3. The two big doors ────────────────────────────────────────────────
-    fun bigDoor(label: String, colour: Int, onClick: () -> Unit) = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(colour) }
-        val p = (18 * dp).toInt(); setPadding(p, (16 * dp).toInt(), p, (16 * dp).toInt())
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (14 * dp).toInt() }
-        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
-        addView(TextView(this@MainActivity).apply {
-            text = label; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        addView(TextView(this@MainActivity).apply { text = "→"; textSize = 22f; setTextColor(0xFFFFFFFF.toInt()) })
+    val toCome = FloatArray(365 - dayOfYear) { j -> soFar.last() + avgDaily * (j + 1) }
+    val monthFirstDays = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+    val yearLabels = (0 until 365).map { d ->
+        val m = monthFirstDays.indexOfLast { d >= it }
+        if (d == monthFirstDays[m] && m % 2 == 0) monthNames[m] else ""
     }
-    content.addView(bigDoor("Productivity", teal) { showProductivity() })
-    content.addView(bigDoor("Temptations", 0xFF3E535C.toInt()) { showTemptationsTab() })
+    val yearStartMs = try { dayFmt.parse("$yearNow-01-01")!!.time } catch (_: Throwable) { 0L }
+    val niceDoyFmt = SimpleDateFormat("d MMM", Locale.UK)
+    val yearHours = toCome.lastOrNull() ?: soFar.last()
+    content.addView(chartStatCard(
+        soFar, yearLabels,
+        stats = listOf(
+            "${Math.round(yearHours)}h" to "this year",
+            "£${Math.round(yearHours * rate)}" to "of your time",
+            "${Math.round(yearHours / 3f)}" to "evenings",
+        ),
+        dotted = toCome, goalPerSlot = goalHours,
+        worth = "Your phone usage is worth…",
+        exampleMsg = if (yearIsReal) null else "EXAMPLE - your real usage replaces this after a day or two",
+        onStatsClick = { aboutYouBack = { setupHomeScreen() }; showAboutYou() },
+        pointInfo = { i, v, projected ->
+            val date = niceDoyFmt.format(Date(yearStartMs + i * 24L * 60 * 60 * 1000))
+            readoutText("By $date · ",
+                "${Math.round(v)}h (£${Math.round(v * rate)})",
+                (if (projected) " · projected" else "") + (if (yearIsReal) "" else "\n[Example data]"),
+                if (projected) 0xFF9AA0A6.toInt() else teal)
+        },
+    ))
 
     // ── 4. Dev tools (only when dev mode is on) ─────────────────────────────
     if (AppConfig.DEV_MODE) {
@@ -2142,7 +2289,8 @@ private fun setupHomeScreen() {
         })
     }
 
-    // permission/status console, then the quietest possible about link
+    // sensors console, then the permission/status console, then the quietest about link
+    content.addView(sensorsConsole())
     content.addView(permissionConsole())
     content.addView(TextView(this).apply {
         text = "About & privacy"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
@@ -2157,12 +2305,135 @@ private fun setupHomeScreen() {
         isFillViewport = true
         addView(content)
     }
-    setContentNoThumb(root)   // the landing screen - nothing behind it to go back to
+    setContentNoThumb(withBottomBar(root, 0))   // the landing screen - nothing behind it
 }
 
 private fun fmtHours(h: Float): String {
     val m = Math.round(h * 60)
     return if (m % 60 == 0) "${m / 60}h" else "${m / 60}h ${m % 60}m"
+}
+
+/** The amber "this is fake data" tag under example charts. */
+private fun exampleTag(msg: String = "EXAMPLE - your real data replaces this after a day or two") =
+    TextView(this).apply {
+        text = msg; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB07800.toInt())
+        setPadding(0, (2 * resources.displayMetrics.density).toInt(), 0, 0)
+    }
+
+/** A strava-style stat row: big bold values with small grey labels, evenly spread.
+ *  One shared builder so home and Productivity arrange their numbers identically. */
+private fun statRow(stats: List<Pair<String, String>>, colour: Int, onClick: (() -> Unit)? = null): View {
+    val dp = resources.displayMetrics.density
+    return LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setPadding(0, (4 * dp).toInt(), 0, 0)
+        if (onClick != null) { isClickable = true; isFocusable = true; setOnClickListener { onClick() } }
+        for ((value, label) in stats) addView(LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            addView(TextView(this@MainActivity).apply {
+                text = value; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(colour)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = label; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+            })
+        })
+    }
+}
+
+/** The bigger, two-tone home-page heading: "Phone usage · This week". */
+private fun homeHeading(primary: String, secondary: String): TextView {
+    val dp = resources.displayMetrics.density
+    val s = android.text.SpannableString("$primary · $secondary")
+    s.setSpan(android.text.style.ForegroundColorSpan(0xFF9AA0A6.toInt()), primary.length, s.length, 0)
+    return TextView(this).apply {
+        text = s; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        setPadding(0, (20 * dp).toInt(), 0, (8 * dp).toInt())
+    }
+}
+
+/** The scrub readout under a chart. Starts as a quiet hint; scrubbing fills it in. */
+private fun scrubLabel(): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        text = "Drag across the graph to explore"
+        textSize = 13f; setTextColor(0xFF9AA0A6.toInt())
+        setPadding(0, (4 * dp).toInt(), 0, 0)
+    }
+}
+
+/** Readout line for a scrubbed point: quiet date, then the VALUE - bold, bigger, and
+ *  coloured to match the marker on the graph - then a quiet suffix ("[Example data]"). */
+private fun readoutText(pre: String, strong: String, post: String, colour: Int): CharSequence {
+    val s = android.text.SpannableString(pre + strong + post)
+    val st = pre.length; val en = pre.length + strong.length
+    if (st > 0) s.setSpan(android.text.style.ForegroundColorSpan(0xFF7B848C.toInt()), 0, st, 0)
+    s.setSpan(android.text.style.StyleSpan(Typeface.BOLD), st, en, 0)
+    s.setSpan(android.text.style.RelativeSizeSpan(1.2f), st, en, 0)
+    s.setSpan(android.text.style.ForegroundColorSpan(colour), st, en, 0)
+    if (post.isNotEmpty()) s.setSpan(android.text.style.ForegroundColorSpan(0xFF9AA0A6.toInt()), en, s.length, 0)
+    return s
+}
+
+/**
+ * The shared chart card used by every stat graph (home week, home year, Productivity's
+ * reclaimed week): grey card, teal line (optionally continuing grey-dotted as a
+ * projection, optionally with a goal line/slope - both named in the legend), a scrub
+ * READOUT updated in the page as the finger moves, an optional "worth…" line, and a
+ * statRow. One look, different numbers.
+ */
+private fun chartStatCard(
+    values: FloatArray, labels: List<String>,
+    stats: List<Pair<String, String>>,
+    accent: Int = 0xFF2E9E8F.toInt(),
+    dotted: FloatArray = FloatArray(0),
+    goal: Float? = null, goalPerSlot: Float? = null,
+    gridStep: Float? = null, minorStep: Float? = null,
+    legendMain: String = "— so far",
+    worth: String? = null,
+    exampleMsg: String? = null,
+    onStatsClick: (() -> Unit)? = null,
+    pointInfo: ((Int, Float, Boolean) -> CharSequence)? = null,
+): View {
+    val dp = resources.displayMetrics.density
+    val card = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+    val chart = StatLineChartView(this, values, labels,
+        goal = goal, dotted = dotted, dottedColour = 0xFF9AA0A6.toInt(),
+        goalPerSlot = goalPerSlot, accent = accent, gridStep = gridStep, minorStep = minorStep)
+    card.addView(chart, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
+
+    // Legend: name every line on the chart.
+    card.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setPadding(0, (4 * dp).toInt(), 0, 0)
+        fun key(t: String, colour: Int) = addView(TextView(this@MainActivity).apply {
+            text = t; textSize = 11f; setTextColor(colour); setPadding(0, 0, (14 * dp).toInt(), 0)
+        })
+        key(legendMain, accent)
+        if (dotted.isNotEmpty()) key("- - projected", 0xFF9AA0A6.toInt())
+        if (goal != null || goalPerSlot != null) key("- - goal", 0xFF2E7D32.toInt())
+    })
+
+    if (pointInfo != null) {
+        val info = scrubLabel()
+        card.addView(info)
+        chart.onScrub = { i ->
+            val projected = i >= values.size
+            val v = if (projected) dotted.getOrNull(i - values.size) else values.getOrNull(i)
+            if (v != null) info.text = pointInfo(i, v, projected)
+        }
+    }
+    if (worth != null) card.addView(TextView(this).apply {
+        text = worth; textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+    })
+    if (stats.isNotEmpty()) card.addView(statRow(stats, accent, onStatsClick))
+    if (exampleMsg != null) card.addView(exampleTag(exampleMsg))
+    return card
 }
 
 // ── Usage goal: pick a daily phone-time target; the home graphs draw it. ──────
@@ -2173,7 +2444,7 @@ private fun showUsageGoal() {
     root.addView(titleText("Usage goal"))
     root.addView(TextView(this).apply {
         text = "Pick how much time on the phone per day you'd be happy with. The home-page " +
-            "graphs draw the goal as a line: days under it go green, days over it don't."
+            "graphs draw it as the dashed line. Until you set one, a 1-hour-a-day baseline is used."
         textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, 0, 0, (14 * dp).toInt())
     })
     val current = UsageGoal.minutesPerDay(this)
@@ -2198,13 +2469,13 @@ private fun showUsageGoal() {
     root.addView(bigChoice("Set goal", 0xFF2E7D32.toInt()) {
         UsageGoal.setMinutesPerDay(this, minutesOf(seek.progress))
         Toast.makeText(this, "Goal set: ${fmtHours(minutesOf(seek.progress) / 60f)} a day", Toast.LENGTH_SHORT).show()
-        setupHomeScreen()
+        showProductivity()
     })
     if (current > 0) root.addView(Button(this).apply {
         text = "Remove the goal"; setAllCaps(false)
-        setOnClickListener { UsageGoal.clear(this@MainActivity); setupHomeScreen() }
+        setOnClickListener { UsageGoal.clear(this@MainActivity); showProductivity() }
     })
-    setContentWithThumb(root) { setupHomeScreen() }
+    setContentWithThumb(root) { showProductivity() }
 }
 
 // ── What the scroll costs: the projector + reclaimed stats (moved off the home page). ──
@@ -2322,7 +2593,6 @@ private fun showProductivity() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-    content.addView(titleText("Productivity"))
 
     // Short-form blocking toggle
     val sfSub = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
@@ -2348,6 +2618,55 @@ private fun showProductivity() {
     // The cost projector + reclaimed stats used to live on the landing page; they moved
     // here so the landing page can stay graphs-only.
     content.addView(homeCard("What the scroll costs", "The projector: minutes per day → years and £ - plus what you\u0027ve reclaimed.") { showScrollCost() })
+
+    // ── This week, reclaimed: the same cumulative card as the home page's year chart,
+    //    but green and pointing the right way - solid line Mon→today, grey dotted
+    //    projection to Sunday at the current pace.
+    content.addView(sectionTitle("This week - reclaimed"))
+    run {
+        val dayMs = 24L * 60 * 60 * 1000
+        val winTs = TemptationLog.timestamps(this) +
+            LoosenLog.all(this).filter { it.outcome == "stopped" || it.outcome == "tomorrow" }.map { it.ts }
+        val todayIdx = System.currentTimeMillis() / dayMs
+        // 1 = Monday … 7 = Sunday: how far through the week we are.
+        val daysElapsed = SimpleDateFormat("u", Locale.UK).format(Date()).toInt().coerceIn(1, 7)
+        val realPerDay = FloatArray(daysElapsed) { i ->
+            val idx = todayIdx - (daysElapsed - 1 - i)
+            winTs.count { it / dayMs == idx } * Progress.EST_MIN_PER_WIN / 60f
+        }
+        val hasWins = realPerDay.any { it > 0f }
+        val examplePerDay = floatArrayOf(0.4f, 0.9f, 0.6f, 1.2f, 0.8f, 1.5f, 1.1f)
+        val perDay = if (hasWins) realPerDay else FloatArray(daysElapsed) { examplePerDay[it] }
+        var cum = 0f
+        val soFar = FloatArray(daysElapsed) { i -> cum += perDay[i]; cum }
+        val pace = soFar.last() / daysElapsed
+        val toCome = FloatArray(7 - daysElapsed) { j -> soFar.last() + pace * (j + 1) }
+        val weekDays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        val rate = AboutYou.effectiveHourly(this)
+        val weekProj = toCome.lastOrNull() ?: soFar.last()
+        content.addView(chartStatCard(
+            soFar, weekDays,
+            stats = listOf(
+                fmtHours(soFar.last()) to "reclaimed so far",
+                "£${Math.round(soFar.last() * rate)}" to "value reclaimed",
+                fmtHours(weekProj) to "by Sunday",
+            ),
+            accent = 0xFF2E7D32.toInt(),
+            dotted = toCome,
+            worth = "Your reclaimed time is worth…",
+            exampleMsg = if (hasWins) null else "EXAMPLE - ride out urges and your real reclaimed time shows here",
+            pointInfo = { i, v, projected ->
+                readoutText("${weekDays.getOrNull(i) ?: ""} · ",
+                    "${fmtHours(v)} (£${Math.round(v * rate)})",
+                    (if (projected) " · projected" else "") + (if (hasWins) "" else "\n[Example data]"),
+                    if (projected) 0xFF9AA0A6.toInt() else 0xFF2E7D32.toInt())
+            },
+        ))
+    }
+    val goalNow = UsageGoal.hoursPerDay(this)
+    content.addView(smallLink(if (goalNow == null) "Set a usage goal  ›" else "Your goal: ${fmtHours(goalNow)} a day - change  ›", dp) {
+        showUsageGoal()
+    })
 
     // ── Dopamine baseline: a whole-phone measure, so it belongs here and not buried in
     //    the adult-content statistics.
@@ -2428,14 +2747,14 @@ private fun showProductivity() {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         isFillViewport = true; addView(content)
     }
-    setContentWithThumb(root) { setupHomeScreen() }
+    subBack = { setupHomeScreen() }
+    setContentNoThumb(withBottomBar(root, 1))
 }
 
 private fun showTemptationsTab() {
     onTemptationsTab = true; onHomeScreen = false; onReportScreen = false; inSubPage = false; subBack = null
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Temptations"))
     root.addView(TextView(this).apply {
         text = "What are you managing?"; textSize = 15f; setTextColor(0xFF7B848C.toInt())
         setPadding(0, 0, 0, (10 * dp).toInt())
@@ -2454,7 +2773,7 @@ private fun showTemptationsTab() {
         isFillViewport = true
         addView(list)
     })
-    setContentWithThumb(root) { setupHomeScreen() }
+    setContentNoThumb(withBottomBar(root, 2))
 }
 
 // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -5021,9 +5340,6 @@ private fun startWeekStrict() {
 
     private fun updateScreen() {
         val step = currentStep()
-        // A bypass attempt in Settings (uninstall, device admin, monitoring-off) can't
-        // show UI from the service; it lands here on the next app open, once per attempt.
-        if (step == Step.READY && maybeShowBypassOffer()) { shownStep = step; return }
         if (step == Step.READY && shownStep == Step.READY) {
             renderStatus()   // already on the main screen - just refresh the dots
             return
@@ -5169,7 +5485,6 @@ private fun startWeekStrict() {
         })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
-        content.addView(homeCard("Room detection (beacons)", "Bedroom / bathroom true-false from the K11 beacons, plus assignment and calibration.") { showRoomBeaconDebug() })
         content.addView(homeCard("Grayscale setup", "Turn on the strict-mode grayscale filter.") { showGreyscaleSetup() })
         content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
@@ -5353,6 +5668,24 @@ private fun startWeekStrict() {
     // green meter PER BEACON (zones learned per room), and the check bars. The
     // decision is PAIRWISE: the current tuple of all beacons' levels is matched
     // against recorded spots - see RoomBeacons.kt.
+    // "Select the room the sensor(s) will be in, or type your own" - the same picker
+    // (and the same custom-options store) as the relapse flow's Where-were-you page.
+    private fun showAddRoomChooser() {
+        inSubPage = true
+        subBack = { if (RoomBeacons.rooms(this).isEmpty()) setupHomeScreen() else showRoomBeaconDebug() }
+        val existing = RoomBeacons.rooms(this)
+        val base = Opts.LOCATIONS.filter { it != "Out / in public" && it.lowercase() !in existing }
+        pickWithCustomScreen(
+            "Which room are you setting up?", base, "location", onBack = null,
+            subtitle = "You're setting up ONE room for now - its sensor(s) go in this room. " +
+                "You can add more rooms later from the sensors page.",
+        ) { name ->
+            if (!RoomBeacons.addRoom(this, name)) Toast.makeText(this,
+                "Couldn't add that (duplicate, or ${RoomBeacons.MAX_ROOMS}-room limit)", Toast.LENGTH_LONG).show()
+            showRoomBeaconDebug()
+        }
+    }
+
     private fun showRoomBeaconDebug() {
         if (!RoomBeacons.hasPermissions(this)) {
             showPrereq(
@@ -5365,24 +5698,16 @@ private fun startWeekStrict() {
                     "this app → Permissions.",
                 "Grant permissions",
                 { requestPermissions(RoomBeacons.requiredPermissions(), REQ_BEACON_PERMS) },
-                "Back", { setupMainScreen() },
+                "Back", { setupHomeScreen() },
             )
             return
         }
 
+        // No rooms yet: name the first one before anything else.
+        if (RoomBeacons.rooms(this).isEmpty()) { showAddRoomChooser(); return }
+
         val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        content.addView(titleText("Room detection"))
-
-        content.addView(Button(this).apply {
-            text = "How we determine what room you're in ›"; setAllCaps(false)
-            setOnClickListener { showRoomHowItWorks() }
-        })
-
-        // Scan health, always visible: the "is data actually flowing" line.
-        val scanLine = TextView(this).apply { textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (4 * dp).toInt(), 0, (6 * dp).toInt()) }
-        content.addView(scanLine)
-
         fun warnLine(msg: String, onClick: () -> Unit) = TextView(this).apply {
             text = msg; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFFB00020.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
@@ -5417,6 +5742,10 @@ private fun startWeekStrict() {
             }
             val big = TextView(this@MainActivity).apply {
                 textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            }
+            val note = TextView(this@MainActivity).apply {
+                text = "⚠ maybe, probs am - treating as true"
+                textSize = 12f; setTextColor(0xFFB07800.toInt()); visibility = View.GONE
             }
             val sub = TextView(this@MainActivity).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()) }
             val metersBox = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
@@ -5508,10 +5837,95 @@ private fun startWeekStrict() {
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             header.addView(card.pill)
+            header.addView(TextView(this).apply {
+                text = "✕"; textSize = 18f; setTextColor(0xFF9AA0A6.toInt())
+                val p = (8 * dp).toInt(); setPadding(p, (2 * dp).toInt(), (2 * dp).toInt(), (2 * dp).toInt())
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Remove ${roomTitle(card.room)}?")
+                        .setMessage("Deletes this room and its calibration from the list. The sensor hardware itself isn't touched.")
+                        .setPositiveButton("Remove") { _, _ ->
+                            RoomBeacons.removeRoom(this@MainActivity, card.room)
+                            RoomPresence.reset()
+                            showRoomBeaconDebug()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+            })
             box.addView(header)
+            box.addView(card.note)
             box.addView(card.big); box.addView(card.sub)
             box.addView(card.metersBox)
             box.addView(card.checksBox); box.addView(card.summary)
+
+            // How many sensors this room should have (1-4). Once a room is calibrated,
+            // any count change means recalibrating - so it's confirmed, and confirming
+            // wipes the calibration so the card honestly says "Set up this room".
+            val count = RoomBeacons.sensorCount(this, card.room)
+            fun changeCount(newCount: Int) {
+                fun apply() {
+                    RoomBeacons.setSensorCount(this@MainActivity, card.room, newCount)
+                    if (RoomBeacons.isCalibrated(this@MainActivity, card.room)) {
+                        RoomBeacons.setSamples(this@MainActivity, card.room, emptyList())
+                    }
+                    RoomPresence.reset()
+                    if (newCount > count) Toast.makeText(this@MainActivity,
+                        "Run set-up to assign sensor ${RoomBeacons.sensorLetter(newCount - 1)}", Toast.LENGTH_SHORT).show()
+                    showRoomBeaconDebug()
+                }
+                if (RoomBeacons.isCalibrated(this@MainActivity, card.room)) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Change sensor count?")
+                        .setMessage("This room is already set up. Changing the number of sensors means you'll have to RECALIBRATE it (run set-up again).")
+                        .setPositiveButton("Change - I'll recalibrate") { _, _ -> apply() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                } else apply()
+            }
+            if (count == 1) {
+                // The upgrade path, made unmissable.
+                box.addView(TextView(this).apply {
+                    text = "＋  Add a second sensor (recommended - much more accurate)"
+                    textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E9E8F.toInt())
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        cornerRadius = 12 * dp; setStroke((1.5f * dp).toInt(), 0xFF2E9E8F.toInt())
+                    }
+                    val p = (10 * dp).toInt(); setPadding(p, p, p, p)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).apply { topMargin = (8 * dp).toInt() }
+                    isClickable = true; isFocusable = true
+                    setOnClickListener { changeCount(2) }
+                })
+            } else {
+                box.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, (4 * dp).toInt(), 0, 0)
+                    addView(TextView(this@MainActivity).apply {
+                        text = "Sensors in this room"; textSize = 13f; setTextColor(0xFF52606A.toInt())
+                        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    })
+                    fun stepBtn(label: String, onClick: () -> Unit) = addView(TextView(this@MainActivity).apply {
+                        text = label; textSize = 20f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+                        setTextColor(0xFF2E9E8F.toInt())
+                        background = GradientDrawable().apply {
+                            cornerRadius = 10 * dp; setStroke((1.5f * dp).toInt(), 0xFF2E9E8F.toInt())
+                        }
+                        layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (36 * dp).toInt())
+                        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
+                    })
+                    stepBtn("−") { changeCount(count - 1) }
+                    addView(TextView(this@MainActivity).apply {
+                        text = "$count"; textSize = 18f; setTypeface(typeface, Typeface.BOLD)
+                        setTextColor(0xFF1F2933.toInt()); gravity = Gravity.CENTER
+                        layoutParams = LinearLayout.LayoutParams((34 * dp).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                    })
+                    stepBtn("+") { if (count < RoomBeacons.MAX_SENSORS) changeCount(count + 1) }
+                })
+            }
 
             val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (6 * dp).toInt(), 0, 0) }
             card.setupBtn.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 2f)
@@ -5544,40 +5958,25 @@ private fun startWeekStrict() {
             content.addView(box)
         }
 
-        // Rooms are user-defined: anywhere from 2 to 8 beacons depending on the house.
+        // Rooms are user-defined: 1 to 8, each with 1-4 sensors.
         content.addView(Button(this).apply {
             text = "Add a room…"; setAllCaps(false)
-            setOnClickListener {
-                val input = EditText(this@MainActivity).apply {
-                    hint = "Room name (e.g. office)"
-                    val p = (16 * dp).toInt(); setPadding(p, p, p, p)
-                }
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Add a room")
-                    .setView(input)
-                    .setPositiveButton("Add") { _, _ ->
-                        if (RoomBeacons.addRoom(this@MainActivity, input.text.toString())) showRoomBeaconDebug()
-                        else Toast.makeText(this@MainActivity,
-                            "Couldn't add that (empty, duplicate, or ${RoomBeacons.MAX_ROOMS}-room limit)",
-                            Toast.LENGTH_LONG).show()
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-            }
+            setOnClickListener { showAddRoomChooser() }
         })
 
-        // Dual-sensor mode: two beacons per room, opposite ends, for tighter readings.
+        // Debug: enforce the room guard regardless of mode, so blocking can be tested
+        // without flipping the whole phone into strict.
         content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+            setPadding(0, (8 * dp).toInt(), 0, (4 * dp).toInt())
             addView(TextView(this@MainActivity).apply {
-                text = "Dual sensors per room (two per room, opposite ends - rooms need re-setup after switching)"
+                text = "Block non-whitelisted apps while in any of these rooms (debug - any mode)"
                 textSize = 13f; setTextColor(0xFF52606A.toInt())
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             addView(android.widget.Switch(this@MainActivity).apply {
-                isChecked = RoomBeacons.dualMode(this@MainActivity)
-                setOnCheckedChangeListener { _, on -> RoomBeacons.setDualMode(this@MainActivity, on) }
+                isChecked = RoomBeacons.debugGuard(this@MainActivity)
+                setOnCheckedChangeListener { _, on -> RoomBeacons.setDebugGuard(this@MainActivity, on) }
             })
         })
 
@@ -5596,6 +5995,11 @@ private fun startWeekStrict() {
         }
         content.addView(feedToggle); content.addView(feed)
 
+        content.addView(Button(this).apply {
+            text = "How we determine what room you're in ›"; setAllCaps(false)
+            setOnClickListener { showRoomHowItWorks() }
+        })
+
         fun locationOn(): Boolean = try {
             val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
             if (Build.VERSION.SDK_INT >= 28) lm.isLocationEnabled
@@ -5609,28 +6013,14 @@ private fun startWeekStrict() {
             scanner.expectedMacs = RoomBeacons.allAssignedMacs(this).toSet()
             if (scanner.isBluetoothOn) scanner.ensureScanning()
             press.start()   // idempotent; restarts the barometer after onStop
-            val err = scanner.lastScanError
-            scanLine.text = when {
-                !scanner.isBluetoothOn -> "Not scanning - Bluetooth is off"
-                err != null -> "Scan problem (Android error $err) - retrying automatically…"
-                else -> {
-                    val heard = scanner.all().count { now - it.lastSeen <= RoomBeacons.TIMEOUT_MS }
-                    val guard = when {
-                        RoomGuard.activeRoom != null -> "guard BLOCKING (${RoomGuard.activeRoom})"
-                        RoomGuard.armed -> "guard armed"
-                        else -> "guard idle (needs strict mode + a calibrated room)"
-                    }
-                    "Scanning · ${String.format("%.1f", scanner.advertsPerSec)} adverts/s from $heard devices" +
-                        (if (press.available) " · barometer on" else " · no barometer") + " · " + guard
-                }
-            }
-            scanLine.setTextColor(if (err != null || !scanner.isBluetoothOn) 0xFFB00020.toInt() else 0xFF7B848C.toInt())
 
             val statuses = RoomPresence.evaluate(this, scanner, press)
             for (card in cards) {
                 val st = statuses[card.room] ?: continue
+                // Only IN and the upper (treated-as-true) slice of maybe show as true;
+                // plain maybe-probs-am is back to amber and never blocks.
                 card.pill.text = when (st.verdict) {
-                    RoomPresence.Verdict.IN -> "  true  "
+                    RoomPresence.Verdict.IN, RoomPresence.Verdict.MAYBE_IN_TRUE -> "  true  "
                     RoomPresence.Verdict.MAYBE_IN -> "  maybe (probs is)  "
                     RoomPresence.Verdict.MAYBE_OUT -> "  maybe (probs not)  "
                     RoomPresence.Verdict.OUT -> "  false  "
@@ -5638,12 +6028,14 @@ private fun startWeekStrict() {
                 card.pill.background = GradientDrawable().apply {
                     cornerRadius = 20 * dp
                     setColor(when (st.verdict) {
-                        RoomPresence.Verdict.IN -> 0xFF2E9E44.toInt()
+                        RoomPresence.Verdict.IN, RoomPresence.Verdict.MAYBE_IN_TRUE -> 0xFF2E9E44.toInt()
                         RoomPresence.Verdict.MAYBE_IN -> 0xFFE0A800.toInt()
                         RoomPresence.Verdict.MAYBE_OUT -> 0xFF8A6D3B.toInt()
                         RoomPresence.Verdict.OUT -> 0xFF9AA0A6.toInt()
                     })
                 }
+                card.note.visibility =
+                    if (st.verdict == RoomPresence.Verdict.MAYBE_IN_TRUE) View.VISIBLE else View.GONE
                 card.big.text = st.rssi?.let { "$it dBm" } ?: "–– dBm"
                 card.sub.text = when {
                     !st.assigned -> "No beacon assigned"
@@ -5683,7 +6075,7 @@ private fun startWeekStrict() {
             ui.removeCallbacksAndMessages(null); beaconUi = null
             scanner.stop(); beaconScanner = null
             press.stop(); pressureMon = null
-            setupMainScreen()
+            setupHomeScreen()
         }
     }
 
@@ -5724,9 +6116,11 @@ private fun startWeekStrict() {
         )
         section("Where to put the sensors")
         bullets(
-            "- Put each beacon closest to where the risk actually is. In a bedroom: at the bed - the headboard or bedside table. This is the most important rule.\n" +
+            "- Put each sensor closest to where the risk actually is. In a bedroom: at the bed - the headboard or bedside table. This is the most important rule.\n" +
                 "- In a bathroom: the back of a cupboard, or a shelf near where the phone would get used.\n" +
-                "- Anywhere works as long as it never moves. If you move a beacon, redo the set-up.",
+                "- Sensors sharing a room go at opposite ends, as low to the floor as possible.\n" +
+                "- Sit each sensor on a piece of aluminium foil about 8cm × 8cm (just enough to cover its base) - it steadies the signal.\n" +
+                "- Anywhere works as long as it never moves. If you move a sensor, redo the set-up.",
         )
         val scroll = ScrollView(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -5738,10 +6132,11 @@ private fun startWeekStrict() {
     /** One place the set-up wizard asks the user to be. core = defines super green + true. */
     private data class CalSpot(val title: String, val instruction: String, val core: Boolean = false)
 
-    private val insideSpots = listOf(
-        CalSpot("Right next to the beacon", "Stand about an arm's length from this room's beacon.", core = true),
+    // The static inside spots. One "right next to sensor X" spot per assigned sensor
+    // is prepended dynamically in the wizard, so every sensor gets its close-up.
+    private val staticInsideSpots = listOf(
         CalSpot("Middle of the room", "Stand in the middle of the room."),
-        CalSpot("Far corner", "Go to the far corner or edge of the room - as far from the beacon as it gets."),
+        CalSpot("Far corner", "Go to the far corner or edge of the room - as far from the sensors as it gets."),
         CalSpot("Opposite far corner", "Now a different far corner or edge of the room."),
     )
 
@@ -5753,12 +6148,12 @@ private fun startWeekStrict() {
     )
 
     // ── Room set-up wizard ────────────────────────────────────────────────────
-    // One instruction per screen, big text. Flow: find this room's beacon (skipped if
-    // already known), make sure at least one other room's beacon exists (the pairwise
-    // matching needs 2+), place all beacons, 6 spots (statics + temptation), a 15 s
-    // walk around the room, then a free-roam pass around the house tagging false
-    // readings. Every recording captures ALL beacons at once - the values come as a
-    // set, and that set is what gets matched later.
+    // One instruction per screen, big text, with the room named LARGE on every page.
+    // Flow: find each of the room's sensors (A, B… - however many were chosen on the
+    // room card; already-assigned slots are skipped), place all sensors, the spots
+    // (one per sensor + statics + temptation), a 15 s walk around the room, then a
+    // free-roam pass around the house tagging false readings. Every recording captures
+    // ALL sensors at once - the values come as a set, and that set is what's matched.
     private fun showRoomSetup(room: String) {
         val roomName = room.replaceFirstChar { it.uppercase() }
         val roomsNow = RoomBeacons.rooms(this)
@@ -5779,13 +6174,18 @@ private fun startWeekStrict() {
             setTextColor(0xFF2E7D32.toInt())
         }
         fun liveLine() = TextView(this).apply {
-            textSize = 22f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); gravity = Gravity.CENTER
+            textSize = 16f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding(0, (6 * dp).toInt(), 0, 0)
         }
         // Renders one wizard screen and kills the previous screen's tickers.
         fun show(step: String, title: String, vararg views: View) {
             ui.removeCallbacksAndMessages(null)
             val root = vbox(pad)
+            // The room, unmissable, on every wizard page.
+            root.addView(TextView(this).apply {
+                text = roomName.uppercase(); textSize = 22f; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(0xFF2E9E8F.toInt()); letterSpacing = 0.08f
+            })
             root.addView(stepText(step.uppercase()))
             root.addView(TextView(this).apply {
                 text = title; textSize = 26f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
@@ -5811,13 +6211,19 @@ private fun startWeekStrict() {
                 .mapNotNull { m -> scanner.kalmanRssi(m)?.let { m to it } }
                 .toMap()
         fun ownMac() = RoomBeacons.beaconMac(this, room)
+        // Every assigned sensor in the house, strongest first - so standing next to
+        // "bedroom A" you SEE bedroom A on top, bedroom B under it, and so on.
         fun liveTick(live: TextView) = tick(300) {
             scanner.ensureScanning(); press.start()
-            val mac = ownMac()
-            val b = mac?.let { scanner.beacon(it) }
-            val fresh = b != null && System.currentTimeMillis() - b.lastSeen <= RoomBeacons.TIMEOUT_MS
-            live.text = if (fresh) "beacon: ${scanner.kalmanRssi(mac!!) ?: b!!.rssi} dBm" else "beacon: not heard"
-            live.setTextColor(if (fresh) 0xFF1F2933.toInt() else 0xFFB00020.toInt())
+            val rows = RoomBeacons.assignedSensors(this, room).map { (r, slot, m) ->
+                Pair("$r ${RoomBeacons.sensorLetter(slot)}", scanner.kalmanRssi(m))
+            }.sortedByDescending { it.second ?: Int.MIN_VALUE }
+            live.text = if (rows.isEmpty()) "no sensors assigned yet"
+                else rows.joinToString("\n") { (label, v) ->
+                    label.padEnd(13) + (v?.let { "$it dBm" } ?: "not heard")
+                }
+            val ownHeard = ownMac()?.let { scanner.kalmanRssi(it) } != null
+            live.setTextColor(if (ownHeard) 0xFF1F2933.toInt() else 0xFFB00020.toInt())
         }
 
         fun finishPage() {
@@ -5886,7 +6292,8 @@ private fun startWeekStrict() {
                 val wrongHere = st?.verdict != null && st.verdict != RoomPresence.Verdict.OUT
                 if (!tagging) tagBtn.visibility = if (wrongHere) View.VISIBLE else View.GONE
                 when (st?.verdict) {
-                    RoomPresence.Verdict.IN -> {
+                    // The two verdicts that read as true are the loud error out here.
+                    RoomPresence.Verdict.IN, RoomPresence.Verdict.MAYBE_IN_TRUE -> {
                         indicator.text = "IT THINKS YOU'RE IN THE ${roomName.uppercase()}!\nThat's wrong - press the red button."
                         indicator.textSize = 22f; indicator.setTypeface(indicator.typeface, Typeface.BOLD)
                         indicator.setTextColor(0xFFB00020.toInt())
@@ -5945,7 +6352,13 @@ private fun startWeekStrict() {
         // ── Phase: static + temptation spots (3 s each) ───────────────────────────
         lateinit var goSpot: (Int) -> Unit
         goSpot = fun(i: Int) {
-            val spots = insideSpots + temptationSpots
+            val spots = RoomBeacons.assignedSensors(this, room)
+                .filter { it.first == room }
+                .map { (_, slot, _) ->
+                    val letter = RoomBeacons.sensorLetter(slot)
+                    CalSpot("Right next to sensor $letter",
+                        "Stand about an arm's length from SENSOR $letter in the $roomName.", core = true)
+                } + staticInsideSpots + temptationSpots
             if (i >= spots.size) { goWander(); return }
             val spot = spots[i]
             val mac = ownMac() ?: run { showRoomBeaconDebug(); return }
@@ -5990,48 +6403,54 @@ private fun startWeekStrict() {
         }
 
         fun placePage() {
-            val dual = RoomBeacons.dualMode(this)
             val placements = roomsNow.mapNotNull { r ->
-                if (RoomBeacons.beaconMac(this, r) == null) null
-                else if (RoomBeacons.beaconMac2(this, r) != null)
-                    "· ${r.replaceFirstChar { c -> c.uppercase() }}: sensor A at the risk spot, sensor B at the opposite end"
-                else "· ${r.replaceFirstChar { c -> c.uppercase() }} beacon → in the $r"
+                val letters = (0 until RoomBeacons.sensorCount(this, r))
+                    .filter { RoomBeacons.beaconMacAt(this, r, it) != null }
+                    .map { RoomBeacons.sensorLetter(it) }
+                val rn = r.replaceFirstChar { c -> c.uppercase() }
+                when {
+                    letters.isEmpty() -> null
+                    letters.size == 1 -> "· $rn: its sensor at the risk spot"
+                    else -> "· $rn: sensor A at the risk spot; ${letters.drop(1).joinToString(", ")} spread at the other ends of the room"
+                }
             }.joinToString("\n")
-            show("Set up · $roomName · place the beacons", "Put EVERY beacon in its room",
+            show("Set up · $roomName · place the sensors", "Put EVERY sensor in its place",
                 bigBody(
-                    "KEY RULE: put each beacon closest to where the risk actually is - bedroom: " +
+                    "KEY RULE: put each sensor closest to where the risk actually is - bedroom: " +
                         "at the bed (headboard or bedside table); bathroom: back of a cupboard or " +
-                        "a shelf near where the phone would get used." +
-                        (if (dual) "\nIn dual mode the second sensor goes at the OPPOSITE end of the room." else "") +
-                        "\n\n" + placements + "\n\n" +
+                        "a shelf near where the phone would get used.\n\n" +
+                        "HOW to place each one:\n" +
+                        "· sensors in the same room go at OPPOSITE ends of the room\n" +
+                        "· as LOW to the floor as possible\n" +
+                        "· sit each one on a piece of ALUMINIUM FOIL, roughly 8cm × 8cm - doesn't " +
+                        "have to be exact, just enough to cover its base (it steadies the signal)\n\n" +
+                        placements + "\n\n" +
                         "They must never move once calibrated - if you move one later, redo the " +
                         "set-up.\n\nCome back here with your phone once they're all in place.",
                 ),
                 bigChoice("All in place - start calibrating", 0xFF2E9E8F.toInt()) { collected.clear(); goSpot(0) })
         }
 
-        // Finds one room's beacon (hold-against-phone → strongest → confirm). Reused
-        // for whichever room/slot needs one; second = the room's B sensor (dual mode).
-        lateinit var assignFlow: (String, String, Boolean, () -> Unit) -> Unit
-        fun confirmPage(target: String, step: String, second: Boolean, candidate: BeaconScanner.Beacon, onDone: () -> Unit) {
+        // Finds one sensor (hold-against-phone → strongest → confirm), for slot A-D.
+        lateinit var assignFlow: (String, String, Int, () -> Unit) -> Unit
+        fun confirmPage(target: String, step: String, slot: Int, candidate: BeaconScanner.Beacon, onDone: () -> Unit) {
             val targetName = target.replaceFirstChar { it.uppercase() }
-            val slotName = if (second) "second $targetName sensor" else "$targetName beacon"
+            val letter = RoomBeacons.sensorLetter(slot)
             show(step, "Found it",
                 bigBody(
                     "Strongest signal right now:\n\n${candidate.name ?: "unnamed beacon"}\n${candidate.mac}\n" +
-                        "${Math.round(candidate.smoothedRssi)} dBm\n\nIs that the beacon in your hand?",
+                        "${Math.round(candidate.smoothedRssi)} dBm\n\nIs that the sensor in your hand?",
                 ),
-                bigChoice("Yes - this is the $slotName", 0xFF2E7D32.toInt()) {
-                    if (second) RoomBeacons.setBeaconMac2(this, target, candidate.mac)
-                    else RoomBeacons.setBeaconMac(this, target, candidate.mac)
+                bigChoice("Yes - this is $targetName sensor $letter", 0xFF2E7D32.toInt()) {
+                    RoomBeacons.setBeaconMacAt(this, target, slot, candidate.mac)
                     scanner.expectedMacs = RoomBeacons.allAssignedMacs(this).toSet()
                     onDone()
                 },
-                Button(this).apply { text = "No - scan again"; setAllCaps(false); setOnClickListener { assignFlow(target, step, second, onDone) } })
+                Button(this).apply { text = "No - scan again"; setAllCaps(false); setOnClickListener { assignFlow(target, step, slot, onDone) } })
         }
 
-        assignFlow = fun(target: String, step: String, second: Boolean, onDone: () -> Unit) {
-            val targetName = target.replaceFirstChar { it.uppercase() }
+        assignFlow = fun(target: String, step: String, slot: Int, onDone: () -> Unit) {
+            val letter = RoomBeacons.sensorLetter(slot)
             val countdown = bigCountdown()
             val live = TextView(this).apply {
                 textSize = 15f; setTextColor(0xFF7B848C.toInt()); gravity = Gravity.CENTER
@@ -6049,7 +6468,7 @@ private fun startWeekStrict() {
                 finding = true; startBtn.isEnabled = false
                 // Every beacon already assigned anywhere (except this very slot's
                 // current value) is off-limits - can't reuse one beacon twice.
-                val currentSlot = if (second) RoomBeacons.beaconMac2(this, target) else RoomBeacons.beaconMac(this, target)
+                val currentSlot = RoomBeacons.beaconMacAt(this, target, slot)
                 val otherMacs = RoomBeacons.allAssignedMacs(this).toSet() - setOfNotNull(currentSlot)
                 val begin = System.currentTimeMillis()
                 val end = begin + RoomBeacons.SAMPLE_MS
@@ -6073,20 +6492,20 @@ private fun startWeekStrict() {
                                 strongest.smoothedRssi > best.smoothedRssi + 6 -> Toast.makeText(this@MainActivity,
                                 "The beacon in your hand is already assigned to another room. To swap them, Reset that room first.",
                                 Toast.LENGTH_LONG).show()
-                            best.smoothedRssi < -55 -> Toast.makeText(this@MainActivity,
+                            best.smoothedRssi < -65 -> Toast.makeText(this@MainActivity,
                                 "Strongest device is only ${Math.round(best.smoothedRssi)} dBm - too weak to be touching the phone. Press the beacon against the phone's back and try again.",
                                 Toast.LENGTH_LONG).show()
-                            else -> confirmPage(target, step, second, best, onDone)
+                            else -> confirmPage(target, step, slot, best, onDone)
                         }
                     }
                 })
             }
-            show(step, if (second) "Find the second $targetName sensor" else "Find the $targetName beacon",
+            show(step, "Find SENSOR $letter",
                 bigBody(
-                    (if (second) "This one will live at the OTHER end of the $target.\n\n" else "") +
-                        "1. Make sure the beacon is switched on: hold its button for ~3 seconds until " +
+                    (if (slot > 0) "This one lives at a DIFFERENT part of the $target from the others.\n\n" else "") +
+                        "1. Make sure the sensor is switched on: hold its button for ~3 seconds until " +
                         "its light blinks. (Brand new? Pull the battery tab out first.)\n\n" +
-                        "2. Hold the beacon flat against the BACK of your phone.\n\n" +
+                        "2. Hold the sensor flat against the BACK of your phone.\n\n" +
                         "3. Keep it there and press Start.",
                 ),
                 countdown, live, startBtn)
@@ -6099,55 +6518,34 @@ private fun startWeekStrict() {
             }
         }
 
-        // The pairwise matching needs at least TWO beacons in the house. Anything
-        // already assigned is skipped silently - no redundant questions.
-        fun afterOwnBeacon() {
-            val assignedTotal = RoomBeacons.allAssignedMacs(this).size
-            val next = roomsNow.firstOrNull { it != room && RoomBeacons.beaconMac(this, it) == null }
-            if (assignedTotal >= 2 || next == null) { placePage(); return }
-            val nextName = next.replaceFirstChar { it.uppercase() }
-            show("Set up · $roomName · second beacon", "Now the $nextName beacon",
-                bigBody(
-                    "One beacon alone can't tell \"in the $roomName\" from \"directly above or " +
-                        "below it on another floor\" - radio goes straight through floors. The app " +
-                        "matches the whole SET of beacon readings, so at least one more room's " +
-                        "beacon must be set up before calibrating.\n\nGo and get the $nextName " +
-                        "beacon now.",
-                ),
-                bigChoice("I'm holding it - find this beacon", 0xFF2E9E8F.toInt()) {
-                    assignFlow(next, "Set up · $roomName · second beacon", false) { placePage() }
-                })
-        }
-
-        // Dual mode: this room needs its B sensor (opposite end) before moving on.
-        fun maybeOwnSecond() {
-            if (!RoomBeacons.dualMode(this) || RoomBeacons.beaconMac2(this, room) != null) {
-                afterOwnBeacon(); return
-            }
-            show("Set up · $roomName · sensor B", "This room gets TWO sensors",
-                bigBody(
-                    "Dual-sensor mode is on: the $roomName gets a second sensor at the OPPOSITE " +
-                        "end of the room, which makes the readings much more distinctive.\n\n" +
-                        "Go and get the second $roomName sensor now.",
-                ),
-                bigChoice("I'm holding it - find this sensor", 0xFF2E9E8F.toInt()) {
-                    assignFlow(room, "Set up · $roomName · sensor B", true) { afterOwnBeacon() }
-                })
+        // Assign every sensor slot the room card asked for (1-4); slots that already
+        // have a sensor are skipped silently, then everything is placed and calibrated.
+        lateinit var assignSlots: (Int) -> Unit
+        assignSlots = fun(i: Int) {
+            val count = RoomBeacons.sensorCount(this, room)
+            if (i >= count) { placePage(); return }
+            if (RoomBeacons.beaconMacAt(this, room, i) != null) { assignSlots(i + 1); return }
+            assignFlow(room,
+                "Set up · sensor ${RoomBeacons.sensorLetter(i)} of ${RoomBeacons.sensorLetter(count - 1)}",
+                i) { assignSlots(i + 1) }
         }
 
         val existing = RoomBeacons.beaconMac(this, room)
         when {
-            existing == null -> assignFlow(room, "Set up · $roomName · find beacon", false) { maybeOwnSecond() }
-            !RoomBeacons.isCalibrated(this, room) -> maybeOwnSecond()   // assigned during another room's set-up
-            else -> show("Recalibrate · $roomName", "Recalibrate $roomName",
+            existing == null -> assignSlots(0)
+            !RoomBeacons.isCalibrated(this, room) -> assignSlots(0)
+            else -> show("Recalibrate", "Recalibrate $roomName",
                 bigBody(
-                    "This room is already set up. Keep the same beacon and redo the calibration " +
-                        "walk, or start from scratch?",
+                    "This room is already set up. Keep the same sensor(s) and redo the " +
+                        "calibration walk, or start from scratch?",
                 ),
-                bigChoice("Keep beacon - recalibrate", 0xFF2E9E8F.toInt()) { maybeOwnSecond() },
+                bigChoice("Keep sensor(s) - recalibrate", 0xFF2E9E8F.toInt()) { assignSlots(0) },
                 Button(this).apply {
-                    text = "Start over - pick the beacon again"; setAllCaps(false)
-                    setOnClickListener { assignFlow(room, "Set up · $roomName · find beacon", false) { maybeOwnSecond() } }
+                    text = "Start over - pick the sensors again"; setAllCaps(false)
+                    setOnClickListener {
+                        RoomBeacons.setBeaconMac(this@MainActivity, room, null)
+                        assignSlots(0)
+                    }
                 })
         }
     }
@@ -6288,6 +6686,117 @@ private fun startWeekStrict() {
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
         return sp
+    }
+
+    /**
+     * The "Connected sensors" console on the home page, just above STATUS. Before the
+     * user has sensors it's the door into the purchase/set-up flow; afterwards it's one
+     * dot per room: green = set up and able to receive, amber = set up but we can't
+     * receive right now (Bluetooth off / permission revoked), grey = not set up yet.
+     */
+    private fun sensorsConsole(): View {
+        val dp = resources.displayMetrics.density
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (24 * dp).toInt() }
+        }
+        box.addView(TextView(this).apply {
+            text = "CONNECTED SENSORS"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
+        })
+        if (!RoomBeacons.ownsSensors(this)) {
+            box.addView(TextView(this).apply {
+                text = "No sensors connected\nTap here to set up room sensors."
+                textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+                isClickable = true; isFocusable = true
+                setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+                setOnClickListener { showSensorGate() }
+            })
+            return box
+        }
+        val bt = (getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager)
+            .adapter?.isEnabled == true
+        val canReceive = bt && RoomBeacons.hasPermissions(this)
+        if (RoomBeacons.rooms(this).isEmpty()) {
+            box.addView(TextView(this).apply {
+                text = "No rooms yet\nTap here to add your first room."
+                textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+                isClickable = true; isFocusable = true
+                setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+                setOnClickListener { showRoomBeaconDebug() }
+            })
+            return box
+        }
+        for (room in RoomBeacons.rooms(this)) {
+            val calibrated = RoomBeacons.isCalibrated(this, room)
+            val colour: Int; val label: String
+            when {
+                !calibrated -> { colour = 0xFF9AA0A6.toInt(); label = "Not set up" }
+                !canReceive -> { colour = 0xFFE0A800.toInt(); label = "No data - check Bluetooth & permissions" }
+                else -> { colour = 0xFF2E9E44.toInt(); label = "On" }
+            }
+            box.addView(TextView(this).apply {
+                text = "●  ${room.replaceFirstChar { it.uppercase() }} sensor - $label"
+                textSize = 14f; setTextColor(colour)
+                isClickable = true; isFocusable = true
+                setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+                setOnClickListener { showRoomBeaconDebug() }
+            })
+        }
+        return box
+    }
+
+    // The gate in front of the room-detection set-up: do they actually have beacons yet?
+    private fun showSensorGate() {
+        inSubPage = true
+        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Room sensors"))
+        root.addView(TextView(this).apply {
+            text = "Room detection uses small Bluetooth beacons - one per room you want " +
+                "protected. Have you got yours?"
+            textSize = 15f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
+        })
+        root.addView(bigChoice("Yes - I have my room sensors and am ready to set them up", 0xFF7C8B88.toInt()) {
+            RoomBeacons.setOwnsSensors(this, true)
+            showRoomBeaconDebug()
+        })
+        root.addView(bigChoice("No - I do not have any room sensors", 0xFF9AA0A6.toInt()) {
+            showSensorPitch()
+        })
+        setContentWithThumb(root) { setupHomeScreen() }
+    }
+
+    // The two-minute pitch for someone without beacons, then the (future) shop door.
+    private fun showSensorPitch() {
+        inSubPage = true
+        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Room sensors"))
+        root.addView(TextView(this).apply {
+            text = "- Small Bluetooth beacons, one per room you want protected.\n" +
+                "- The app learns each room and knows when you're in it.\n" +
+                "- In strict mode, protected rooms lock away every non-essential app automatically.\n" +
+                "- No pairing, years of battery, and nothing ever leaves your phone."
+            textSize = 15f; setTextColor(0xFF3A434B.toInt()); setLineSpacing(0f, 1.35f)
+            setPadding(0, (4 * dp).toInt(), 0, (18 * dp).toInt())
+        })
+        root.addView(bigChoice("Take me to the order page", 0xFF2E9E8F.toInt()) { showSensorOrderPage() })
+        setContentWithThumb(root) { showSensorGate() }
+    }
+
+    private fun showSensorOrderPage() {
+        inSubPage = true
+        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Order sensors"))
+        root.addView(TextView(this).apply {
+            text = "Coming soon."
+            textSize = 16f; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+        })
+        setContentWithThumb(root) { showSensorPitch() }
     }
 
     /** The permission/status console, rendered programmatically for the home page. */

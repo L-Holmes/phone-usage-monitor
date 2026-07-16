@@ -777,6 +777,35 @@ object DopamineRank {
         Belt("Disciple", "Dopamine Disciple", 7, 40, 0xFF3E7CB1.toInt()),
     )
 
+    /** One row of the prestige ladder, for the "all the ranks" page. */
+    data class RankLevel(val longTitle: String, val colour: Int, val requirement: String)
+
+    /** The full ladder, best first, with what each takes. Belt numbers are interpolated
+     *  from BELTS so this page can never drift out of sync with the real rules. */
+    fun levels(): List<RankLevel> = BELTS.mapIndexed { i, b ->
+        val flavour = when (i) {
+            0 -> "Roughly: well under an hour a day on non-whitelisted apps, nothing late at night, for two months straight. The top of the mountain."
+            1 -> "About an hour a day, kept up for a whole month."
+            2 -> "Two clean weeks - the feeds barely see you."
+            else -> "One controlled week. The first belt."
+        }
+        RankLevel(b.longTitle, b.colour,
+            "${b.streakDays} days in a row with a baseline of ${b.maxScore} or less. $flavour")
+    } + listOf(
+        RankLevel("Adenosine Apprentice", 0xFF52796F.toInt(),
+            "A 7-day average under 40. The habit is bending - hold it for a week and the belts start."),
+        RankLevel("Dopamine Drifter", 0xFF9A7B00.toInt(),
+            "A 7-day average under 50. Coasting - could go either way."),
+        RankLevel("The Twitchy Thumb", 0xFFB07800.toInt(),
+            "A 7-day average under 60. The phone is winning more rounds than you are."),
+        RankLevel("Certified Doomscroller", 0xFFC0392B.toInt(),
+            "A 7-day average under 75. Hours a day going to the scroll."),
+        RankLevel("Fully Fried", 0xFF8E1600.toInt(),
+            "A 7-day average of 75 or more. Rock bottom - from here it only goes up."),
+        RankLevel("The Journey Begins", 0xFF2E9E8F.toInt(),
+            "Where everyone starts: install the app, live one normal day."),
+    )
+
     fun of(context: Context): DopamineRankResult {
         val history = DopamineLog.history(context, 90)
         val scored = history.map { d -> DopamineScore.of(d).let { if (it.hasData) it.score else -1 } }

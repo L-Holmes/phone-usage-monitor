@@ -136,6 +136,8 @@ data class BlockEvent(
     val posture: String? = null,
     val lightLevel: String? = null,
     val lux: Float? = null,
+    // Which protected room the beacons said you were in (null = none / unknown).
+    val room: String? = null,
 ) {
     companion object {
         const val KIND_WEB = "web"
@@ -166,6 +168,7 @@ data class BlockEvent(
                 posture = SensorContext.postureLabel(),
                 lightLevel = SensorContext.lightLabel(),
                 lux = SensorContext.lux.takeIf { it >= 0f },
+                room = RoomGuard.presenceRoom,
             )
         }
     }
@@ -232,7 +235,7 @@ interface BlockEventDao {
     suspend fun summaries(): List<BlockSummary>
 }
 
-@Database(entities = [BlockEvent::class, BlockSummary::class], version = 2, exportSchema = false)
+@Database(entities = [BlockEvent::class, BlockSummary::class], version = 3, exportSchema = false)
 abstract class BlockEventDatabase : RoomDatabase() {
 
     abstract fun dao(): BlockEventDao
@@ -249,6 +252,13 @@ abstract class BlockEventDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 adds the beacon-detected room the block happened in. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE block_events ADD COLUMN room TEXT")
+            }
+        }
+
         fun get(context: Context): BlockEventDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -259,7 +269,7 @@ abstract class BlockEventDatabase : RoomDatabase() {
                     // NOTE: deliberately NO fallbackToDestructiveMigration here.
                     // Unlike monitor.db, this data is meant to live ~3 months; a schema
                     // change must ship a proper Migration or it wipes the history.
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { instance = it }
             }
     }

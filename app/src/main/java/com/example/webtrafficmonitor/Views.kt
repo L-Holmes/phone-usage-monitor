@@ -987,72 +987,219 @@ class DopamineScaleView(context: Context, private val score: Int) : View(context
 
 
 // =====================================================================================
-// UsageBarChartView  (bars of hours per day/month, with an optional goal line)
+// StatLineChartView  (the Strava-style line graph used across the home page)
 // =====================================================================================
 /**
- * A simple bar chart for the home page's usage graphs. [values] are hours (one bar
- * each, oldest first; NaN = no data for that slot, drawn as a faint stub). [labels]
- * are sparse x-axis labels, same length as values, empty string = no label. [goal]
- * (hours) draws a dashed line: bars at or under it are green, over it amber→red.
+ * One line, filled underneath, dots on data days, weekday/month labels under the x
+ * axis, labelled hour gridlines (auto-stepped unless [gridStep] is given), an optional
+ * dashed goal, and a dashed [dotted] continuation for projections.
+ *
+ * SCRUBBABLE: set [onScrub] and the whole view becomes the hitbox - touch or drag
+ * anywhere and the nearest point is selected (marker + vertical guide drawn), with the
+ * index reported so the caller can show the values IN the page (never a toast). The
+ * selection sticks after the finger lifts.
  */
-class UsageBarChartView(
+class StatLineChartView(
     context: Context,
     private val values: FloatArray,
     private val labels: List<String>,
-    private val goal: Float?,
+    private val unit: String = "h",
+    private val goal: Float? = null,
+    private val dotted: FloatArray = FloatArray(0),
+    private val goalPerSlot: Float? = null,
+    private val accent: Int = 0xFF2E9E8F.toInt(),   // the app's primary teal
+    private val dottedColour: Int? = null,          // projection colour (grey for "estimated")
+    private val gridStep: Float? = null,            // labelled y gridline every this many units
+    private val minorStep: Float? = null,           // unlabelled y gridline (e.g. half-hours)
+    // One colour per point: each segment/dot takes its point's colour (the dopamine
+    // trend uses the gauge's band colours, so a bad stretch literally goes red).
+    private val segmentColours: IntArray? = null,
 ) : View(context) {
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** Fired with the selected slot index while touching/dragging. Whole view = hitbox. */
+    var onScrub: ((Int) -> Unit)? = null
+    private var selIndex = -1
+
+    @Suppress("ClickableViewAccessibility")
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        val scrub = onScrub ?: return super.onTouchEvent(event)
+        when (event.action) {
+            android.view.MotionEvent.ACTION_DOWN,
+            android.view.MotionEvent.ACTION_MOVE -> {
+                // Own the gesture so the page doesn't scroll out from under the finger.
+                parent?.requestDisallowInterceptTouchEvent(true)
+                val dp = resources.displayMetrics.density
+                val xL = 30f * dp; val xR = width - 8f * dp
+                val n = values.size + dotted.size
+                if (n > 1 && xR > xL) {
+                    val i = Math.round((event.x - xL) / (xR - xL) * (n - 1)).coerceIn(0, n - 1)
+                    if (i != selIndex) { selIndex = i; invalidate(); scrub(i) }
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> performClick()
+        }
+        return true
+    }
+
+    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    private val dashed = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+    }
+    private val goalP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; color = 0xFF2E7D32.toInt()
+    }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
+    private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x3D000000; strokeCap = Paint.Cap.ROUND }
+    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
+    private val fillP = Paint(Paint.ANTI_ALIAS_FLAG)
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    private fun fmtVal(v: Float): String =
+        if (unit == "h" && v < 1f && v > 0f) "${Math.round(v * 60)}m"
+        else "${if (v == Math.floor(v.toDouble()).toFloat()) v.toInt().toString() else String.format("%.1f", v)}$unit"
+
+    /** A round gridline step (1/2/5 × 10^k) giving 3-5 lines up the axis. */
+    private fun niceStep(mx: Float): Float {
+        val raw = mx / 4f
+        var pow = 1f
+        while (pow * 10 <= raw) pow *= 10
+        while (pow > raw && pow > 0.001f) pow /= 10
+        for (m in floatArrayOf(1f, 2f, 5f, 10f)) {
+            val step = m * pow
+            if (mx / step <= 5f) return step
+        }
+        return pow * 10
+    }
+
     override fun onDraw(canvas: Canvas) {
-        if (values.isEmpty()) return
+        if (width == 0 || height == 0 || values.isEmpty()) return
         val dp = resources.displayMetrics.density
-        val padL = 26 * dp; val padB = 16 * dp; val padT = 6 * dp
-        val x0 = padL; val x1 = width - 4 * dp
-        val yBase = height - padB; val yTop = padT
-        val maxVal = maxOf(values.filter { !it.isNaN() }.maxOrNull() ?: 1f, goal ?: 0f, 1f) * 1.15f
-        fun y(v: Float) = yBase - (yBase - yTop) * (v / maxVal)
+        val padL = 34f * dp; val padR = 8f * dp; val padB = 18f * dp; val padT = 8f * dp
+        val xL = padL; val xR = width - padR; val yB = height - padB; val yT = padT
+        val n = values.size + dotted.size
+        val all = (values + dotted).filter { !it.isNaN() }
+        val goalTop = if (goalPerSlot != null) goalPerSlot * n else (goal ?: 0f)
+        val mx = maxOf(all.maxOrNull() ?: 1f, goalTop, 0.5f) * 1.12f
+        fun px(i: Int) = if (n == 1) (xL + xR) / 2f else xL + (xR - xL) * i / (n - 1)
+        fun py(v: Float) = yB - (yB - yT) * (v / mx)
+        line.strokeWidth = 2.5f * dp; axis.strokeWidth = 1f * dp
+        dashed.strokeWidth = 2.5f * dp
+        dashed.pathEffect = android.graphics.DashPathEffect(floatArrayOf(4f * dp, 5f * dp), 0f)
+        dashed.color = dottedColour ?: accent
+        goalP.strokeWidth = 1.5f * dp
+        goalP.pathEffect = android.graphics.DashPathEffect(floatArrayOf(5f * dp, 5f * dp), 0f)
 
-        // y axis: 0 and the max hour tick
-        text.textSize = 9 * dp; text.color = 0xFF9AA0A6.toInt(); text.textAlign = Paint.Align.RIGHT
-        canvas.drawText("0h", padL - 4 * dp, yBase, text)
-        val topTick = Math.round(maxVal / 1.15f)
-        canvas.drawText("${topTick}h", padL - 4 * dp, y(topTick.toFloat()) + 3 * dp, text)
-        paint.color = 0x22000000; paint.strokeWidth = 1 * dp
-        canvas.drawLine(x0, yBase, x1, yBase, paint)
+        // y axis: labelled gridlines all the way up. gridStep pins the spacing (with
+        // optional unlabelled minors between); otherwise a round step is auto-picked -
+        // so an hours chart counts up in real hours whatever data is passed in.
+        canvas.drawLine(xL, yB, xR, yB, axis)
+        text.textSize = 10f * dp; text.color = 0xFF9AA0A6.toInt(); text.textAlign = Paint.Align.RIGHT
+        canvas.drawText("0", xL - 4f * dp, yB + 3.5f * dp, text)
+        val stepMain = gridStep ?: niceStep(mx)
+        val stepDraw = minorStep ?: stepMain
+        var v = stepDraw
+        while (v <= mx) {
+            canvas.drawLine(xL, py(v), xR, py(v), axis)
+            val labelled = Math.abs(v / stepMain - Math.round(v / stepMain)) < 0.01f
+            if (labelled) canvas.drawText(fmtVal(v), xL - 4f * dp, py(v) + 3.5f * dp, text)
+            v += stepDraw
+        }
 
-        val n = values.size
-        val slot = (x1 - x0) / n
-        val barW = slot * 0.66f
-        for (i in 0 until n) {
-            val cx = x0 + slot * i + slot / 2
-            val v = values[i]
-            if (v.isNaN()) {
-                paint.color = 0x14000000
-                canvas.drawRoundRect(cx - barW / 2, yBase - 3 * dp, cx + barW / 2, yBase, 2 * dp, 2 * dp, paint)
+        // goal: horizontal line, or a rising slope on cumulative charts - always
+        // labelled "goal" so nobody wonders what the green line is.
+        text.textSize = 9f * dp
+        if (goalPerSlot != null) {
+            canvas.drawLine(px(0), py(0f), px(n - 1), py(goalPerSlot * n), goalP)
+            text.textAlign = Paint.Align.RIGHT; text.color = 0xFF2E7D32.toInt()
+            canvas.drawText("goal", xR, py(goalPerSlot * n) - 3f * dp, text)
+        } else if (goal != null) {
+            canvas.drawLine(xL, py(goal), xR, py(goal), goalP)
+            text.textAlign = Paint.Align.RIGHT; text.color = 0xFF2E7D32.toInt()
+            canvas.drawText("goal ${fmtVal(goal)}", xR, py(goal) - 3f * dp, text)
+        }
+
+        // the real line (skipping NaN gaps), filled underneath
+        val path = Path(); val fill = Path()
+        var started = false; var lastX = 0f
+        for (i in values.indices) {
+            val vv = values[i]; if (vv.isNaN()) continue
+            val xx = px(i); val yy = py(vv)
+            if (!started) { path.moveTo(xx, yy); fill.moveTo(xx, yB); fill.lineTo(xx, yy); started = true }
+            else { path.lineTo(xx, yy); fill.lineTo(xx, yy) }
+            lastX = xx
+        }
+        if (started) {
+            fill.lineTo(lastX, yB); fill.close()
+            fillP.shader = android.graphics.LinearGradient(
+                0f, yT, 0f, yB, (accent and 0x00FFFFFF) or (40 shl 24), (accent and 0x00FFFFFF) or (5 shl 24),
+                Shader.TileMode.CLAMP)
+            canvas.drawPath(fill, fillP)
+            if (segmentColours == null) {
+                canvas.drawPath(path, line)
             } else {
-                paint.color = when {
-                    goal == null -> 0xFF2E9E8F.toInt()
-                    v <= goal -> 0xFF2E9E44.toInt()
-                    v <= goal * 1.5f -> 0xFFE0A800.toInt()
-                    else -> 0xFFC0392B.toInt()
+                // Per-segment colouring: each stretch takes the colour of the point it
+                // arrives at, so the line changes colour as the level changes band.
+                var prev = -1
+                for (i in values.indices) {
+                    if (values[i].isNaN()) continue
+                    if (prev >= 0) {
+                        line.color = segmentColours.getOrElse(i) { accent }
+                        canvas.drawLine(px(prev), py(values[prev]), px(i), py(values[i]), line)
+                    }
+                    prev = i
                 }
-                canvas.drawRoundRect(cx - barW / 2, y(v), cx + barW / 2, yBase, 2 * dp, 2 * dp, paint)
+                line.color = accent
             }
-            val label = labels.getOrNull(i).orEmpty()
-            if (label.isNotEmpty()) {
-                text.textAlign = Paint.Align.CENTER; text.color = 0xFF9AA0A6.toInt()
-                canvas.drawText(label, cx, height - 4 * dp, text)
+            // dots only when they won't turn the line into a caterpillar
+            if (values.size <= 40) {
+                for (i in values.indices) if (!values[i].isNaN()) {
+                    dot.color = segmentColours?.getOrElse(i) { accent } ?: accent
+                    canvas.drawCircle(px(i), py(values[i]), 3f * dp, dot)
+                }
+            }
+            val li = values.indexOfLast { !it.isNaN() }
+            if (li >= 0) {
+                dot.color = segmentColours?.getOrElse(li) { accent } ?: accent
+                canvas.drawCircle(px(li), py(values[li]), 5f * dp, dot)
+            }
+            dot.color = accent
+        }
+
+        // the dotted projection, continuing from the last real point
+        if (dotted.isNotEmpty() && started) {
+            val li = values.indexOfLast { !it.isNaN() }
+            val proj = Path()
+            proj.moveTo(px(li), py(values[li]))
+            for (j in dotted.indices) proj.lineTo(px(values.size + j), py(dotted[j]))
+            canvas.drawPath(proj, dashed)
+        }
+
+        // scrub selection: vertical guide + ring on the selected point
+        if (selIndex in 0 until n) {
+            val sv = if (selIndex < values.size) values[selIndex] else dotted[selIndex - values.size]
+            if (!sv.isNaN()) {
+                guide.strokeWidth = 1.5f * dp
+                canvas.drawLine(px(selIndex), yT, px(selIndex), yB, guide)
+                dot.color = when {
+                    selIndex >= values.size -> dottedColour ?: accent
+                    segmentColours != null -> segmentColours.getOrElse(selIndex) { accent }
+                    else -> accent
+                }
+                ring.strokeWidth = 2.5f * dp
+                canvas.drawCircle(px(selIndex), py(sv), 6.5f * dp, dot)
+                canvas.drawCircle(px(selIndex), py(sv), 6.5f * dp, ring)
+                dot.color = accent
             }
         }
 
-        goal?.let { g ->
-            paint.color = 0xFF1F2933.toInt(); paint.strokeWidth = 1.5f * dp
-            var x = x0
-            while (x < x1) { canvas.drawLine(x, y(g), minOf(x + 5 * dp, x1), y(g), paint); x += 9 * dp }
-            text.textAlign = Paint.Align.LEFT; text.color = 0xFF1F2933.toInt()
-            canvas.drawText("goal", x0 + 2 * dp, y(g) - 3 * dp, text)
+        // x labels (weekdays / months) - sparse, under the axis
+        text.textSize = 10f * dp; text.textAlign = Paint.Align.CENTER; text.color = 0xFF9AA0A6.toInt()
+        for (i in 0 until minOf(n, labels.size)) {
+            val l = labels[i]
+            if (l.isNotEmpty()) canvas.drawText(l, px(i), height - 4f * dp, text)
         }
     }
 }

@@ -112,6 +112,7 @@ import android.graphics.Path
 class PageMonitorAccessibilityService : AccessibilityService() {
 
     private var overlay: OverlayController? = null
+    private val keyguard by lazy { getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
 
     private var breathing: BreathingOverlay? = null
     private var lastForegroundPkgForBreathing: String? = null
@@ -739,6 +740,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /** Reason an app should currently be covered: a blocked browser, or a timed content block. */
     private fun appBlockReason(pkg: String?): String? {
+        // NEVER cover the lock screen. With the keyguard up, currentForegroundPackage()
+        // can still return the app underneath it (systemui is filtered as noise), and the
+        // sensor-driven guards (night/room) would then draw the cover over the keyguard -
+        // which is exactly where they fire, because you're lying in bed. The keyguard IS
+        // a block; ours can wait until the phone is actually unlocked. This also makes
+        // the recheck loop drop an existing cover the moment the screen locks.
+        if (keyguard.isKeyguardLocked) return null
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
         nightGuardReason(pkg)?.let { return it }
         roomGuardReason(pkg)?.let { return it }

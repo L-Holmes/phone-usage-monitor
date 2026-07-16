@@ -28,7 +28,7 @@ import kotlin.math.sqrt
 //  Each room gets a beacon that shouts its identity over BLE; the phone only listens
 //  and measures loudness (RSSI, dBm, closer to 0 = nearer). No pairing, no KKM app.
 //
-//  Rooms are user-defined (2-8, one beacon each). CALIBRATION (the wizard) records
+//  Rooms are user-defined (1-8; each with one sensor, optionally two). CALIBRATION (the wizard) records
 //  the FULL SET of every assigned beacon's level at each place: static spots, the
 //  "temptation spots" where the phone actually gets used (flagged core=true - only
 //  these can produce a 'true'), a 15 s walk around the room, and user-tagged "false
@@ -54,18 +54,17 @@ import kotlin.math.sqrt
 // =====================================================================================
 object RoomBeacons {
 
-    /** Default rooms; the real list is user-editable (2-8 rooms, one beacon each). */
-    private val DEFAULT_ROOMS = listOf("bedroom", "bathroom")
     const val MAX_ROOMS = 8
+    const val MAX_SENSORS = 4   // per room
 
-    /** The rooms being tracked. Order = display order. */
+    /** The rooms being tracked, oldest first. Starts EMPTY - the user names their
+     *  first room during set-up (1-8 rooms, each with 1-4 sensors). */
     fun rooms(context: Context): List<String> {
-        val raw = prefs(context).getString("rooms", null) ?: return DEFAULT_ROOMS
+        val raw = prefs(context).getString("rooms", null) ?: return emptyList()
         return try {
             val arr = JSONArray(raw)
-            val list = (0 until arr.length()).map { arr.getString(it) }
-            if (list.isEmpty()) DEFAULT_ROOMS else list
-        } catch (t: Throwable) { DEFAULT_ROOMS }
+            (0 until arr.length()).map { arr.getString(it) }
+        } catch (t: Throwable) { emptyList() }
     }
 
     fun addRoom(context: Context, name: String): Boolean {
@@ -140,57 +139,79 @@ object RoomBeacons {
     private const val PREFS = "room_beacons"
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun beaconMac(context: Context, room: String): String? =
-        prefs(context).getString("$room.mac", null)
+    // Slot keys: 0 = "$room.mac" (kept for data compatibility), 1.. = "$room.mac2"…
+    private fun slotKey(room: String, slot: Int) = if (slot == 0) "$room.mac" else "$room.mac${slot + 1}"
 
+    /** How many sensors the user wants in this room (1-MAX_SENSORS). */
+    fun sensorCount(context: Context, room: String): Int =
+        prefs(context).getInt("$room.sensors", 1).coerceIn(1, MAX_SENSORS)
+
+    /** Change the wanted count. Shrinking drops the removed slots' sensors (and, since
+     *  the tuple shape changes, the calibration when any were actually assigned). */
+    fun setSensorCount(context: Context, room: String, n: Int) {
+        val count = n.coerceIn(1, MAX_SENSORS)
+        val e = prefs(context).edit().putInt("$room.sensors", count)
+        var dropped = false
+        for (slot in count until MAX_SENSORS) {
+            if (prefs(context).getString(slotKey(room, slot), null) != null) dropped = true
+            e.remove(slotKey(room, slot))
+        }
+        if (dropped) e.remove("$room.samples")
+        e.apply()
+    }
+
+    fun beaconMacAt(context: Context, room: String, slot: Int): String? =
+        prefs(context).getString(slotKey(room, slot), null)
+
+    fun setBeaconMacAt(context: Context, room: String, slot: Int, mac: String?) {
+        val old = beaconMacAt(context, room, slot)
+        val e = prefs(context).edit()
+        if (mac == null) e.remove(slotKey(room, slot)) else e.putString(slotKey(room, slot), mac)
+        if (mac != old) e.remove("$room.samples")   // the tuple changed: recalibrate
+        e.apply()
+    }
+
+    /** "A".."D" for a slot - how sensors are named everywhere in the UI. */
+    fun sensorLetter(slot: Int): String = ('A' + slot).toString()
+
+    fun beaconMac(context: Context, room: String): String? = beaconMacAt(context, room, 0)
+
+    /** Clearing the primary (mac == null) resets the whole room: all slots + samples. */
     fun setBeaconMac(context: Context, room: String, mac: String?) {
-        val old = beaconMac(context, room)
-        val e = prefs(context).edit()
-        if (mac == null) e.remove("$room.mac").remove("$room.mac2").remove("$room.samples")
-        else {
-            e.putString("$room.mac", mac)
-            if (mac != old) e.remove("$room.samples")
-        }
-        e.remove("$room.farA").remove("$room.farB")   // legacy keys from the first cut
-        e.apply()
+        if (mac == null) {
+            val e = prefs(context).edit()
+            for (slot in 0 until MAX_SENSORS) e.remove(slotKey(room, slot))
+            e.remove("$room.samples").remove("$room.farA").remove("$room.farB").apply()
+        } else setBeaconMacAt(context, room, 0, mac)
     }
 
-    // ── Dual-sensor mode: two beacons per room, at opposite ends, for tighter
-    //    readings. The second beacon is just one more entry in the tuple everywhere.
-    fun dualMode(context: Context): Boolean = prefs(context).getBoolean("dual", false)
-    fun setDualMode(context: Context, on: Boolean) =
-        prefs(context).edit().putBoolean("dual", on).apply()
+    // ── Onboarding: has the user told us they own beacons? Gates the home page's
+    //    "Connected sensors" console (before this, it shows the set-up pitch instead).
+    fun ownsSensors(context: Context): Boolean = prefs(context).getBoolean("owns_sensors", false)
+    fun setOwnsSensors(context: Context, v: Boolean) =
+        prefs(context).edit().putBoolean("owns_sensors", v).apply()
 
-    fun beaconMac2(context: Context, room: String): String? =
-        prefs(context).getString("$room.mac2", null)
+    fun beaconMac2(context: Context, room: String): String? = beaconMacAt(context, room, 1)
 
-    fun setBeaconMac2(context: Context, room: String, mac: String?) {
-        val old = beaconMac2(context, room)
-        val e = prefs(context).edit()
-        if (mac == null) e.remove("$room.mac2")
-        else {
-            e.putString("$room.mac2", mac)
-            if (mac != old) e.remove("$room.samples")
-        }
-        e.apply()
-    }
-
-    /** All assigned beacons (both slots of every room), own room's first, with the
-     *  room each belongs to. */
-    fun assignedBeacons(context: Context, firstRoom: String): List<Pair<String, String>> =
+    /** One entry per assigned sensor: (room, slot, mac), own room's slots first. */
+    fun assignedSensors(context: Context, firstRoom: String): List<Triple<String, Int, String>> =
         (listOf(firstRoom) + rooms(context).filter { it != firstRoom })
             .flatMap { r ->
-                listOfNotNull(
-                    beaconMac(context, r)?.let { r to it },
-                    beaconMac2(context, r)?.let { r to it },
-                )
+                (0 until sensorCount(context, r)).mapNotNull { slot ->
+                    beaconMacAt(context, r, slot)?.let { Triple(r, slot, it) }
+                }
             }
 
-    /** Every assigned beacon MAC in the house, both slots of every room. */
+    /** Every assigned beacon MAC in the house, every slot of every room. */
     fun allAssignedMacs(context: Context): List<String> =
         rooms(context).flatMap { r ->
-            listOfNotNull(beaconMac(context, r), beaconMac2(context, r))
+            (0 until sensorCount(context, r)).mapNotNull { slot -> beaconMacAt(context, r, slot) }
         }.distinct()
+
+    // ── Debug: enforce the room guard in ANY mode (normally strict-only). ──
+    fun debugGuard(context: Context): Boolean = prefs(context).getBoolean("debug_guard", false)
+    fun setDebugGuard(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean("debug_guard", on).apply()
 
     // Samples are re-read every UI tick, so cache the parse keyed on the raw string.
     private val sampleCache = HashMap<String, Pair<String, List<Sample>>>()
@@ -284,7 +305,15 @@ object RoomBeacons {
 object RoomPresence {
 
     /** true / maybe (probs is) / maybe (probs not) / false. */
-    enum class Verdict { IN, MAYBE_IN, MAYBE_OUT, OUT }
+    // MAYBE_IN_TRUE is the upper 40% of the maybe-probs-am band (the part nearest
+    // true): the band's range and every calculation stay EXACTLY as they were - this
+    // is only a label carved out of MAYBE_IN, and it's the slice shown (and enforced)
+    // as true. Plain MAYBE_IN stays amber and does NOT block.
+    enum class Verdict { IN, MAYBE_IN_TRUE, MAYBE_IN, MAYBE_OUT, OUT }
+
+    /** The fraction of the maybe-probs-am band (measured from the true end) that is
+     *  treated as true. Band = effAny in 0..NEAR_DIST; upper 40% = ≤ NEAR_DIST × 0.4. */
+    const val NEAR_TRUE_FRACTION = 0.4
 
     /** A verdict change must hold this long before it's believed (applied silently). */
     const val FLIP_MS = 1_500L
@@ -386,19 +415,17 @@ object RoomPresence {
             // Meters are DISPLAY plus one hard rule each: a beacon heard at a level
             // outside its amber band was never heard like that from inside → false.
             // Own-room beacons (both, in dual mode) are open-topped.
-            val ownMacs = setOfNotNull(mac, RoomBeacons.beaconMac2(context, room))
-            val meters = RoomBeacons.assignedBeacons(context, room).map { (beaconRoom, m) ->
+            val meters = RoomBeacons.assignedSensors(context, room).map { (beaconRoom, slot, m) ->
                 val zone = RoomBeacons.zone(context, room, m)
                 val cur = scanner.kalmanRssi(m)
-                val openTop = m in ownMacs
+                val openTop = beaconRoom == room
                 val state = when {
                     zone == null -> 0
                     cur == null && !openTop -> 0
                     else -> zone.state(cur ?: RoomBeacons.SILENT_DBM, openTop)
                 }
-                val second = m == RoomBeacons.beaconMac2(context, beaconRoom)
                 MeterData(
-                    "${beaconRoom.replaceFirstChar { it.uppercase() }} beacon${if (second) " B" else ""}",
+                    "${beaconRoom.replaceFirstChar { it.uppercase() }} ${RoomBeacons.sensorLetter(slot)}",
                     m, cur, zone, state, openTop,
                 )
             }
@@ -460,11 +487,14 @@ object RoomPresence {
                 effAny == null -> Verdict.OUT
                 dOut != null && dOut + OUT_MARGIN <= effAny -> Verdict.OUT
                 effCore != null && effCore <= TRUE_DIST -> Verdict.IN
+                effAny <= NEAR_DIST * NEAR_TRUE_FRACTION -> Verdict.MAYBE_IN_TRUE
                 effAny <= NEAR_DIST -> Verdict.MAYBE_IN
                 effAny <= FAR_DIST -> Verdict.MAYBE_OUT
                 else -> Verdict.OUT
             }
-            if (candidate == Verdict.IN && !floorOk) candidate = Verdict.MAYBE_IN
+            if (!floorOk && (candidate == Verdict.IN || candidate == Verdict.MAYBE_IN_TRUE)) {
+                candidate = Verdict.MAYBE_IN
+            }
 
             // Debounce (silent): the change must persist before it's believed.
             val verdict: Verdict
@@ -480,7 +510,9 @@ object RoomPresence {
 
         // Exclusivity: if several rooms are IN, the best (nearest) inside match keeps
         // IN and the rest drop to "maybe (probs is)".
-        val claiming = statuses.values.filter { it.verdict == Verdict.IN }
+        val claiming = statuses.values.filter {
+            it.verdict == Verdict.IN || it.verdict == Verdict.MAYBE_IN_TRUE
+        }
         if (claiming.size > 1) {
             val winner = claiming.minByOrNull { dInByRoom[it.room] ?: Double.MAX_VALUE }!!
             for (s in claiming) {
@@ -537,7 +569,11 @@ object RoomGuard {
     private const val EVAL_MS = 2_000L     // presence evaluation cadence while armed
     private const val GATE_MS = 15_000L    // cadence of the should-this-run-at-all check
 
-    /** The protected room the phone is in right now, or null. Read by the service. */
+    /** The room the phone is in right now (presence - runs whenever a calibrated room
+     *  + permissions exist, in ANY mode). Stamped onto block events. */
+    @Volatile var presenceRoom: String? = null; private set
+
+    /** The room currently being ENFORCED (strict/debug modes only), or null. */
     @Volatile var activeRoom: String? = null; private set
 
     /** True while the gate is open and the scanner is listening (for debug UIs). */
@@ -567,24 +603,27 @@ object RoomGuard {
         handler?.removeCallbacksAndMessages(null); handler = null
         scanner?.stop(); scanner = null
         pressure?.stop(); pressure = null
-        activeRoom = null; armed = false; gateOpen = false; lastGateCheck = 0L
+        presenceRoom = null; activeRoom = null; armed = false; gateOpen = false; lastGateCheck = 0L
     }
 
+    // Strict (or stricter) normally; the sensors page's debug toggle forces it on.
     private fun strictOrStricter(context: Context): Boolean =
-        Mode.current(context) != Mode.RELAXED
+        Mode.current(context) != Mode.RELAXED || RoomBeacons.debugGuard(context)
 
     private fun tick(app: Context, onChange: (() -> Unit)?) {
         val now = System.currentTimeMillis()
+        // Presence runs in EVERY mode (block events want the room stamped on them);
+        // only the BLOCKING below is gated on strict/debug.
         if (now - lastGateCheck >= GATE_MS || !gateOpen) {
             lastGateCheck = now
-            gateOpen = strictOrStricter(app) &&
-                RoomBeacons.hasPermissions(app) &&
+            gateOpen = RoomBeacons.hasPermissions(app) &&
                 RoomBeacons.rooms(app).any { RoomBeacons.isCalibrated(app, it) }
         }
         if (!gateOpen) {
             scanner?.stop(); scanner = null
             pressure?.stop(); pressure = null
             armed = false
+            presenceRoom = null
             setRoom(null, onChange)
             return
         }
@@ -597,15 +636,21 @@ object RoomGuard {
         armed = sc.isScanning
 
         val statuses = RoomPresence.evaluate(app, sc, pr, key = "guard")
-        val inRoom = statuses.values.firstOrNull { it.verdict == RoomPresence.Verdict.IN }?.room
-        val held = activeRoom
+        // Engage on true (IN, or the treated-as-true top slice of maybe); once engaged,
+        // hold through plain maybe-probs-am so shifting in bed can't flap the cover.
+        val inRoom = statuses.values.firstOrNull {
+            it.verdict == RoomPresence.Verdict.IN || it.verdict == RoomPresence.Verdict.MAYBE_IN_TRUE
+        }?.room
+        val held = presenceRoom
+        val heldVerdict = held?.let { statuses[it]?.verdict }
         val next = when {
             inRoom != null -> inRoom
-            // Latched: stay engaged through "probs is"; release below that.
-            held != null && statuses[held]?.verdict == RoomPresence.Verdict.MAYBE_IN -> held
+            heldVerdict == RoomPresence.Verdict.MAYBE_IN ||
+                heldVerdict == RoomPresence.Verdict.MAYBE_IN_TRUE -> held
             else -> null
         }
-        setRoom(next, onChange)
+        presenceRoom = next
+        setRoom(if (strictOrStricter(app)) next else null, onChange)
     }
 
     private fun setRoom(room: String?, onChange: (() -> Unit)?) {
