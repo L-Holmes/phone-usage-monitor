@@ -5276,6 +5276,10 @@ private fun startWeekStrict() {
     override fun onResume() {
         super.onResume()
         AppBlocklist.refresh(this)
+        // onStop stops the beacon page's scanner; returning to the app must restart it
+        // IMMEDIATELY (start() skips ensureScanning's restart cool-down), or the page
+        // shows "not heard" for up to ~12s and looks like the sensors dropped.
+        beaconScanner?.start(); pressureMon?.start()
         updateScreen()   // re-checks prerequisites every time the app is foregrounded
     }
 
@@ -6251,6 +6255,7 @@ private fun startWeekStrict() {
             // Persist everything so far - the live indicator below runs on the full set.
             RoomBeacons.setSamples(this, room, collected)
             RoomPresence.reset()
+            fun tagPage() {
             val indicator = TextView(this).apply { gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt()) }
             var tagging = false
             val tagBtn = bigChoice("TAG FALSE READING HERE", 0xFFB00020.toInt()) {}
@@ -6311,6 +6316,17 @@ private fun startWeekStrict() {
                     }
                 }
             }
+            }
+
+            // Gate: they must actually LEAVE the room before tagging starts, or the
+            // first "false reading" they'd tag is the inside of their own room.
+            show("Set up · $roomName · step outside", "First - step OUT of the $roomName",
+                bigBody(
+                    "Leave the $roomName now, and set the door the way it usually sits.\n\n" +
+                        "Once you're outside, confirm below - then walk around the REST of the " +
+                        "house and fix any incorrect readings.",
+                ),
+                bigChoice("I've stepped outside the room", 0xFF2E9E8F.toInt()) { tagPage() })
         }
 
         // ── Phase: 15 s walk around the room (outliers get trimmed later) ─────────

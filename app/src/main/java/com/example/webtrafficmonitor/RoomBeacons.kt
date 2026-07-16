@@ -37,9 +37,10 @@ import kotlin.math.sqrt
 //  DECISION (RoomPresence) is PAIRWISE: the current tuple of all beacons' levels is
 //  matched against the recorded spots, where distance = the WORST single-beacon
 //  difference - a spot only matches when EVERY beacon agrees. Four answers:
-//    true              - the tuple matches a core (usage) spot within TRUE_DIST.
-//    maybe (probs is)  - it matches somewhere inside the room within NEAR_DIST.
-//    maybe (probs not) - only vaguely close to anything inside (≤ FAR_DIST).
+//    true              - the tuple matches a core (usage) spot within the true distance.
+//    maybe (probs is)  - it matches somewhere inside the room within the near distance.
+//    maybe (probs not) - only vaguely close to anything inside. All distances are
+//                        σ-scaled from the room's own recorded spread (signalSigma).
 //    false             - own beacon silent/out of its amber band, the tuple matches
 //                        a tagged false spot better than any inside spot, or it
 //                        matches nothing recorded inside at all.
@@ -95,19 +96,45 @@ object RoomBeacons {
     /** Treated as the reading when a beacon isn't heard at all. */
     const val SILENT_DBM = -100
 
-    // Band slacks are aligned with RoomPresence's distance thresholds so the meters
-    // agree with the verdict (a 'true' can only fire while the needles show super).
-    /** Zone construction: SUPER green = core (temptation) readings, trimmed, ± this. */
-    const val SUPER_SLACK_DB = 4
+    // ── The room's signal scale σ ─────────────────────────────────────────────────
+    // No fixed dB anywhere: zone paddings and the decision thresholds are all measured
+    // in units of σ - the spread of THIS room's own recorded readings (sensor powers
+    // vary massively between units and rooms, so a fixed dB is wrong somewhere).
+    // σ = robust MAD estimate of how far in-room readings sit from their per-sensor
+    // medians. The clamp is deliberately tight: at its midpoint every derived value
+    // reproduces the long-tested fixed numbers (e.g. amber ±6 dB at σ 3.5), so a weird
+    // calibration can nudge the bands, never wreck them.
+    const val SIGMA_DEFAULT = 3.5
+    const val SIGMA_MIN = 3.0
+    const val SIGMA_MAX = 4.2
 
-    /** Zone construction: green = all in-room readings (outliers trimmed) ± this. */
-    const val GREEN_SLACK_DB = 3
+    fun signalSigma(context: Context, room: String): Double {
+        val inside = samples(context, room).filter { it.inRoom }
+        val perMac = HashMap<String, MutableList<Int>>()
+        for (s in inside) for ((mac, v) in s.readings) perMac.getOrPut(mac) { mutableListOf() }.add(v)
+        val devs = mutableListOf<Double>()
+        for (vals in perMac.values) {
+            if (vals.size < 4) continue
+            val med = vals.sorted()[vals.size / 2].toDouble()
+            for (v in vals) devs.add(Math.abs(v - med))
+        }
+        if (devs.size < 8) return SIGMA_DEFAULT
+        devs.sort()
+        return (1.4826 * devs[devs.size / 2]).coerceIn(SIGMA_MIN, SIGMA_MAX)
+    }
 
-    /** Zone construction: amber = all in-room readings including the tails ± this.
+    // Zone paddings in σ units (all ×σ at evaluation time; at σ 3.5 → 4 / 3 / 6 dB).
+    /** SUPER green = core (temptation) readings, trimmed, ± this many σ. */
+    const val SUPER_SLACK_SIGMAS = 4.0 / 3.5
+
+    /** Green = all in-room readings (outliers trimmed) ± this many σ. */
+    const val GREEN_SLACK_SIGMAS = 3.0 / 3.5
+
+    /** Amber = all in-room readings including the tails ± this many σ.
      *  Deliberately wide: the tail ends of the in-room range are where downstairs /
      *  next-door readings overlap, so they only ever count as "uncertain", never as
      *  proof of being in the room. */
-    const val AMBER_SLACK_DB = 6
+    const val AMBER_SLACK_SIGMAS = 6.0 / 3.5
 
     /** One calibration point. core=true marks the temptation/at-the-beacon readings
      *  that define the green ("definitely in") zone. Traces record one per second. */
@@ -270,12 +297,16 @@ object RoomBeacons {
         val trimmedAll = trimOutliers(all)
         val coreVals = inside.filter { it.core }.mapNotNull { it.readings[mac] }.sorted()
         val core = trimOutliers(if (coreVals.isNotEmpty()) coreVals else trimmedAll)
-        val aLo = all.first() - AMBER_SLACK_DB
-        val aHi = all.last() + AMBER_SLACK_DB
-        val gLo = (trimmedAll.first() - GREEN_SLACK_DB).coerceAtLeast(aLo)
-        val gHi = (trimmedAll.last() + GREEN_SLACK_DB).coerceAtMost(aHi)
-        val sLo = (core.first() - SUPER_SLACK_DB).coerceAtLeast(gLo)
-        val sHi = (core.last() + SUPER_SLACK_DB).coerceAtMost(gHi)
+        val sigma = signalSigma(context, room)
+        val amberSlack = Math.round(AMBER_SLACK_SIGMAS * sigma).toInt()
+        val greenSlack = Math.round(GREEN_SLACK_SIGMAS * sigma).toInt()
+        val superSlack = Math.round(SUPER_SLACK_SIGMAS * sigma).toInt()
+        val aLo = all.first() - amberSlack
+        val aHi = all.last() + amberSlack
+        val gLo = (trimmedAll.first() - greenSlack).coerceAtLeast(aLo)
+        val gHi = (trimmedAll.last() + greenSlack).coerceAtMost(aHi)
+        val sLo = (core.first() - superSlack).coerceAtLeast(gLo)
+        val sHi = (core.last() + superSlack).coerceAtMost(gHi)
         return Zone(sLo, sHi, gLo, gHi, aLo, aHi)
     }
 
@@ -312,8 +343,10 @@ object RoomPresence {
     enum class Verdict { IN, MAYBE_IN_TRUE, MAYBE_IN, MAYBE_OUT, OUT }
 
     /** The fraction of the maybe-probs-am band (measured from the true end) that is
-     *  treated as true. Band = effAny in 0..NEAR_DIST; upper 40% = ≤ NEAR_DIST × 0.4. */
-    const val NEAR_TRUE_FRACTION = 0.4
+     *  treated as true. Purely relative - the band itself is σ-scaled from the room's
+     *  own recordings, so there is no fixed dB here. (0.4 read true slightly too far
+     *  out; 0.28 never fired; 0.3 is the middle ground.) */
+    const val NEAR_TRUE_FRACTION = 0.3
 
     /** A verdict change must hold this long before it's believed (applied silently). */
     const val FLIP_MS = 1_500L
@@ -328,10 +361,12 @@ object RoomPresence {
     // off) from "far end of the room" (both beacons match the far-end recording) -
     // independent per-beacon ranges cannot make that distinction. Works for any
     // number of beacons.
-    const val TRUE_DIST = 4.0    // this close to a CORE (usage-spot) recording → true
-    const val NEAR_DIST = 7.0    // this close to any inside recording → maybe (probs is)
-    const val FAR_DIST = 10.0    // this close → maybe (probs not); beyond → false
-    const val OUT_MARGIN = 3.0   // nearest-outside beats nearest-inside by this → false
+    // In σ units (× the room's signalSigma at evaluation; at σ 3.5 → 4 / 7 / 10 / 3 dB,
+    // the long-tested fixed values). Stronger/weaker sensors get proportionate bands.
+    const val TRUE_SIGMAS = 4.0 / 3.5     // ≤ this near a CORE (usage-spot) recording → true
+    const val NEAR_SIGMAS = 7.0 / 3.5     // ≤ this near any inside recording → maybe (probs is)
+    const val FAR_SIGMAS = 10.0 / 3.5     // ≤ this → maybe (probs not); beyond → false
+    const val OUT_MARGIN_SIGMAS = 3.0 / 3.5   // nearest-outside wins by this → false
 
     // The recent-average booster: alongside the instantaneous distances we keep a
     // ~10 s history of them. If the recent average is good AND consistent (small
@@ -438,6 +473,12 @@ object RoomPresence {
 
             // The pairwise core: how far is the current tuple from the nearest
             // recorded spot of each kind? (Worst per-beacon difference, in dB.)
+            // Thresholds scale with this room's measured signal spread - no fixed dB.
+            val sigma = RoomBeacons.signalSigma(context, room)
+            val trueDist = TRUE_SIGMAS * sigma
+            val nearDist = NEAR_SIGMAS * sigma
+            val farDist = FAR_SIGMAS * sigma
+            val outMargin = OUT_MARGIN_SIGMAS * sigma
             val samples = RoomBeacons.samples(context, room)
             val dInCore = samples.filter { it.inRoom && it.core }.minOfOrNull { distance(current, it) }
             val dInAny = samples.filter { it.inRoom }.minOfOrNull { distance(current, it) }
@@ -456,8 +497,8 @@ object RoomPresence {
             effAny?.let { dInByRoom[room] = it }
             val spotState = when {
                 effAny == null -> 0
-                dOut != null && dOut + OUT_MARGIN <= effAny -> -1
-                effAny <= NEAR_DIST && (dOut == null || effAny + OUT_MARGIN <= dOut) -> 1
+                dOut != null && dOut + outMargin <= effAny -> -1
+                effAny <= nearDist && (dOut == null || effAny + outMargin <= dOut) -> 1
                 else -> 0
             }
             checks += Check("Nearest known spot", spotState,
@@ -478,18 +519,28 @@ object RoomPresence {
                     })
             }
 
+            // "Very true": the phone is practically on top of one of this room's own
+            // sensors - louder than that sensor's calibrated core ceiling. You cannot
+            // be that loud from outside the room, so this is true even while the other
+            // sensors sit in their yellow (a red one still forces OUT above).
+            val veryClose = meters.any { m ->
+                val z = m.zone; val c = m.current
+                m.openTop && z != null && c != null && c >= z.superHi
+            }
+
             // The ladder, all pairwise (instant OR steady recent average, whichever is
             // better): match a usage spot → true; anywhere inside → probs is; vaguely
             // close → probs not; match a tagged/outside spot better, match nothing,
             // or ANY beacon heard outside its learned band → false.
             var candidate = when {
                 !heard || meters.any { it.state == -1 } -> Verdict.OUT
+                veryClose -> Verdict.IN
                 effAny == null -> Verdict.OUT
-                dOut != null && dOut + OUT_MARGIN <= effAny -> Verdict.OUT
-                effCore != null && effCore <= TRUE_DIST -> Verdict.IN
-                effAny <= NEAR_DIST * NEAR_TRUE_FRACTION -> Verdict.MAYBE_IN_TRUE
-                effAny <= NEAR_DIST -> Verdict.MAYBE_IN
-                effAny <= FAR_DIST -> Verdict.MAYBE_OUT
+                dOut != null && dOut + outMargin <= effAny -> Verdict.OUT
+                effCore != null && effCore <= trueDist -> Verdict.IN
+                effAny <= nearDist * NEAR_TRUE_FRACTION -> Verdict.MAYBE_IN_TRUE
+                effAny <= nearDist -> Verdict.MAYBE_IN
+                effAny <= farDist -> Verdict.MAYBE_OUT
                 else -> Verdict.OUT
             }
             if (!floorOk && (candidate == Verdict.IN || candidate == Verdict.MAYBE_IN_TRUE)) {
@@ -636,21 +687,15 @@ object RoomGuard {
         armed = sc.isScanning
 
         val statuses = RoomPresence.evaluate(app, sc, pr, key = "guard")
-        // Engage on true (IN, or the treated-as-true top slice of maybe); once engaged,
-        // hold through plain maybe-probs-am so shifting in bed can't flap the cover.
+        // Blocked ONLY while a room reads true (IN, or the treated-as-true slice).
+        // No latch through amber: step out of the room, the verdict drops out of the
+        // true slice, and the cover releases on the next pass. RoomPresence's own
+        // 1.5 s debounce is all the flap protection this needs.
         val inRoom = statuses.values.firstOrNull {
             it.verdict == RoomPresence.Verdict.IN || it.verdict == RoomPresence.Verdict.MAYBE_IN_TRUE
         }?.room
-        val held = presenceRoom
-        val heldVerdict = held?.let { statuses[it]?.verdict }
-        val next = when {
-            inRoom != null -> inRoom
-            heldVerdict == RoomPresence.Verdict.MAYBE_IN ||
-                heldVerdict == RoomPresence.Verdict.MAYBE_IN_TRUE -> held
-            else -> null
-        }
-        presenceRoom = next
-        setRoom(if (strictOrStricter(app)) next else null, onChange)
+        presenceRoom = inRoom
+        setRoom(if (strictOrStricter(app)) inRoom else null, onChange)
     }
 
     private fun setRoom(room: String?, onChange: (() -> Unit)?) {
