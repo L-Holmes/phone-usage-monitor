@@ -87,7 +87,12 @@ import android.graphics.Path
 // Mode  (relaxed vs strict; optional week-long strict lock)
 // =====================================================================================
 /**
- * Three modes:
+ * Four modes:
+ *   OFF           - monitoring is off entirely: no scanning, no blocking, no covers.
+ *                   THE DEFAULT on a fresh install. This is the only mode where the two
+ *                   core permissions (page monitoring + block overlay) are optional -
+ *                   pick anything higher and MainActivity's setup gate makes them
+ *                   mandatory again (see currentStep()).
  *   RELAXED       - the calming "breathing" pause is suppressed for every app.
  *   STRICT        - the breathing pause shows on the FIRST open of a chosen app each day.
  *   SUPERHARDCORE - the breathing pause shows on EVERY open of a chosen app, plus the
@@ -107,6 +112,7 @@ object Mode {
     private const val KEY_LOCK_UNTIL = "strict_locked_until"
     private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
 
+    const val OFF = "off"
     const val RELAXED = "relaxed"
     const val STRICT = "strict"
     const val SUPERHARDCORE = "superhardcore"
@@ -115,7 +121,8 @@ object Mode {
     private fun rank(mode: String) = when (mode) {
         SUPERHARDCORE -> 2
         STRICT -> 1
-        else -> 0
+        RELAXED -> 0
+        else -> -1        // OFF (and anything unknown) sits below every real mode
     }
 
     private fun prefs(ctx: Context) =
@@ -127,11 +134,15 @@ object Mode {
      * superhardcore.
      */
     fun current(ctx: Context): String {
-        val stored = prefs(ctx).getString(KEY_MODE, RELAXED) ?: RELAXED
+        // OFF is the fresh-install default: monitoring starts disabled and the two core
+        // permissions stay optional until the user picks a real mode (or finishes the
+        // guided permission flow, which bumps this to RELAXED).
+        val stored = prefs(ctx).getString(KEY_MODE, OFF) ?: OFF
         if (isLocked(ctx) && rank(stored) < rank(STRICT)) return STRICT
         return stored
     }
 
+    fun isOff(ctx: Context) = current(ctx) == OFF
     fun isRelaxed(ctx: Context) = current(ctx) == RELAXED
     fun isStrict(ctx: Context) = current(ctx) == STRICT
     fun isSuperHardcore(ctx: Context) = current(ctx) == SUPERHARDCORE
@@ -140,6 +151,18 @@ object Mode {
     fun spec(ctx: Context): AppConfig.ModeSpec {
         val id = current(ctx)
         return AppConfig.MODES.firstOrNull { it.id == id } ?: AppConfig.MODES.first()
+    }
+
+    /**
+     * One-time migration for installs that predate OFF. They lived behind the mandatory
+     * permission gate, so "no stored choice + both permissions granted" means monitoring
+     * was already live - keep it live as RELAXED rather than silently switching it off.
+     * Called with permsGranted from MainActivity (both checks) and from the service
+     * (accessibility is on by definition there, so it checks the overlay only).
+     */
+    fun migrateIfUnset(ctx: Context, permsGranted: Boolean) {
+        if (permsGranted && !prefs(ctx).contains(KEY_MODE))
+            prefs(ctx).edit().putString(KEY_MODE, RELAXED).apply()
     }
 
     /** True while the week-long strict lock is still running. */

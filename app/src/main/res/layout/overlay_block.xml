@@ -6,7 +6,10 @@
 
   "Go back one page instead" is deliberately small. Back inside a browser is unpredictable -
   it can dump you on another blocked page, or somewhere you never asked for. The app itself
-  NEVER presses Back for you; it only happens if you tap that link.
+  NEVER presses Back for you; it only happens if you tap that link. It is also HIDDEN
+  entirely unless the block is a distracting web page in a browser (OverlayController.show's
+  showGoBack) - a blocked app or a sensor cover (lying down / dark / protected room) has no
+  page to go back to.
 
   block_status is EMPTY by default and stays that way. It is only ever filled in - and
   flashed - when the user actually taps Go back, so it can tell them whether Back moved them

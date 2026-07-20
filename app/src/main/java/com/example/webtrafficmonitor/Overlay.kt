@@ -105,9 +105,26 @@ class OverlayController(private val context: Context) {
 
     val isShowing: Boolean get() = view != null
 
-    fun show(reason: String, onGoBack: () -> Unit, onLeave: () -> Unit, onReport: () -> Unit) {
+    /**
+     * [showGoBack] - whether the quiet "Go back one page instead" link is offered at all.
+     * Only a distracting WEB PAGE in a browser gets it: pressing Back there plausibly
+     * lands somewhere fine. For everything else - a blocked app, the night guard's
+     * lying-down/dark covers, a protected room - there is no "previous page" to go back
+     * to, so the only way out is the big exit button.
+     */
+    fun show(
+        reason: String,
+        onGoBack: () -> Unit,
+        onLeave: () -> Unit,
+        onReport: () -> Unit,
+        showGoBack: Boolean = true,
+    ) {
         view?.let { existing ->
             existing.findViewById<TextView>(R.id.block_reason).text = reason
+            // The cover can be re-shown for a DIFFERENT kind of block (a page cover
+            // upgraded to an app cover, say) - keep the link's visibility current.
+            existing.findViewById<View>(R.id.btn_go_back).visibility =
+                if (showGoBack) View.VISIBLE else View.GONE
             return
         }
 
@@ -116,6 +133,7 @@ class OverlayController(private val context: Context) {
         // Typed as View, not Button: "go back" and "report" are quiet TextView links now,
         // and only "leave" is still an actual Button.
         val goBack = overlay.findViewById<View>(R.id.btn_go_back)
+        goBack.visibility = if (showGoBack) View.VISIBLE else View.GONE
         goBack.setOnClickListener {
             pressAnimation(it)
             onGoBack()

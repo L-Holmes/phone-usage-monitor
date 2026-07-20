@@ -132,6 +132,17 @@ object AppConfig {
         val summary: List<String> = emptyList(),     // plain-English rules shown to the user
     )
     val MODES: List<ModeSpec> = listOf(
+        ModeSpec(id = "off", displayName = "Off",
+            breathingOn = false, breathEveryOpen = false, greyscale = false,
+            nightGuard = false,
+            flagThreshold = 0, flagLyingDown = false, lightFlagBelow = LightLevel.DARK,
+            summary = listOf(
+                "Monitoring is OFF. Nothing is scanned and nothing is blocked - none of the \"Always on\" rules run in this mode.",
+                "This is the starting mode on a fresh install.",
+                "The two permissions the blocker needs (page monitoring and the block screen) are OPTIONAL while you are here - the app never demands them.",
+                "Pick ANY other mode and both permissions become required: the app walks you through turning them on, and won't leave this screen until they are.",
+                "The Productivity page and its screen-time stats keep working either way.",
+            )),
         ModeSpec(id = "relaxed", displayName = "Relaxed",
             breathingOn = false, breathEveryOpen = false, greyscale = false,
             nightGuard = false,
@@ -140,7 +151,7 @@ object AppConfig {
                 "Breathing pause: NEVER. Watched apps open straight away.",
                 "Greyscale: off. Your screen stays in colour.",
                 "Lying down or sitting in the dark changes nothing. Every app still opens.",
-                "This is the ONLY mode where the \"who is the filter for\" switches (Adult content -> Settings) can be changed. In any stricter mode they are forced fully on.",
+                "The \"who is the filter for\" switches (Adult content -> Settings) can be changed here (and in Off). In any stricter mode they are forced fully on.",
                 "Everything in \"Always on\" above still applies - blocking does not stop in Relaxed.",
                 "You can switch out of this mode whenever you like, unless the 7-day strict lock is running.",
             )),
@@ -208,7 +219,8 @@ object AppConfig {
      * change these lines in the same commit.
      */
     val ALWAYS_ON_RULES: List<String> = listOf(
-        "Known adult sites are blocked outright. Mode makes no difference.",
+        "One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.",
+        "Known adult sites are blocked outright. Beyond Off, mode makes no difference.",
         "Pages are scanned for sexual words. Enough of them and the page is blocked, in every mode - including Relaxed.",
         "Anything on your ban list is blocked - the sites, pages, search terms and keywords you have banned yourself from.",
         "Blocked browsers are covered the moment you open them. DuckDuckGo is deliberately left usable.",

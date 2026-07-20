@@ -295,6 +295,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // Pre-OFF installs never stored a mode choice; the service running at all means
+        // monitoring was live, so keep it live rather than defaulting them to Off.
+        // (Accessibility is on by definition here - only the overlay needs checking.)
+        Mode.migrateIfUnset(this, Settings.canDrawOverlays(this))
         overlay = OverlayController(this)
         breathing = BreathingOverlay(this)
         BlockRules.load(this)
@@ -615,6 +619,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             mainHandler.post(recheck)
         }
 
+        // Monitoring OFF (the lowest mode): no page reading, no scanning, no blocking, no
+        // page log - and any page cover still up comes down. The dopamine/usage counters
+        // above keep running (the Productivity stats are not adult-content monitoring),
+        // and the uninstall-guard bounce stays, because that belongs to the uninstall lock.
+        if (Mode.isOff(this)) {
+            if (!appBlockActive) overlay?.let { if (it.isShowing) it.hide() }
+            shownBlockHost = null
+            shownBlockUrl = null
+            return
+        }
+
         val now = System.currentTimeMillis()
 
         // Blocking now runs on a MUCH shorter leash than logging. The old single 700ms gate
@@ -732,6 +747,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 // unlock a blocked app.  Kept as a stub so the overlay button still
                 // appears, but the app stays covered.
             },
+            // An APP cover (blocked app, night guard, room guard, lockdown, timed block):
+            // there is no web page underneath, so "go back one page" would be nonsense.
+            // Exit is the only offer.
+            showGoBack = false,
         )
         mainHandler.removeCallbacks(recheck)
         mainHandler.postDelayed(recheck, RECHECK_MS)
@@ -747,6 +766,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // a block; ours can wait until the phone is actually unlocked. This also makes
         // the recheck loop drop an existing cover the moment the screen locks.
         if (keyguard.isKeyguardLocked) return null
+        if (Mode.isOff(this)) return null                     // monitoring off: nothing is covered
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
         nightGuardReason(pkg)?.let { return it }
         roomGuardReason(pkg)?.let { return it }
@@ -1169,6 +1189,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 onReport = {
                     // do nothing
                 },
+                // "Go back one page instead" only makes sense over a distracting WEB PAGE
+                // in a browser (host != null there, and only there). A non-web screen
+                // guard or an in-app keyword match has no page to go back to.
+                showGoBack = host != null,
             )
             // show() only sets the text on first display; keep the reason live.
             if (!freshShow) controller.setReason(reason)

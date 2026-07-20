@@ -1866,6 +1866,113 @@ private fun loadLaunchableApps(): List<AppRow> {
     }.distinctBy { it.pkg }.sortedBy { it.label.lowercase() }
 }
 
+/**
+ * The pre-defined WHITELIST (AppConfig.SAFE_APPS_BY_NAME) - the apps the user is
+ * never blocked on by default (Maps, WhatsApp, Camera, this app, …) - shown so the
+ * user can opt to block one anyway with a tap. A blocked app is struck through and
+ * tagged "Blocked" in place. Unblocking is only allowed in Relaxed mode - in any
+ * stricter mode a tap on a blocked app is refused, so a block made here is a
+ * commitment like every other block. Only apps actually installed are listed.
+ */
+private fun showBlockApps() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density
+    val pad = (16 * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(titleText("Whitelisted apps"))
+    root.addView(TextView(this).apply {
+        text = "These apps are never blocked by default. Tap one to block it anyway. " +
+            (if (Mode.isRelaxed(this@MainActivity)) "Tap a blocked app to unblock it."
+             else "Blocked apps can only be unblocked in Relaxed mode.")
+        textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val loading = TextView(this).apply { text = "Loading apps…"; textSize = 14f }
+    root.addView(loading)
+    val listLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(listLayout)
+    })
+    setContentWithThumb(root) { showReportScreen() }
+
+    lifecycleScope.launch(Dispatchers.IO) {
+        val apps = loadWhitelistedApps()
+        runOnUiThread {
+            loading.visibility = View.GONE
+            if (apps.isEmpty()) listLayout.addView(TextView(this@MainActivity).apply {
+                text = "None of the whitelisted apps are installed."; textSize = 14f
+            })
+            apps.forEach { a -> listLayout.addView(blockAppRow(a)) }
+        }
+    }
+}
+
+/** The pre-defined whitelist, limited to apps actually installed, with real icons. */
+private fun loadWhitelistedApps(): List<AppRow> {
+    val pm = packageManager
+    return AppConfig.SAFE_APPS_BY_NAME.mapNotNull { (name, pkg) ->
+        val info = try { pm.getApplicationInfo(pkg, 0) } catch (t: Throwable) { null }
+            ?: return@mapNotNull null              // not installed - don't list it
+        val icon = try { pm.getApplicationIcon(info) } catch (t: Throwable) { null }
+        AppRow(name, pkg, icon)
+    }.sortedBy { it.label.lowercase() }
+}
+
+private fun blockAppRow(a: AppRow): LinearLayout {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding((8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt())
+        isClickable = true; isFocusable = true
+    }
+    val icon = ImageView(this).apply {
+        layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (36 * dp).toInt())
+        if (a.icon != null) setImageDrawable(a.icon)
+    }
+    val name = TextView(this).apply {
+        text = a.label; textSize = 16f; setPadding((12 * dp).toInt(), 0, 0, 0)
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    val defaultColors = name.textColors    // restore this when un-blocking (theme-safe)
+    val status = TextView(this).apply {
+        text = "Blocked"; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(0xFFB00020.toInt())
+    }
+    row.addView(icon); row.addView(name); row.addView(status)
+
+    fun render() {
+        if (AppRules.appTier(this, a.pkg) == AppRules.BLOCK) {
+            name.paintFlags = name.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+            name.setTextColor(0xFF9AA0A6.toInt())
+            icon.alpha = 0.4f
+            status.visibility = View.VISIBLE
+        } else {
+            name.paintFlags = name.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
+            name.setTextColor(defaultColors)
+            icon.alpha = 1f
+            status.visibility = View.GONE
+        }
+    }
+    render()
+
+    row.setOnClickListener {
+        when {
+            AppRules.appTier(this, a.pkg) != AppRules.BLOCK ->
+                { AppRules.setApp(this, a.pkg, AppRules.BLOCK); render() }
+            Mode.isRelaxed(this) ->
+                { AppRules.remove(this, true, a.pkg); render() }
+            else ->
+                Toast.makeText(this, "You can only unblock apps in Relaxed mode.", Toast.LENGTH_SHORT).show()
+        }
+    }
+    return row
+}
+
 private fun saveSiteRule(input: EditText, tier: String) {
     if (tier == AppRules.BLOCK) {
         val rule = ruleFromInput(input.text.toString())
@@ -2060,9 +2167,14 @@ private fun setupHomeScreen() {
     inSubPage = false; inRelapseFlow = false; inTemptationFlow = false
     inLoosenFlow = false; inAppSiteFlow = false
     stopRideTimer(); stopLoosenTimer(); entriesJob?.cancel()
+    markTabSeen("overview")
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
     val teal = 0xFF2E9E8F.toInt()
+
+    // Quiet amber nudge: the permissions are optional in Off mode, but they're the point.
+    homeBuiltWithNudge = shouldNudgePermissions()
+    if (homeBuiltWithNudge) content.addView(permissionNudgeBanner())
 
     // ── 1. Productivity score: gauge + score + full rank name + the 14-day trend.
     //    The trend line wears the gauge's band colours (a bad stretch goes red), and
@@ -2591,6 +2703,7 @@ private fun showScrollCost() {
 // Everything that used to sit under the home graphic now lives here.
 private fun showProductivity() {
     inSubPage = true
+    markTabSeen("productivity")
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
@@ -2753,6 +2866,7 @@ private fun showProductivity() {
 
 private fun showTemptationsTab() {
     onTemptationsTab = true; onHomeScreen = false; onReportScreen = false; inSubPage = false; subBack = null
+    markTabSeen("temptations")
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val root = vbox(pad)
     root.addView(TextView(this).apply {
@@ -3786,8 +3900,8 @@ private fun showModeRules() {
     }
 
     sectionHeader("ALWAYS ON - IN EVERY MODE", 0xFF9AA0A6.toInt())
-    rulesCard("These never switch off", "Even in Relaxed.", AppConfig.ALWAYS_ON_RULES,
-        0xFF2E7D32.toInt(), highlight = false)
+    rulesCard("These never switch off", "Even in Relaxed. Off is the one exception - see its card below.",
+        AppConfig.ALWAYS_ON_RULES, 0xFF2E7D32.toInt(), highlight = false)
 
     sectionHeader("THE MODES - WHAT CHANGES", 0xFF9AA0A6.toInt())
     AppConfig.MODES.forEach { spec ->
@@ -5269,6 +5383,10 @@ private fun startWeekStrict() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Installs that predate the Off mode never stored a choice but were forced through
+        // the permission gate - both permissions granted means monitoring was live.
+        Mode.migrateIfUnset(this, isAccessibilityEnabled() && Settings.canDrawOverlays(this))
+        markFirstOpen()
         BlockRules.load(this)
         updateScreen()
     }
@@ -5296,6 +5414,9 @@ private fun startWeekStrict() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         when {
+            // Backing out of a VOLUNTARY permission screen is the same as "Not now" -
+            // otherwise the flow flag stays armed and the screen reappears on resume.
+            inPermissionFlow -> { inPermissionFlow = false; updateScreen() }
             inRelapseFlow -> relapseBack()
             inTemptationFlow -> temptationBack()
             inLoosenFlow -> loosenBack()
@@ -5311,16 +5432,132 @@ private fun startWeekStrict() {
 
     // ── Setup gate ────────────────────────────────────────────────────────────
     // Shows the prerequisites in order (monitoring -> overlay -> uninstall lock).
-    // The first two are required; until both are on you can't reach the main
-    // screen, and disabling either later sends you straight back here.
+    //
+    // The two permissions are only MANDATORY while the adult-content monitoring mode is
+    // above Off (the fresh-install default). In Off you land straight on the main screen;
+    // the app nudges instead: a one-time popup once you've seen all three tabs (or 30
+    // minutes in), then a quiet amber banner on Overview. Both routes set
+    // inPermissionFlow, which walks the same two prereq screens VOLUNTARILY (with a
+    // "Not now" escape). Completing them bumps the mode to Relaxed - and from that moment
+    // the permissions are mandatory again: drop either one and you're back at the gate.
 
     // The full-screen uninstall-lock prompt shows only during FIRST setup (persisted
     // below). The arousal page instead shows a dismissible centred popup EVERY time it
     // opens while unprotected (showUnprotectedPopup) - the home page nags nowhere.
-    private fun lockPromptSeen(): Boolean =
-        getSharedPreferences("setup", Context.MODE_PRIVATE).getBoolean("lock_prompt_seen", false)
+    private fun setupPrefs() = getSharedPreferences("setup", Context.MODE_PRIVATE)
+    private fun lockPromptSeen(): Boolean = setupPrefs().getBoolean("lock_prompt_seen", false)
     private fun markLockPromptSeen() =
-        getSharedPreferences("setup", Context.MODE_PRIVATE).edit().putBoolean("lock_prompt_seen", true).apply()
+        setupPrefs().edit().putBoolean("lock_prompt_seen", true).apply()
+
+    // ── Permission nudges (only while the mode is Off - see the gate comment below) ──
+    // A one-time centred popup fires 3 seconds after the third main tab has been seen;
+    // after that (or ~30 min after first open, whichever comes first) Overview carries a
+    // quiet amber banner instead. Both routes just set inPermissionFlow and let the
+    // ordinary prereq screens do the walking.
+    private val PERM_NUDGE_AFTER_MS = 30L * 60 * 1000
+    private var permPopupScheduled = false
+    // Whether the last setupHomeScreen() build included the banner - lets updateScreen()
+    // rebuild Overview exactly once when the nudge first becomes due mid-session.
+    private var homeBuiltWithNudge = false
+
+    private fun firstOpenAt(): Long = setupPrefs().getLong("first_open_at", 0L)
+    private fun markFirstOpen() {
+        if (firstOpenAt() == 0L)
+            setupPrefs().edit().putLong("first_open_at", System.currentTimeMillis()).apply()
+    }
+    private fun permPopupDone(): Boolean = setupPrefs().getBoolean("perm_popup_done", false)
+    private fun markPermPopupDone() =
+        setupPrefs().edit().putBoolean("perm_popup_done", true).apply()
+
+    private fun markTabSeen(tab: String) {
+        if (!setupPrefs().getBoolean("seen_$tab", false))
+            setupPrefs().edit().putBoolean("seen_$tab", true).apply()
+        maybeSchedulePermPopup()
+    }
+    private fun allTabsSeen(): Boolean =
+        listOf("overview", "productivity", "temptations")
+            .all { setupPrefs().getBoolean("seen_$it", false) }
+
+    /** 3 seconds after the last of the three tabs is first seen, offer the flow - once ever. */
+    private fun maybeSchedulePermPopup() {
+        if (permPopupScheduled || permPopupDone()) return
+        if (!Mode.isOff(this) || corePermsGranted() || !allTabsSeen()) return
+        permPopupScheduled = true
+        Handler(Looper.getMainLooper()).postDelayed({
+            permPopupScheduled = false
+            if (isFinishing || isDestroyed) return@postDelayed
+            if (permPopupDone() || !Mode.isOff(this) || corePermsGranted()) return@postDelayed
+            showEnablePermissionsPopup()
+        }, 3_000)
+    }
+
+    /** Should Overview carry the amber "set up the permissions" banner right now? */
+    private fun shouldNudgePermissions(): Boolean =
+        Mode.isOff(this) && !corePermsGranted() &&
+            (permPopupDone() || System.currentTimeMillis() - firstOpenAt() > PERM_NUDGE_AFTER_MS)
+
+    /** The subtle amber strip at the top of Overview. Tapping it starts the flow. */
+    private fun permissionNudgeBanner(): View {
+        val dp = resources.displayMetrics.density
+        return TextView(this).apply {
+            text = "⚠  Blocking is off - the app still needs two quick permissions. " +
+                "Tap to set them up."
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+            setLineSpacing(0f, 1.15f)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * dp; setColor(0xFFFFF8EC.toInt())
+                setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+            }
+            val p = (12 * dp).toInt(); setPadding(p, p, p, p)
+            isClickable = true; isFocusable = true
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = (10 * dp).toInt() }
+            setOnClickListener { inPermissionFlow = true; updateScreen() }
+        }
+    }
+
+    // The one-time "turn the blocking on?" offer, same look as showUnprotectedPopup.
+    private fun showEnablePermissionsPopup() {
+        markPermPopupDone()      // once, ever - the Overview banner takes over from here
+        val dp = resources.displayMetrics.density
+        val dialog = AlertDialog.Builder(this).create()
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 18 * dp; setColor(0xFFFFF8EC.toInt()); setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+            }
+            val p = (18 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, p)
+        }
+        card.addView(TextView(this).apply {
+            text = "✕"; textSize = 18f; setTextColor(0xFF8A6D3B.toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { gravity = Gravity.END }
+            val t = (8 * dp).toInt(); setPadding(t, t, t, t)
+            isClickable = true; isFocusable = true
+            setOnClickListener { dialog.dismiss() }
+        })
+        card.addView(TextView(this).apply {
+            text = "Ready to turn the blocking on?"; textSize = 17f
+            setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+        })
+        card.addView(TextView(this).apply {
+            text = "You've had a look around. To actually block anything, the app needs two " +
+                "permissions: page monitoring (so it can see what's on screen) and the " +
+                "block screen (so it can cover it). Under a minute, all on this phone."
+            textSize = 13f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
+        })
+        card.addView(bigChoice("Continue", 0xFF2E7D32.toInt()) {
+            dialog.dismiss()
+            inPermissionFlow = true
+            updateScreen()
+        })
+        dialog.setView(card)
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0x00000000))
+        dialog.show()
+    }
+
     private var onReportScreen = false
     private var inSubPage = false
     private var onHomeScreen = false
@@ -5335,20 +5572,50 @@ private fun startWeekStrict() {
     private var beaconUi: Handler? = null
     private var reportBackTarget: () -> Unit = { showTemptationsTab() }
 
-    private fun currentStep(): Step = when {
-        !isAccessibilityEnabled()       -> Step.MONITORING
-        !Settings.canDrawOverlays(this) -> Step.OVERLAY
-        !AppConfig.DEV_MODE && !lockPromptSeen() -> Step.LOCK
-        else                            -> Step.READY
+    /** True when the user is walking the permission screens by choice (mode still Off). */
+    private var inPermissionFlow = false
+
+    private fun corePermsGranted(): Boolean =
+        isAccessibilityEnabled() && Settings.canDrawOverlays(this)
+
+    private fun currentStep(): Step {
+        // Above Off the permissions are mandatory; in Off they're only shown while the
+        // user has voluntarily entered the flow (popup / banner / "Not now" backs out).
+        val needPerms = !Mode.isOff(this) || inPermissionFlow
+        return when {
+            needPerms && !isAccessibilityEnabled()       -> Step.MONITORING
+            needPerms && !Settings.canDrawOverlays(this) -> Step.OVERLAY
+            corePermsGranted() && !AppConfig.DEV_MODE && !lockPromptSeen() -> Step.LOCK
+            else                                         -> Step.READY
+        }
     }
 
     private fun updateScreen() {
+        // Finishing the voluntary flow turns monitoring on at its lowest level. From here
+        // the two permissions are mandatory (currentStep) until the mode is set back to Off.
+        if (inPermissionFlow && corePermsGranted()) {
+            inPermissionFlow = false
+            if (Mode.isOff(this)) {
+                Mode.setMode(this, Mode.RELAXED)
+                Toast.makeText(this, "Protection on - Relaxed mode", Toast.LENGTH_SHORT).show()
+            }
+        }
         val step = currentStep()
         if (step == Step.READY && shownStep == Step.READY) {
+            // The nudge banner can become DUE while Overview is already built (resumed
+            // from recents past the 30-min mark, say). Rebuild once so it appears.
+            if (onHomeScreen && !homeBuiltWithNudge && shouldNudgePermissions()) {
+                setupHomeScreen()
+                return
+            }
             renderStatus()   // already on the main screen - just refresh the dots
             return
         }
         shownStep = step
+        // "Not now" only exists while the flow is voluntary - above Off there's no way past.
+        val voluntary = Mode.isOff(this)
+        val notNow: (() -> Unit)? =
+            if (voluntary) { { inPermissionFlow = false; updateScreen() } } else null
         when (step) {
             Step.MONITORING -> showPrereq(
                 "Step 1 of 3\nTurn on page monitoring",
@@ -5360,6 +5627,8 @@ private fun startWeekStrict() {
                     "3.  Turn the toggle ON and accept.\n\nThen come back to this app.",
                 "Continue to Accessibility",
                 { openAccessibilitySettings() },
+                if (voluntary) "Not now" else null,
+                notNow,
             )
             Step.OVERLAY -> showPrereq(
                 "Step 2 of 3\nAllow the block screen",
@@ -5368,6 +5637,8 @@ private fun startWeekStrict() {
                     "turn its toggle ON.\n\nThen come back to this app.",
                 "Continue to \u201CAppear on top\u201D",
                 { requestOverlayPermission() },
+                if (voluntary) "Not now" else null,
+                notNow,
             )
             Step.LOCK -> showLockPrompt { markLockPromptSeen(); updateScreen() }
             Step.READY -> setupHomeScreen()
@@ -5493,6 +5764,7 @@ private fun startWeekStrict() {
         content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
         content.addView(homeCard("Manage block rules", "Add or remove blocked sites and apps.") { showManageRules() })
+        content.addView(homeCard("Whitelisted apps", "The always-allowed apps - block one with a tap.") { showBlockApps() })
         content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
         // The supervised loosen flow is no longer reachable from the adult-content page (see
         // BypassWatch). It lives here so it can still be tested without staging a fake
@@ -6688,7 +6960,16 @@ private fun startWeekStrict() {
                     return
                 }
                 if (Mode.setMode(this@MainActivity, chosen)) {
-                    Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
+                    if (chosen == Mode.OFF) {
+                        Toast.makeText(this@MainActivity,
+                            "Monitoring off - nothing is watched or blocked", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
+                        // Anything above Off makes the two core permissions MANDATORY:
+                        // if either is missing, this drops them straight onto the setup
+                        // gate, and the main screen stays out of reach until both are on.
+                        if (!corePermsGranted()) updateScreen()
+                    }
                 } else {
                     // Refused: they're locked into strict and just tried to get out of it.
                     // That's a bypass attempt - see BypassWatch. The honest-exit offer

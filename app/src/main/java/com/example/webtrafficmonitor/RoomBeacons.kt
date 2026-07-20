@@ -658,8 +658,9 @@ object RoomGuard {
     }
 
     // Strict (or stricter) normally; the sensors page's debug toggle forces it on.
+    // Named modes, not "!= RELAXED": Off sits BELOW relaxed and must never arm the guard.
     private fun strictOrStricter(context: Context): Boolean =
-        Mode.current(context) != Mode.RELAXED || RoomBeacons.debugGuard(context)
+        Mode.isStrict(context) || Mode.isSuperHardcore(context) || RoomBeacons.debugGuard(context)
 
     private fun tick(app: Context, onChange: (() -> Unit)?) {
         val now = System.currentTimeMillis()

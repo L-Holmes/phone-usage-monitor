@@ -307,7 +307,7 @@ object AttractionFilter {
     private const val KEY_MALE = "block_male"
 
     /** May the user change these right now? Only in Relaxed. */
-    fun canEdit(c: Context): Boolean = Mode.isRelaxed(c)
+    fun canEdit(c: Context): Boolean = Mode.isRelaxed(c) || Mode.isOff(c)
 
     fun blockFemale(c: Context): Boolean =
         if (!canEdit(c)) true else prefs(c).getBoolean(KEY_FEMALE, true)

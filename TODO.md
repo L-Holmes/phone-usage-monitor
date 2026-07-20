@@ -1,11 +1,97 @@
 
+- second page unclear
+- light and maybe angle blocking too harsh.
+- --> do we always allow say just a Google search not no websites
 
-------
+---------------------------------
+Fix issues:
+- populate the whitelist of apps
+- dont block my own plugin!
+    - gets blocked when trying to update the strictness... By my other app.. 
 
-- dont show the 'go back one page instead' if we're on a non-web browser app... 
-    - Or if we block by light level or angle, or sensor for which room they're in, only show the 'exit the app' button, no go back text...
+---------------------------------
 
---------------------------------------- 
+
+---------------
+Add my manual words / websites;
+- search engines:
+    - ecosia.org
+    - qwant.com
+    - search.brave.com
+    - startpage.com
+
+- reddit viewers:
+    - inini.wtf
+    - lite.redgifs.com
+    - peekstr.com
+    - photon-reddit.com
+    - redlite.app 
+    - scrolller.com
+    - veo.world
+
+
+- reddit:
+    - reddit.com
+
+- borderlines:
+    - etsy.com
+    - depop.com
+    - shein.com
+
+
+- keywords:
+    - reddit
+    - redd
+    - red dit
+    - re ddit
+    - reddi t
+    - redd it
+    - ai vide
+    - ai video
+    - ai image
+    - eddit 
+    - e ddit
+    - r eddit
+    - scrolller
+    - scroller
+    - ling eri
+    - lace
+    - try on hau
+    - haul
+    - try on haul
+    - t ry on haul
+    - try n haul
+    - sheer
+    - shee r
+    - browser
+    - brow ser
+    - lingerie
+    - lin gerie
+    - lin geri
+    - lingeri
+    - ikini
+    - sh eer
+    - bik ini
+    - bi kini
+
+--------
+public list of dodgy forums? like 4chan etc? 
+
+
+--------
+
+
+avoid triggering 'nude' in non-sexual contexts...
+- add guards for like women words, other variants like naked.
+look for things like makeup....
+(is there not a public list that looks for these things!??!)
+
+
+make the word matching just much more strict in general..
+
+
+
+-----------------------------------------------
 
 achievements:
 - like strava or duolingo
@@ -40,19 +126,6 @@ MANUAL TODO:
 - add N slip to list of rules...
     - + no cloth..
 
-
-
-------------------------------
-----
-
-
-
-
-Record activity before after after a block comes up... 
-(E.g. minus 5 mins and plus 10 minutes around the block?) 
-- then log that specific thing to a list of "break reports"
-(Obviously if there's multiple in a short time... Then only log one..)
-(E.g. within the minus 5 plus 10 minutes range...) 
 
 
 ------------------------------
@@ -425,3 +498,12 @@ Log the thing that leads to the moment.
 ====================================================================================
 ====================================================================================
 ====================================================================================
+
+
+
+
+
+
+let usre pre determine when a block is fine?
+    - let them also pick a time for when they pick that time?
+    - (e.g. turn off on the weekend... (when visit someone))
