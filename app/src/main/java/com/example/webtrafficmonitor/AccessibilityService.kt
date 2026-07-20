@@ -1112,9 +1112,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         } else null
 
+        // Mode-gated keyword block (Strict+ / Super-hardcore-only), matched off title + URL.
+        val modeKeyword = ModeKeywords.match(this, title, url)
         val baseReason = when {
                appGuard != null -> appGuard
                host != null && DomainBlocklist.isBlocked(host) -> "Adult site (blocklist): $host"
+               // Search engines: only Google is allowed, in every mode.
+               host != null && SearchEngineBlocklist.isBlocked(host) -> "Search engine blocked: $host"
+               // Our hand-maintained hosts (reddit frontends, reddit, borderline shops):
+               // blocked in Strict / Super hardcore, allowed in Relaxed.
+               host != null && !Mode.isRelaxed(this) && StrictOnlyBlocklist.isBlocked(host) ->
+                   "Blocked site: $host"
+               modeKeyword != null -> "Blocked term: $modeKeyword"
                rule != null -> describeRule(rule)
                host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
                    GreyUsage.isOverLimit(this, host) ->

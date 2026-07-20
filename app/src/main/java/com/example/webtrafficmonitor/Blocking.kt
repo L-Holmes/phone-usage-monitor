@@ -736,8 +736,8 @@ object AppTimedBlock {
  *  - To block a new browser: open it once with monitoring on, find its row in the
  *    list, copy the package name, and add a line to BLOCKED_BROWSERS below.
  *  - To allow a browser: delete (or comment out) its line.
- *  - DuckDuckGo (com.duckduckgo.mobile.android) is intentionally NOT listed, so it
- *    stays allowed.
+ *  - DuckDuckGo (com.duckduckgo.mobile.android) IS blocked (it's in AppConfig.BLOCKED_BROWSERS):
+ *    only Firefox is allowed, so the DDG search engine can't be reached through its own app.
  *  - Casing doesn't matter: matching is case-insensitive, so keep entries lowercase.
  */
 object AppBlocklist {
@@ -760,7 +760,7 @@ object AppBlocklist {
         if (packageName.isNullOrBlank()) return null
         val pkg = packageName.lowercase()
         if (pkg in sessionAllow) return null
-        if (pkg in ALLOWED_BROWSERS) return null         // NEW: e.g. DuckDuckGo, never block
+        if (pkg in ALLOWED_BROWSERS) return null         // only Firefox; DuckDuckGo is NOT here
         if (pkg in BLOCKED_BROWSERS) return packageName   // static list
         if (pkg in dynamicBrowsers) return packageName    // NEW: detected at runtime
         return null
@@ -841,8 +841,8 @@ object AppBlocklist {
 
     // ================================================================
     // EDIT BELOW - the browser package names to block. All lowercase.
-    // DuckDuckGo is in ALLOWED_BROWSERS above, so it stays allowed even
-    // if dynamic detection finds it.
+    // Only Firefox is in ALLOWED_BROWSERS; every other browser (DuckDuckGo included)
+    // is blocked, whether it's in the static list below or detected at runtime.
     // ================================================================
     private val BLOCKED_BROWSERS = AppConfig.BLOCKED_BROWSERS
 }

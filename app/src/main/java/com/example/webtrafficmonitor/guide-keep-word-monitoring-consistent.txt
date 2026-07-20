@@ -1,0 +1,133 @@
+# Keeping the word/site monitoring consistent (Android master → Firefox plugin)
+
+The adult-content filter exists **twice**, in two languages:
+
+| | **MASTER — edit here** | Derived (updated *from* the master) |
+|---|---|---|
+| **Words / scoring** | Android `TextFilter.kt` | Firefox extension `content/textfilter.js` |
+| **Domains / block lists** | Android `ContentFilter.kt` | Firefox extension `background/domains.js` |
+
+**This Android repo is the master.** You make every change here first. Then you copy the
+changed file out and have an AI update the matching Firefox-plugin file to match. You should
+almost never hand-edit the plugin's word/domain lists directly — that's how the two drift.
+
+---
+
+## The workflow
+
+1. **Edit the master** here: add/remove a word, tweak a tier, add a domain or keyword, change
+   a weight — in `TextFilter.kt` and/or `ContentFilter.kt`.
+2. **Compile** to be sure it's valid: `./gradlew :app:compileDebugKotlin`.
+3. **Copy the changed master file** out of this repo.
+4. **Open the Firefox plugin repo** and ask an AI to port the change (prompt below), pasting
+   the master file as the source of truth.
+5. **Review the diff** in the plugin: it should touch *only* the shared parts (see the map).
+   Anything in the "plugin-only" list must be left alone.
+
+### Copy-paste prompt for the AI (run it in the plugin repo)
+
+> Here is my master `TextFilter.kt` (and/or `ContentFilter.kt`) from my Android app. It is the
+> **source of truth**. Update the Firefox extension's `content/textfilter.js` (and/or
+> `background/domains.js`) so its **word tiers, word families, per-word EXCEPTIONS, phrases,
+> domain/keyword lists, weights and THRESHOLDs match the Kotlin master exactly.**
+>
+> The Kotlin has extras the JS does NOT and should NOT gain from this port — do not copy these
+> across, and do not treat their absence in the JS as "drift":
+>   1. leetspeak/stretch normalisation (`candidates`/`deleet`/`collapse`) + the
+>      `VARIANT_EXPLICIT` / `VARIANT_DUAL` lists,
+>   2. the gendered switches (`AttractionFilter` / `GenderedTerms` / `genderMultiplier`),
+>   3. medical dampening (`MedicalContext` / `MEDICAL_DAMPEN`).
+>   — UNLESS I tell you to also add one of these to the JS (see the note under the map).
+>
+> Keep the JS public surface as it is (`ImageGateText.evaluate` etc.). Then show me exactly
+> what changed and confirm the extension still loads.
+
+---
+
+## What maps to what
+
+| Android master | Firefox plugin |
+|---|---|
+| `BannedWords.CORE` | `RELAXED_CORE` |
+| `BannedWords.MIXED` | `RELAXED_MIXED` |
+| `BannedWords.SUPPORT` | `RELAXED_SUPPORT` |
+| `BannedWords.COMBO` | `RELAXED_COMBO` |
+| `BannedWords.EXTRA_EXPLICIT/SUBTLE/DUAL/AMBIGUOUS` | same names |
+| `BannedWords.PERSON` | `PERSON` |
+| `BannedWords` FAMILY_GROUPS + `famOf` | `FAMILY_GROUPS` / `famOf` |
+| `BannedWordExceptions.MAP` | `EXCEPTIONS` |
+| `FilterTuning` (+ `Settings.relaxed`) | `STRICT_TUNING` / `RELAXED_TUNING` |
+| `BannedPhrases.LOUD` / `.SOFT` | `EXTRA_PHRASE_LIST` (+ any loud-phrase handling) |
+| `DomainBlocklist` / `DomainStrikes` / `DomainGreylist` | same names |
+| `StrictOnlyBlocklist` | `StrictOnlyBlocklist` |
+| `SearchEngineBlocklist` | *(add a matching block list in domains.js)* |
+| `ModeKeywords` (`SUPER_HARDCORE`, `STRICT_PLUS`) | *(add matching mode-gated keyword tiers)* |
+| `DefiniteNsfw` *(add to Kotlin when first needed)* | `DefiniteNsfw` |
+
+### Tuning parity (numbers must match)
+
+`THRESHOLD 15`, `DEFINITE_THRESHOLD 30`, `CORE/EXPLICIT 15`, `MIXED 8`, `SUPPORT/STRONG 8`,
+`SUBTLE 2`, `DUAL 3`, `AMBIGUOUS 2`, `COMBO 7`, `PER_WORD_CAP 5`, `SINGLE_WORD_MAX 14`,
+`CONTEXT_WINDOW 4`, `EXCEPTION_WINDOW 3`, `TITLE_URL_MULTIPLIER 2`.
+
+---
+
+## Plugin-only vs master-only (don't mistake either for "drift")
+
+**Master-only (Kotlin has, JS doesn't — do NOT port unless told):** leetspeak/`VARIANT_*`,
+gendered switches, medical dampening.
+
+> **Worth porting to the plugin:** the **medical dampening** is exactly what stops the "I
+> searched a medical issue and it blocked on *sex* / *vagina* / *vulva*" false positive you
+> hit in the extension. When you're ready, tell the AI to ALSO add `MedicalContext` + the
+> "damp only the non-CORE score" rule to `textfilter.js`. Then move it out of this list so it
+> becomes a normal shared feature.
+
+**Plugin-only (JS has, Kotlin doesn't):** the giant ~550k-host download/IndexedDB machinery
+in `domains.js` — Android builds/caches that differently (`DomainBlocklist.warmUp`). The
+*host lists themselves* are shared; the plumbing around them isn't.
+
+---
+
+## Avoiding false positives (blocking a page that is NOT harmful)
+
+This is a first-class goal: **do not block a non-harmful page.** The mechanisms, weakest page
+signal to strongest:
+
+- **Word FAMILIES** — inflections count once, so "nude/nudes/nudity" can't stack into a block.
+- **`SINGLE_WORD_MAX`** — no non-CORE word ever blocks alone; blocking needs two DIFFERENT
+  signals. So one "sex" or one "vagina" can never block by itself.
+- **Per-word `EXCEPTIONS`** — an innocent neighbour within `EXCEPTION_WINDOW` vetoes the match
+  outright: "naked mole rat", "nude lipstick", "vaginal health", "breast cancer", "pussy
+  riot", "hardcore punk", "vulva pain".
+- **Medical damper** — if the page reads medical, the **soft** score (everything except CORE)
+  is multiplied by `MEDICAL_DAMPEN` (0.35). CORE/LOUD are never damped, so real porn still
+  blocks even on a page that says "health".
+
+**When you find a new false positive:** find the words that scored (the block reason lists
+them), and either (a) add the innocent neighbour(s) to that word's `EXCEPTIONS` entry, or
+(b) if the whole page is a legit category (medical, art, biology, breastfeeding, sex-ed),
+add its giveaway words to `MedicalContext.WORDS`. Then mirror the change to the plugin.
+
+Categories NSFW filters classically over-block (all handled above; add to them freely):
+medical/anatomy, sex education, LGBTQ+ health, breastfeeding, fine art & art history,
+biology/veterinary, addiction-recovery ("quit porn"), news/legal, and fashion/swimwear.
+(The tokenizer is whole-word, so the "Scunthorpe problem" — Scunthorpe, Essex, Dickinson,
+Cockburn — is already a non-issue: those tokenise whole and never match a substring.)
+
+> On "is there a public list of these false-positive contexts to import?" — there is no
+> canonical, well-maintained open dataset for it. The public NSFW lists are the *opposite*
+> (profanity/host blocklists), and the research on filter over-blocking is prose, not data.
+> So this stays hand-curated: the `EXCEPTIONS` + `MedicalContext` above ARE our version of
+> that list. Grow them from real false positives.
+
+---
+
+## Rules of thumb for adding a word
+
+- Always-sexual, no innocent use → `CORE` (one hit blocks; be sure).
+- Strong but has real innocent uses → `MIXED` (needs a second signal) + an `EXCEPTIONS` entry.
+- Anatomy/slang → `SUPPORT` (never blocks alone) + an `EXCEPTIONS` entry for its medical uses.
+- Suggestive fashion → `EXTRA_SUBTLE` (strict-only).
+- Sexual only in context → `EXTRA_DUAL` (scores only next to an indicator).
+- Inflections → a `FAMILY` group, never separate tier entries.

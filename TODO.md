@@ -1,106 +1,12 @@
 
+-------------
+
 - second page unclear
 - light and maybe angle blocking too harsh.
-- --> do we always allow say just a Google search not no websites
-
----------------------------------
-Fix issues:
-- populate the whitelist of apps
-- dont block my own plugin!
-    - gets blocked when trying to update the strictness... By my other app.. 
+- --> do we always allow say just a Google search not no websites (regardless of light and angle?)
 
 ---------------------------------
 
-
----------------
-Add my manual words / websites;
-- search engines:
-    - ecosia.org
-    - qwant.com
-    - search.brave.com
-    - startpage.com
-
-- reddit viewers:
-    - inini.wtf
-    - lite.redgifs.com
-    - peekstr.com
-    - photon-reddit.com
-    - redlite.app 
-    - scrolller.com
-    - veo.world
-
-
-- reddit:
-    - reddit.com
-
-- borderlines:
-    - etsy.com
-    - depop.com
-    - shein.com
-
-
-- keywords:
-    - reddit
-    - redd
-    - red dit
-    - re ddit
-    - reddi t
-    - redd it
-    - ai vide
-    - ai video
-    - ai image
-    - eddit 
-    - e ddit
-    - r eddit
-    - scrolller
-    - scroller
-    - ling eri
-    - lace
-    - try on hau
-    - haul
-    - try on haul
-    - t ry on haul
-    - try n haul
-    - sheer
-    - shee r
-    - browser
-    - brow ser
-    - lingerie
-    - lin gerie
-    - lin geri
-    - lingeri
-    - ikini
-    - sh eer
-    - bik ini
-    - bi kini
-
---------
-public list of dodgy forums? like 4chan etc? 
-
-
---------
-
-
-avoid triggering 'nude' in non-sexual contexts...
-- add guards for like women words, other variants like naked.
-look for things like makeup....
-(is there not a public list that looks for these things!??!)
-
-
-make the word matching just much more strict in general..
-
-
-
------------------------------------------------
-
-achievements:
-- like strava or duolingo
-    - have a page showing all the differnet achievements they can unlock...
-
-- then like short term ones:
-    - ike one for 'least phone usage this week',
-    - 'least usage week ever'
-    - 'says without relapse (for if they looked at adult content prevoiusly and had been using those features..)
 
 ------------------------------
 
@@ -116,7 +22,6 @@ LATER:
 
 
 MANUAL TODO:
-- move across my 'stay focused' blocks
 - block all app store vpns...
 - add the holiday stuff? / guideance?
    - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place).
@@ -125,7 +30,7 @@ MANUAL TODO:
    - No tracking needed on this — they'll know where they're at.
 - add N slip to list of rules...
     - + no cloth..
-
+    - + downblou
 
 
 ------------------------------
@@ -137,6 +42,15 @@ TODO LATER:
 
 ------------
 
+achievements:
+- like strava or duolingo
+    - have a page showing all the differnet achievements they can unlock...
+
+- then like short term ones:
+    - ike one for 'least phone usage this week',
+    - 'least usage week ever'
+    - 'says without relapse (for if they looked at adult content prevoiusly and had been using those features..)
+
 
 OOOH!
 Like Strava... And other mapping apps.. 
@@ -146,11 +60,6 @@ Can we determine where they are on a map?
 (BUT! Will this be affected by VPNs??) 
 
 -------
-
-
-In the productivity side.. 
-+ "How you compare to the average person".. as far as productivity etc... 
-
 
 ====
 Add 'founder mode'
@@ -192,10 +101,6 @@ Perhaps the above could be "down the line" things to add later....
 ===============================
 
 Later:
-
-Make the entire app translateable. 
-- have an extremely obvoius list of translate files so its easy to update them / add new entries.
-    - (also could we have validatoin in the ./deploy stage or whatever or during the final build stage I guess that checks if all languages have the same key entries? and f they don't state the differences. (assume english is the master one)
 
 
 

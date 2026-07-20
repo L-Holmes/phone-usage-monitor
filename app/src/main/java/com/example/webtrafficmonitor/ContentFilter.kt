@@ -5,529 +5,18 @@ import android.util.Log
 import java.util.zip.GZIPInputStream
 
 // =====================================================================================
-//  CONTENT FILTER  —  the single home for all "banned words / banned sites" logic.
+//  CONTENT FILTER (DOMAINS)  —  the "banned / greylisted SITES" half of the filter.
 // =====================================================================================
 //
-//  Everything that decides whether a page looks sexual/adult lives here:
-//    * the four hardcoded word tiers (below),
-//    * BorderlineScorer  — turns page text/title/URL into a score and a block reason,
+//  Everything that decides whether a HOST looks adult lives here:
 //    * DomainBlocklist   — the ~550k-host adult blocklist (loaded from the bundled .gz),
 //    * DomainStrikes     — repeat-offender domains get blocked for a while,
 //    * DomainGreylist    — our own list of mixed-content sites (Reddit, etc.) to limit.
 //
-//  The word lists used to live in assets/words/*.txt and were read at runtime; they are
-//  now hardcoded here so the whole thing is one source-controlled module.
-//
-//  ── THE FOUR WORD TIERS (strongest → weakest) ──────────────────────────────────────
-//
-//  EXPLICIT (weight 6) — hardcore / clinical terms that are sexual in essentially every
-//      context, with no innocent use ("blowjob", "pussy", "porn"). Two in the body — or
-//      one in the title/URL, which counts double — is enough to block. Also act as
-//      "indicators" that switch on a nearby dual-meaning word.
-//
-//  STRONG (weight 4) — always-adult words that mean the adult thing ~99% of the time
-//      ("sex", "slut", "onlyfans", "naked"). They count on their own (no neighbour
-//      needed) but weigh a little less, so a single stray use is tolerated. Also
-//      indicators. ("sex" is the one word here with real innocent uses — it must repeat
-//      to block; move it to DUAL if a sex-ed page ever trips.)
-//
-//  SUBTLE (weight 2) — suggestive terms that lean adult but have plenty of innocent uses
-//      (swimwear, fashion, fitness): "bikini", "lingerie", "cleavage". One alone should
-//      not block; several — or one alongside other signals — should. PER_WORD_CAP gives
-//      the "bikini ×10 = bad, bikini ×2 = fine" behaviour. Also indicators.
-//
-//  DUAL (weight 3, ONLY in context) — words that are sexual in some contexts and innocent
-//      in others: "hot", "wet", "girls", "bang". They count for NOTHING on their own; a
-//      dual word only scores when an indicator (any EXPLICIT/STRONG/SUBTLE word) is within
-//      CONTEXT_WINDOW words of it. "hot chocolate" → 0; "hot naked teens" → "hot"+"teens".
-//
-//  There is no phrase matching — word combinations are handled purely by the DUAL context
-//  rule. Multi-word entries (e.g. "see through") therefore never match; they are kept in
-//  the list only for the record.
-//
-//  TUNING: to make a word stronger/weaker, move it between the four sets below, or adjust
-//  the weights / THRESHOLD / CONTEXT_WINDOW / PER_WORD_CAP constants.
+//  The "banned WORDS" half — the text/title/URL scorer and its word tiers — lives in its
+//  own file, TextFilter.kt (BorderlineScorer + BannedWords + friends), so it can be kept
+//  in lock-step with the Firefox extension's textfilter.js port.
 // =====================================================================================
-
-
-// ── Scoring knobs ────────────────────────────────────────────────────────────────────
-object FilterTuning {
-    const val EXPLICIT_WEIGHT = 6
-    const val STRONG_WEIGHT = 4
-    const val SUBTLE_WEIGHT = 2
-    const val DUAL_SEXUAL_WEIGHT = 3
-
-    // PHRASES (see BannedPhrases). A LOUD phrase in a title is meant to block on its own:
-    // 7 x TITLE_URL_MULTIPLIER = 14, comfortably over THRESHOLD.
-    const val PHRASE_LOUD_WEIGHT = 7
-    const val PHRASE_SOFT_WEIGHT = 3
-
-    const val CONTEXT_WINDOW = 4     // a DUAL word counts only if an indicator is this near
-    const val PER_WORD_CAP = 5       // one word can contribute at most this many times
-    const val THRESHOLD = 10         // score at/above this → block
-    const val TITLE_URL_MULTIPLIER = 2   // hits in the title or URL count double
-
-    // How much a SOFT gendered word is still worth when that side of the filter is switched
-    // off. Not zero - "bikini" on an actual porn page should still nudge the needle, it just
-    // shouldn't block a swimwear shop on its own. See GenderedTerms.
-    const val GENDER_OFF_MULTIPLIER = 0.25f
-
-    // Medical/clinical context found on the page (see MedicalContext) multiplies the whole
-    // score by this. Someone looking up a symptom must not be blocked.
-    const val MEDICAL_DAMPEN = 0.35f
-}
-
-
-// ── The four hardcoded word tiers ────────────────────────────────────────────────────
-object BannedWords {
-
-    val EXPLICIT: Set<String> = setOf(
-        "anal", "analsex", "ballsack", "bareback", "bbw", "bdsm", "blowjob", "bukkake",
-        "buttplug", "camgirl", "camwhore", "clit", "clitoris", "cock", "cocks", "creampie",
-        "cuckold", "cum", "cumming", "cumshot", "cunnilingus", "cunt", "deepthroat", "dildo",
-        "dildos", "doggystyle", "dominatrix", "ejaculate", "ejaculation", "erection",
-        "fellatio", "femdom", "fingering", "fisting", "footjob", "foreskin", "gangbang",
-        "gloryhole", "handjob", "hardcore", "hentai", "horny", "incest", "jerkoff", "labia",
-        "masturbate", "masturbating", "masturbation", "milf", "nipple", "nipples", "nsfw",
-        "nude", "nudes", "nudity", "orgasm", "orgasms", "orgy", "pegging", "penetration",
-        "penis", "porn", "porno", "pornographic", "pornography", "pornstar", "pussies",
-        "pussy", "rimjob", "scissoring", "semen", "sextape", "sextoy", "sextoys", "sodomy",
-        "spunk", "squirting", "strapon", "threesome", "titfuck", "titjob", "tits", "titties",
-        "titty", "twat", "vagina", "vaginal", "vulva", "wank", "wanking", "xxx",
-    )
-
-    val STRONG: Set<String> = setOf(
-        "boob", "boobies", "boobs", "hardon", "naked", "onlyfans", "sex", "slut", "sluts",
-        "slutty", "smut", "topless", "whore", "whores", "xrated",
-    )
-
-    val SUBTLE: Set<String> = setOf(
-        "arousal", "aroused", "bikini", "bikinis", "booty", "bosom", "bra", "braless",
-        "breast", "breasts", "busty", "butt", "buttock", "buttocks", "cleavage", "curves",
-        "curvy", "erotic", "erotica", "escort", "escorts", "fetish", "flirt", "flirty",
-        "foreplay", "garter", "hooters", "intercourse", "intimate", "kinky", "lapdance",
-        "lewd", "libido", "lingerie", "lust", "lustful", "negligee", "panties", "provocative",
-        "raunchy", "revealing", "risque", "seduce", "seduction", "seductive", "sensual",
-        "sexual", "sexuality", "sexy", "showgirl", "skimpy", "spank", "spanking", "strip",
-        "stripper", "striptease", "suggestive", "swimsuit", "temptress", "thong", "thongs",
-        "underwear", "undress", "undressing", "voluptuous", "webcam", "sheer", "transparent",
-        "tights", "panty", "pantyhose", "cosplay",
-        // multi-word entries kept for the record; they never match (no phrase matching):
-        // "see through", "try on", "try on haul"
-    )
-
-    val DUAL: Set<String> = setOf(
-        "adult", "ass", "babe", "babes", "bang", "banged", "banging", "blow", "blown",
-        "bombshell", "cheeks", "chick", "chicks", "dirties", "dirty", "doll", "dolls",
-        "exposed", "fuck", "fucked", "fucking", "gentlemen", "girl", "girls", "hookup", "hot",
-        "hottie", "hotties", "hump", "humping", "kink", "ladies", "lady", "load", "loads",
-        "mature", "moan", "moaning", "naughty", "package", "petite", "pole", "rack", "ride",
-        "riding", "score", "screw", "screwed", "screwing", "spread", "stud", "suck", "sucking",
-        "tease", "teen", "teens", "thick", "tight", "toy", "toys", "vixen", "wet", "women",
-    )
-
-    // ── EVASION SPELLINGS ────────────────────────────────────────────────────────────
-    // Deliberate misspellings, shortenings and slang used to get around a filter. These
-    // are folded into the tiers below, so they score exactly like the word they stand in
-    // for.
-    //
-    // NOTE what you do NOT need to list here: leetspeak and stretched letters. The scorer
-    // normalises every token before matching (see deleet / collapse in BorderlineScorer),
-    // so "p0rn", "pr0n", "s3x", "b00bs", "pooorn" and "seeexy" all already resolve to
-    // words that are in the lists above. Only add genuinely DIFFERENT spellings here.
-    //
-    // Everything in this set has no real innocent use, so it sits at EXPLICIT weight.
-    // If you add something with an innocent meaning (e.g. "goon", "hoe"), put it in
-    // VARIANT_DUAL instead - it will then only score next to another sexual word.
-    val VARIANT_EXPLICIT: Set<String> = setOf(
-        // naked / nude
-        "nake", "nakey", "nekked", "nekkid", "nakd", "nekid", "nood", "noods", "nudez", "nudz",
-        // porn
-        "pron", "prn0", "pr0no", "prnhub", "pornhub", "xnxx", "xvideos", "redtube", "youporn",
-        "brazzers", "spankbang", "motherless", "xhamster",
-        // sex
-        "seggs", "secks", "sechs", "sexo", "sexx", "sexxx",
-        // breasts
-        "bewbs", "bewb", "boobz", "titz", "tiddies", "tiddy", "tittys", "milkers",
-        // masturbation / the community's own words
-        "fap", "fapping", "fapped", "faps", "fapper", "coom", "coomer", "cooming",
-        "masterbate", "masterbating", "masterbation", "masturbait", "gooner",
-        "cumz", "cummin", "jizz", "jizzed",
-        // anatomy misspellings
-        "pussi", "pusy", "pusssy", "vajayjay", "coochie", "cooter", "phuck", "fukk",
-        // adult platforms / genres
-        "onlyfanz", "onlyfan", "fansly", "chaturbate", "stripchat", "camsoda", "myfreecams",
-        "hentia", "hentay", "ahegao", "ecchi", "futanari", "futa", "doujin", "doujinshi",
-        "rule34", "r34", "lewds", "lewding", "nudify", "deepnude", "thot", "thots", "thotty",
-    )
-
-    // Evasion spellings that DO have innocent uses. Context-gated, like any DUAL word, so
-    // they score NOTHING on their own. Keep this list tight: every entry here is a word
-    // that appears on ordinary pages, and the only thing saving us is the context rule.
-    // ("edge" and "cake" were tried and pulled - far too common to be worth the noise.)
-    val VARIANT_DUAL: Set<String> = setOf(
-        "goon", "gooning", "goonin", "edging", "thicc", "thicce", "phat",
-        "hoe", "hoes", "buns", "melons", "smash",
-    )
-
-    // Any non-dual sexual word "switches on" a nearby dual word.
-    val INDICATORS: Set<String> = EXPLICIT + STRONG + SUBTLE + VARIANT_EXPLICIT
-}
-
-
-// ── Phrases ──────────────────────────────────────────────────────────────────────────
-// The word tiers can only ever see ONE word at a time, which is why "try on haul",
-// "nip slip" and "no leggings" all sailed straight through: not one of those words is
-// banned on its own, and they never will be. Phrases are matched against the page text as
-// a whole, so word ORDER carries the meaning.
-//
-// LOUD  = the phrase itself is the giveaway. One of these in a title blocks on its own.
-// SOFT  = leans adult, but has a real innocent life (a genuine fashion haul). Needs help
-//         from something else on the page to reach the threshold.
-//
-// TO ADD ONE: lower case, single spaces, letters and digits only - it is matched against a
-// normalised copy of the page, so punctuation and hyphens in the real text don't matter
-// ("try-on haul" and "Try On Haul!!" both match "try on haul").
-// ── Who is being sexualised ──────────────────────────────────────────────────────────
-// Two switches (see AttractionFilter) let someone turn DOWN the sexualised-women or the
-// sexualised-men side of the filter. Default: both fully on.
-//
-// WHAT THIS IS FOR: a straight woman shopping for lingerie, or a gay man who has no
-// interest in bikini content, should not be fighting the filter all day. It is an
-// accessibility valve, not an escape hatch.
-//
-// WHAT IT DOES *NOT* TOUCH - and this is the important bit:
-//   Only the SOFT, suggestive words and phrases below are affected. Anything EXPLICIT
-//   ("porn", "blowjob", "milf", "onlyfans"...) keeps its full weight no matter what these
-//   switches say, because that is pornography regardless of who you're attracted to.
-//   Turning a switch off lets you look at swimwear. It does not let you look at porn.
-object GenderedTerms {
-
-    /** Suggestive terms about WOMEN's bodies/clothing. Softened when the women switch is off. */
-    val SOFT_FEMALE: Set<String> = setOf(
-        "bikini", "bikinis", "lingerie", "bra", "braless", "panties", "panty", "pantyhose",
-        "thong", "thongs", "negligee", "swimsuit", "tights", "cleavage", "busty", "bosom",
-        "boob", "boobs", "boobies", "breast", "breasts", "booty", "curves", "curvy",
-        "voluptuous", "hooters", "showgirl", "temptress", "skimpy", "garter", "underwear",
-        "topless", "milkers", "bewbs", "bewb", "boobz", "titz", "tiddies", "tiddy",
-    )
-
-    /** Suggestive terms about MEN's bodies. Softened when the men switch is off. */
-    val SOFT_MALE: Set<String> = setOf(
-        "shirtless", "abs", "sixpack", "bulge", "speedo", "speedos", "hardon", "beefcake",
-        "hunk", "hunks", "himbo", "dadbod", "musclebound",
-    )
-
-    /** Phrases that only make sense as sexualised-women content. */
-    val PHRASES_FEMALE: Set<String> = setOf(
-        "bikini haul", "lingerie haul", "underwear haul", "swimwear try on", "braless try on",
-        "no bra", "no panties", "nip slip", "nipple slip", "camel toe", "micro bikini",
-        "bikini body", "curvy model", "plus size model", "boudoir shoot",
-        "naked girls", "nude girls", "hot girls", "sexy girls", "naked women",
-    )
-
-    /** Phrases that only make sense as sexualised-men content. */
-    val PHRASES_MALE: Set<String> = setOf(
-        "shirtless men", "hot guys", "sexy men", "male stripper", "naked men",
-    )
-}
-
-
-// ── Medical / clinical context ───────────────────────────────────────────────────────
-// "vaginal discharge", "testicular lump", "breast screening" — the anatomy words are the
-// same, the intent could not be more different, and someone must never be blocked from
-// looking up a symptom.
-//
-// If any of these words appear on the page, the sexual score is heavily damped (see
-// FilterTuning.MEDICAL_DAMPEN). It is a DAMPER, not an exemption: a porn page that happens
-// to contain the word "doctor" doesn't get a free pass, it just needs more evidence.
-//
-// NOTE ON PUBLIC LISTS: there is no well-known MIT-licensed "medical context" word list -
-// the public ones (LDNOOBW and friends) are profanity lists, which is the opposite problem.
-// This is our own, so add to it freely when you find a gap.
-object MedicalContext {
-    val WORDS: Set<String> = setOf(
-        "symptom", "symptoms", "diagnosis", "diagnosed", "treatment", "treated", "infection",
-        "infected", "discharge", "itching", "itchy", "rash", "swelling", "swollen", "lump",
-        "lumps", "pain", "painful", "bleeding", "cramps", "doctor", "gp", "clinic", "clinical",
-        "nhs", "hospital", "nurse", "medical", "medicine", "prescription", "antibiotics",
-        "cancer", "screening", "smear", "biopsy", "cyst", "thrush", "yeast", "bacterial",
-        "vaginosis", "uti", "cystitis", "std", "sti", "chlamydia", "herpes", "hpv",
-        "contraception", "contraceptive", "pregnancy", "pregnant", "menstrual", "menstruation",
-        "period", "periods", "menopause", "ovulation", "fertility", "endometriosis",
-        "prostate", "testicular", "erectile", "dysfunction", "puberty", "hormone", "hormonal",
-        "surgery", "examination", "health", "healthcare", "gynaecologist", "gynecologist",
-        "urologist", "dermatologist", "mastectomy", "mammogram",
-    )
-}
-
-
-object BannedPhrases {
-
-    val LOUD: Set<String> = setOf(
-        // the "technically clothed" genre
-        "nip slip", "nipple slip", "wardrobe malfunction", "accidental exposure",
-        "see through", "see thru", "sheer top", "sheer dress", "nothing underneath",
-        "no panties", "no underwear", "no bra", "no pants", "no leggings", "no clothes",
-        "without underwear", "without a bra", "without panties", "braless try on",
-        // haul / try-on as a delivery vehicle
-        "try on haul", "tryon haul", "lingerie haul", "bikini haul", "sheer haul",
-        "transparent haul", "underwear haul", "nude haul", "see through haul",
-        "mesh haul", "micro bikini",
-        // the obvious ones
-        "leaked nudes", "leaked onlyfans", "onlyfans leak", "sex tape", "adult film",
-        "free porn", "porn site", "live cam", "cam girls", "webcam girls", "camel toe",
-        "thirst trap", "hidden cam", "spy cam", "strip tease", "pole dance",
-        "naked girls", "nude girls", "hot girls", "sexy girls", "naked women",
-        "only fans", "adult content", "not safe for work",
-    )
-
-    val SOFT: Set<String> = setOf(
-        "try on", "tryon", "haul video", "clothing haul", "fashion haul", "swimsuit haul",
-        "tight dress", "short skirt", "mini skirt", "crop top", "yoga pants", "leggings haul",
-        "gym fit", "workout fit", "body check", "before and after body", "beach body",
-        "bikini body", "hot tub", "shower scene", "bed scene", "massage video",
-        "asmr girl", "girl next door", "curvy model", "plus size model", "fitness model",
-        "swimwear try on", "boudoir shoot", "glamour shoot", "photo shoot bikini",
-    )
-}
-
-
-// ── Who the filter is switched on for ────────────────────────────────────────────────
-/**
- * The two "sexualised women / sexualised men" switches. Both default ON.
- *
- * LOCKED OUTSIDE RELAXED MODE. In strict or super hardcore these are forced back on and
- * cannot be changed - otherwise the first thing a bad night does is flip a switch. See
- * [canEdit].
- */
-object AttractionFilter {
-    private const val PREFS = "attraction_filter"
-    private const val KEY_FEMALE = "block_female"
-    private const val KEY_MALE = "block_male"
-
-    /** May the user change these right now? Only in Relaxed. */
-    fun canEdit(c: Context): Boolean = Mode.isRelaxed(c) || Mode.isOff(c)
-
-    fun blockFemale(c: Context): Boolean =
-        if (!canEdit(c)) true else prefs(c).getBoolean(KEY_FEMALE, true)
-
-    fun blockMale(c: Context): Boolean =
-        if (!canEdit(c)) true else prefs(c).getBoolean(KEY_MALE, true)
-
-    fun setBlockFemale(c: Context, on: Boolean) {
-        if (canEdit(c)) prefs(c).edit().putBoolean(KEY_FEMALE, on).apply()
-    }
-
-    fun setBlockMale(c: Context, on: Boolean) {
-        if (canEdit(c)) prefs(c).edit().putBoolean(KEY_MALE, on).apply()
-    }
-
-    private fun prefs(c: Context) =
-        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-}
-
-
-// ── The scorer: text/title/URL → score + block reason ────────────────────────────────
-object BorderlineScorer {
-
-    data class Result(val score: Int, val reason: String)
-
-    /**
-     * The switches in force for this scoring pass. Passed in rather than read from a cache,
-     * so flipping a switch or changing mode takes effect on the very next page.
-     */
-    data class Settings(val blockFemale: Boolean, val blockMale: Boolean) {
-        companion object {
-            val ALL_ON = Settings(true, true)
-            fun of(c: Context) =
-                Settings(AttractionFilter.blockFemale(c), AttractionFilter.blockMale(c))
-        }
-    }
-
-    /** Raw score for logging/flagging; null when nothing sexual was found. */
-    fun score(title: String?, url: String?, text: String?, s: Settings = Settings.ALL_ON): Result? {
-        val v = compute(title, url, text, s)
-        return if (v <= 0) null else Result(v, reasonFor(v))
-    }
-
-    /** Non-null (with a block reason) only when the score reaches the block THRESHOLD. */
-    fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
-        val v = compute(title, url, content, s)
-        return if (v >= FilterTuning.THRESHOLD) Result(v, reasonFor(v)) else null
-    }
-
-    private fun reasonFor(score: Int): String = "Sexual / adult content (score $score)"
-
-    private fun compute(title: String?, url: String?, body: String?, set: Settings): Int {
-        val counted = HashMap<String, Int>()   // per-word occurrence cap, shared across fields
-        var total = 0f
-        total += scoreField(tokenize(title), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
-        total += scoreField(tokenize(url), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
-        total += scoreField(tokenize(body), 1, counted, set)
-        // Phrases are matched on the text as a whole, because the meaning is in the ORDER -
-        // no single word of "try on haul" is bannable, and the three together plainly are.
-        total += scorePhrases(normalise(title), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
-        total += scorePhrases(normalise(url), FilterTuning.TITLE_URL_MULTIPLIER, counted, set)
-        total += scorePhrases(normalise(body), 1, counted, set)
-
-        // Looking up a symptom is not looking at porn. Damp the whole score hard when the
-        // page reads as medical - a damper, not an exemption, so an actual porn page that
-        // says "doctor" once still needs only a little more evidence.
-        if (hasMedicalContext(title, body)) total *= FilterTuning.MEDICAL_DAMPEN
-
-        return Math.round(total)
-    }
-
-    private fun hasMedicalContext(title: String?, body: String?): Boolean {
-        for (w in tokenize(title)) if (w in MedicalContext.WORDS) return true
-        for (w in tokenize(body)) if (w in MedicalContext.WORDS) return true
-        return false
-    }
-
-    /**
-     * What one word is worth, after the gender switches. A SOFT gendered word is knocked
-     * down to GENDER_OFF_MULTIPLIER when its side is switched off; EXPLICIT words are never
-     * touched, so turning a switch off can never unblock pornography.
-     */
-    private fun genderMultiplier(word: String, set: Settings): Float {
-        if (!set.blockFemale && word in GenderedTerms.SOFT_FEMALE) return FilterTuning.GENDER_OFF_MULTIPLIER
-        if (!set.blockMale && word in GenderedTerms.SOFT_MALE) return FilterTuning.GENDER_OFF_MULTIPLIER
-        return 1f
-    }
-
-    private fun phraseMultiplier(phrase: String, set: Settings): Float {
-        if (!set.blockFemale && phrase in GenderedTerms.PHRASES_FEMALE) return FilterTuning.GENDER_OFF_MULTIPLIER
-        if (!set.blockMale && phrase in GenderedTerms.PHRASES_MALE) return FilterTuning.GENDER_OFF_MULTIPLIER
-        return 1f
-    }
-
-    private fun scoreField(
-        words: List<String>, mult: Int, counted: HashMap<String, Int>, set: Settings,
-    ): Float {
-        var s = 0f
-        for (i in words.indices) {
-            val (w, base) = weigh(words, i)
-            if (base == 0) continue
-            val c = counted.getOrDefault(w, 0)
-            if (c >= FilterTuning.PER_WORD_CAP) continue
-            counted[w] = c + 1
-            s += base * mult * genderMultiplier(w, set)
-        }
-        return s
-    }
-
-    /**
-     * The weight of word [i], trying the token as written AND its normalised form, so
-     * "p0rn" / "pooorn" / "PORN" all land on "porn". Returns the form that matched (for the
-     * per-word cap) and its weight.
-     */
-    private fun weigh(words: List<String>, i: Int): Pair<String, Int> {
-        for (w in candidates(words[i])) {
-            val base = when {
-                w in BannedWords.EXPLICIT -> FilterTuning.EXPLICIT_WEIGHT
-                w in BannedWords.VARIANT_EXPLICIT -> FilterTuning.EXPLICIT_WEIGHT
-                w in BannedWords.STRONG -> FilterTuning.STRONG_WEIGHT
-                w in BannedWords.SUBTLE -> FilterTuning.SUBTLE_WEIGHT
-                w in BannedWords.DUAL || w in BannedWords.VARIANT_DUAL ->
-                    if (hasIndicatorNear(words, i)) FilterTuning.DUAL_SEXUAL_WEIGHT else 0
-                else -> 0
-            }
-            if (base > 0) return w to base
-        }
-        return words[i] to 0
-    }
-
-    /** The spellings we'll accept for one token: as typed, de-leeted, and de-stretched. */
-    private fun candidates(token: String): List<String> {
-        val out = ArrayList<String>(3)
-        out.add(token)
-        val d = deleet(token)
-        if (d != token) out.add(d)
-        val c = collapse(d)
-        if (c != d && c != token) out.add(c)
-        return out
-    }
-
-    /** Digit/symbol substitutions: p0rn -> porn, s3x -> sex, b00bs -> boobs. */
-    private fun deleet(s: String): String {
-        val sb = StringBuilder(s.length)
-        for (ch in s) {
-            sb.append(
-                when (ch) {
-                    '0' -> 'o'; '1' -> 'i'; '3' -> 'e'; '4' -> 'a'
-                    '5' -> 's'; '7' -> 't'; '@' -> 'a'; '$' -> 's'
-                    else -> ch
-                },
-            )
-        }
-        return sb.toString()
-    }
-
-    /**
-     * Stretched letters: "pooorn" -> "porn", "seeexy" -> "sexy". Runs collapse all the way
-     * to ONE letter, which does mangle honest doubles ("boobs" -> "bobs") - that's fine,
-     * because candidates() checks the word as typed as well, and "boobs" matches there.
-     */
-    private fun collapse(s: String): String {
-        if (s.length < 3) return s
-        val sb = StringBuilder(s.length)
-        for (i in s.indices) {
-            if (i == 0 || s[i] != s[i - 1]) sb.append(s[i])
-        }
-        return sb.toString()
-    }
-
-    private fun hasIndicatorNear(words: List<String>, i: Int): Boolean {
-        val lo = maxOf(0, i - FilterTuning.CONTEXT_WINDOW)
-        val hi = minOf(words.lastIndex, i + FilterTuning.CONTEXT_WINDOW)
-        for (j in lo..hi) {
-            if (j == i) continue
-            if (candidates(words[j]).any { it in BannedWords.INDICATORS }) return true
-        }
-        return false
-    }
-
-    private fun scorePhrases(
-        text: String, mult: Int, counted: HashMap<String, Int>, set: Settings,
-    ): Float {
-        if (text.isBlank()) return 0f
-        var s = 0f
-        fun run(phrases: Set<String>, weight: Int) {
-            for (p in phrases) {
-                if (!text.contains(" $p ")) continue
-                val key = "phrase:$p"
-                val c = counted.getOrDefault(key, 0)
-                if (c >= FilterTuning.PER_WORD_CAP) continue
-                counted[key] = c + 1
-                s += weight * mult * phraseMultiplier(p, set)
-            }
-        }
-        run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT)
-        run(BannedPhrases.SOFT, FilterTuning.PHRASE_SOFT_WEIGHT)
-        return s
-    }
-
-    /**
-     * The page as one padded, single-spaced, letters-and-digits-only string, so a phrase can
-     * be found with a plain " phrase " contains(). The padding is what gives us word
-     * boundaries for free: " no bra " will not match inside "piano brand".
-     */
-    private fun normalise(s: String?): String {
-        if (s.isNullOrEmpty()) return ""
-        return " " + s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
-    }
-
-    /**
-     * Lowercase, split on anything that isn't a letter or DIGIT, keep tokens of length >= 2.
-     * Digits are kept deliberately: strip them and "p0rn" tokenises to "p"/"rn" and no
-     * amount of de-leeting can save it.
-     */
-    private fun tokenize(s: String?): List<String> {
-        if (s.isNullOrEmpty()) return emptyList()
-        return s.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 2 }
-    }
-}
 
 
 // ── The ~550k-host adult domain blocklist ─────────────────────────────────────────────
@@ -742,14 +231,138 @@ object DomainGreylist {
     )
 
     /** True if the host, or any parent domain, is on our greylist. */
-    fun isGreylisted(host: String): Boolean {
-        var cur = host.lowercase().removePrefix("www.")
-        while (true) {
-            if (cur in DOMAINS) return true
-            val dot = cur.indexOf('.')
-            if (dot < 0) return false
-            cur = cur.substring(dot + 1)
-            if (cur.indexOf('.') < 0) return false
+    fun isGreylisted(host: String): Boolean = hostOrParentIn(host, DOMAINS)
+}
+
+
+// ── Shared host walk: is [host] (or a parent domain) in [set]? ────────────────────────
+//  "en.wikipedia.org" walks wikipedia.org, but never a bare TLD. Used by every domain
+//  matcher below (matches the JS parentWalk in domains.js).
+internal fun hostOrParentIn(host: String, set: Set<String>): Boolean {
+    var cur = host.lowercase().removePrefix("www.")
+    while (true) {
+        if (cur in set) return true
+        val dot = cur.indexOf('.')
+        if (dot < 0) return false
+        cur = cur.substring(dot + 1)
+        if (cur.indexOf('.') < 0) return false   // don't test a bare TLD
+    }
+}
+
+
+// ── Search engines: block ALL of them except Google (every mode) ──────────────────────
+//  The user's rule: Google is the only search engine allowed — everything else, DuckDuckGo
+//  included, is off the table so a "safe" alternative engine can't be used to run the same
+//  searches. A bare domain also covers its subdomains (hostOrParentIn). Only the SEARCH host
+//  is listed, not a whole company: "search.brave.com" (not brave.com), "search.yahoo.com"
+//  (not yahoo.com — Yahoo Mail stays reachable).
+//  NB: self-hosted metasearch (SearX/SearXNG) has no fixed domain, so it can't be enumerated
+//  here; add specific instances as you meet them.
+//  MIRROR TO JS: add these to a matching block list in domains.js.
+object SearchEngineBlocklist {
+    val DOMAINS: Set<String> = setOf(
+        "duckduckgo.com", "duck.com",
+        "bing.com",
+        "search.brave.com",
+        "ecosia.org",
+        "qwant.com",
+        "startpage.com",
+        "search.yahoo.com",
+        "yandex.com", "yandex.ru",
+        "baidu.com",
+        "ask.com",
+        "search.aol.com",
+        "mojeek.com",
+        "you.com",
+        "presearch.com",
+        "swisscows.com",
+        "gibiru.com",
+        "metager.org",
+        "dogpile.com",
+        "searchencrypt.com",
+        "onesearch.com",
+        "lukol.com",
+        "kagi.com",
+        "perplexity.ai",
+        "phind.com",
+        "yep.com",
+        "excite.com",
+        "lycos.com",
+        "webcrawler.com",
+        "search.marginalia.nu",
+        "searx.be", "searx.tiekoetter.com",   // a couple of well-known public SearX instances
+    )
+
+    fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
+}
+
+
+// ── Strict+ blocklist: our own hand-maintained hosts, blocked when NOT in Relaxed ─────
+//  These aren't on the big adult blocklist (reddit frontends/mirrors, reddit itself, and a
+//  few "borderline" shopping/fashion sites). We don't want them blocked in Relaxed, so the
+//  service only consults this when the mode is Strict or Super hardcore. A bare domain also
+//  covers its subdomains. Mirrors StrictOnlyBlocklist in domains.js — keep the two in sync.
+object StrictOnlyBlocklist {
+    val DOMAINS: Set<String> = setOf(
+        // ── Reddit frontends / mirrors / viewers ──────────────────────────────────────
+        "photon-reddit.com", "lite.redgifs.com", "peekstr.com", "redlite.app",
+        "scrolller.com", "rdx.overdevs.com", "viewri.com", "troddit.com",
+        "ghostddit.pages.dev", "search.pullpush.io", "reditr.com", "reddit-viewer.com",
+        "infini.wtf", "inini.wtf", "redditp.com", "reddit-stream.com", "reveddit.com",
+        "rosint.dev", "subranking.com", "veo.world",
+        // ── Reddit itself (Strict+ only; Relaxed keeps it greylisted/limited) ─────────
+        "reddit.com", "redd.it",
+        // ── Borderline shopping / fashion (Strict+ only) ──────────────────────────────
+        "etsy.com", "depop.com", "shein.com",
+        // ── Imageboards / "mixed" forums (Strict+ only) ───────────────────────────────
+        // No canonical open-source list exists for these (the maintained host lists lump in
+        // mainstream social), so this is hand-curated — add freely as you meet more.
+        "4chan.org", "4channel.org", "8kun.top", "2ch.hk", "kohlchan.net",
+        "endchan.org", "endchan.net", "soyjak.party", "sportschan.org",
+        "wizchan.org", "lainchan.org",
+    )
+
+    fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
+}
+
+
+// ── Mode-gated keyword blocks (title / URL substring match) ───────────────────────────
+//  Unlike the adult text scorer, these are blunt substring matches on the page TITLE and URL
+//  — deliberately including spaced-out fragments ("red dit", "ling eri", "bik ini") to catch
+//  someone typing around a block. They are gated by mode, NOT scored:
+//    * SUPER_HARDCORE — only when the mode is Super hardcore.
+//    * STRICT_PLUS    — when the mode is Strict OR Super hardcore.
+//  Nothing here fires in Relaxed (or Off). Mirrors the mode-gated keyword tiers you keep in
+//  the extension. NOTE: short fragments like "lace" / "haul" WILL also match innocent words
+//  ("necklace", "overhaul") — that's the intended bluntness, but keep it in mind.
+object ModeKeywords {
+
+    // Very hardcore: Super-hardcore-only. Reddit and the ways it gets typed around a filter.
+    val SUPER_HARDCORE: List<String> = listOf(
+        "reddit", "redd", "red dit", "re ddit", "reddi t", "redd it",
+        "eddit", "e ddit", "r eddit",
+    )
+
+    // Hardcore: Strict and above.
+    val STRICT_PLUS: List<String> = listOf(
+        "scrolller", "scroller",
+        "lingerie", "lin gerie", "lin geri", "lingeri", "ling eri",
+        "lace",
+        "try on haul", "try on hau", "t ry on haul", "try n haul", "haul",
+        "sheer", "shee r", "sh eer",
+        "browser", "brow ser",
+        "bikini", "bik ini", "bi kini", "ikini",
+    )
+
+    /** The keyword that blocks this title/URL for the current mode, or null. */
+    fun match(context: Context, title: String?, url: String?): String? {
+        val active: List<String> = when {
+            Mode.isSuperHardcore(context) -> SUPER_HARDCORE + STRICT_PLUS
+            Mode.isStrict(context) -> STRICT_PLUS
+            else -> return null                       // Relaxed / Off: nothing
         }
+        val haystack = ((title ?: "") + "  " + (url ?: "")).lowercase()
+        if (haystack.isBlank()) return null
+        return active.firstOrNull { it in haystack }
     }
 }
