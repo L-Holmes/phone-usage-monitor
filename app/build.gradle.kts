@@ -123,3 +123,55 @@ val stageNsfwModel = tasks.register<Copy>("stageNsfwModel") {
 
 // Make sure staging happens before assets are merged into the APK.
 tasks.named("preBuild") { dependsOn(stageNsfwModel) }
+
+// ---------------------------------------------------------------------------
+// checkTranslations — every language must have EXACTLY the same string keys as
+// the English master (res/values/strings.xml). English is the source of truth.
+//
+// For each res/values-<code>/strings.xml it reports the keys that are MISSING
+// (in the master but not translated) and EXTRA (present but not in the master,
+// usually a typo or a removed key). Any mismatch fails the build, so a
+// half-translated or drifted language can't ship. Runs as part of preBuild, so
+// it also gates every assembleDebug/assembleRelease (i.e. ./deploy). Run it on
+// its own with:  ./gradlew checkTranslations
+// ---------------------------------------------------------------------------
+val checkTranslations = tasks.register("checkTranslations") {
+    group = "verification"
+    description = "Verify every res/values-*/strings.xml has the same <string> keys as the English master."
+    val resDir = layout.projectDirectory.dir("src/main/res").asFile
+    inputs.dir(resDir)
+    doLast {
+        val master = resDir.resolve("values/strings.xml")
+        if (!master.exists()) throw GradleException("Missing English master: ${master.path}")
+        val keyRe = Regex("""<string\s+name="([^"]+)"""")
+        val commentRe = Regex("""(?s)<!--.*?-->""")   // strip comments so examples inside them don't count
+        fun keysOf(f: java.io.File): Set<String> =
+            keyRe.findAll(f.readText().replace(commentRe, "")).map { it.groupValues[1] }.toSet()
+
+        val masterKeys = keysOf(master)
+        val problems = StringBuilder()
+        resDir.listFiles()
+            ?.filter { it.isDirectory && it.name.startsWith("values-") }
+            ?.sortedBy { it.name }
+            ?.forEach { dir ->
+                val f = dir.resolve("strings.xml")
+                if (!f.exists()) return@forEach          // locale dir with no strings.xml: skip
+                val keys = keysOf(f)
+                val missing = (masterKeys - keys).sorted()
+                val extra = (keys - masterKeys).sorted()
+                if (missing.isNotEmpty() || extra.isNotEmpty()) {
+                    problems.appendLine("• ${dir.name}/strings.xml")
+                    if (missing.isNotEmpty())
+                        problems.appendLine("    MISSING ${missing.size} (in English, not translated): ${missing.joinToString(", ")}")
+                    if (extra.isNotEmpty())
+                        problems.appendLine("    EXTRA ${extra.size} (not in the English master): ${extra.joinToString(", ")}")
+                }
+            }
+        if (problems.isNotEmpty())
+            throw GradleException(
+                "Translation keys do not match the English master (src/main/res/values/strings.xml):\n$problems"
+            )
+        logger.lifecycle("checkTranslations: OK — all locales match the English master (${masterKeys.size} keys).")
+    }
+}
+tasks.named("preBuild") { dependsOn(checkTranslations) }

@@ -112,8 +112,8 @@ class BorderlineScorerTest {
 
     // ── The attraction switches ──────────────────────────────────────────────────────
 
-    private val womenOff = BorderlineScorer.Settings(blockFemale = false, blockMale = true)
-    private val menOff = BorderlineScorer.Settings(blockFemale = true, blockMale = false)
+    private val womenOff = BorderlineScorer.Settings(blockFemale = false, blockMale = true, relaxed = false)
+    private val menOff = BorderlineScorer.Settings(blockFemale = true, blockMale = false, relaxed = false)
 
     @Test
     fun `turning the women switch off lets swimwear and lingerie through`() {
@@ -142,7 +142,7 @@ class BorderlineScorerTest {
                 BorderlineScorer.evaluate(it, null, null, menOff) != null)
             assertTrue("'$it' must still block with both off",
                 BorderlineScorer.evaluate(
-                    it, null, null, BorderlineScorer.Settings(false, false),
+                    it, null, null, BorderlineScorer.Settings(false, false, relaxed = false),
                 ) != null)
         }
     }

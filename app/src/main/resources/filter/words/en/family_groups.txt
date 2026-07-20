@@ -1,0 +1,23 @@
+# Word families — inflections count as ONE signal. First word on a line is the family head;
+# the rest map to it. LANGUAGE-SPECIFIC. Loaded by BannedWords.famOf.
+nude, nudes, nudity
+boob, boobs, boobies
+tits, titties, titty
+slut, sluts, slutty
+whore, whores
+pussy, pussies
+cock, cocks
+cum, cumming
+nipple, nipples
+wank, wanking
+vagina, vaginal
+dildo, dildos
+orgasm, orgasms
+sextoy, sextoys
+masturbate, masturbating, masturbation
+porn, porno, pornographic, pornography
+breast, breasts
+buttock, buttocks
+thong, thongs
+hottie, hotties
+bikini, bikinis

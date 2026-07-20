@@ -1,0 +1,25 @@
+# Mixed-content sites: LIMIT, don't block (hand-curated greylist).
+# One host per line. "#" starts a comment. A bare domain also covers its subdomains.
+# LANGUAGE-NEUTRAL. Loaded by FilterData → DomainGreylist.
+
+reddit.com
+redd.it
+x.com
+twitter.com
+t.co
+tumblr.com
+imgur.com
+pinterest.com
+deviantart.com
+quora.com
+9gag.com
+twitch.tv
+discord.com
+tiktok.com
+instagram.com
+snapchat.com
+facebook.com
+fb.com
+vk.com
+flickr.com
+wattpad.com

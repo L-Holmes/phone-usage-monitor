@@ -214,11 +214,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun promptCustom(category: String, onAdded: (String) -> Unit) {
         val input = EditText(this).apply {
-            hint = "Type it"; inputType = InputType.TYPE_CLASS_TEXT
+            hint = getString(R.string.picker_type_it); inputType = InputType.TYPE_CLASS_TEXT
             val p = (20 * resources.displayMetrics.density).toInt(); setPadding(p, p, p, p)
         }
-        AlertDialog.Builder(this).setTitle("Add your own").setView(input)
-            .setPositiveButton("Add") { _, _ ->
+        AlertDialog.Builder(this).setTitle(getString(R.string.picker_add_own)).setView(input)
+            .setPositiveButton(getString(R.string.picker_add)) { _, _ ->
                 val n = input.text.toString().trim().replace("\n", " ")
                 if (n.isNotEmpty()) { CustomOptions.add(this, category, n); onAdded(n) }
             }
@@ -242,14 +242,14 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(titleText(title))
         root.addView(TextView(this).apply {
-            text = "Select all that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            text = getString(R.string.picker_select_all); textSize = 14f; setTextColor(0xFF6B7075.toInt())
             setPadding(0, 0, 0, (4 * dp).toInt())
         })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
         })
-        val cont = bigContinue("Continue") { if (selected.isNotEmpty()) onPick(selected.toList()) }
+        val cont = bigContinue(getString(R.string.common_continue)) { if (selected.isNotEmpty()) onPick(selected.toList()) }
         root.addView(cont)
 
         fun choices(): List<Choice> {
@@ -320,23 +320,23 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(titleText("What's feeding it right now?"))
+        root.addView(titleText(getString(R.string.temp_groups_title)))
         root.addView(TextView(this).apply {
-            text = "Pick any that apply."; textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            text = getString(R.string.temp_groups_sub); textSize = 14f; setTextColor(0xFF6B7075.toInt())
             setPadding(0, 0, 0, (4 * dp).toInt())
         })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
         })
-        val cont = bigContinue("Continue") {
+        val cont = bigContinue(getString(R.string.common_continue)) {
             if (tGroups.isNotEmpty()) { tSubQueue = tGroups.toList(); tSubIndex = 0; renderNextSub() }
         }
         root.addView(cont)
         fun renderList() {
             list.removeAllViews()
             TGroup.values().forEach { g ->
-                list.addView(checkRow(Choice(g.short, g.icon, g.example), g in tGroups) {
+                list.addView(checkRow(Choice(g.short, g.icon, tgroupExample(g), label = tgroupShort(g)), g in tGroups) {
                     if (g in tGroups) tGroups.remove(g) else tGroups.add(g)
                     renderList(); tuneContinue(cont, tGroups.isNotEmpty())
                 })
@@ -351,11 +351,11 @@ class MainActivity : AppCompatActivity() {
         val g = tSubQueue[tSubIndex]
         tBack = { if (tSubIndex == 0) temptationGroupsScreen() else { tSubIndex--; renderNextSub() } }
         if (g == TGroup.FEELING || g == TGroup.DOING) {
-            pickMultiWithCustomScreen(g.title, baseFor(g), g.category, onBack = { temptationBack() }) {
+            pickMultiWithCustomScreen(tgroupTitle(g), baseFor(g), g.category, onBack = { temptationBack() }) {
                 tAnswers[g] = it.joinToString(", "); tSubIndex++; renderNextSub()
             }
         } else {
-            pickWithCustomScreen(g.title, baseFor(g), g.category, onBack = { temptationBack() }) {
+            pickWithCustomScreen(tgroupTitle(g), baseFor(g), g.category, onBack = { temptationBack() }) {
                 tAnswers[g] = it; tSubIndex++; renderNextSub()
             }
         }
@@ -363,7 +363,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun temptationUrgeScreen() {
         tBack = { if (tSubQueue.isEmpty()) temptationGroupsScreen() else { tSubIndex = tSubQueue.lastIndex; renderNextSub() } }
-        urgeScaleScreen("How strong is the urge?", onBack = { temptationBack() }) {
+        urgeScaleScreen(getString(R.string.temp_urge_q), onBack = { temptationBack() }) {
             tUrgeIndex = Opts.URGE_LEVELS.indexOf(it).coerceAtLeast(0)
             startRideWave()
         }
@@ -378,7 +378,7 @@ class MainActivity : AppCompatActivity() {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(titleText("Manage blocks"))
+        root.addView(titleText(getString(R.string.manage_title)))
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -397,7 +397,7 @@ class MainActivity : AppCompatActivity() {
                 text = label; textSize = 15f
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
-            addView(Button(this@MainActivity).apply { text = "Remove"; setOnClickListener { onRemove() } })
+            addView(Button(this@MainActivity).apply { text = getString(R.string.common_remove); setOnClickListener { onRemove() } })
         }
 
         fun reload() {
@@ -405,32 +405,32 @@ class MainActivity : AppCompatActivity() {
             var any = false
             val blockedApps = AppRules.apps(this).filter { it.first == AppRules.BLOCK }
             if (blockedApps.isNotEmpty()) {
-                any = true; container.addView(header("Blocked apps"))
+                any = true; container.addView(header(getString(R.string.manage_blocked_apps)))
                 blockedApps.forEach { (_, pkg) ->
                     container.addView(row(appLabel(pkg)) { AppRules.remove(this, true, pkg); reload() })
                 }
             }
             val greyApps = AppRules.apps(this).filter { it.first == AppRules.GREY }
             if (greyApps.isNotEmpty()) {
-                any = true; container.addView(header("Greylisted apps (${GreyUsage.LIMIT_MIN} min/hour)"))
+                any = true; container.addView(header(getString(R.string.manage_greylisted_apps, GreyUsage.LIMIT_MIN)))
                 greyApps.forEach { (_, pkg) ->
                     container.addView(row(appLabel(pkg)) { AppRules.remove(this, true, pkg); reload() })
                 }
             }
             val siteRules = BlockRules.all()
             if (siteRules.isNotEmpty()) {
-                any = true; container.addView(header("Blocked sites & pages"))
+                any = true; container.addView(header(getString(R.string.manage_blocked_sites)))
                 siteRules.forEach { r -> container.addView(row(r) { BlockRules.remove(this, r); reload() }) }
             }
             val greyHosts = AppRules.hosts(this)
             if (greyHosts.isNotEmpty()) {
-                any = true; container.addView(header("Greylisted sites (${GreyUsage.LIMIT_MIN} min/hour)"))
+                any = true; container.addView(header(getString(R.string.manage_greylisted_sites, GreyUsage.LIMIT_MIN)))
                 greyHosts.forEach { (_, host) ->
                     container.addView(row(host) { AppRules.remove(this, false, host); reload() })
                 }
             }
             if (!any) container.addView(TextView(this).apply {
-                text = "Nothing blocked yet."; setPadding(0, (16 * dp).toInt(), 0, 0)
+                text = getString(R.string.manage_nothing); setPadding(0, (16 * dp).toInt(), 0, 0)
             })
         }
         reload()
@@ -440,10 +440,98 @@ private fun appLabel(pkg: String): String = try {
     packageManager.getApplicationInfo(pkg, 0).loadLabel(packageManager).toString()
 } catch (t: Throwable) { pkg }
 
+// ── Temptation-category display text (from strings.xml, keyed by spec id) ────────────
+private fun habitResId(key: String, suffix: String): Int =
+    resources.getIdentifier("habit_${key}_$suffix", if (suffix == "options") "array" else "string", packageName)
+private fun habitLabel(key: String): String = getString(habitResId(key, "label"))
+private fun habitHint(key: String): String = getString(habitResId(key, "hint"))
+private fun habitOption(key: String, index: Int): String =
+    resources.getStringArray(habitResId(key, "options")).getOrElse(index) { "" }
+
+private fun temptResId(id: String, suffix: String): Int =
+    resources.getIdentifier("temptspec_${id}_$suffix", if (suffix == "covers") "array" else "string", packageName)
+private fun temptTitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "title"))
+private fun temptSubtitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "subtitle"))
+private fun temptInsteadOf(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "insteadof"))
+private fun temptCovers(spec: AppConfig.TemptationSpec): List<String> =
+    resources.getStringArray(temptResId(spec.id, "covers")).toList()
+
+/** Localised mode name for the UI (falls back to AppConfig's English name for unknown ids). */
+private fun modeDisplayName(id: String): String = when (id) {
+    Mode.OFF -> getString(R.string.mode_off_name)
+    Mode.RELAXED -> getString(R.string.mode_relaxed_name)
+    Mode.STRICT -> getString(R.string.mode_strict_name)
+    Mode.SUPERHARDCORE -> getString(R.string.mode_superhardcore_name)
+    else -> AppConfig.modeName(id)
+}
+
+/** The plain-English rule bullets for a mode (from string-arrays; empty for unknown ids). */
+private fun modeRules(id: String): List<String> {
+    val arr = when (id) {
+        Mode.OFF -> R.array.mode_off_rules
+        Mode.RELAXED -> R.array.mode_relaxed_rules
+        Mode.STRICT -> R.array.mode_strict_rules
+        Mode.SUPERHARDCORE -> R.array.mode_superhardcore_rules
+        else -> return emptyList()
+    }
+    return resources.getStringArray(arr).toList()
+}
+
+/** The "always on, in every mode" rules. The three time/limit lines take live values. */
+private fun alwaysOnRules(): List<String> = listOf(
+    getString(R.string.always_on_01),
+    getString(R.string.always_on_02),
+    getString(R.string.always_on_03),
+    getString(R.string.always_on_04),
+    getString(R.string.always_on_05),
+    getString(R.string.always_on_06),
+    getString(R.string.always_on_07),
+    getString(R.string.always_on_08, GreyUsage.LIMIT_MIN),
+    getString(R.string.always_on_09, (Lockdown.DURATION_MS / 60_000).toInt()),
+    getString(R.string.always_on_10, LoosenLimit.LIFETIME_MAX),
+    getString(R.string.always_on_11),
+    getString(R.string.always_on_12),
+    getString(R.string.always_on_13),
+)
+
+/**
+ * The in-app language picker. Lists LocaleHelper.SUPPORTED (system default first, then each
+ * shipped language in its own name), applies the choice via the Android per-app-language API,
+ * and recreates the UI so it takes effect at once. With only English shipped this is a no-op
+ * for now, but the whole path is live — adding a values-<code>/ folder makes it real.
+ */
+private fun showLanguagePicker() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText(getString(R.string.settings_language)))
+    root.addView(TextView(this).apply {
+        text = getString(R.string.settings_language_subtitle)
+        textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    LocaleHelper.SUPPORTED.forEach { lang ->
+        val name = if (lang.tag.isBlank()) getString(R.string.language_system_default)
+                   else lang.nativeNameResOrText
+        root.addView(Button(this).apply {
+            text = if (LocaleHelper.isCurrent(lang)) "✓  $name" else name
+            setOnClickListener {
+                LocaleHelper.apply(lang.tag)
+                Toast.makeText(this@MainActivity, getString(R.string.language_changed), Toast.LENGTH_SHORT).show()
+                recreate()   // re-inflate everything in the chosen language
+            }
+        })
+    }
+    setContentWithThumb(root) { setupMainScreen() }
+}
+
 // ── Statistics ─────────────────────────────────────────────────────────────
-private val DOW_ORDER = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+// Localized short weekday names, Mon..Sun order (shortWeekdays is 1=Sun..7=Sat). Used as chart
+// labels AND matched against dowName(ts) below, so both derive from the SAME locale.
+private val DOW_ORDER: List<String>
+    get() = java.text.DateFormatSymbols(Locale.getDefault()).shortWeekdays
+        .let { w -> listOf(w[2], w[3], w[4], w[5], w[6], w[7], w[1]) }
 private fun hourOf(ts: Long) = SimpleDateFormat("H", Locale.US).format(Date(ts)).toIntOrNull() ?: 0
-private fun dowName(ts: Long) = SimpleDateFormat("EEE", Locale.US).format(Date(ts))
+private fun dowName(ts: Long) = SimpleDateFormat("EEE", Locale.getDefault()).format(Date(ts))
 private fun topCounts(items: List<String>, limit: Int = 8): List<Pair<String, Int>> =
     items.filter { it.isNotBlank() }.groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(limit).map { it.key to it.value }
@@ -453,16 +541,16 @@ private fun showStatsMenu() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Statistics"))
+    root.addView(titleText(getString(R.string.stats_title)))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     // NOTE: "Dopamine baseline" deliberately does NOT live here. It is a whole-phone,
     // whole-life measure, not an adult-content one, so it belongs on the Productivity page -
     // see showProductivity(). Don't move it back in here.
-    list.addView(pickCard("Progress & reward") { showProgress() })
-    list.addView(pickCard("Where & how it happens") { showContextStats() })
-    list.addView(pickCard("Temptation patterns") { showTemptationStats() })
-    list.addView(pickCard("Relapse patterns") { showRelapseStats() })
-    list.addView(pickCard("Unlock attempts") { showLoosenStats() })
+    list.addView(pickCard(getString(R.string.stats_progress)) { showProgress() })
+    list.addView(pickCard(getString(R.string.stats_context)) { showContextStats() })
+    list.addView(pickCard(getString(R.string.stats_temptation)) { showTemptationStats() })
+    list.addView(pickCard(getString(R.string.stats_relapse)) { showRelapseStats() })
+    list.addView(pickCard(getString(R.string.stats_unlock)) { showLoosenStats() })
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
@@ -487,7 +575,7 @@ private var lifeInputsBack: () -> Unit = { showProductivity() }
 private fun showAboutYou() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("About you"))
+    root.addView(titleText(getString(R.string.about_you_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -495,10 +583,7 @@ private fun showAboutYou() {
     setContentWithThumb(root) { aboutYouBack() }
 
     c.addView(TextView(this).apply {
-        text = "Optional. We use this only to estimate what the lost time is actually costing " +
-            "you — nothing here leaves your phone, and nothing here is shared.\n\n" +
-            "Leave it blank and we'll assume £${AboutYou.DEFAULT_HOURLY_GBP * AboutYou.HOURS_PER_YEAR / 1000}k a year " +
-            "(£${AboutYou.DEFAULT_HOURLY_GBP}/hr). Everything on the home page updates the moment you type."
+        text = getString(R.string.about_intro, AboutYou.DEFAULT_HOURLY_GBP * AboutYou.HOURS_PER_YEAR / 1000, AboutYou.DEFAULT_HOURLY_GBP)
         textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (16 * dp).toInt())
     })
@@ -515,7 +600,7 @@ private fun showAboutYou() {
         c.addView(EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             setText(get().takeIf { it > 0 }?.toString().orEmpty())
-            hint = "£ per year"
+            hint = getString(R.string.about_per_year)
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) {
                     set(s?.toString()?.toIntOrNull() ?: 0)
@@ -526,18 +611,15 @@ private fun showAboutYou() {
         })
     }
 
-    moneyRow("What you earn a year",
-        "Your day job, after tax if you like. Only know your hourly rate? " +
-            "About ${AboutYou.HOURS_PER_YEAR} working hours make a year - £15/hr ≈ £29,000.",
+    moneyRow(getString(R.string.about_earn_label),
+        getString(R.string.about_earn_sub, AboutYou.HOURS_PER_YEAR),
         { AboutYou.annualWage(this) }, { AboutYou.setAnnualWage(this, it) })
-    moneyRow("Side income a year (optional)",
-        "A business you're building, freelance work. Don't know? LEAVE IT BLANK - " +
-            "a guess here just skews your numbers. If it's higher than your wage, we use it.",
+    moneyRow(getString(R.string.about_side_label),
+        getString(R.string.about_side_sub),
         { AboutYou.annualSide(this) }, { AboutYou.setAnnualSide(this, it) })
 
     c.addView(TextView(this).apply {
-        text = "\nWhy we ask: \"3 hours a day\" is abstract and easy to shrug off. " +
-            "\"£13,000 a year\" is not."
+        text = getString(R.string.about_whyask)
         textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
     })
@@ -554,7 +636,7 @@ private fun showDopamine() {
     val today = DopamineLog.today(this)
     val r = DopamineScore.of(today)
     val root = vbox(pad)
-    root.addView(titleText("Dopamine baseline"))
+    root.addView(titleText(getString(R.string.dop_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -563,9 +645,7 @@ private fun showDopamine() {
 
     if (!r.hasData) {
         c.addView(TextView(this).apply {
-            text = "Nothing measured yet today.\n\nThis builds itself as you use the phone - what you " +
-                "spend time on, how often you unlock, how fast you scroll, when and where you do it. " +
-                "Come back later today."
+            text = getString(R.string.dop_empty)
             textSize = 15f; setTextColor(0xFF6B7075.toInt()); setLineSpacing(0f, 1.2f)
         })
         return
@@ -592,7 +672,7 @@ private fun showDopamine() {
         text = r.band; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(r.colour)
     })
     numbers.addView(TextView(this).apply {
-        text = "out of 100 · higher is more fried\ntoday so far"
+        text = getString(R.string.dop_out_of_100)
         textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0)
     })
     scaleRow.addView(numbers)
@@ -602,12 +682,12 @@ private fun showDopamine() {
     val history = DopamineLog.history(this, 14)
     val scores = history.map { DopamineScore.of(it).score.toFloat() }.toFloatArray()
     if (scores.count { it > 0f } >= 2) {
-        c.addView(statHeader("LAST 14 DAYS", dp))
+        c.addView(statHeader(getString(R.string.dop_last14), dp))
         c.addView(TrendView(this, scores), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (120 * dp).toInt()))
         val avg = scores.filter { it > 0f }.average().toInt()
         c.addView(TextView(this).apply {
-            text = "Average $avg over the days we have data for."
+            text = getString(R.string.dop_average, avg)
             textSize = 13f; setTextColor(0xFF7B848C.toInt())
             setPadding(0, (6 * dp).toInt(), 0, 0)
         })
@@ -615,30 +695,29 @@ private fun showDopamine() {
 
     // ── what's driving it ──
     if (r.contributors.isNotEmpty()) {
-        c.addView(statHeader("WHAT'S DRIVING IT TODAY", dp))
+        c.addView(statHeader(getString(R.string.dop_driving), dp))
         r.contributors.forEach { line ->
             c.addView(scoreLineRow(line.label, line.points, line.detail, 0xFFB3261E.toInt(), dp))
         }
     }
     if (r.credits.isNotEmpty()) {
-        c.addView(statHeader("PULLING IT DOWN", dp))
+        c.addView(statHeader(getString(R.string.dop_pulling_down), dp))
         r.credits.forEach { line ->
             c.addView(scoreLineRow(line.label, line.points, line.detail, 0xFF2E7D32.toInt(), dp))
         }
     }
 
-    c.addView(statHeader("MORE", dp))
-    c.addView(captionedButton("The ranks", "every level, and what it takes to reach them",
+    c.addView(statHeader(getString(R.string.dop_more), dp))
+    c.addView(captionedButton(getString(R.string.dop_ranks_btn), getString(R.string.dop_ranks_sub),
         0xFF2E7D32.toInt()) { showDopamineRanks() })
-    c.addView(captionedButton("How is this calculated?", "every rule, and what it's worth",
+    c.addView(captionedButton(getString(R.string.dop_maths_btn), getString(R.string.dop_maths_sub),
         0xFF34464E.toInt()) { showDopamineMaths() })
-    c.addView(captionedButton("How do I bring this down?", "what actually moves the number",
+    c.addView(captionedButton(getString(R.string.dop_guidance_btn), getString(R.string.dop_guidance_sub),
         0xFF3E535C.toInt()) { showDopamineGuidance() })
-    c.addView(captionedButton("Your habits estimate", "self-reported · does NOT affect the score above",
+    c.addView(captionedButton(getString(R.string.dop_habits_btn), getString(R.string.dop_habits_sub),
         0xFF52796F.toInt()) { lifeInputsBack = { showDopamine() }; showLifeInputs() })
     c.addView(TextView(this).apply {
-        text = "A rough model, not a medical measurement. It exists to make a pattern visible, " +
-            "nothing more."
+        text = getString(R.string.dop_disclaimer)
         textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
         setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
     })
@@ -651,7 +730,7 @@ private fun showDopamine() {
 private fun showDopamineRanks() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("The ranks"))
+    root.addView(titleText(getString(R.string.dop_ranks_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -659,9 +738,7 @@ private fun showDopamineRanks() {
     setContentWithThumb(root) { showDopamine() }
 
     c.addView(TextView(this).apply {
-        text = "Hold a low baseline and you climb. The belts are earned by TIME - not one " +
-            "good day, but weeks of them. A rough week drops you fast; climbing back is " +
-            "the long game. That's the point."
+        text = getString(R.string.dop_ranks_intro)
         textSize = 14f; setTextColor(0xFF52606A.toInt()); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
@@ -680,7 +757,7 @@ private fun showDopamineRanks() {
                 LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = (8 * dp).toInt() }
             addView(TextView(this@MainActivity).apply {
-                text = level.longTitle + (if (mine) "   ← you" else "")
+                text = level.longTitle + (if (mine) getString(R.string.dop_ranks_you) else "")
                 textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(level.colour)
             })
             addView(TextView(this@MainActivity).apply {
@@ -699,7 +776,7 @@ private fun showDopamineMaths() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val t = DopamineTuning
     val root = vbox(pad)
-    root.addView(titleText("How it's calculated"))
+    root.addView(titleText(getString(R.string.dop_maths_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -707,8 +784,7 @@ private fun showDopamineMaths() {
     setContentWithThumb(root) { showDopamine() }
 
     c.addView(TextView(this).apply {
-        text = "Every rule below adds points to a daily total, capped at 100. Higher is worse. " +
-            "Nothing here is hidden from you."
+        text = getString(R.string.dop_maths_intro)
         textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
@@ -744,11 +820,9 @@ private fun showDopamineMaths() {
         c.addView(card)
     }
 
-    c.addView(statHeader("1 · TIME SPENT — THE BIG ONE", dp))
+    c.addView(statHeader(getString(R.string.dop_maths_h1), dp))
     c.addView(TextView(this).apply {
-        text = "Each category is worth points at a full dose. A \"full dose\" is " +
-            "${t.DOSE_MAX_HOURS.toInt()} hours or more in a day. Below that it scales up on a " +
-            "curve, so the fourth hour costs you more than the first."
+        text = getString(R.string.dop_maths_dose, t.DOSE_MAX_HOURS.toInt())
         textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
     })
     DopamineCategory.values()
@@ -757,71 +831,52 @@ private fun showDopamineMaths() {
         .forEach { cat ->
             val pts = Math.round(t.CATEGORY_POINTS[cat] ?: 0f)
             c.addView(TextView(this).apply {
-                text = "•  ${cat.label} — up to $pts points"
+                text = getString(R.string.dop_maths_cat_line, cat.label, pts)
                 textSize = 14f; setTextColor(0xFF3C4650.toInt())
                 setPadding(0, (7 * dp).toInt(), 0, 0)
             })
         }
     c.addView(TextView(this).apply {
-        text = "Example: 2 hours of ${DopamineCategory.FAST_VIDEO.label.lowercase()} is half the " +
-            "maximum dose, which on the curve is about " +
-            "${Math.round(t.doseMultiplier(2f) * 100)}% of " +
-            "${Math.round(t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f)} points ≈ " +
-            "${Math.round(t.doseMultiplier(2f) * (t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f))} points."
+        text = getString(R.string.dop_maths_example, DopamineCategory.FAST_VIDEO.label.lowercase(), Math.round(t.doseMultiplier(2f) * 100), Math.round(t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f), Math.round(t.doseMultiplier(2f) * (t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f)))
         textSize = 12f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (10 * dp).toInt(), 0, 0)
     })
 
-    c.addView(statHeader("2 · EVERYTHING ELSE", dp))
-    rule("When you did it",
-        "×${t.LATE_NIGHT_MULTIPLIER} / ×${t.JUST_WOKE_MULTIPLIER}",
-        "Time spent between ${t.LATE_NIGHT_FROM}:00 and 0${t.LATE_NIGHT_TO}:00 is multiplied by " +
-            "${t.LATE_NIGHT_MULTIPLIER} — you pay twice, once for the hit and once for the sleep. " +
-            "Use in the first ${t.JUST_WOKE_WINDOW_MIN} minutes after waking is multiplied by " +
-            "${t.JUST_WOKE_MULTIPLIER}.")
-    rule("Phone unlocks", "up to ${Math.round(t.UNLOCKS_MAX_POINTS)}",
-        "Nothing below ${Math.round(t.UNLOCKS_PER_HOUR_OK)} an hour. Full points at " +
-            "${Math.round(t.UNLOCKS_PER_HOUR_BAD)} an hour or more.")
-    rule("Straight-in opens", "up to ${Math.round(t.URGENT_OPEN_MAX_POINTS)}",
-        "${Math.round(t.URGENT_OPEN_POINTS)} points each time you unlock the phone and are inside " +
-            "a feed within ${t.URGENT_OPEN_SECONDS} seconds. No decision happened there.")
-    rule("Compulsive checking", "up to ${Math.round(t.CHECKS_MAX_POINTS)}",
-        "Based on the MOST times you opened any single app within one hour. Nothing below " +
-            "${t.CHECKS_PER_HOUR_OK} opens; full points at ${t.CHECKS_PER_HOUR_BAD}.")
-    rule("Scrolling / tapping rate", "up to ${Math.round(t.INTERACTIONS_MAX_POINTS)}",
-        "Interactions per minute of screen time. Nothing below ${Math.round(t.INTERACTIONS_PER_MIN_OK)}/min " +
-            "(that's reading). Full points at ${Math.round(t.INTERACTIONS_PER_MIN_BAD)}/min (that's thumbing a feed).")
-    rule("Lying down", "up to ${Math.round(t.LYING_MAX_POINTS)}",
-        "Full points at ${t.POSTURE_FULL_HOURS.toInt()} hours of phone use lying down.")
-    rule("In the dark", "up to ${Math.round(t.DARK_MAX_POINTS)}",
-        "Full points at ${t.POSTURE_FULL_HOURS.toInt()} hours of phone use in a dark room.")
+    c.addView(statHeader(getString(R.string.dop_maths_h2), dp))
+    rule(getString(R.string.dop_maths_when_title),
+        getString(R.string.dop_maths_when_worth, t.LATE_NIGHT_MULTIPLIER, t.JUST_WOKE_MULTIPLIER),
+        getString(R.string.dop_maths_when_body, t.LATE_NIGHT_FROM, t.LATE_NIGHT_TO, t.LATE_NIGHT_MULTIPLIER, t.JUST_WOKE_WINDOW_MIN, t.JUST_WOKE_MULTIPLIER))
+    rule(getString(R.string.dop_maths_unlocks_title), getString(R.string.dop_maths_up_to, Math.round(t.UNLOCKS_MAX_POINTS)),
+        getString(R.string.dop_maths_unlocks_body, Math.round(t.UNLOCKS_PER_HOUR_OK), Math.round(t.UNLOCKS_PER_HOUR_BAD)))
+    rule(getString(R.string.dop_maths_straightin_title), getString(R.string.dop_maths_up_to, Math.round(t.URGENT_OPEN_MAX_POINTS)),
+        getString(R.string.dop_maths_straightin_body, Math.round(t.URGENT_OPEN_POINTS), t.URGENT_OPEN_SECONDS))
+    rule(getString(R.string.dop_maths_checking_title), getString(R.string.dop_maths_up_to, Math.round(t.CHECKS_MAX_POINTS)),
+        getString(R.string.dop_maths_checking_body, t.CHECKS_PER_HOUR_OK, t.CHECKS_PER_HOUR_BAD))
+    rule(getString(R.string.dop_maths_scrolling_title), getString(R.string.dop_maths_up_to, Math.round(t.INTERACTIONS_MAX_POINTS)),
+        getString(R.string.dop_maths_scrolling_body, Math.round(t.INTERACTIONS_PER_MIN_OK), Math.round(t.INTERACTIONS_PER_MIN_BAD)))
+    rule(getString(R.string.dop_maths_lying_title), getString(R.string.dop_maths_up_to, Math.round(t.LYING_MAX_POINTS)),
+        getString(R.string.dop_maths_lying_body, t.POSTURE_FULL_HOURS.toInt()))
+    rule(getString(R.string.dop_maths_dark_title), getString(R.string.dop_maths_up_to, Math.round(t.DARK_MAX_POINTS)),
+        getString(R.string.dop_maths_dark_body, t.POSTURE_FULL_HOURS.toInt()))
 
-    c.addView(statHeader("3 · WHAT TAKES POINTS OFF", dp))
+    c.addView(statHeader(getString(R.string.dop_maths_h3), dp))
     c.addView(TextView(this).apply {
-        text = "Time with the screen off — up to ${Math.round(t.SCREEN_OFF_MAX_POINTS)} points back, " +
-            "with full credit at ${t.SCREEN_OFF_FULL_HOURS.toInt()} waking hours off the phone.\n\n" +
-            "That is deliberately small. A calm evening does not undo a four-hour binge, and a " +
-            "score that pretended it did would be no use to you."
+        text = getString(R.string.dop_maths_screenoff, Math.round(t.SCREEN_OFF_MAX_POINTS), t.SCREEN_OFF_FULL_HOURS.toInt())
         textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
     })
 
-    c.addView(statHeader("4 · WHAT THE NUMBER IS CALLED", dp))
+    c.addView(statHeader(getString(R.string.dop_maths_h4), dp))
     listOf(0, 15, 30, 45, 60, 80).forEach { lo ->
         c.addView(TextView(this).apply {
-            text = "•  $lo+  ·  ${t.band(lo)}"
+            text = getString(R.string.dop_maths_band_line, lo, t.band(lo))
             textSize = 14f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(t.bandColour(lo)); setPadding(0, (6 * dp).toInt(), 0, 0)
         })
     }
 
-    c.addView(statHeader("WHAT WE CAN'T MEASURE", dp))
+    c.addView(statHeader(getString(R.string.dop_maths_h5), dp))
     c.addView(TextView(this).apply {
-        text = "Being straight with you about the holes:\n\n" +
-            "• We cannot tell when you woke up. Android gives us no alarm signal, so we treat " +
-            "your first unlock after a ${t.WAKE_GAP_HOURS.toInt()}+ hour gap as \"just woke up\". " +
-            "Nap and it'll misfire.\n\n" +
-            "• Screen-off credit doesn't know whether a podcast is playing. Seeing that needs a " +
-            "permission this app deliberately doesn't take."
+        text = getString(R.string.dop_maths_cant, t.WAKE_GAP_HOURS.toInt())
         textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, 0, 0, (24 * dp).toInt())
     })
@@ -857,7 +912,7 @@ private fun showDopamineGuidance() {
     val today = DopamineLog.today(this)
     val r = DopamineScore.of(today)
     val root = vbox(pad)
-    root.addView(titleText("Bringing it down"))
+    root.addView(titleText(getString(R.string.dop_guid_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -867,30 +922,23 @@ private fun showDopamineGuidance() {
     // The part aimed squarely at what THEIR number is actually made of.
     val top = r.contributors.firstOrNull { it.points > 0 }
     if (top != null) {
-        c.addView(statHeader("YOUR BIGGEST ONE", dp))
+        c.addView(statHeader(getString(R.string.dop_guid_biggest), dp))
         c.addView(TextView(this).apply {
-            text = "${top.label} — ${top.detail}.\n\n${adviceFor(top.label)}"
+            text = getString(R.string.dop_guid_biggest_body, top.label, top.detail, adviceFor(top.label))
             textSize = 15f; setTextColor(0xFF1F2933.toInt()); setLineSpacing(0f, 1.2f)
             setPadding(0, 0, 0, (8 * dp).toInt())
         })
     }
 
-    c.addView(statHeader("WHAT ACTUALLY MOVES IT", dp))
+    c.addView(statHeader(getString(R.string.dop_guid_moves), dp))
     listOf(
-        "Time is the biggest lever, by a mile." to
-            "Everything else in the score is small change next to how long you spend in the worst categories. An hour less short-form video will move this number more than a perfect day of everything else.",
-        "The first hour matters least, the fourth matters most." to
-            "The curve is deliberately steep at the top end. Cutting a four-hour day to three does more than cutting a one-hour day to zero.",
-        "Don't start the day in a feed." to
-            "Use just after waking is weighted harder, and it sets the tone for the whole day. Put the first unlock somewhere else.",
-        "Don't end it in one either." to
-            "Late-night use is weighted hardest of all, because you're paying twice: the hit, and the sleep.",
-        "Unlocks are a habit, not a need." to
-            "Most unlocks aren't for anything. The count itself is the signal - if it's high, you're reaching for it on autopilot.",
-        "Slow down." to
-            "A high interaction rate means thumbing a feed. A low one means reading something. The same hour can be either.",
-        "Get out of bed, and turn a light on." to
-            "Lying down in the dark with a phone is the single most reliable setup for a bad night. Strict mode's night guard exists for exactly this.",
+        getString(R.string.dop_guid_h1) to getString(R.string.dop_guid_b1),
+        getString(R.string.dop_guid_h2) to getString(R.string.dop_guid_b2),
+        getString(R.string.dop_guid_h3) to getString(R.string.dop_guid_b3),
+        getString(R.string.dop_guid_h4) to getString(R.string.dop_guid_b4),
+        getString(R.string.dop_guid_h5) to getString(R.string.dop_guid_b5),
+        getString(R.string.dop_guid_h6) to getString(R.string.dop_guid_b6),
+        getString(R.string.dop_guid_h7) to getString(R.string.dop_guid_b7),
     ).forEach { (h, b) ->
         c.addView(TextView(this).apply {
             text = h; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
@@ -901,9 +949,7 @@ private fun showDopamineGuidance() {
         })
     }
     c.addView(TextView(this).apply {
-        text = "\nAnd the honest bit: this recovers slowly. The anti-rules in the score are weak on " +
-            "purpose, because a walk does not undo a four-hour binge and a number that pretended " +
-            "otherwise would be useless to you."
+        text = getString(R.string.dop_guid_honest)
         textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (10 * dp).toInt(), 0, (16 * dp).toInt())
     })
@@ -911,39 +957,39 @@ private fun showDopamineGuidance() {
 
 private fun adviceFor(label: String): String = when (label) {
     DopamineCategory.ADULT.label ->
-        "This is the one this whole app is built around. Everything on the Adult Content page - strict mode, the ban list, the night guard - is aimed at exactly this."
+        getString(R.string.dop_adv_adult)
     DopamineCategory.FAST_VIDEO.label ->
-        "Short-form video is the most concentrated dose available to you. Turn on the short-form block (Temptations → Endless Scrolling) and the feeds die while the rest of the app still works."
+        getString(R.string.dop_adv_fastvideo)
     DopamineCategory.FAST_SOCIAL.label ->
-        "Drop these to the grey tier so they get a few minutes an hour and then close. Temptations → Social Comparison has the switch."
+        getString(R.string.dop_adv_fastsocial)
     DopamineCategory.IMPULSE.label ->
-        "Temptations → Impulse Shopping blocks the sites. The 48-hour basket rule does the rest."
+        getString(R.string.dop_adv_impulse)
     DopamineCategory.FORUMS_NEWS.label ->
-        "Temptations → News Cycles. Pick one time a day to read it, and block it the rest of the time."
+        getString(R.string.dop_adv_forums)
     DopamineCategory.LONG_VIDEO.label ->
-        "Less concentrated than the short stuff, but it eats whole evenings. Temptations → Binge Watching."
+        getString(R.string.dop_adv_longvideo)
     DopamineCategory.MOBILE_GAMING.label ->
-        "Temptations → Gaming & Reward Loops. Name what you're avoiding by playing."
+        getString(R.string.dop_adv_gaming)
     DopamineCategory.GAMBLING.label ->
-        "This is the one category here that can take more than your time. If it's showing up at all, it's worth treating as seriously as the adult content."
+        getString(R.string.dop_adv_gambling)
     "Phone unlocks" ->
-        "Leave it in another room. Most of these aren't decisions - you won't miss what you never reached for."
+        getString(R.string.dop_adv_unlocks)
     "Straight-in opens" ->
-        "You unlocked and were in a feed before you'd thought about it. That's the purest autopilot there is. Moving the app off your home screen breaks the reflex more than willpower does."
+        getString(R.string.dop_adv_straightin)
     "Compulsive checking" ->
-        "Opening the same app over and over in an hour is a tic, not a use. The grey tier (a few minutes an hour, then it closes) is built for it."
+        getString(R.string.dop_adv_checking)
     "Constant scrolling / tapping" ->
-        "A high rate means you're thumbing, not reading. Slowing down IS the intervention."
+        getString(R.string.dop_adv_scrolling)
     "Using it lying down", "Using it in the dark" ->
-        "Strict mode's night guard blocks non-essential apps in exactly this state. It's the single highest-leverage switch you have."
-    else -> "Cut the time first. It outweighs everything else in the score."
+        getString(R.string.dop_adv_lyingdark)
+    else -> getString(R.string.dop_adv_default)
 }
 
 // ── The self-reported habits: a SEPARATE estimate, never mixed into the score ──
 private fun showLifeInputs() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Your habits estimate"))
+    root.addView(titleText(getString(R.string.dop_life_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -951,10 +997,7 @@ private fun showLifeInputs() {
     setContentWithThumb(root) { lifeInputsBack() }
 
     val banner = TextView(this).apply {
-        text = "This does NOT affect your dopamine baseline.\n\nIt's self-reported, so it can't - " +
-            "otherwise you could tick a few boxes and watch the number you came here to face go " +
-            "down. This is a separate estimate of the restorative side of your life, and it runs " +
-            "the other way: HIGHER IS BETTER."
+        text = getString(R.string.dop_life_banner)
         textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
         background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 14 * dp; setColor(0xFFF4F6F8.toInt())
@@ -968,12 +1011,12 @@ private fun showLifeInputs() {
         setPadding(0, (16 * dp).toInt(), 0, (2 * dp).toInt())
     }
     fun paintScore() {
-        scoreLabel.text = "Restorative habits: ${LifeInputs.estimate(this)} / 100"
+        scoreLabel.text = getString(R.string.dop_life_score, LifeInputs.estimate(this))
     }
     paintScore()
     c.addView(scoreLabel)
     c.addView(TextView(this).apply {
-        text = "On a typical day."
+        text = getString(R.string.dop_life_typical)
         textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
     })
 
@@ -981,11 +1024,11 @@ private fun showLifeInputs() {
     // caffeine in cups. A shared 0-7 slider was the wrong shape for all of them.
     LifeInputs.HABITS.forEach { habit ->
         c.addView(TextView(this).apply {
-            text = habit.label; textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+            text = habitLabel(habit.key); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFF1F2933.toInt()); setPadding(0, (18 * dp).toInt(), 0, (1 * dp).toInt())
         })
         c.addView(TextView(this).apply {
-            text = habit.hint; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+            text = habitHint(habit.key); textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
             setPadding(0, 0, 0, (8 * dp).toInt())
         })
         c.addView(optionChips(habit) { paintScore() })
@@ -1016,7 +1059,7 @@ private fun optionChips(habit: LifeInputs.Habit, onChange: () -> Unit): View {
 
     habit.options.forEachIndexed { i, opt ->
         val chip = TextView(this).apply {
-            text = opt.label
+            text = habitOption(habit.key, i)
             textSize = 12f
             gravity = Gravity.CENTER
             val px = (6 * dp).toInt(); val py = (9 * dp).toInt()
@@ -1047,7 +1090,7 @@ private fun showContextStats() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Where & how it happens"))
+    root.addView(titleText(getString(R.string.stats_context)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -1065,9 +1108,7 @@ private fun showContextStats() {
 
         if (known.isEmpty() && knownLight.isEmpty()) {
             c.addView(TextView(this@MainActivity).apply {
-                text = "Nothing to show yet.\n\nFrom now on, every block and every reported slip " +
-                    "records whether you were lying down and how dark the room was. Once a few " +
-                    "have built up, the pattern shows up here."
+                text = getString(R.string.stats_ctx_empty)
                 textSize = 15f; setTextColor(0xFF6B7075.toInt()); setLineSpacing(0f, 1.2f)
             })
             return@launch
@@ -1081,13 +1122,13 @@ private fun showContextStats() {
             topPosture?.let { (label, n) ->
                 val pct = n * 100 / known.size
                 bits.add(if (label == "lying")
-                    "You are usually LYING DOWN when this happens ($pct% of the time)."
+                    getString(R.string.stats_ctx_lying, pct)
                 else
-                    "You are usually UPRIGHT when this happens ($pct% of the time).")
+                    getString(R.string.stats_ctx_upright, pct))
             }
             topLight?.let { (label, n) ->
                 val pct = n * 100 / knownLight.size
-                bits.add("The light level is usually ${lightWord(label)} ($pct% of the time).")
+                bits.add(getString(R.string.stats_ctx_light, lightWord(label), pct))
             }
             text = bits.joinToString("\n\n")
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
@@ -1096,13 +1137,13 @@ private fun showContextStats() {
 
         // ── the breakdowns ──
         if (known.isNotEmpty()) {
-            c.addView(statHeader("BODY POSITION", dp))
-            listOf("lying" to "Lying down", "upright" to "Upright").forEach { (key, label) ->
+            c.addView(statHeader(getString(R.string.stats_hdr_posture), dp))
+            listOf("lying" to getString(R.string.stats_lying), "upright" to getString(R.string.stats_upright)).forEach { (key, label) ->
                 c.addView(statBar(label, known.count { it == key }, known.size, 0xFF52796F.toInt(), dp))
             }
         }
         if (knownLight.isNotEmpty()) {
-            c.addView(statHeader("LIGHT IN THE ROOM", dp))
+            c.addView(statHeader(getString(R.string.stats_hdr_light), dp))
             AppConfig.LightLevel.values().forEach { level ->
                 c.addView(statBar(
                     lightWord(level.name).replaceFirstChar { it.uppercase() },
@@ -1114,8 +1155,7 @@ private fun showContextStats() {
 
         val unknown = postures.size - known.size
         if (unknown > 0) c.addView(TextView(this@MainActivity).apply {
-            text = "$unknown record(s) had no sensor reading yet, so they're left out of the " +
-                "percentages above."
+            text = getString(R.string.stats_ctx_unknown, unknown)
             textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
             setPadding(0, (16 * dp).toInt(), 0, (16 * dp).toInt())
         })
@@ -1124,10 +1164,10 @@ private fun showContextStats() {
 
 /** DARK/DULL/NORMAL/BRIGHT -> words a human uses. */
 private fun lightWord(level: String): String = when (level) {
-    "DARK" -> "dark"
-    "DULL" -> "dim"
-    "NORMAL" -> "normal indoor light"
-    "BRIGHT" -> "bright"
+    "DARK" -> getString(R.string.light_dark)
+    "DULL" -> getString(R.string.light_dim)
+    "NORMAL" -> getString(R.string.light_normal)
+    "BRIGHT" -> getString(R.string.light_bright)
     else -> level.lowercase()
 }
 
@@ -1144,7 +1184,7 @@ private fun statBar(label: String, count: Int, total: Int, colour: Int, dp: Floa
         setPadding(0, 0, 0, (10 * dp).toInt())
     }
     row.addView(TextView(this).apply {
-        text = "$label   ·   $count  ($pct%)"
+        text = getString(R.string.stats_bar_row, label, count, pct)
         textSize = 14f; setTextColor(0xFF3C4650.toInt())
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
@@ -1178,7 +1218,7 @@ private fun showProgress() {
     val s = Progress.snapshot(this)
     val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
     val root = vbox(pad)
-    root.addView(titleText("Progress"))
+    root.addView(titleText(getString(R.string.stats_progress_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -1187,63 +1227,63 @@ private fun showProgress() {
 
     if (!s.hasData) {
         c.addView(TextView(this).apply {
-            text = "This fills in as you use the app. Ride out an urge or get through a wait, and your consistency and reclaimed time start showing here."
+            text = getString(R.string.stats_prog_empty)
             textSize = 15f; setTextColor(0xFF6B7075.toInt()); setPadding(0, (12 * dp).toInt(), 0, 0)
         })
         return
     }
 
     // headline: consistency that never resets to zero
-    c.addView(statBigCard("${s.consistency}%", "consistency",
-        "${s.cleanDays} of the last ${s.trackedDays} days clean", green))
+    c.addView(statBigCard("${s.consistency}%", getString(R.string.stats_prog_consistency),
+        getString(R.string.stats_prog_clean, s.cleanDays, s.trackedDays), green))
     c.addView(TextView(this).apply {
-        text = "One slip never resets this - it only dips it a little. The goal is the trend, not a perfect streak."
+        text = getString(R.string.stats_prog_noreset)
         textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
     if (s.forgivingRun > 0) c.addView(TextView(this).apply {
-        text = "Current run: ${s.forgivingRun} day${if (s.forgivingRun == 1) "" else "s"} - one slip won't end it."
+        text = getString(R.string.stats_prog_run, s.forgivingRun, if (s.forgivingRun == 1) "" else "s")
         textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(green); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
 
-    c.addView(sectionTitle("Time reclaimed"))
-    c.addView(statBigCard("${s.reclaimedHours}h", "reclaimed so far",
-        "estimated - about ${Progress.EST_MIN_PER_WIN} min per urge you rode out", teal))
+    c.addView(sectionTitle(getString(R.string.stats_sec_reclaimed)))
+    c.addView(statBigCard("${s.reclaimedHours}h", getString(R.string.stats_prog_reclaimed_label),
+        getString(R.string.stats_prog_reclaimed_sub, Progress.EST_MIN_PER_WIN), teal))
 
-    c.addView(sectionTitle("Heading the right way"))
+    c.addView(sectionTitle(getString(R.string.stats_sec_heading_right)))
     c.addView(TrendView(this, s.weeklyWins), LinearLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, (120 * dp).toInt()))
     c.addView(TextView(this).apply {
-        text = "urges ridden out per week (last 8 weeks)"
+        text = getString(R.string.stats_prog_weekly)
         textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
     })
 
-    c.addView(sectionTitle("If you keep this pace"))
+    c.addView(sectionTitle(getString(R.string.stats_sec_pace)))
     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-    val cardH = statBigCard("~${s.projYearHours}h", "per year", null, teal).apply {
+    val cardH = statBigCard("~${s.projYearHours}h", getString(R.string.stats_prog_per_year), null, teal).apply {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = (4 * dp).toInt() }
     }
-    val cardM = statBigCard("~\u00a3${s.projYearGbp}", "per year", null, green).apply {
+    val cardM = statBigCard("~\u00a3${s.projYearGbp}", getString(R.string.stats_prog_per_year), null, green).apply {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = (4 * dp).toInt() }
     }
     row.addView(cardH); row.addView(cardM)
     c.addView(row)
     c.addView(TextView(this).apply {
-        text = "projected from your recent pace \u00b7 reclaimed time valued at ~\u00a3${Progress.VALUE_PER_HOUR_GBP}/hr"
+        text = getString(R.string.stats_prog_projected, Progress.VALUE_PER_HOUR_GBP)
         textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
     })
 
-    c.addView(sectionTitle("Milestones"))
+    c.addView(sectionTitle(getString(R.string.stats_sec_milestones)))
     if (s.milestones.isEmpty()) c.addView(TextView(this).apply {
-        text = "None yet - they're coming."; textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.stats_prog_no_milestones); textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
     })
     s.milestones.forEach { m ->
         c.addView(TextView(this).apply {
-            text = "\uD83C\uDFC5  $m"; textSize = 15f; setPadding(0, (5 * dp).toInt(), 0, (5 * dp).toInt())
+            text = getString(R.string.stats_prog_milestone_item, m); textSize = 15f; setPadding(0, (5 * dp).toInt(), 0, (5 * dp).toInt())
         })
     }
     s.nextMilestone?.let { nm ->
         c.addView(TextView(this).apply {
-            text = "\u25CB  Next: $nm"; textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+            text = getString(R.string.stats_prog_next, nm); textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
             setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
         })
     }
@@ -1286,63 +1326,63 @@ private fun statsPage(title: String, back: () -> Unit, build: (LinearLayout) -> 
 
 private fun showTemptationStats() {
     val events = TemptationLog.all(this)
-    statsPage("Temptation patterns", { showStatsMenu() }) { c ->
+    statsPage(getString(R.string.stats_temptation), { showStatsMenu() }) { c ->
         if (events.isEmpty()) { c.addView(emptyStat()); return@statsPage }
-        c.addView(summaryLine("${events.size} urges ridden out"))
-        c.addView(sectionTitle("Time of day"))
+        c.addView(summaryLine(getString(R.string.stats_temp_count, events.size)))
+        c.addView(sectionTitle(getString(R.string.stats_sec_time)))
         val hours = IntArray(24); events.forEach { hours[hourOf(it.ts).coerceIn(0, 23)]++ }
         c.addView(vBars(hours, HOUR_LABELS))
-        c.addView(sectionTitle("Day of week"))
+        c.addView(sectionTitle(getString(R.string.stats_sec_dow)))
         c.addView(hBars(DOW_ORDER.map { d -> d to events.count { dowName(it.ts) == d } }))
-        c.addView(sectionTitle("Where"))
-        c.addView(hBars(topCounts(events.mapNotNull { it.location })))
-        c.addView(sectionTitle("What you saw"))
-        c.addView(hBars(topCounts(events.mapNotNull { it.screen })))
-        c.addView(sectionTitle("How you felt"))
-        c.addView(hBars(topCounts(events.mapNotNull { it.feeling })))
-        c.addView(sectionTitle("Urge strength"))
-        c.addView(hBars(Opts.URGE_LEVELS.map { lvl -> lvl to events.count { it.urge == lvl } }))
-        c.addView(sectionTitle("Last 14 days"))
+        c.addView(sectionTitle(getString(R.string.stats_sec_where)))
+        c.addView(hBars(topCounts(events.mapNotNull { it.location }).map { optLabel("location", it.first) to it.second }))
+        c.addView(sectionTitle(getString(R.string.stats_sec_saw)))
+        c.addView(hBars(topCounts(events.mapNotNull { it.screen }).map { optLabel("screen", it.first) to it.second }))
+        c.addView(sectionTitle(getString(R.string.stats_sec_felt)))
+        c.addView(hBars(topCounts(events.mapNotNull { it.feeling }).map { optLabel("feeling", it.first) to it.second }))
+        c.addView(sectionTitle(getString(R.string.stats_sec_urge)))
+        c.addView(hBars(Opts.URGE_LEVELS.map { lvl -> optLabel("urge", lvl) to events.count { it.urge == lvl } }))
+        c.addView(sectionTitle(getString(R.string.stats_sec_14d)))
         c.addView(vBars(TemptationLog.dailyCounts(this, 14), mapOf(0 to "-13", 13 to "now")))
     }
 }
 
 private fun showRelapseStats() {
-    statsPage("Relapse patterns", { showStatsMenu() }) { c ->
-        c.addView(summaryLine("Loading\u2026"))
+    statsPage(getString(R.string.stats_relapse), { showStatsMenu() }) { c ->
+        c.addView(summaryLine(getString(R.string.common_loading)))
         lifecycleScope.launch {
             val list = RelapseLog.all(this@MainActivity)
             c.removeAllViews()
             if (list.isEmpty()) { c.addView(emptyStat()); return@launch }
-            c.addView(summaryLine("${list.size} reports"))
-            c.addView(sectionTitle("Time of day"))
+            c.addView(summaryLine(getString(R.string.stats_relapse_count, list.size)))
+            c.addView(sectionTitle(getString(R.string.stats_sec_time)))
             val hours = IntArray(24); list.forEach { if (it.hourOfDay in 0..23) hours[it.hourOfDay]++ }
             c.addView(vBars(hours, HOUR_LABELS))
-            c.addView(sectionTitle("Day of week"))
-            val cal = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-            c.addView(hBars(DOW_ORDER.map { d -> d to list.count { cal.getOrElse(it.dayOfWeek - 1) { "" } == d } }))
-            c.addView(sectionTitle("Where"))
-            c.addView(hBars(topCounts(list.mapNotNull { it.room })))
-            c.addView(sectionTitle("How you felt"))
-            c.addView(hBars(topCounts(list.mapNotNull { it.feeling })))
-            c.addView(sectionTitle("What led in"))
-            c.addView(hBars(topCounts(list.mapNotNull { it.activity })))
+            c.addView(sectionTitle(getString(R.string.stats_sec_dow)))
+            val cal = java.text.DateFormatSymbols(Locale.getDefault()).shortWeekdays  // [_,Sun,Mon..Sat]
+            c.addView(hBars(DOW_ORDER.map { d -> d to list.count { cal.getOrElse(it.dayOfWeek) { "" } == d } }))
+            c.addView(sectionTitle(getString(R.string.stats_sec_where)))
+            c.addView(hBars(topCounts(list.mapNotNull { it.room }).map { optLabel("location", it.first) to it.second }))
+            c.addView(sectionTitle(getString(R.string.stats_sec_felt)))
+            c.addView(hBars(topCounts(list.mapNotNull { it.feeling }).map { optLabel("feeling", it.first) to it.second }))
+            c.addView(sectionTitle(getString(R.string.stats_sec_ledin)))
+            c.addView(hBars(topCounts(list.mapNotNull { it.activity }).map { optLabel("activity", it.first) to it.second }))
         }
     }
 }
 
 private fun showLoosenStats() {
     val events = LoosenLog.all(this)
-    statsPage("Unlock attempts", { showStatsMenu() }) { c ->
+    statsPage(getString(R.string.stats_unlock), { showStatsMenu() }) { c ->
         if (events.isEmpty()) { c.addView(emptyStat()); return@statsPage }
-        c.addView(summaryLine("${events.size} attempts"))
-        c.addView(sectionTitle("How they ended"))
-        val names = mapOf("stopped" to "Stopped", "tomorrow" to "Left till tomorrow", "looked" to "Looked")
+        c.addView(summaryLine(getString(R.string.stats_loosen_count, events.size)))
+        c.addView(sectionTitle(getString(R.string.stats_sec_ended)))
+        val names = mapOf("stopped" to getString(R.string.stats_outcome_stopped), "tomorrow" to getString(R.string.stats_outcome_tomorrow), "looked" to getString(R.string.stats_outcome_looked))
         c.addView(hBars(listOf("stopped", "tomorrow", "looked")
             .map { (names[it] ?: it) to events.count { e -> e.outcome == it } }))
-        c.addView(sectionTitle("What they hoped to quiet"))
-        c.addView(hBars(topCounts(events.mapNotNull { it.feeling })))
-        c.addView(sectionTitle("Time of day"))
+        c.addView(sectionTitle(getString(R.string.stats_sec_quiet)))
+        c.addView(hBars(topCounts(events.mapNotNull { it.feeling }).map { optLabel("feeling", it.first) to it.second }))
+        c.addView(sectionTitle(getString(R.string.stats_sec_time)))
         val hours = IntArray(24); events.forEach { hours[hourOf(it.ts).coerceIn(0, 23)]++ }
         c.addView(vBars(hours, HOUR_LABELS))
     }
@@ -1352,7 +1392,7 @@ private fun showLoosenStats() {
 private fun emptyStat(): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = "Nothing logged yet."; textSize = 15f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.stats_empty); textSize = 15f; setTextColor(0xFF9AA0A6.toInt())
         setPadding(0, (16 * dp).toInt(), 0, 0)
     }
 }
@@ -1375,7 +1415,7 @@ private fun hBars(pairs: List<Pair<String, Int>>): View {
     val dp = resources.displayMetrics.density
     val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     if (pairs.isEmpty()) {
-        col.addView(TextView(this).apply { text = "No data yet."; textSize = 13f; setTextColor(0xFF9AA0A6.toInt()) })
+        col.addView(TextView(this).apply { text = getString(R.string.misc_no_data); textSize = 13f; setTextColor(0xFF9AA0A6.toInt()) })
         return col
     }
     val max = (pairs.maxOfOrNull { it.second } ?: 0).coerceAtLeast(1)
@@ -1463,34 +1503,34 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
     private fun waveWalk() {
         tBack = { stopRideTimer(); temptationUrgeScreen() }
         waveActionScreen(
-            "Can you step outside - even just a short walk?", "\uD83D\uDEB6",
-            "Yes - I'll go now", { waveSuccess() },
-            "Not right now", { waveMove() },
+            getString(R.string.ride_walk_q), "\uD83D\uDEB6",
+            getString(R.string.ride_walk_yes), { waveSuccess() },
+            getString(R.string.ride_walk_no), { waveMove() },
         )
     }
     private fun waveMove() {
         tBack = { waveWalk() }
         waveActionScreen(
-            "Can you move to a different room?", "\uD83D\uDEAA",
-            "Done - I've moved", { waveSuccess() },
-            "Can't right now", { wavePhysical() },
+            getString(R.string.ride_move_q), "\uD83D\uDEAA",
+            getString(R.string.ride_move_yes), { waveSuccess() },
+            getString(R.string.ride_move_no), { wavePhysical() },
         )
     }
     private fun wavePhysical() {
         tBack = { waveMove() }
         waveActionScreen(
-            "Can you do something physical - stretch, press-ups, tidy up?", "\uD83E\uDD38",
-            "Yes - doing it", { waveSuccess() },
-            "I can't do any of these", { waveStuck() },
+            getString(R.string.ride_phys_q), "\uD83E\uDD38",
+            getString(R.string.ride_phys_yes), { waveSuccess() },
+            getString(R.string.ride_phys_no), { waveStuck() },
         )
     }
 
     private fun waveStuck() {
         tBack = { wavePhysical() }
         waveBreatheScreen(
-            "Then just breathe and wait",
-            "You don't have to do anything but outlast it. The wave always passes - you only have to get through this one.",
-            "I've breathed - what now?",
+            getString(R.string.ride_stuck_title),
+            getString(R.string.ride_stuck_body),
+            getString(R.string.ride_stuck_btn),
         ) { wavePeakScreen() }
     }
 
@@ -1509,16 +1549,16 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             text = "\uD83C\uDF0A"; textSize = 64f; gravity = Gravity.CENTER
         })
         root.addView(TextView(this).apply {
-            text = "You've already cleared the hardest part."
+            text = getString(R.string.ride_peak_title)
             textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding(0, (16 * dp).toInt(), 0, (10 * dp).toInt())
         })
         root.addView(TextView(this).apply {
-            text = "An urge peaks within the first 30 seconds or so - and you just rode straight through it. From here it only fades. You can get through this."
+            text = getString(R.string.ride_peak_body)
             textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
         })
         root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(bigChoice("I've got through it", 0xFF2E7D32.toInt()) { waveSuccess() })
+        root.addView(bigChoice(getString(R.string.temp_ride_done_btn), 0xFF2E7D32.toInt()) { waveSuccess() })
         setContentView(root)
     }
 
@@ -1543,29 +1583,29 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(titleText("That was you, beating it."))
+        root.addView(titleText(getString(R.string.temp_ridedone_title)))
         root.addView(TextView(this).apply {
-            text = "Every urge you ride out makes the next one weaker."
+            text = getString(R.string.temp_ridedone_body)
             textSize = 16f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
         })
         // urge over time: it spikes, then falls - and you're already past the peak.
         root.addView(PeakCurveView(this), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt() })
         root.addView(TextView(this).apply {
-            text = "$total ridden out  \u00b7  $week this week"
+            text = getString(R.string.ride_success_stats, total, week)
             textSize = 15f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding(0, 0, 0, (12 * dp).toInt())
         })
-        root.addView(captionedButton("Put the phone down", "closes the app", 0xFF2E7D32.toInt()) {
+        root.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), 0xFF2E7D32.toInt()) {
             try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
         })
         root.addView(TextView(this).apply {
-            text = "or lock apps for 30 minutes"; textSize = 14f; gravity = Gravity.CENTER
+            text = getString(R.string.ride_lock_apps); textSize = 14f; gravity = Gravity.CENTER
             setTextColor(0xFF48606A.toInt()); isClickable = true; isFocusable = true
             setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
             setOnClickListener {
                 Lockdown.start(this@MainActivity)
-                Toast.makeText(this@MainActivity, "Locked down for 30 min. Essentials still work.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, getString(R.string.temp_lockdown_toast), Toast.LENGTH_LONG).show()
                 showReportScreen()
             }
         })
@@ -1599,11 +1639,11 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     root.addView(orbBox)
 
     val breatheLabel = TextView(this).apply {
-        text = "Breathe in"; textSize = 18f; gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, 0)
+        text = getString(R.string.overlay_breathe_in); textSize = 18f; gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, 0)
     }
     root.addView(breatheLabel)
     val counter = TextView(this).apply {
-        text = "Follow the orb - $totalBreaths slow breaths"
+        text = getString(R.string.ride_follow_orb, totalBreaths)
         textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
         setPadding(0, (6 * dp).toInt(), 0, 0)
     }
@@ -1623,11 +1663,11 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
             cycles = totalBreaths,
             onCycle = { done, total ->
                 if (done >= total) {
-                    counter.text = "Done - nicely paced"
+                    counter.text = getString(R.string.temp_ride_paced)
                     breatheLabel.text = ""
                     tuneContinue(continueBtn, true)
                 } else {
-                    counter.text = "$done of $total done"
+                    counter.text = getString(R.string.temp_ride_counter, done, total)
                 }
             },
         )
@@ -1685,10 +1725,10 @@ private fun attachWaveTimer(label: TextView) {
         override fun run() {
             val sec = (System.currentTimeMillis() - waveStartAt) / 1000
             label.text = when {
-                sec >= 600 -> "10 minutes in - it's faded. You did this."
-                sec >= 120 -> "2 minutes in - you're riding it out."
-                sec >= 60 -> "1 minute in - the peak has passed."
-                sec >= 30 -> "30 seconds in - you're doing it, keep going."
+                sec >= 600 -> getString(R.string.ride_ms_10)
+                sec >= 120 -> getString(R.string.ride_ms_2)
+                sec >= 60 -> getString(R.string.ride_ms_1)
+                sec >= 30 -> getString(R.string.ride_ms_30)
                 else -> ""
             }
             rideHandler?.postDelayed(this, 1000)
@@ -1751,15 +1791,14 @@ private fun progressChart(counts: IntArray): View {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        root.addView(titleText("What do you want to limit?"))
+        root.addView(titleText(getString(R.string.appsite_kind_title)))
         root.addView(TextView(this).apply {
-            text = "Set this now, while you're calm - the app just honours it later. " +
-                "No content scanning, no screenshots."
+            text = getString(R.string.appsite_kind_subtitle)
             textSize = 14f; setTextColor(0xFF6B7075.toInt())
             setPadding(0, 0, 0, (16 * dp).toInt())
         })
-        root.addView(bigChoice("An app on this phone", 0xFF3E535C.toInt()) { appSiteChooseApp() })
-        root.addView(bigChoice("A website", 0xFF3E535C.toInt()) { appSiteChooseSite() })
+        root.addView(bigChoice(getString(R.string.appsite_kind_app), 0xFF3E535C.toInt()) { appSiteChooseApp() })
+        root.addView(bigChoice(getString(R.string.appsite_kind_website), 0xFF3E535C.toInt()) { appSiteChooseSite() })
         setContentView(root)
     }
 
@@ -1771,19 +1810,19 @@ private fun appSiteChooseSite() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("Add a website"))
+    root.addView(titleText(getString(R.string.appsite_site_title)))
     val urlInput = EditText(this).apply {
-        hint = "paste or type a web address"
+        hint = getString(R.string.appsite_site_hint)
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         maxLines = 1
     }
     root.addView(urlInput)
     root.addView(tierNote())
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(bigChoice("Greylist it - ${GreyUsage.LIMIT_MIN} min / hour", 0xFF3E535C.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_greylist_it, GreyUsage.LIMIT_MIN), 0xFF3E535C.toInt()) {
         saveSiteRule(urlInput, AppRules.GREY)
     })
-    root.addView(bigChoice("Blocklist it - block outright", 0xFFB00020.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_blocklist_it), 0xFFB00020.toInt()) {
         saveSiteRule(urlInput, AppRules.BLOCK)
     })
     setContentView(root)
@@ -1800,8 +1839,8 @@ private fun appSiteChooseApp() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("Pick an app"))
-    val loading = TextView(this).apply { text = "Loading apps\u2026"; textSize = 14f }
+    root.addView(titleText(getString(R.string.appsite_pick_app)))
+    val loading = TextView(this).apply { text = getString(R.string.appsite_loading); textSize = 14f }
     root.addView(loading)
     val listLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
@@ -1844,13 +1883,13 @@ private fun appSiteAppTier(a: AppRow) {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("Limit ${a.label}?"))
+    root.addView(titleText(getString(R.string.appsite_limit_app, a.label)))
     root.addView(tierNote())
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(bigChoice("Greylist - ${GreyUsage.LIMIT_MIN} min / hour", 0xFF3E535C.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_greylist, GreyUsage.LIMIT_MIN), 0xFF3E535C.toInt()) {
         AppRules.setApp(this, a.pkg, AppRules.GREY); appSiteSaved(a.label, AppRules.GREY)
     })
-    root.addView(bigChoice("Blocklist - block outright", 0xFFB00020.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_blocklist), 0xFFB00020.toInt()) {
         AppRules.setApp(this, a.pkg, AppRules.BLOCK); appSiteSaved(a.label, AppRules.BLOCK)
     })
     setContentView(root)
@@ -1883,15 +1922,15 @@ private fun showBlockApps() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("Whitelisted apps"))
+    root.addView(titleText(getString(R.string.blockapps_title)))
     root.addView(TextView(this).apply {
-        text = "These apps are never blocked by default. Tap one to block it anyway. " +
-            (if (Mode.isRelaxed(this@MainActivity)) "Tap a blocked app to unblock it."
-             else "Blocked apps can only be unblocked in Relaxed mode.")
+        text = getString(R.string.blockapps_subtitle_prefix) +
+            (if (Mode.isRelaxed(this@MainActivity)) getString(R.string.blockapps_subtitle_relaxed)
+             else getString(R.string.blockapps_subtitle_strict))
         textSize = 13f; setTextColor(0xFF6B7075.toInt())
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
-    val loading = TextView(this).apply { text = "Loading apps…"; textSize = 14f }
+    val loading = TextView(this).apply { text = getString(R.string.appsite_loading); textSize = 14f }
     root.addView(loading)
     val listLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
@@ -1905,7 +1944,7 @@ private fun showBlockApps() {
         runOnUiThread {
             loading.visibility = View.GONE
             if (apps.isEmpty()) listLayout.addView(TextView(this@MainActivity).apply {
-                text = "None of the whitelisted apps are installed."; textSize = 14f
+                text = getString(R.string.blockapps_none_installed); textSize = 14f
             })
             apps.forEach { a -> listLayout.addView(blockAppRow(a)) }
         }
@@ -1940,7 +1979,7 @@ private fun blockAppRow(a: AppRow): LinearLayout {
     }
     val defaultColors = name.textColors    // restore this when un-blocking (theme-safe)
     val status = TextView(this).apply {
-        text = "Blocked"; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+        text = getString(R.string.blockapps_blocked_tag); textSize = 13f; setTypeface(typeface, Typeface.BOLD)
         setTextColor(0xFFB00020.toInt())
     }
     row.addView(icon); row.addView(name); row.addView(status)
@@ -1967,7 +2006,7 @@ private fun blockAppRow(a: AppRow): LinearLayout {
             Mode.isRelaxed(this) ->
                 { AppRules.remove(this, true, a.pkg); render() }
             else ->
-                Toast.makeText(this, "You can only unblock apps in Relaxed mode.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.blockapps_cant_unblock), Toast.LENGTH_SHORT).show()
         }
     }
     return row
@@ -1976,12 +2015,12 @@ private fun blockAppRow(a: AppRow): LinearLayout {
 private fun saveSiteRule(input: EditText, tier: String) {
     if (tier == AppRules.BLOCK) {
         val rule = ruleFromInput(input.text.toString())
-        if (rule == null) { Toast.makeText(this, "Couldn't read a web address.", Toast.LENGTH_SHORT).show(); return }
+        if (rule == null) { Toast.makeText(this, getString(R.string.appsite_bad_url), Toast.LENGTH_SHORT).show(); return }
         BlockRules.add(this, rule)            // keeps the path -> blocks that page, not the whole site
         appSiteSaved(rule, AppRules.BLOCK)
     } else {
         val host = hostOf(input.text.toString())
-        if (host == null) { Toast.makeText(this, "Couldn't read a web address.", Toast.LENGTH_SHORT).show(); return }
+        if (host == null) { Toast.makeText(this, getString(R.string.appsite_bad_url), Toast.LENGTH_SHORT).show(); return }
         AppRules.setHost(this, host, AppRules.GREY)   // greylist is per-site time, so whole host
         appSiteSaved(host, AppRules.GREY)
     }
@@ -2006,26 +2045,25 @@ private fun appSiteSaved(target: String, tier: String) {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("Saved"))
+    root.addView(titleText(getString(R.string.appsite_saved_title)))
     root.addView(TextView(this).apply {
-        text = "$target is now " +
-            (if (tier == AppRules.GREY) "greylisted - ${GreyUsage.LIMIT_MIN} minutes each hour"
-             else "blocklisted - blocked outright") +
-            ". It's in effect right away."
+        val state = if (tier == AppRules.GREY)
+            getString(R.string.appsite_saved_greylisted, GreyUsage.LIMIT_MIN)
+        else getString(R.string.appsite_saved_blocklisted)
+        text = getString(R.string.appsite_saved_msg, target, state)
         textSize = 16f; setPadding(0, (12 * dp).toInt(), 0, 0)
     })
     val spacer = View(this)
     root.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(Button(this).apply { text = "Add another"; setOnClickListener { appSiteChooseKind() } })
-    root.addView(Button(this).apply { text = "Done"; setOnClickListener { showReportScreen() } })
+    root.addView(Button(this).apply { text = getString(R.string.appsite_add_another); setOnClickListener { appSiteChooseKind() } })
+    root.addView(Button(this).apply { text = getString(R.string.common_done); setOnClickListener { showReportScreen() } })
     setContentView(root)
 }
 
 private fun tierNote(): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = "Greylist = ${GreyUsage.LIMIT_MIN} minutes each hour, then paused.\n" +
-            "Blocklist = blocked completely."
+        text = getString(R.string.appsite_tier_note, GreyUsage.LIMIT_MIN)
         textSize = 13f; setTextColor(0xFF6B7075.toInt())
         setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
     }
@@ -2047,7 +2085,7 @@ private fun showRecentBlocks() {
     }
     val scroll = ScrollView(this).apply { addView(container) }
     val dialog = AlertDialog.Builder(this)
-        .setTitle("Recent blocks (past hour)")
+        .setTitle(getString(R.string.recent_title))
         .setView(scroll)
         .setPositiveButton(android.R.string.ok, null)
         .create()
@@ -2062,7 +2100,7 @@ private fun showRecentBlocks() {
             container.removeAllViews()
             if (items.isEmpty()) {
                 container.addView(TextView(this@MainActivity).apply {
-                    text = "(nothing in the last hour)"
+                    text = getString(R.string.recent_empty)
                 })
                 return@launch
             }
@@ -2082,7 +2120,7 @@ private fun showRecentBlocks() {
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 })
                 row.addView(Button(this@MainActivity).apply {
-                    text = "Remove"
+                    text = getString(R.string.common_remove)
                     setOnClickListener { BlockEventLog.remove(this@MainActivity, e.id); reload() }
                 })
                 container.addView(row)
@@ -2120,9 +2158,9 @@ private fun withBottomBar(content: View, selected: Int): View {
         setPadding((8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
     }
     val tabs = listOf(
-        Triple(R.drawable.ic_nav_overview, "Overview") { setupHomeScreen() },
-        Triple(R.drawable.ic_nav_productivity, "Productivity") { showProductivity() },
-        Triple(R.drawable.ic_nav_temptations, "Temptations") { showTemptationsTab() },
+        Triple(R.drawable.ic_nav_overview, getString(R.string.nav_overview)) { setupHomeScreen() },
+        Triple(R.drawable.ic_nav_productivity, getString(R.string.nav_productivity)) { showProductivity() },
+        Triple(R.drawable.ic_nav_temptations, getString(R.string.nav_temptations)) { showTemptationsTab() },
     )
     tabs.forEachIndexed { i, (icon, label, go) ->
         val sel = i == selected
@@ -2182,11 +2220,11 @@ private fun setupHomeScreen() {
     val today = DopamineScore.of(DopamineLog.today(this))
     val rank = DopamineRank.of(this)
     val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.UK)
-    val weekdayFmt = SimpleDateFormat("EEE", Locale.UK)
-    val niceDateFmt = SimpleDateFormat("EEE d MMM", Locale.UK)
+    val weekdayFmt = SimpleDateFormat("EEE", Locale.getDefault())
+    val niceDateFmt = SimpleDateFormat("EEE d MMM", Locale.getDefault())
     fun niceDate(iso: String): String =
         try { niceDateFmt.format(dayFmt.parse(iso)!!) } catch (_: Throwable) { iso }
-    content.addView(homeHeading("Your productivity score", "weekly overview"))
+    content.addView(homeHeading(getString(R.string.home_productivity_title), getString(R.string.home_productivity_sub)))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
@@ -2274,16 +2312,16 @@ private fun setupHomeScreen() {
         try { weekdayFmt.format(dayFmt.parse(d.date)!!) } catch (_: Throwable) { "" }
     }
     val weekTotal = weekVals.filter { !it.isNaN() }.sum()
-    content.addView(homeHeading("Phone usage", "This week"))
+    content.addView(homeHeading(getString(R.string.home_usage_title), getString(R.string.home_usage_week_sub)))
     content.addView(chartStatCard(
         weekVals, weekLabels,
         stats = listOf(
-            fmtHours(weekTotal) to "time wasted",
-            "£${Math.round(weekTotal * rate)}" to "money wasted",
+            fmtHours(weekTotal) to getString(R.string.home_time_wasted),
+            "£${Math.round(weekTotal * rate)}" to getString(R.string.home_money_wasted),
         ),
         goal = goalHours, gridStep = 1f, minorStep = 0.5f,
-        legendMain = "— this week",
-        exampleMsg = if (weekIsReal) null else "EXAMPLE - your real usage replaces this after a day or two",
+        legendMain = getString(R.string.home_legend_week),
+        exampleMsg = if (weekIsReal) null else getString(R.string.home_example),
         pointInfo = { i, v, _ ->
             val d = week.getOrNull(i)
             when {
@@ -2298,12 +2336,12 @@ private fun setupHomeScreen() {
     ))
 
     // By month - only once there's more than two months of real data (or as the example).
-    val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    val monthNames = java.text.DateFormatSymbols(Locale.getDefault()).shortMonths  // localized Jan..Dec
     val byMonth = history90.filter { DopamineScore.of(it).hasData }
         .groupBy { it.date.substring(0, 7) }.toSortedMap()
     val hasUsage = history90.sumOf { d -> hoursOf(d).takeIf { !it.isNaN() }?.toDouble() ?: 0.0 } >= 1.0
     if ((hasUsage && byMonth.size > 2) || !hasUsage) {
-        content.addView(homeHeading("Phone usage", "By month"))
+        content.addView(homeHeading(getString(R.string.home_usage_title), getString(R.string.home_usage_month_sub)))
         val monthly: FloatArray; val monthLabels: List<String>
         if (hasUsage) {
             monthly = byMonth.values.map { days -> days.sumOf { it.screenOnSeconds }.toFloat() / 3600f }.toFloatArray()
@@ -2320,7 +2358,7 @@ private fun setupHomeScreen() {
             if (v != null) monthInfo.text = readoutText(
                 "${monthLabels.getOrNull(i) ?: ""} · ",
                 "${fmtHours(v)} (£${Math.round(v * rate)})",
-                if (hasUsage) "" else "\n[Example data]", teal)
+                if (hasUsage) "" else getString(R.string.home_example_data), teal)
         }
         content.addView(monthChart,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
@@ -2337,7 +2375,7 @@ private fun setupHomeScreen() {
     // days must not oust the example with a meaningless near-zero line.
     val yearIsReal = recentDays.size >= 14 && realAvg >= 0.5f
     val avgDaily = if (yearIsReal) realAvg else 3.9f
-    content.addView(homeHeading("Phone usage overview", "This year"))
+    content.addView(homeHeading(getString(R.string.home_usage_overview_title), getString(R.string.home_usage_year_sub)))
     val dayOfYear = SimpleDateFormat("D", Locale.UK).format(Date()).toInt().coerceIn(1, 365)
     // Organic daily increments: calm stretches, weekend spikes, the odd binge - so the
     // cumulative line climbs unevenly like a real one (fixed pattern, no shimmer).
@@ -2361,24 +2399,24 @@ private fun setupHomeScreen() {
         if (d == monthFirstDays[m] && m % 2 == 0) monthNames[m] else ""
     }
     val yearStartMs = try { dayFmt.parse("$yearNow-01-01")!!.time } catch (_: Throwable) { 0L }
-    val niceDoyFmt = SimpleDateFormat("d MMM", Locale.UK)
+    val niceDoyFmt = SimpleDateFormat("d MMM", Locale.getDefault())
     val yearHours = toCome.lastOrNull() ?: soFar.last()
     content.addView(chartStatCard(
         soFar, yearLabels,
         stats = listOf(
-            "${Math.round(yearHours)}h" to "this year",
-            "£${Math.round(yearHours * rate)}" to "of your time",
-            "${Math.round(yearHours / 3f)}" to "evenings",
+            "${Math.round(yearHours)}h" to getString(R.string.home_this_year),
+            "£${Math.round(yearHours * rate)}" to getString(R.string.home_of_your_time),
+            "${Math.round(yearHours / 3f)}" to getString(R.string.home_evenings),
         ),
         dotted = toCome, goalPerSlot = goalHours,
-        worth = "Your phone usage is worth…",
-        exampleMsg = if (yearIsReal) null else "EXAMPLE - your real usage replaces this after a day or two",
+        worth = getString(R.string.home_worth),
+        exampleMsg = if (yearIsReal) null else getString(R.string.home_example),
         onStatsClick = { aboutYouBack = { setupHomeScreen() }; showAboutYou() },
         pointInfo = { i, v, projected ->
             val date = niceDoyFmt.format(Date(yearStartMs + i * 24L * 60 * 60 * 1000))
-            readoutText("By $date · ",
+            readoutText(getString(R.string.home_readout_by, date),
                 "${Math.round(v)}h (£${Math.round(v * rate)})",
-                (if (projected) " · projected" else "") + (if (yearIsReal) "" else "\n[Example data]"),
+                (if (projected) getString(R.string.home_projected) else "") + (if (yearIsReal) "" else getString(R.string.home_example_data)),
                 if (projected) 0xFF9AA0A6.toInt() else teal)
         },
     ))
@@ -2394,7 +2432,7 @@ private fun setupHomeScreen() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (12 * dp).toInt() }
             isClickable = true; isFocusable = true; setOnClickListener { setupMainScreen() }
             addView(TextView(this@MainActivity).apply {
-                text = "🔧  Dev tools"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF5A6068.toInt())
+                text = getString(R.string.home_dev_tools); textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF5A6068.toInt())
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             addView(TextView(this@MainActivity).apply { text = "›"; textSize = 20f; setTextColor(0xFF9AA0A6.toInt()) })
@@ -2405,7 +2443,7 @@ private fun setupHomeScreen() {
     content.addView(sensorsConsole())
     content.addView(permissionConsole())
     content.addView(TextView(this).apply {
-        text = "About & privacy"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.home_about_privacy); textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
         gravity = Gravity.CENTER; isClickable = true; isFocusable = true
         setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -2468,7 +2506,7 @@ private fun homeHeading(primary: String, secondary: String): TextView {
 private fun scrubLabel(): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = "Drag across the graph to explore"
+        text = getString(R.string.misc_drag_graph)
         textSize = 13f; setTextColor(0xFF9AA0A6.toInt())
         setPadding(0, (4 * dp).toInt(), 0, 0)
     }
@@ -2553,10 +2591,9 @@ private fun showUsageGoal() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Usage goal"))
+    root.addView(titleText(getString(R.string.usage_goal_title)))
     root.addView(TextView(this).apply {
-        text = "Pick how much time on the phone per day you'd be happy with. The home-page " +
-            "graphs draw it as the dashed line. Until you set one, a 1-hour-a-day baseline is used."
+        text = getString(R.string.usage_goal_intro)
         textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, 0, 0, (14 * dp).toInt())
     })
     val current = UsageGoal.minutesPerDay(this)
@@ -2570,7 +2607,7 @@ private fun showUsageGoal() {
         progress = (((if (current > 0) current else 120) / 15) - 1).coerceIn(0, 31)
     }
     fun minutesOf(p: Int) = (p + 1) * 15
-    fun refreshLabel() { label.text = fmtHours(minutesOf(seek.progress) / 60f) + " a day" }
+    fun refreshLabel() { label.text = getString(R.string.usage_goal_perday, fmtHours(minutesOf(seek.progress) / 60f)) }
     seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) { refreshLabel() }
         override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
@@ -2578,13 +2615,13 @@ private fun showUsageGoal() {
     })
     root.addView(label); root.addView(seek)
     refreshLabel()
-    root.addView(bigChoice("Set goal", 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(getString(R.string.usage_goal_set), 0xFF2E7D32.toInt()) {
         UsageGoal.setMinutesPerDay(this, minutesOf(seek.progress))
-        Toast.makeText(this, "Goal set: ${fmtHours(minutesOf(seek.progress) / 60f)} a day", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.usage_goal_set_toast, fmtHours(minutesOf(seek.progress) / 60f)), Toast.LENGTH_SHORT).show()
         showProductivity()
     })
     if (current > 0) root.addView(Button(this).apply {
-        text = "Remove the goal"; setAllCaps(false)
+        text = getString(R.string.usage_goal_remove); setAllCaps(false)
         setOnClickListener { UsageGoal.clear(this@MainActivity); showProductivity() }
     })
     setContentWithThumb(root) { showProductivity() }
@@ -2595,21 +2632,21 @@ private fun showScrollCost() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-    content.addView(titleText("What the scroll costs you"))
+    content.addView(titleText(getString(R.string.scroll_title)))
 
     val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
     val s = Progress.snapshot(this)
     if (s.hasData) {
-        content.addView(statBigCard("${s.reclaimedHours}h", "reclaimed so far",
-            "about ${Progress.EST_MIN_PER_WIN} min back for every urge you rode out", teal))
-        content.addView(statBigCard("${s.consistency}%", "consistency",
-            "${s.cleanDays} of the last ${s.trackedDays} days clean - one slip never resets it", green))
+        content.addView(statBigCard("${s.reclaimedHours}h", getString(R.string.stats_prog_reclaimed_label),
+            getString(R.string.scroll_reclaimed_sub, Progress.EST_MIN_PER_WIN), teal))
+        content.addView(statBigCard("${s.consistency}%", getString(R.string.stats_prog_consistency),
+            getString(R.string.scroll_consistency_sub, s.cleanDays, s.trackedDays), green))
     } else {
-        content.addView(statBigCard("0h", "reclaimed so far",
-            "ride out your first urge and your reclaimed time starts here", teal))
+        content.addView(statBigCard("0h", getString(R.string.stats_prog_reclaimed_label),
+            getString(R.string.scroll_reclaimed_empty_sub), teal))
     }
 
-    content.addView(sectionTitle("The projector"))
+    content.addView(sectionTitle(getString(R.string.scroll_projector)))
     val hero = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
@@ -2658,24 +2695,22 @@ private fun showScrollCost() {
         val totalWakingYears = perYearHours * yrs / Usage.WAKING_HOURS / 365.0
         val gbpTotal = gbpYr * yrs
         donut.setFraction((min / (Usage.WAKING_HOURS * 60f)))
-        bigStat.text = "${Math.round(wakingDaysYr)} waking days a year"
-        subStat.text = "≈ £$gbpYr a year of your time"
-        lifeStat.text = "Over $yrs year${if (yrs == 1) "" else "s"}: about ${String.format("%.1f", totalWakingYears)} years of waking life - and £$gbpTotal"
-        minLabel.text = "$min minutes a day on short video & feeds"
-        yearLabel.text = "Looking $yrs year${if (yrs == 1) "" else "s"} ahead"
+        bigStat.text = getString(R.string.scroll_waking_days, Math.round(wakingDaysYr).toInt())
+        subStat.text = getString(R.string.scroll_per_year_value, gbpYr.toInt())
+        lifeStat.text = getString(R.string.scroll_over_years, yrs, if (yrs == 1) "" else "s", String.format("%.1f", totalWakingYears), gbpTotal)
+        minLabel.text = getString(R.string.scroll_min_per_day, min)
+        yearLabel.text = getString(R.string.scroll_looking_ahead, yrs, if (yrs == 1) "" else "s")
 
         // Hours are abstract. These aren't.
         val gymSessions = Math.round(perYearHours / 1.0)          // ~1hr a session
         val eveningsWithPeople = Math.round(perYearHours / 3.0)   // ~3hr an evening
         val booksRead = Math.round(perYearHours / 8.0)            // ~8hr a book
-        otherStat.text = "That same year is also:\n" +
-            "$gymSessions hours of training  ·  $eveningsWithPeople evenings with people  ·  " +
-            "about $booksRead books"
+        otherStat.text = getString(R.string.scroll_that_year, gymSessions.toInt(), eveningsWithPeople.toInt(), booksRead.toInt())
 
         aboutYouLink.text = if (AboutYou.hasData(this))
-            "Valued at £${AboutYou.effectiveAnnual(this)}/yr, from your numbers  ·  change"
+            getString(R.string.scroll_valued, AboutYou.effectiveAnnual(this))
         else
-            "Add your hourly rate to see what it's really costing you  ›"
+            getString(R.string.scroll_add_rate)
     }
 
     val seekListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
@@ -2720,22 +2755,22 @@ private fun showProductivity() {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
-    sfText.addView(TextView(this).apply { text = "Block reels, shorts & feeds"; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) })
+    sfText.addView(TextView(this).apply { text = getString(R.string.prod_block_sf); textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) })
     sfText.addView(sfSub)
     sfCard.addView(sfText); sfCard.addView(sfSwitch)
-    fun refreshSf() { sfSub.text = if (ShortForm.enabled()) "On - the endless feeds are blocked." else "Off - tap to cut the doomscroll." }
+    fun refreshSf() { sfSub.text = if (ShortForm.enabled()) getString(R.string.prod_sf_on) else getString(R.string.prod_sf_off) }
     sfSwitch.setOnCheckedChangeListener { _, checked -> ShortForm.setEnabled(this, checked); refreshSf() }
     refreshSf()
     content.addView(sfCard)
 
     // The cost projector + reclaimed stats used to live on the landing page; they moved
     // here so the landing page can stay graphs-only.
-    content.addView(homeCard("What the scroll costs", "The projector: minutes per day → years and £ - plus what you\u0027ve reclaimed.") { showScrollCost() })
+    content.addView(homeCard(getString(R.string.prod_scroll_cost_title), getString(R.string.prod_scroll_cost_sub)) { showScrollCost() })
 
     // ── This week, reclaimed: the same cumulative card as the home page's year chart,
     //    but green and pointing the right way - solid line Mon→today, grey dotted
     //    projection to Sunday at the current pace.
-    content.addView(sectionTitle("This week - reclaimed"))
+    content.addView(sectionTitle(getString(R.string.prod_week_reclaimed)))
     run {
         val dayMs = 24L * 60 * 60 * 1000
         val winTs = TemptationLog.timestamps(this) +
@@ -2754,37 +2789,37 @@ private fun showProductivity() {
         val soFar = FloatArray(daysElapsed) { i -> cum += perDay[i]; cum }
         val pace = soFar.last() / daysElapsed
         val toCome = FloatArray(7 - daysElapsed) { j -> soFar.last() + pace * (j + 1) }
-        val weekDays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        val weekDays = DOW_ORDER  // localized Mon..Sun
         val rate = AboutYou.effectiveHourly(this)
         val weekProj = toCome.lastOrNull() ?: soFar.last()
         content.addView(chartStatCard(
             soFar, weekDays,
             stats = listOf(
-                fmtHours(soFar.last()) to "reclaimed so far",
-                "£${Math.round(soFar.last() * rate)}" to "value reclaimed",
-                fmtHours(weekProj) to "by Sunday",
+                fmtHours(soFar.last()) to getString(R.string.stats_prog_reclaimed_label),
+                "£${Math.round(soFar.last() * rate)}" to getString(R.string.prod_value_reclaimed),
+                fmtHours(weekProj) to getString(R.string.prod_by_sunday),
             ),
             accent = 0xFF2E7D32.toInt(),
             dotted = toCome,
-            worth = "Your reclaimed time is worth…",
-            exampleMsg = if (hasWins) null else "EXAMPLE - ride out urges and your real reclaimed time shows here",
+            worth = getString(R.string.prod_worth),
+            exampleMsg = if (hasWins) null else getString(R.string.prod_week_example),
             pointInfo = { i, v, projected ->
                 readoutText("${weekDays.getOrNull(i) ?: ""} · ",
                     "${fmtHours(v)} (£${Math.round(v * rate)})",
-                    (if (projected) " · projected" else "") + (if (hasWins) "" else "\n[Example data]"),
+                    (if (projected) getString(R.string.home_projected) else "") + (if (hasWins) "" else getString(R.string.home_example_data)),
                     if (projected) 0xFF9AA0A6.toInt() else 0xFF2E7D32.toInt())
             },
         ))
     }
     val goalNow = UsageGoal.hoursPerDay(this)
-    content.addView(smallLink(if (goalNow == null) "Set a usage goal  ›" else "Your goal: ${fmtHours(goalNow)} a day - change  ›", dp) {
+    content.addView(smallLink(if (goalNow == null) getString(R.string.prod_set_goal) else getString(R.string.prod_goal_change, fmtHours(goalNow)), dp) {
         showUsageGoal()
     })
 
     // ── Dopamine baseline: a whole-phone measure, so it belongs here and not buried in
     //    the adult-content statistics.
     val todayScore = DopamineScore.of(DopamineLog.today(this))
-    content.addView(sectionTitle("Your dopamine baseline"))
+    content.addView(sectionTitle(getString(R.string.prod_dopamine_title)))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
@@ -2807,11 +2842,11 @@ private fun showProductivity() {
         setPadding((14 * dp).toInt(), 0, 0, 0)
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         addView(TextView(this@MainActivity).apply {
-            text = if (todayScore.hasData) todayScore.band else "Still measuring"
+            text = if (todayScore.hasData) todayScore.band else getString(R.string.prod_still_measuring)
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
         })
         addView(TextView(this@MainActivity).apply {
-            text = "out of 100 today · higher is more fried"
+            text = getString(R.string.prod_out_of_100)
             textSize = 12f; setTextColor(0xFF7B848C.toInt())
         })
     })
@@ -2820,22 +2855,22 @@ private fun showProductivity() {
     })
     content.addView(dopCard)
 
-    content.addView(smallLink("Your habits estimate  ›", dp) {
+    content.addView(smallLink(getString(R.string.prod_habits_estimate), dp) {
         lifeInputsBack = { showProductivity() }; showLifeInputs()
     })
-    content.addView(smallLink("About you — hourly rate, what your time is worth  ›", dp) {
+    content.addView(smallLink(getString(R.string.prod_about_you), dp) {
         aboutYouBack = { showProductivity() }; showAboutYou()
     })
 
     // Your next year as days
-    content.addView(sectionTitle("Your next year"))
+    content.addView(sectionTitle(getString(R.string.prod_next_year)))
     val grid = TimeGridView(this)
     content.addView(grid, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     val gridCaption = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0) }
     content.addView(gridCaption)
 
     // Opportunity cost
-    content.addView(sectionTitle("Reclaim it and you could"))
+    content.addView(sectionTitle(getString(R.string.prod_reclaim_could)))
     val oppBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     content.addView(oppBox)
 
@@ -2843,15 +2878,15 @@ private fun showProductivity() {
     val perYearHours = min * 365.0 / 60.0
     val wakingDaysYr = Math.round(perYearHours / Usage.WAKING_HOURS).toInt()
     grid.setFilledDays(wakingDaysYr)
-    gridCaption.text = "$wakingDaysYr of the next 365 days, gone to the feed"
+    gridCaption.text = getString(R.string.prod_grid_caption, wakingDaysYr)
     listOf(
-        "${Math.round(perYearHours / 6.0)} books read - about 6 hours each",
-        "${Math.round(perYearHours / 0.75)} proper workouts, 45 minutes apiece",
-        "${Math.round(perYearHours / 480.0 * 100)}% of the way to conversational in a new language",
-        "${Math.round(perYearHours / 8.0)} full nights of extra sleep",
+        getString(R.string.prod_opp_b1, Math.round(perYearHours / 6.0).toInt()),
+        getString(R.string.prod_opp_b2, Math.round(perYearHours / 0.75).toInt()),
+        getString(R.string.prod_opp_b3, Math.round(perYearHours / 480.0 * 100).toInt()),
+        getString(R.string.prod_opp_b4, Math.round(perYearHours / 8.0).toInt()),
     ).forEach { line ->
         oppBox.addView(TextView(this).apply {
-            text = "\u2022  $line"; textSize = 15f; setTextColor(0xFF3A434B.toInt())
+            text = getString(R.string.proto_bullet, line); textSize = 15f; setTextColor(0xFF3A434B.toInt())
             setLineSpacing((3 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
         })
     }
@@ -2870,17 +2905,17 @@ private fun showTemptationsTab() {
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val root = vbox(pad)
     root.addView(TextView(this).apply {
-        text = "What are you managing?"; textSize = 15f; setTextColor(0xFF7B848C.toInt())
+        text = getString(R.string.temp_managing); textSize = 15f; setTextColor(0xFF7B848C.toInt())
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     // Adult Content keeps its own big bespoke flow. Everything else shares the one simple
     // page below, driven off AppConfig.TEMPTATIONS - add a category there, not here.
-    list.addView(homeCard("Adult Content \uD83D\uDD1E", "Tools for the moment, and the longer game.") {
+    list.addView(homeCard(getString(R.string.temp_adult_title), getString(R.string.temp_adult_sub)) {
         reportBackTarget = { showTemptationsTab() }; showReportScreen(offerLock = true)
     })
     AppConfig.TEMPTATIONS.forEach { spec ->
-        list.addView(homeCard(spec.title, spec.subtitle) { showTemptation(spec) })
+        list.addView(homeCard(temptTitle(spec), temptSubtitle(spec)) { showTemptation(spec) })
     }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -2907,9 +2942,9 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
     habitOrb?.stop(); habitOrb = null
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText(spec.title))
+    root.addView(titleText(temptTitle(spec)))
     root.addView(TextView(this).apply {
-        text = spec.subtitle; textSize = 15f; setTextColor(0xFF7B848C.toInt())
+        text = temptSubtitle(spec); textSize = 15f; setTextColor(0xFF7B848C.toInt())
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
 
@@ -2927,10 +2962,10 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
         ).apply { bottomMargin = (14 * dp).toInt() }
     }
     card.addView(TextView(this).apply {
-        text = "Does this sound like you?"; textSize = 15f
+        text = getString(R.string.temp_sound_like); textSize = 15f
         setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
     })
-    spec.covers.forEach { line ->
+    temptCovers(spec).forEach { line ->
         card.addView(TextView(this).apply {
             text = "\u2022  $line"; textSize = 14f; setTextColor(0xFF3C4650.toInt())
             setLineSpacing(0f, 1.15f); setPadding(0, (8 * dp).toInt(), 0, 0)
@@ -2941,35 +2976,35 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
     val rides = HabitLog.count(this, spec.id, HabitLog.RIDE)
     val slips = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
     list.addView(TextView(this).apply {
-        text = "$rides ridden out  \u00B7  $slips slip(s) this week"
+        text = getString(R.string.temp_stats, rides, slips)
         textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
 
-    list.addView(captionedButton("I feel the pull right now", "ride it out - it passes", 0xFF3E535C.toInt()) {
+    list.addView(captionedButton(getString(R.string.temp_pull_title), getString(R.string.temp_pull_sub), 0xFF3E535C.toInt()) {
         habitRide(spec)
     })
 
     if (TemptationBlocks.hasBlocks(spec)) list.addView(blockSwitch(spec))
 
-    list.addView(captionedButton("I slipped", "log it, no shame", 0xFF526D78.toInt()) {
+    list.addView(captionedButton(getString(R.string.temp_slipped_title), getString(R.string.temp_slipped_sub), 0xFF526D78.toInt()) {
         habitSlip(spec)
     })
 
     list.addView(TextView(this).apply {
-        text = "Try instead:  ${spec.insteadOf}"
+        text = getString(R.string.temp_try_instead, temptInsteadOf(spec))
         textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (16 * dp).toInt(), 0, (6 * dp).toInt())
     })
     list.addView(TextView(this).apply {
-        text = "or lock everything down for 30 minutes"
+        text = getString(R.string.temp_lockdown)
         textSize = 14f; setTextColor(0xFF48606A.toInt())
         isClickable = true; isFocusable = true
         setPadding(0, (8 * dp).toInt(), 0, (16 * dp).toInt())
         setOnClickListener {
             Lockdown.start(this@MainActivity)
             Toast.makeText(this@MainActivity,
-                "Locked down for 30 min. Essentials still work.", Toast.LENGTH_LONG).show()
+                getString(R.string.temp_lockdown_toast), Toast.LENGTH_LONG).show()
             showTemptation(spec)
         }
     })
@@ -3004,12 +3039,12 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
         textSize = 13f; setTextColor(0xFFCBD3D8.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
     }
     fun paint() {
-        title.text = if (on) "\u25CF  Blocking what feeds this" else "\u25CB  Block what feeds this"
+        title.text = if (on) getString(R.string.temp_block_on) else getString(R.string.temp_block_off)
         val sites = spec.blockPatterns.size
         val apps = spec.greyApps.size
-        val appBit = if (apps > 0) " and limits $apps app(s) to ${GreyUsage.LIMIT_MIN} min/hour" else ""
-        sub.text = if (on) "Blocking $sites site(s)$appBit.  Tap to turn off."
-                   else "Blocks $sites site(s)$appBit.  Tap to turn on."
+        val appBit = if (apps > 0) getString(R.string.temp_block_applimit, apps, GreyUsage.LIMIT_MIN) else ""
+        sub.text = if (on) getString(R.string.temp_block_sub_on, sites, appBit)
+                   else getString(R.string.temp_block_sub_off, sites, appBit)
         row.background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 16 * dp
             setColor(if (on) 0xFF2E7D32.toInt() else 0xFF34464E.toInt())
@@ -3030,9 +3065,9 @@ private fun habitRide(spec: AppConfig.TemptationSpec) {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val totalBreaths = 3
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
-    root.addView(titleText("Ride it out"))
+    root.addView(titleText(getString(R.string.temp_ride_title)))
     root.addView(TextView(this).apply {
-        text = "The pull peaks fast, then fades. Follow the orb - $totalBreaths slow breaths."
+        text = getString(R.string.temp_ride_body, totalBreaths)
         textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
     })
 
@@ -3044,7 +3079,7 @@ private fun habitRide(spec: AppConfig.TemptationSpec) {
     })
 
     val label = TextView(this).apply {
-        text = "Breathe in"; textSize = 18f; gravity = Gravity.CENTER
+        text = getString(R.string.overlay_breathe_in); textSize = 18f; gravity = Gravity.CENTER
     }
     root.addView(label)
     val counter = TextView(this).apply {
@@ -3054,7 +3089,7 @@ private fun habitRide(spec: AppConfig.TemptationSpec) {
     root.addView(counter)
 
     // Only unlocks once the breaths are actually done - otherwise it's just a tap-through.
-    val done = bigChoice("I've got through it", 0xFF2E7D32.toInt()) { habitRideDone(spec) }
+    val done = bigChoice(getString(R.string.temp_ride_done_btn), 0xFF2E7D32.toInt()) { habitRideDone(spec) }
     done.isEnabled = false
     done.alpha = 0.5f
     root.addView(done)
@@ -3063,7 +3098,7 @@ private fun habitRide(spec: AppConfig.TemptationSpec) {
     habitOrb = BreathOrbAnimator(orb, label).also { a ->
         a.start(
             cycles = totalBreaths,
-            onCycle = { d, t -> counter.text = if (d >= t) "Done - nicely paced" else "$d of $t done" },
+            onCycle = { d, t -> counter.text = if (d >= t) getString(R.string.temp_ride_paced) else getString(R.string.temp_ride_counter, d, t) },
             onComplete = { label.text = ""; done.isEnabled = true; done.alpha = 1f },
         )
     }
@@ -3075,9 +3110,9 @@ private fun habitRideDone(spec: AppConfig.TemptationSpec) {
     HabitLog.record(this, spec.id, HabitLog.RIDE)
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
-    root.addView(titleText("That was you, beating it."))
+    root.addView(titleText(getString(R.string.temp_ridedone_title)))
     root.addView(TextView(this).apply {
-        text = "Every urge you ride out makes the next one weaker."
+        text = getString(R.string.temp_ridedone_body)
         textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
         setPadding(0, (4 * dp).toInt(), 0, 0)
     })
@@ -3086,11 +3121,11 @@ private fun habitRideDone(spec: AppConfig.TemptationSpec) {
             topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt()
         })
     root.addView(TextView(this).apply {
-        text = "${HabitLog.count(this@MainActivity, spec.id, HabitLog.RIDE)} ridden out"
+        text = getString(R.string.temp_ridden_out, HabitLog.count(this@MainActivity, spec.id, HabitLog.RIDE))
         textSize = 15f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
-    root.addView(captionedButton("Put the phone down", "closes the app", 0xFF2E7D32.toInt()) {
+    root.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), 0xFF2E7D32.toInt()) {
         try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
     })
     setContentWithThumb(root) { showTemptation(spec) }
@@ -3102,16 +3137,15 @@ private fun habitSlip(spec: AppConfig.TemptationSpec) {
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val week = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
-    root.addView(titleText("Logged."))
+    root.addView(titleText(getString(R.string.temp_slip_title)))
     root.addView(TextView(this).apply {
-        text = "That's honesty, and it's worth more than a clean streak you had to lie for.\n\n" +
-            "$week this week. The number isn't a verdict - it's just data. Watch which way it moves."
+        text = getString(R.string.temp_slip_body, week)
         textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
         setLineSpacing(0f, 1.15f); setPadding(0, (10 * dp).toInt(), 0, 0)
     })
     root.addView(grow())
     root.addView(TextView(this).apply {
-        text = "Next time, try:  ${spec.insteadOf}"
+        text = getString(R.string.temp_slip_next, temptInsteadOf(spec))
         textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
         setLineSpacing(0f, 1.15f); setPadding(0, 0, 0, (14 * dp).toInt())
     })
@@ -3158,29 +3192,29 @@ private fun showProtocol() {
     val strictActive = Mode.isLocked(this)
     val sevenStarted = Protocol.sevenStarted(this)
     val root = vbox(pad)
-    root.addView(titleText("Break the addiction protocol"))
+    root.addView(titleText(getString(R.string.report_protocol)))
     root.addView(TextView(this).apply {
-        text = "Two moves do most of the work: a real break away from your device, then locking it down hard for the week after. Everything else supports those two."
+        text = getString(R.string.proto_intro)
         textSize = 15f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
     list.addView(TextView(this).apply {
-        text = "BUILD THE WALLS AROUND IT"; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
+        text = getString(R.string.proto_hdr_walls); textSize = 12f; setTypeface(typeface, Typeface.BOLD)
         setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), 0, 0, (8 * dp).toInt())
     })
     // Look like the rest: a tickbox + tap to open the guide.
-    list.addView(protocolLinkCheckRow("Rearrange your apps",
-        "Get the troublesome ones out of easy reach.", appsDone) { showProtocolApps() })
+    list.addView(protocolLinkCheckRow(getString(R.string.proto_apps_title),
+        getString(R.string.proto_apps_sub), appsDone) { showProtocolApps() })
     val anyReplace = Protocol.isChecked(this, "buy_alarm") ||
                      Protocol.isChecked(this, "charge_outside") || Protocol.isChecked(this, "buy_watch")
-    list.addView(protocolLinkCheckRow("Keep your phone out of the bedroom",
-        "Alarm clock so it never comes to bed - tap for the how.", anyReplace) { showProtocolReplace() })
+    list.addView(protocolLinkCheckRow(getString(R.string.proto_bedroom_title),
+        getString(R.string.proto_bedroom_sub), anyReplace) { showProtocolReplace() })
     val checks = listOf(
-        "out_of_house" to ("Be out of the house as much as possible" to "Spend the money if you have to - on anything that isn't addictive. Friends and social clubs most of all."),
-        "delete_social" to ("Delete your social media accounts" to "Not just the apps - the accounts. Remove the pull entirely."),
-        "new_background" to ("Set a new phone background" to "A clean visual reset every time you unlock."),
-        "new_theme" to ("Change your app theme, if you can" to "Make the phone feel like a different, less familiar device."),
+        "out_of_house" to (getString(R.string.proto_outhouse_title) to getString(R.string.proto_outhouse_sub)),
+        "delete_social" to (getString(R.string.proto_delete_title) to getString(R.string.proto_delete_sub)),
+        "new_background" to (getString(R.string.proto_bg_title) to getString(R.string.proto_bg_sub)),
+        "new_theme" to (getString(R.string.proto_theme_title) to getString(R.string.proto_theme_sub)),
     )
     checks.forEach { (key, pair) ->
         val (t, sub) = pair
@@ -3188,22 +3222,22 @@ private fun showProtocol() {
     }
 
     // The two big moves: same tickbox card, but a gold outline (brighter gold once done).
-    list.addView(protocolGoldRow("Go on holiday - without your device",
-        "Step right out of the environment the habit lives in. The single biggest reset.",
+    list.addView(protocolGoldRow(getString(R.string.proto_holiday_title),
+        getString(R.string.proto_holiday_sub),
         holidayDone) { showProtocolHoliday() })
     val sevenSub = when {
-        strictActive -> "Active - ${Mode.daysLeft(this)} days left."
-        sevenStarted -> "Completed. You can run it again any time."
-        !holidayDone -> "Do the holiday first - it's what protects the fresh start."
-        else -> "Lock yourself out for 7 days straight, right after the holiday."
+        strictActive -> getString(R.string.proto_seven_active, Mode.daysLeft(this))
+        sevenStarted -> getString(R.string.proto_seven_completed)
+        !holidayDone -> getString(R.string.proto_seven_needholiday)
+        else -> getString(R.string.proto_seven_ready)
     }
-    list.addView(protocolGoldRow("Super-strict lock for a week after",
+    list.addView(protocolGoldRow(getString(R.string.proto_seven_title),
         sevenSub, sevenStarted && !strictActive) {
         if (holidayDone) showProtocol7Day()
-        else Toast.makeText(this, "Do the holiday first - it's what makes the lock stick.", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(this, getString(R.string.proto_seven_toast_needholiday), Toast.LENGTH_SHORT).show()
     })
 
-    list.addView(homeCard("\uD83D\uDCA1  Additional tips", "More ways to keep the phone out of your hands.") { showProtocolTips() })
+    list.addView(homeCard(getString(R.string.proto_tips_card_title), getString(R.string.proto_tips_card_sub)) { showProtocolTips() })
 
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
@@ -3291,18 +3325,18 @@ private fun showProtocolReplace() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Replace what the phone does"))
+    root.addView(titleText(getString(R.string.proto_replace_title)))
     root.addView(TextView(this).apply {
-        text = "The goal is simple: never need to bring your phone into the bedroom. If the phone isn't there at night, the highest-risk moments mostly disappear."
+        text = getString(R.string.proto_replace_intro)
         textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    list.addView(protocolCheckRow("buy_alarm", "Buy a real alarm clock",
-        "The single most important purchase. It removes the only honest reason to have the phone by your bed."))
-    list.addView(protocolCheckRow("charge_outside", "Charge your phone in another room",
-        "Pick a spot - kitchen, hallway - and make it the permanent overnight home for the phone."))
-    list.addView(protocolCheckRow("buy_watch", "Wear a watch",
-        "So you never reach for the phone just to check the time."))
+    list.addView(protocolCheckRow("buy_alarm", getString(R.string.proto_alarm_title),
+        getString(R.string.proto_alarm_sub)))
+    list.addView(protocolCheckRow("charge_outside", getString(R.string.proto_charge_title),
+        getString(R.string.proto_charge_sub)))
+    list.addView(protocolCheckRow("buy_watch", getString(R.string.proto_watch_title),
+        getString(R.string.proto_watch_sub)))
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
@@ -3314,12 +3348,12 @@ private fun showProtocolTips() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Additional tips"))
+    root.addView(titleText(getString(R.string.proto_tips_title)))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    list.addView(protocolGuidanceCard("Don't bring your phone to bed or high-risk spots",
-        "The bedroom, the bathroom, anywhere you've slipped before. Leave it charging in another room."))
-    list.addView(protocolGuidanceCard("Change your state when an urge hits",
-        "A shower, a cold blast at the end of it, a quick workout, stepping outside, a tight bedtime and wake-up routine, even a game - anything that breaks the moment and shifts how you feel."))
+    list.addView(protocolGuidanceCard(getString(R.string.proto_tip1_title),
+        getString(R.string.proto_tip1_sub)))
+    list.addView(protocolGuidanceCard(getString(R.string.proto_tip2_title),
+        getString(R.string.proto_tip2_sub)))
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
@@ -3530,20 +3564,20 @@ private fun protocolStep(num: Int, title: String, sub: String, done: Boolean, lo
 private fun showProtocolApps() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Rearrange your apps"))
-    root.addView(body("Make the habit harder to reach by accident. Before anything else:"))
+    root.addView(titleText(getString(R.string.proto_apps_title)))
+    root.addView(body(getString(R.string.proto_apps_intro)))
     listOf(
-        "Move anything that tends to lead you in off your home screen - bury it in a folder, or remove the shortcut.",
-        "Sign out of accounts so opening them isn't one tap.",
-        "Delete the apps you don't truly need. The friction is the point.",
-        "Add the rest to this app's block list so they're handled for you.",
+        getString(R.string.proto_apps_b1),
+        getString(R.string.proto_apps_b2),
+        getString(R.string.proto_apps_b3),
+        getString(R.string.proto_apps_b4),
     ).forEach { line ->
         root.addView(TextView(this).apply {
-            text = "\u2022  $line"; textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
+            text = getString(R.string.proto_bullet, line); textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
         })
     }
     root.addView(grow())
-    root.addView(bigChoice(if (Protocol.appsDone(this)) "Done \u2713" else "I've rearranged my apps", 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(if (Protocol.appsDone(this)) getString(R.string.proto_done) else getString(R.string.proto_apps_btn), 0xFF2E7D32.toInt()) {
         Protocol.setApps(this, true); showProtocol()
     })
     setContentWithThumb(root) { showProtocol() }
@@ -3553,20 +3587,20 @@ private fun showProtocolHoliday() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Go on holiday / break the routine"))
-    root.addView(body("The habit is wired to a place and a rhythm. The fastest way to weaken it is to physically leave that environment for a while."))
+    root.addView(titleText(getString(R.string.proto_holiday_page_title)))
+    root.addView(body(getString(R.string.proto_holiday_intro)))
     listOf(
-        "Aim for a proper break - ideally around two weeks.",
-        "Go without your phone if you can, or leave it locked down the whole time.",
-        "Fill the days with people, movement and daylight - not screens.",
-        "Come back to a home you've already rearranged, and start the 7-day lock fresh.",
+        getString(R.string.proto_holiday_b1),
+        getString(R.string.proto_holiday_b2),
+        getString(R.string.proto_holiday_b3),
+        getString(R.string.proto_holiday_b4),
     ).forEach { line ->
         root.addView(TextView(this).apply {
-            text = "\u2022  $line"; textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
+            text = getString(R.string.proto_bullet, line); textSize = 15f; setLineSpacing((4 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
         })
     }
     root.addView(grow())
-    root.addView(bigChoice(if (Protocol.holidayDone(this)) "Done \u2713" else "I've taken the break", 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(if (Protocol.holidayDone(this)) getString(R.string.proto_done) else getString(R.string.proto_holiday_btn), 0xFF2E7D32.toInt()) {
         Protocol.setHoliday(this, true); showProtocol()
     })
     setContentWithThumb(root) { showProtocol() }
@@ -3576,21 +3610,21 @@ private fun showProtocol7Day() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("7-day strict lock"))
-    root.addView(body("Strict mode stays on for 7 days. You can't switch back to relaxed until it ends. It's most effective once you've reset with the holiday - you're protecting fresh ground, not fighting uphill."))
+    root.addView(titleText(getString(R.string.proto_7day_title)))
+    root.addView(body(getString(R.string.proto_7day_intro)))
     if (Mode.isLocked(this)) {
         root.addView(TextView(this).apply {
-            text = "Active - ${Mode.daysLeft(this@MainActivity)} days left."
+            text = getString(R.string.proto_seven_active, Mode.daysLeft(this@MainActivity))
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
             setPadding(0, (12 * dp).toInt(), 0, 0)
         })
         root.addView(grow())
     } else {
         root.addView(grow())
-        root.addView(bigChoice("Start the 7-day lock", 0xFF2E7D32.toInt()) {
+        root.addView(bigChoice(getString(R.string.proto_7day_btn), 0xFF2E7D32.toInt()) {
             Protocol.setSevenStarted(this)
             Mode.startWeekStrict(this)
-            Toast.makeText(this, "Strict mode on for 7 days", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.proto_7day_toast), Toast.LENGTH_SHORT).show()
             showProtocol()
         })
     }
@@ -3646,7 +3680,7 @@ private fun showReportScreen(offerLock: Boolean = false) {
         ).apply { topMargin = (10 * dp).toInt() }
         isClickable = true; isFocusable = true; setOnClickListener { showProtocol() }
         addView(TextView(this@MainActivity).apply {
-            text = "Break the addiction protocol"; textSize = 16f; setTypeface(typeface, Typeface.BOLD)
+            text = getString(R.string.report_protocol); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFFFFFFFF.toInt())
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
@@ -3660,20 +3694,20 @@ private fun showReportScreen(offerLock: Boolean = false) {
     // ONLY when the user has already started trying to tear the guard down (uninstall,
     // device admin, switching monitoring off, escaping a locked strict mode) - see the big
     // comment on BypassWatch, and the offer pane a few lines below. Do not put it back.
-    root.addView(reportPane("Report an app/site", 0xFF34464E.toInt()) { onReportAppSite() })
-    root.addView(reportPane("I feel temptation", 0xFF3E535C.toInt()) { onFeelTemptation() })
-    root.addView(reportPane("Report relapse", 0xFF526D78.toInt()) { onReportRelapse() })
+    root.addView(reportPane(getString(R.string.report_pane_appsite), 0xFF34464E.toInt()) { onReportAppSite() })
+    root.addView(reportPane(getString(R.string.report_pane_temptation), 0xFF3E535C.toInt()) { onFeelTemptation() })
+    root.addView(reportPane(getString(R.string.report_pane_relapse), 0xFF526D78.toInt()) { onReportRelapse() })
 
     // THE HONEST EXIT deliberately does NOT live on this page any more. It appears as
     // its own full screen (showBypassOffer) at the moment of a bypass attempt - see
     // maybeShowBypassOffer(). A card sitting here read as a permanent door handle.
-    root.addView(reportPane("Statistics", 0xFF5E7A86.toInt()) { showStatsMenu() }.apply {
+    root.addView(reportPane(getString(R.string.report_pane_stats), 0xFF5E7A86.toInt()) { showStatsMenu() }.apply {
         textSize = 16f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt())
     })
     // Quiet on purpose: almost nobody needs these, and the ones who do will look for them.
     root.addView(TextView(this).apply {
-        text = "Settings"
+        text = getString(R.string.report_settings)
         textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF8A9299.toInt())
         isClickable = true; isFocusable = true
         setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
@@ -3713,22 +3747,17 @@ private fun showBypassOffer() {
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val reason = BypassWatch.lastReason(this)
     val root = vbox(pad)
-    root.addView(titleText("Before you pull it all down"))
+    root.addView(titleText(getString(R.string.bypass_title)))
     root.addView(TextView(this).apply {
-        text = buildString {
-            if (reason != null) append("A moment ago, $reason.\n\n")
-            append("If you're going to look, do it the honest way instead: a wait, a written ")
-            append("commitment, a fixed window, and the guard still standing afterwards.\n\n")
-            append("It costs you one of your ${LoosenLimit.LIFETIME_MAX} lifetime unlocks. ")
-            append("Breaking the app costs you everything you've built.")
-        }
+        text = (if (reason != null) getString(R.string.bypass_moment, reason) else "") +
+            getString(R.string.bypass_body, LoosenLimit.LIFETIME_MAX)
         textSize = 15f; setTextColor(0xFF3A434B.toInt()); setLineSpacing(0f, 1.25f)
         setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
     })
     root.addView(grow())
-    root.addView(bigChoice("I'm going to look anyway  ›", 0xFFB1541F.toInt()) { onLookAnyway() })
+    root.addView(bigChoice(getString(R.string.bypass_look_anyway), 0xFFB1541F.toInt()) { onLookAnyway() })
     root.addView(Button(this).apply {
-        text = "Not now"; setAllCaps(false)
+        text = getString(R.string.common_not_now); setAllCaps(false)
         setOnClickListener { setupHomeScreen() }
     })
     setContentWithThumb(root) { setupHomeScreen() }
@@ -3749,7 +3778,7 @@ private fun showAdultSettings() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val canEdit = AttractionFilter.canEdit(this)
     val root = vbox(pad)
-    root.addView(titleText("Settings"))
+    root.addView(titleText(getString(R.string.report_settings)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
@@ -3757,24 +3786,19 @@ private fun showAdultSettings() {
     setContentWithThumb(root) { showReportScreen() }
 
     c.addView(TextView(this).apply {
-        text = "What the filter looks for"
+        text = getString(R.string.adult_section_looks)
         textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
         setPadding(0, 0, 0, (8 * dp).toInt())
     })
     c.addView(TextView(this).apply {
-        text = "By default the filter treats sexualised images of women and of men the same. " +
-            "If one of them simply isn't a temptation for you, you can turn it down — so you can " +
-            "shop for swimwear or underwear without a fight.\n\n" +
-            "This only softens the SUGGESTIVE end. Explicit content and known adult sites stay " +
-            "blocked either way, whatever these switches say."
+        text = getString(R.string.adult_intro)
         textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (14 * dp).toInt())
     })
 
     if (!canEdit) {
         c.addView(TextView(this).apply {
-            text = "Locked while you're in ${AppConfig.modeName(Mode.current(this@MainActivity))} mode.\n" +
-                "Both are fully on. Switch to Relaxed to change them."
+            text = getString(R.string.adult_locked, modeDisplayName(Mode.current(this@MainActivity)))
             textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB1541F.toInt())
             setLineSpacing(0f, 1.15f)
             background = android.graphics.drawable.GradientDrawable().apply {
@@ -3816,16 +3840,15 @@ private fun showAdultSettings() {
         c.addView(row)
     }
 
-    switchRow("Block sexualised women",
-        "Bikinis, lingerie, cleavage and the like.",
+    switchRow(getString(R.string.adult_block_women),
+        getString(R.string.adult_block_women_sub),
         { AttractionFilter.blockFemale(this) }, { AttractionFilter.setBlockFemale(this, it) })
-    switchRow("Block sexualised men",
-        "Shirtless, bulges and the like.",
+    switchRow(getString(R.string.adult_block_men),
+        getString(R.string.adult_block_men_sub),
         { AttractionFilter.blockMale(this) }, { AttractionFilter.setBlockMale(this, it) })
 
     c.addView(TextView(this).apply {
-        text = "Health and medical pages are already treated differently — looking up a symptom " +
-            "is not the same as looking at porn, and the filter knows the difference."
+        text = getString(R.string.adult_medical_note)
         textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (18 * dp).toInt(), 0, (20 * dp).toInt())
     })
@@ -3852,9 +3875,9 @@ private fun showModeRules() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val current = Mode.current(this)
     val root = vbox(pad)
-    root.addView(titleText("The rules, in plain English"))
+    root.addView(titleText(getString(R.string.moderules_title)))
     root.addView(TextView(this).apply {
-        text = "Everything this app does to you, and exactly when. No surprises."
+        text = getString(R.string.moderules_subtitle)
         textSize = 14f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (12 * dp).toInt())
     })
 
@@ -3899,17 +3922,17 @@ private fun showModeRules() {
         list.addView(card)
     }
 
-    sectionHeader("ALWAYS ON - IN EVERY MODE", 0xFF9AA0A6.toInt())
-    rulesCard("These never switch off", "Even in Relaxed. Off is the one exception - see its card below.",
-        AppConfig.ALWAYS_ON_RULES, 0xFF2E7D32.toInt(), highlight = false)
+    sectionHeader(getString(R.string.moderules_section_always), 0xFF9AA0A6.toInt())
+    rulesCard(getString(R.string.moderules_always_title), getString(R.string.moderules_always_sub),
+        alwaysOnRules(), 0xFF2E7D32.toInt(), highlight = false)
 
-    sectionHeader("THE MODES - WHAT CHANGES", 0xFF9AA0A6.toInt())
+    sectionHeader(getString(R.string.moderules_section_modes), 0xFF9AA0A6.toInt())
     AppConfig.MODES.forEach { spec ->
         val isCurrent = spec.id == current
         rulesCard(
-            title = spec.displayName,
-            sub = if (isCurrent) "You are in this mode right now" else null,
-            rules = spec.summary,
+            title = modeDisplayName(spec.id),
+            sub = if (isCurrent) getString(R.string.moderules_current) else null,
+            rules = modeRules(spec.id),
             accent = 0xFF2E9E8F.toInt(),
             highlight = isCurrent,
         )
@@ -3917,16 +3940,15 @@ private fun showModeRules() {
 
     if (Mode.isLocked(this)) {
         list.addView(TextView(this).apply {
-            text = "Strict lock is running: ${Mode.daysLeft(this@MainActivity)}. " +
-                "You cannot go back to Relaxed until it ends. You can still go up to Super hardcore."
+            text = getString(R.string.moderules_lock, Mode.daysLeft(this@MainActivity))
             textSize = 13f; setTextColor(0xFFB1541F.toInt()); setTypeface(typeface, Typeface.BOLD)
             setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
         })
     }
 
     list.addView(TextView(this).apply {
-        text = "\"Watched apps\" are the ones that get the breathing pause: " +
-            AppConfig.BREATHING_APPS.joinToString(", ") { appLabelOrPackage(it) } + "."
+        text = getString(R.string.moderules_watched,
+            AppConfig.BREATHING_APPS.joinToString(", ") { appLabelOrPackage(it) })
         textSize = 13f; setTextColor(0xFF7B848C.toInt())
         setPadding(0, (6 * dp).toInt(), 0, (16 * dp).toInt())
     })
@@ -3959,17 +3981,17 @@ private fun showLogPage() {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
     }
     header.addView(TextView(this).apply {
-        text = "Log"; textSize = 21f; setTypeface(typeface, Typeface.BOLD)
+        text = getString(R.string.log_title); textSize = 21f; setTypeface(typeface, Typeface.BOLD)
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     })
     header.addView(Button(this).apply {
-        text = "Clear log"
-        setOnClickListener { clearLog(); Toast.makeText(this@MainActivity, "Log cleared", Toast.LENGTH_SHORT).show() }
+        text = getString(R.string.log_clear)
+        setOnClickListener { clearLog(); Toast.makeText(this@MainActivity, getString(R.string.log_cleared), Toast.LENGTH_SHORT).show() }
     })
     root.addView(header)
 
     val empty = TextView(this).apply {
-        text = "No entries yet"; setPadding(0, (24 * dp).toInt(), 0, 0); visibility = View.GONE
+        text = getString(R.string.log_empty); setPadding(0, (24 * dp).toInt(), 0, 0); visibility = View.GONE
     }
     root.addView(empty)
     val rv = RecyclerView(this).apply {
@@ -3993,7 +4015,7 @@ private fun showAboutPage() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("About & privacy"))
+    root.addView(titleText(getString(R.string.home_about_privacy)))
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     content.addView(TextView(this).apply {
         text = getString(R.string.disclosure); textSize = 15f
@@ -4073,23 +4095,23 @@ private fun loosenStop(message: String) {
     inLoosenFlow = false; onReportScreen = true; loosenBackAction = null
     val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Good."))
+    root.addView(titleText(getString(R.string.loosen_stop_good)))
     root.addView(body(message))
     root.addView(grow())
-    root.addView(Button(this).apply { text = "Done"; setOnClickListener { showReportScreen() } })
+    root.addView(Button(this).apply { text = getString(R.string.common_done); setOnClickListener { showReportScreen() } })
     setContentView(root)
 }
 
 private fun loosenBlockedScreen() {
     val today = LoosenLimit.usedToday(this)
     val msg = if (today)
-        "You've already used your one unlock for today. It resets tomorrow - and that wait is doing its job."
+        getString(R.string.loosen_blocked_today)
     else
-        "You've used all ${LoosenLimit.LIFETIME_MAX} of your lifetime unlocks, by your own earlier choice. You've got this without it."
+        getString(R.string.loosen_blocked_lifetime, LoosenLimit.LIFETIME_MAX)
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
     root.addView(bigPanic())
-    root.addView(titleText("Not available right now"))
+    root.addView(titleText(getString(R.string.loosen_blocked_title)))
     root.addView(body(msg))
     root.addView(grow())
     setContentWithThumb(root) { showReportScreen() }
@@ -4100,19 +4122,19 @@ private fun loosenIntro1() {
     loosenBackAction = { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(boldWordTitle("This is a supervised unlock, only for times of desperation.", "desperation"))
+    root.addView(boldWordTitle(getString(R.string.loosen_intro_title), getString(R.string.loosen_intro_boldword)))
     root.addView(TextView(this).apply {
-        text = "${LoosenLimit.remaining(this@MainActivity)} of ${LoosenLimit.LIFETIME_MAX} unlocks available"
+        text = getString(R.string.loosen_unlocks_avail, LoosenLimit.remaining(this@MainActivity), LoosenLimit.LIFETIME_MAX)
         textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
     root.addView(TextView(this).apply {
-        text = "Every urge works the same way - it spikes hard, then fades. People who wait it out almost always find it's gone in minutes."
+        text = getString(R.string.loosen_intro_urge)
         textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
     })
-    root.addView(PeakCurveView(this, showMarker = false, labelTop = "it always", labelBot = "passes"),
+    root.addView(PeakCurveView(this, showMarker = false, labelTop = getString(R.string.loosen_curve_top), labelBot = getString(R.string.loosen_curve_bot)),
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(captionedButton("I want to stop instead", "I am strong and can do it", 0xFF2E7D32.toInt()) { openPanic() })
-    root.addView(captionedButton("I understand", "and want to continue", 0xFF3E535C.toInt()) { loosenFaceActScreen() })
+    root.addView(captionedButton(getString(R.string.loosen_stop_instead), getString(R.string.loosen_stop_strong), 0xFF2E7D32.toInt()) { openPanic() })
+    root.addView(captionedButton(getString(R.string.loosen_understand), getString(R.string.loosen_understand_sub), 0xFF3E535C.toInt()) { loosenFaceActScreen() })
     setContentView(root)
 }
 
@@ -4124,15 +4146,15 @@ private fun loosenFaceActScreen() {
     loosenBackAction = { loosenIntro1() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("How will you feel after?"))
+    root.addView(titleText(getString(R.string.loosen_feel_after_title)))
     root.addView(TextView(this).apply {
-        text = "Drag the face to where you'll feel after\u2026"
+        text = getString(R.string.loosen_drag_after)
         textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
     })
-    val face = FeelingFaceView(this, NEG_FEELINGS, 0xFFB0453B.toInt(), positiveInside = false,
-        startZoneLabel = "you, if you get past this\n(just 5 minutes of waiting)")
+    val face = FeelingFaceView(this, NEG_FEELINGS, resources.getStringArray(R.array.feel_neg).toList(), 0xFFB0453B.toInt(), positiveInside = false,
+        startZoneLabel = getString(R.string.loosen_startzone))
     root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val cont = continueLink("Continue") { loosenRegret = face.nearestLabel() ?: loosenRegret; loosenFaceRideScreen() }
+    val cont = continueLink(getString(R.string.common_continue)) { loosenRegret = face.nearestLabel() ?: loosenRegret; loosenFaceRideScreen() }
     face.onMoodChange = { enableLink(cont) }
     root.addView(panicBar())
     root.addView(cont)
@@ -4144,9 +4166,9 @@ private fun loosenFaceRideScreen() {
     loosenBackAction = { stopLoosenTimer(); loosenFaceActScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("And if you wait it out?"))
+    root.addView(titleText(getString(R.string.loosen_wait_title)))
     root.addView(TextView(this).apply {
-        text = "Drag the face to where you'll be in 30 minutes\u2026"
+        text = getString(R.string.loosen_drag_30)
         textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (2 * dp).toInt())
     })
     val timer = TextView(this).apply {
@@ -4154,9 +4176,9 @@ private fun loosenFaceRideScreen() {
         setTextColor(0xFF2E7D32.toInt())
     }
     root.addView(timer)
-    val face = FeelingFaceView(this, POS_FEELINGS, 0xFF2E7D32.toInt(), positiveInside = true)
+    val face = FeelingFaceView(this, POS_FEELINGS, resources.getStringArray(R.array.feel_pos).toList(), 0xFF2E7D32.toInt(), positiveInside = true)
     root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val cont = continueLink("Continue") { stopLoosenTimer(); loosenDelayChanceScreen() }
+    val cont = continueLink(getString(R.string.common_continue)) { stopLoosenTimer(); loosenDelayChanceScreen() }
     face.onMoodChange = { enableLink(cont) }
     root.addView(panicBar())
     root.addView(cont)
@@ -4169,10 +4191,10 @@ private fun loosenDelayChanceScreen() {
     loosenBackAction = { loosenFaceRideScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("A 30-minute challenge"))
-    root.addView(body("Beat the urge by doing nothing but waiting it out."))
+    root.addView(titleText(getString(R.string.loosen_challenge_title)))
+    root.addView(body(getString(R.string.loosen_challenge_body)))
     root.addView(TextView(this).apply {
-        text = "Right now, how likely is it you can hold off for 30 minutes?"
+        text = getString(R.string.loosen_howlikely)
         textSize = 15f; setPadding(0, (16 * dp).toInt(), 0, (8 * dp).toInt())
     })
     val label = TextView(this).apply {
@@ -4184,16 +4206,16 @@ private fun loosenDelayChanceScreen() {
     root.addView(seek)
     val ends = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     ends.addView(TextView(this).apply {
-        text = "no chance"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.loosen_nochance); textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     })
     ends.addView(TextView(this).apply {
-        text = "I've got this"; textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); gravity = Gravity.END
+        text = getString(R.string.loosen_gotthis); textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); gravity = Gravity.END
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     })
     root.addView(ends)
     label.text = delayBand(seek.progress)
-    val cont = continueLink("I want to continue anyway") { loosenOneOffScreen() }
+    val cont = continueLink(getString(R.string.loosen_continue_anyway)) { loosenOneOffScreen() }
     seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(s: android.widget.SeekBar, p: Int, fromUser: Boolean) {
             label.text = delayBand(p); if (fromUser) enableLink(cont)
@@ -4209,11 +4231,11 @@ private fun loosenDelayChanceScreen() {
 
 // Mirrors the "how strong is the urge" wording, flipped to "can I hold off?"
 private fun delayBand(p: Int): String = when {
-    p < 20 -> "Feels impossible right now"
-    p < 40 -> "Very hard - but not impossible"
-    p < 60 -> "Could honestly go either way"
-    p < 80 -> "I think I can hold off"
-    else -> "I've got this - 30 minutes is nothing"
+    p < 20 -> getString(R.string.loosen_band_impossible)
+    p < 40 -> getString(R.string.loosen_band_veryhard)
+    p < 60 -> getString(R.string.loosen_band_either)
+    p < 80 -> getString(R.string.loosen_band_canhold)
+    else -> getString(R.string.loosen_band_gotthis)
 }
 
 // ── Screen D: is this a one-off? how it shapes the future ───────────────────
@@ -4221,14 +4243,14 @@ private fun loosenOneOffScreen() {
     loosenBackAction = { loosenDelayChanceScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Is this really a one-off?"))
-    root.addView(body("Each unlock nudges your brain back toward the old wiring. \u201cJust this once\u201d is exactly how the pattern keeps itself alive."))
+    root.addView(titleText(getString(R.string.loosen_oneoff_title)))
+    root.addView(body(getString(R.string.loosen_oneoff_body)))
     root.addView(RecoveryBrainView(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     val list = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(0, (resources.displayMetrics.density * 8).toInt(), 0, (resources.displayMetrics.density * 4).toInt())
     }
-    list.addView(pickCard("Yes - genuinely a one-off") { loosenOneOffFollow(true) }.apply { gravity = Gravity.CENTER })
+    list.addView(pickCard(getString(R.string.loosen_oneoff_yes)) { loosenOneOffFollow(true) }.apply { gravity = Gravity.CENTER })
     root.addView(list)
     root.addView(panicBar())
     setContentView(root)
@@ -4238,17 +4260,17 @@ private fun loosenOneOffFollow(oneOff: Boolean) {
     loosenBackAction = { loosenOneOffScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText(if (oneOff) "Then waiting costs you nothing" else "Then let this be where it breaks"))
+    root.addView(titleText(if (oneOff) getString(R.string.loosen_follow_title_yes) else getString(R.string.loosen_follow_title_no)))
     root.addView(body(if (oneOff)
-        "If it's truly just once, 30 minutes won't change that - except you'll have it behind you, clean, with every unlock still in the bank."
+        getString(R.string.loosen_follow_body_yes)
     else
-        "Patterns break at one ordinary moment that looks exactly like this one. The future you is asking you to make it this one."))
+        getString(R.string.loosen_follow_body_no)))
     root.addView(grow())
-    root.addView(bigChoice("I'll wait it out", 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(getString(R.string.loosen_wait_it_out), 0xFF2E7D32.toInt()) {
         LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
-        loosenStop("That was the hard choice, made well. The urge passes; this stays with you. Nothing's been used up.")
+        loosenStop(getString(R.string.loosen_stop_msg_hard))
     })
-    root.addView(continueLink("Continue anyway") { loosenFixScreen() }.also { enableLink(it) })
+    root.addView(continueLink(getString(R.string.loosen_continue_anyway_short)) { loosenFixScreen() }.also { enableLink(it) })
     root.addView(grow())
     setContentView(root)
 }
@@ -4256,13 +4278,13 @@ private fun loosenOneOffFollow(oneOff: Boolean) {
 // ── reuse the temptation emotion picker, then where they are ────────────────
 private fun loosenFixScreen() {
     loosenBackAction = { loosenOneOffScreen() }
-    pickMultiWithCustomScreen("What emotions are you feeling right now?", Opts.FEELINGS, "feeling",
+    pickMultiWithCustomScreen(getString(R.string.loosen_emotions_q), Opts.FEELINGS, "feeling",
         onBack = { loosenBack() }) { feels -> loosenFix = feels.joinToString(", "); loosenPlaceScreen() }
 }
 
 private fun loosenPlaceScreen() {
     loosenBackAction = { loosenFixScreen() }
-    pickWithCustomScreen("Where are you right now?", Opts.LOCATIONS, "location",
+    pickWithCustomScreen(getString(R.string.loosen_place_q), Opts.LOCATIONS, "location",
         onBack = { loosenBack() }) { loc ->
         loosenFix = listOfNotNull(loosenFix?.takeIf { it.isNotBlank() }, loc).joinToString("  \u00b7  ")
         loosenUrgeGraphScreen()
@@ -4274,22 +4296,22 @@ private fun loosenUrgeGraphScreen() {
     loosenBackAction = { loosenPlaceScreen() }
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Where are you on the wave?"))
+    root.addView(titleText(getString(R.string.loosen_wave_title)))
     root.addView(TextView(this).apply {
-        text = "The urge spikes, then fades. Tap where you think you are right now."
+        text = getString(R.string.loosen_wave_body)
         textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
     })
     val resp = TextView(this).apply {
         textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
         setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
     }
-    val cont = continueLink("I want to continue anyway") { loosenWaitScreen() }
+    val cont = continueLink(getString(R.string.loosen_continue_anyway)) { loosenWaitScreen() }
     val graph = PeakTapView(this, threshold = 0.30f) { _, correct ->
         if (correct) {
-            resp.text = "That's right - you only have to beat the next 5 minutes. That's all, and it trains you for life."
+            resp.text = getString(R.string.loosen_wave_correct)
             enableLink(cont)
         } else {
-            resp.text = "Not quite - you've actually passed the peak already. Tap again, further along, where the urge is fading."
+            resp.text = getString(R.string.loosen_wave_wrong)
         }
     }
     root.addView(graph, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -4302,7 +4324,7 @@ private fun loosenUrgeGraphScreen() {
 // ── the wait: persists, whitelist-locks, reuses breathing ──────────────────
 private fun loosenWaitScreen() {
     onReportScreen = true; inLoosenFlow = true
-    loosenBackAction = { loosenStop("You stepped back from it - nothing's been used up. The wait was already working.") }
+    loosenBackAction = { loosenStop(getString(R.string.loosen_stop_msg_stepback)) }
     if (!LoosenWait.isActive(this)) LoosenWait.start(this, 5L * 60 * 1000)
     val endAt = System.currentTimeMillis() + LoosenWait.remaining(this)
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
@@ -4310,12 +4332,12 @@ private fun loosenWaitScreen() {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
     }
     content.addView(TextView(this).apply {
-        text = "A short wait first"; textSize = 21f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+        text = getString(R.string.loosen_wait_short); textSize = 21f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     })
     // the only time readout - updates each minute, no ticking seconds
     val sub = TextView(this).apply {
-        text = "you'll be able to continue in 5 minutes"; textSize = 16f; gravity = Gravity.CENTER
+        text = getString(R.string.loosen_wait_sub); textSize = 16f; gravity = Gravity.CENTER
         setTextColor(0xFF4A4F54.toInt()); setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
     }
     content.addView(sub)
@@ -4330,24 +4352,24 @@ private fun loosenWaitScreen() {
     }
     content.addView(orbBox)
     val breatheLabel = TextView(this).apply {
-        text = "Breathe in"; textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
+        text = getString(R.string.overlay_breathe_in); textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
     }
     content.addView(breatheLabel)
 
     // the enticing primary; tapping it groups the "give it longer" options
-    content.addView(GlowButton(this, "Lock me out for 5 mins - I can do this") { showLoosenLongerDialog() }.apply {
+    content.addView(GlowButton(this, getString(R.string.loosen_lock5)) { showLoosenLongerDialog() }.apply {
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (62 * dp).toInt()
         ).apply { bottomMargin = (8 * dp).toInt() }
     })
     // the temptation-style exit, caption now inside the button
-    content.addView(captionedButton("Put the phone down", "closes the app", 0xFF2E7D32.toInt()) {
+    content.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), 0xFF2E7D32.toInt()) {
         LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
         try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
     })
     content.addView(grow())
     // revealed once the wait is up, pinned to the very bottom
-    val doneContinue = continueLink("I've waited - continue") { loosenCommitStart() }
+    val doneContinue = continueLink(getString(R.string.loosen_waited_continue)) { loosenCommitStart() }
     content.addView(doneContinue)
     val root = ScrollView(this).apply {
         setPadding(pad, pad, pad, pad)
@@ -4369,18 +4391,18 @@ private fun showLoosenLongerDialog() {
         val p = (20 * dp).toInt(); setPadding(p, (8 * dp).toInt(), p, 0)
     }
     val dialog = AlertDialog.Builder(this)
-        .setTitle("Give it longer? It only helps.")
+        .setTitle(getString(R.string.loosen_longer_title))
         .setView(box)
-        .setNegativeButton("Keep the 5 minutes", null)
+        .setNegativeButton(getString(R.string.loosen_keep5), null)
         .create()
     fun option(label: String, ms: Long) {
         box.addView(bigChoice(label, 0xFF2E7D32.toInt()) {
             LoosenWait.start(this, ms); dialog.dismiss(); loosenWaitScreen()
         })
     }
-    option("Lock me out for 10 minutes", 10L * 60 * 1000)
-    option("Lock me out for 30 minutes", 30L * 60 * 1000)
-    option("Lock me out for 2 hours", 2L * 60 * 60 * 1000)
+    option(getString(R.string.loosen_lock10), 10L * 60 * 1000)
+    option(getString(R.string.loosen_lock30), 30L * 60 * 1000)
+    option(getString(R.string.loosen_lock2h), 2L * 60 * 60 * 1000)
     dialog.show()
 }
 
@@ -4393,12 +4415,12 @@ private fun loosenCommitStart() {
 private fun renderCommitStep() {
     loosenBackAction = { if (commitStep == 0) loosenWaitScreen() else { commitStep--; renderCommitStep() } }
     when (commitStep.coerceIn(0, 3)) {
-        0 -> commitConfirmScreen("Step 1 of 4", "Be honest with yourself",
-            "I'm choosing this, knowing how I'll feel after.", { loosenAdmit }, { loosenAdmit = it }, "Yes, I'm choosing this")
-        1 -> commitNoteScreen("Step 2 of 4")
-        2 -> commitConfirmScreen("Step 3 of 4", "One promise",
-            "I won't do this next time.", { loosenWontRepeat }, { loosenWontRepeat = it }, "I promise")
-        3 -> commitDurationScreen("Step 4 of 4")
+        0 -> commitConfirmScreen(getString(R.string.loosen_step1), getString(R.string.loosen_honest_head),
+            getString(R.string.loosen_honest_stmt), { loosenAdmit }, { loosenAdmit = it }, getString(R.string.loosen_honest_btn))
+        1 -> commitNoteScreen(getString(R.string.loosen_step2))
+        2 -> commitConfirmScreen(getString(R.string.loosen_step3), getString(R.string.loosen_promise_head),
+            getString(R.string.loosen_promise_stmt), { loosenWontRepeat }, { loosenWontRepeat = it }, getString(R.string.loosen_promise_btn))
+        3 -> commitDurationScreen(getString(R.string.loosen_step4))
     }
 }
 
@@ -4424,22 +4446,22 @@ private fun commitNoteScreen(step: String) {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
     root.addView(stepText(step))
-    root.addView(titleText("What will you look at?"))
+    root.addView(titleText(getString(R.string.loosen_note_title)))
     root.addView(TextView(this).apply {
-        text = "Private - stays on this device."; textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        text = getString(R.string.loosen_note_private); textSize = 13f; setTextColor(0xFF6B7075.toInt())
         setPadding(0, 0, 0, (8 * dp).toInt())
     })
     val note = EditText(this).apply {
-        hint = "Name it plainly\u2026"
+        hint = getString(R.string.loosen_note_hint)
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         gravity = Gravity.TOP or Gravity.START; minLines = 3; setText(loosenNote ?: "")
     }
     root.addView(note, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     root.addView(Button(this).apply {
-        text = "That's what I'll look at"
+        text = getString(R.string.loosen_note_btn)
         setOnClickListener {
             val t = note.text.toString().trim()
-            if (t.isEmpty()) { Toast.makeText(this@MainActivity, "Write it down first.", Toast.LENGTH_SHORT).show() }
+            if (t.isEmpty()) { Toast.makeText(this@MainActivity, getString(R.string.loosen_note_toast), Toast.LENGTH_SHORT).show() }
             else { loosenNote = t; commitStep++; renderCommitStep() }
         }
     })
@@ -4450,12 +4472,12 @@ private fun commitDurationScreen(step: String) {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
     root.addView(stepText(step))
-    root.addView(titleText("For how long?"))
+    root.addView(titleText(getString(R.string.loosen_duration_title)))
     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     val btns = linkedMapOf<Int, Button>()
     listOf(1, 2, 5).forEach { m ->
         val b = Button(this).apply {
-            text = "$m min"; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            text = getString(R.string.loosen_min, m); layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         btns[m] = b; row.addView(b)
     }
@@ -4464,7 +4486,7 @@ private fun commitDurationScreen(step: String) {
     val cont = Button(this)
     val refresh = {
         btns.forEach { (m, b) -> b.setTypeface(Typeface.DEFAULT, if (m == loosenDuration) Typeface.BOLD else Typeface.NORMAL) }
-        cont.text = "Unlock for $loosenDuration min"
+        cont.text = getString(R.string.loosen_unlock_for, loosenDuration)
     }
     btns.forEach { (m, b) -> b.setOnClickListener { loosenDuration = m; refresh() } }
     cont.setOnClickListener { loosenUnlock() }
@@ -4488,19 +4510,19 @@ private fun loosenUnlockedScreen() {
     inLoosenFlow = false; onReportScreen = true; loosenBackAction = null
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val root = vbox(pad)
-    root.addView(titleText("Unlocked for $loosenDuration min"))
+    root.addView(titleText(getString(R.string.loosen_unlocked_title, loosenDuration)))
     val countdown = TextView(this).apply {
         textSize = 40f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
     }
     root.addView(countdown)
-    root.addView(body("The breathing orb and image friction stay on. It re-locks itself when the timer ends."))
+    root.addView(body(getString(R.string.loosen_unlocked_body)))
     root.addView(grow())
-    root.addView(bigChoice("Go", 0xFF3E535C.toInt()) { moveTaskToBack(true) })
-    root.addView(Button(this).apply { text = "Done"; setOnClickListener { showReportScreen() } })
+    root.addView(bigChoice(getString(R.string.loosen_go), 0xFF3E535C.toInt()) { moveTaskToBack(true) })
+    root.addView(Button(this).apply { text = getString(R.string.common_done); setOnClickListener { showReportScreen() } })
     setContentView(root)
     runLoosenCountdown(countdown, System.currentTimeMillis() + LoosenWindow.remaining(this)) {
-        countdown.text = "Re-locked"
+        countdown.text = getString(R.string.loosen_relocked)
     }
 }
 
@@ -4521,13 +4543,13 @@ private fun stepText(s: String) = TextView(this).apply {
     text = s; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
     setPadding(0, 0, 0, (resources.displayMetrics.density * 4).toInt())
 }
-private fun panicBar(): Button = bigChoice("I want to stop instead", 0xFF2E7D32.toInt()) { openPanic() }
+private fun panicBar(): Button = bigChoice(getString(R.string.loosen_stop_instead), 0xFF2E7D32.toInt()) { openPanic() }
 
 private fun bigPanic(): Button {
     val dp = resources.displayMetrics.density
     val third = resources.displayMetrics.heightPixels / 3
     return Button(this).apply {
-        text = "I want to stop instead"; setAllCaps(false)
+        text = getString(R.string.loosen_stop_instead); setAllCaps(false)
         setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, Typeface.BOLD); textSize = 20f
         background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 16 * dp; setColor(0xFF2E7D32.toInt())
@@ -4579,27 +4601,27 @@ private fun openPanic() {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    root.addView(titleText("Let's break the loop"))
+    root.addView(titleText(getString(R.string.panic_title)))
     val pacer = TextView(this).apply {
         textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
     }
     root.addView(pacer)
     root.addView(TextView(this).apply {
-        text = "Follow the words. In through the nose, out through the mouth."
+        text = getString(R.string.panic_body)
         textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
     val grounding = listOf(
-        "Plant both feet on the floor and sit up straight.",
-        "Name 5 things you can see, 4 you can hear, 3 you can touch.",
-        "Stand up and walk into a different room.",
-        "Pour a glass of water and drink it slowly.",
+        getString(R.string.panic_ground_1),
+        getString(R.string.panic_ground_2),
+        getString(R.string.panic_ground_3),
+        getString(R.string.panic_ground_4),
     )
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     grounding.forEachIndexed { i, s ->
         list.addView(TextView(this).apply {
-            text = "${i + 1}.  $s"; textSize = 15f
+            text = getString(R.string.panic_ground_line, i + 1, s); textSize = 15f
             setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
         })
     }
@@ -4607,15 +4629,15 @@ private fun openPanic() {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         addView(list)
     })
-    val lockApps = bigChoice("Lock apps for 30 minutes", 0xFF2E7D32.toInt()) {}
+    val lockApps = bigChoice(getString(R.string.panic_lock_apps), 0xFF2E7D32.toInt()) {}
     lockApps.setOnClickListener {
-        Lockdown.start(this); lockApps.text = "Apps locked for 30 min"; lockApps.isEnabled = false
-        Toast.makeText(this, "Locked down. Essentials still work.", Toast.LENGTH_LONG).show()
+        Lockdown.start(this); lockApps.text = getString(R.string.panic_apps_locked); lockApps.isEnabled = false
+        Toast.makeText(this, getString(R.string.panic_lockdown_toast), Toast.LENGTH_LONG).show()
     }
     root.addView(lockApps)
-    root.addView(bigChoice("Lock my phone screen now", 0xFF3E535C.toInt()) { lockPhoneNow() })
+    root.addView(bigChoice(getString(R.string.panic_lock_screen), 0xFF3E535C.toInt()) { lockPhoneNow() })
     root.addView(Button(this).apply {
-        text = "I'm okay now"
+        text = getString(R.string.panic_okay)
         setOnClickListener {
             stopLoosenTimer(); inLoosenFlow = false
             showReportScreen()
@@ -4630,15 +4652,15 @@ private fun lockPhoneNow() {
         try {
             (getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).lockNow()
         } catch (t: Throwable) {
-            Toast.makeText(this, "Couldn't lock the screen.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.panic_cant_lock), Toast.LENGTH_SHORT).show()
         }
     } else {
-        Toast.makeText(this, "Turn on the lock feature first to use this.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.panic_need_lock), Toast.LENGTH_SHORT).show()
     }
 }
 
 // ── shared bits for this flow ──────────────────────────────────────────────
-private fun panicButton(): Button = bigChoice("PANIC - I need to stop", 0xFFB00020.toInt()) { openPanic() }
+private fun panicButton(): Button = bigChoice(getString(R.string.panic_button), 0xFFB00020.toInt()) { openPanic() }
 
 private fun bigChoice(label: String, color: Int, onClick: () -> Unit): Button {
     val dp = resources.displayMetrics.density
@@ -4702,10 +4724,10 @@ private fun runLoosenMinuteCountdown(label: TextView, endAt: Long, onDone: () ->
     loosenRunnable = object : Runnable {
         override fun run() {
             val rem = (endAt - System.currentTimeMillis()).coerceAtLeast(0)
-            if (rem <= 0) { label.text = "you can continue now"; onDone() }
+            if (rem <= 0) { label.text = getString(R.string.loosen_continue_now); onDone() }
             else {
                 val mins = ((rem + 59_999) / 60_000).toInt()
-                label.text = "you'll be able to continue in $mins minute" + (if (mins == 1) "" else "s")
+                label.text = getString(R.string.loosen_continue_in, mins, if (mins == 1) "" else "s")
                 loosenHandler?.postDelayed(this, 1000)
             }
         }
@@ -4830,31 +4852,31 @@ private fun renderRelapseStep() {
     relapseStep = relapseStep.coerceIn(0, steps.lastIndex)
     when (steps[relapseStep]) {
         RStep.DEVICE -> reportChoiceScreen(
-            "Where did it happen?", listOf("Yes, on this device", "No, a different device"),
-            onBack = ::relapseBack) { draft.onThisDevice = it.startsWith("Yes"); relapseAdvance() }
+            getString(R.string.relapse_device_q), listOf(getString(R.string.relapse_device_yes), getString(R.string.relapse_device_no)),
+            onBack = ::relapseBack) { draft.onThisDevice = it == getString(R.string.relapse_device_yes); relapseAdvance() }
 
         RStep.HOME -> reportChoiceScreen(
-            "Were you at home?", listOf("At home", "Out / somewhere else"), onBack = ::relapseBack) {
-            draft.atHome = (it == "At home"); if (draft.atHome != true) draft.room = null; relapseAdvance()
+            getString(R.string.relapse_home_q), listOf(getString(R.string.relapse_home_yes), getString(R.string.relapse_home_no)), onBack = ::relapseBack) {
+            draft.atHome = (it == getString(R.string.relapse_home_yes)); if (draft.atHome != true) draft.room = null; relapseAdvance()
         }
 
         RStep.ROOM -> pickWithCustomScreen(
-            "Where were you?", Opts.LOCATIONS, "location", onBack = ::relapseBack) {
+            getString(R.string.relapse_room_q), Opts.LOCATIONS, "location", onBack = ::relapseBack) {
             draft.room = it; relapseAdvance()
         }
 
         RStep.ACTIVITY -> pickMultiWithCustomScreen(
-            "What were you doing just before?", ACTIVITIES, "activity", onBack = ::relapseBack) {
+            getString(R.string.relapse_activity_q), ACTIVITIES, "activity", onBack = ::relapseBack) {
             draft.activity = it.joinToString(", "); relapseAdvance()
         }
 
         RStep.FEELING -> pickMultiWithCustomScreen(
-            "How were you feeling?", Opts.FEELINGS, "feeling", onBack = ::relapseBack) {
+            getString(R.string.relapse_feeling_q), Opts.FEELINGS, "feeling", onBack = ::relapseBack) {
             draft.feeling = it.joinToString(", "); relapseAdvance()
         }
 
         RStep.URGE -> urgeScaleScreen(
-            "How strong was the urge?", onBack = ::relapseBack) {
+            getString(R.string.relapse_urge_q), onBack = ::relapseBack) {
             draft.urge = it; relapseAdvance()
         }
 
@@ -4866,7 +4888,6 @@ private var inRelapseFlow = false
 private var relapseStep = 0
 private var draft = RelapseDraft()
 
-private val DEFAULT_ROOMS = listOf("Bedroom", "Bathroom", "Living room", "Office / desk", "Kitchen")
 private val ACTIVITIES = listOf(
     "In bed / trying to sleep",
     "Just woke up",
@@ -4911,17 +4932,17 @@ private fun noteStep() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     root.addView(TextView(this).apply {
-        text = "Anything you want to note?"
+        text = getString(R.string.relapse_note_title)
         textSize = 21f; setTypeface(typeface, Typeface.BOLD)
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
     root.addView(TextView(this).apply {
-        text = "Private. It stays on this device and is never shown back to you as judgement."
+        text = getString(R.string.relapse_note_private)
         textSize = 13f; setTextColor(0xFF6B7075.toInt())
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val input = EditText(this).apply {
-        hint = "What happened, what set it off\u2026 (optional)"
+        hint = getString(R.string.relapse_note_hint)
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         gravity = Gravity.TOP or Gravity.START
         minLines = 4
@@ -4934,11 +4955,11 @@ private fun noteStep() {
         setPadding(0, (8 * dp).toInt(), 0, 0)
     }
     btns.addView(Button(this).apply {
-        text = "Skip"
+        text = getString(R.string.relapse_skip)
         setOnClickListener { draft.note = null; saveRelapse() }
     })
     btns.addView(Button(this).apply {
-        text = "Save report"
+        text = getString(R.string.relapse_save)
         setOnClickListener {
             draft.note = input.text.toString().trim().ifBlank { null }
             saveRelapse()
@@ -4954,7 +4975,7 @@ private fun saveRelapse() {
         val priors = RelapseLog.all(this@MainActivity)   // their earlier reports (excludes this one)
         val report = draft.toReport()
         RelapseLog.record(this@MainActivity, report)
-        val feedback = RelapseLog.analyze(report, priors)
+        val feedback = RelapseLog.analyze(this@MainActivity, report, priors)
         renderRelapseFeedback(feedback)
     }
 }
@@ -4972,7 +4993,7 @@ private fun renderRelapseFeedback(fb: RelapseFeedback) {
     }
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     content.addView(TextView(this).apply {
-        text = "Report saved \u2713"
+        text = getString(R.string.relapse_saved)
         textSize = 24f; setTypeface(typeface, Typeface.BOLD)
     })
     content.addView(TextView(this).apply {
@@ -4982,13 +5003,13 @@ private fun renderRelapseFeedback(fb: RelapseFeedback) {
     })
     if (fb.lines.isNotEmpty()) {
         content.addView(TextView(this).apply {
-            text = "What we noticed"
+            text = getString(R.string.relapse_noticed)
             textSize = 16f; setTypeface(typeface, Typeface.BOLD)
             setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
         })
         fb.lines.forEach { line ->
             content.addView(TextView(this).apply {
-                text = "\u2022  $line"
+                text = getString(R.string.proto_bullet, line)
                 textSize = 15f
                 setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
             })
@@ -5000,7 +5021,7 @@ private fun renderRelapseFeedback(fb: RelapseFeedback) {
         addView(content)
     })
     root.addView(Button(this).apply {
-        text = "Done"
+        text = getString(R.string.common_done)
         setOnClickListener { showReportScreen() }
     })
     setContentView(root)
@@ -5068,20 +5089,47 @@ private fun pickCard(label: String, onClick: () -> Unit): TextView {
 }
 
 // ── nicer option rows: emoji icon (vertically centred) + label + lighter sub ──
-private class Choice(
-    val value: String,
+private data class Choice(
+    val value: String,               // STABLE key: stored + compared + icon-keyed (English)
     val icon: String? = null,
     val sub: String? = null,
     val tint: Int = 0xFFF1F3F4.toInt(),
     val group: String? = null,
+    val label: String = value,       // localized DISPLAY text (defaults to value / custom entries)
 )
 
+private fun optCodeList(category: String?): List<String>? = when (category) {
+    "feeling" -> Opts.FEELINGS
+    "location" -> Opts.LOCATIONS
+    "activity" -> ACTIVITIES
+    "screen" -> Opts.SCREEN_TYPES
+    "urge" -> Opts.URGE_LEVELS
+    else -> null
+}
+/** Localized display label for a stored English option value; the value itself for custom entries. */
+private fun optLabel(category: String?, value: String): String {
+    val list = optCodeList(category) ?: return value
+    val i = list.indexOf(value); if (i < 0) return value            // custom / unknown -> as-is
+    val arrId = resources.getIdentifier("opt_$category", "array", packageName)
+    return if (arrId == 0) value else resources.getStringArray(arrId).getOrElse(i) { value }
+}
+private fun tgroupResId(g: TGroup, suffix: String): Int =
+    resources.getIdentifier("tgroup_${g.name.lowercase()}_$suffix", "string", packageName)
+private fun tgroupShort(g: TGroup): String = getString(tgroupResId(g, "short"))
+private fun tgroupExample(g: TGroup): String = getString(tgroupResId(g, "example"))
+private fun tgroupTitle(g: TGroup): String = getString(tgroupResId(g, "title"))
+
+private fun urgeExample(level: String): String {
+    val i = Opts.URGE_LEVELS.indexOf(level); if (i < 0) return ""
+    return resources.getStringArray(R.array.opt_urge_examples).getOrElse(i) { "" }
+}
+
 private fun metaFor(category: String, v: String): Choice = when (category) {
-    "screen" -> Choice(v, screenIcon(v))
-    "location" -> Choice(v, locationIcon(v))
-    "activity" -> Choice(v, activityIcon(v))
-    "feeling" -> feelingMeta(v)
-    else -> Choice(v)
+    "screen" -> Choice(v, screenIcon(v), label = optLabel("screen", v))
+    "location" -> Choice(v, locationIcon(v), label = optLabel("location", v))
+    "activity" -> Choice(v, activityIcon(v), label = optLabel("activity", v))
+    "feeling" -> feelingMeta(v).copy(label = optLabel("feeling", v))
+    else -> Choice(v, label = optLabel(category, v))
 }
 
 private fun screenIcon(v: String) = when (v) {
@@ -5169,18 +5217,18 @@ private fun checkRow(choice: Choice, checked: Boolean, onToggle: () -> Unit): Vi
         setPadding(0, 0, (12 * dp).toInt(), 0)
     })
     emojiView(choice.icon)?.let { card.addView(it) }
-    card.addView(textCol(choice.value, choice.sub))
+    card.addView(textCol(choice.label, choice.sub))
     card.setOnClickListener { onToggle() }
     return card
 }
 private fun optionRow(choice: Choice, onClick: () -> Unit): View {
     val card = rowCard(choice.tint, false)
     emojiView(choice.icon)?.let { card.addView(it) }
-    card.addView(textCol(choice.value, choice.sub))
+    card.addView(textCol(choice.label, choice.sub))
     card.setOnClickListener { onClick() }
     return card
 }
-private fun addOwnRow(onClick: () -> Unit): View = optionRow(Choice("Add your own\u2026", "\u2795"), onClick)
+private fun addOwnRow(onClick: () -> Unit): View = optionRow(Choice(getString(R.string.picker_add_own_row), "\u2795"), onClick)
 
 /** Big primary Continue that brightens and grows once something is selected. */
 private fun bigContinue(label: String, onClick: () -> Unit): Button {
@@ -5264,14 +5312,6 @@ private fun boldWordTitle(full: String, word: String): TextView {
 // Strongest at the top (red) fading to the gentlest at the bottom (blue), with
 // faint hi/lo markers and a short example on each card (full text behind the ⓘ).
 // Returns the chosen Opts.URGE_LEVELS string, so callers are unchanged.
-private val URGE_EXAMPLES = mapOf(
-    "Overwhelming" to "I feel I can't control it - like it's inevitable I'll give in.",
-    "Strong" to "Hard to think about much else right now.",
-    "Noticeable" to "Clearly there, but I can still steer around it.",
-    "Mild" to "A small pull - easy to set aside.",
-    "Barely there" to "Just a flicker - it barely registers.",
-)
-
 private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (String) -> Unit) {
     val dp = resources.displayMetrics.density
     val pad = (16 * dp).toInt()
@@ -5290,7 +5330,7 @@ private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (Strin
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
     center.addView(TextView(this).apply {
-        text = "high level of urge"; textSize = 12f; gravity = Gravity.CENTER
+text = getString(R.string.urge_high); textSize = 12f; gravity = Gravity.CENTER
         setTextColor(0x33000000); setPadding(0, 0, 0, (6 * dp).toInt())
     })
     val red = 0xFFC0392B.toInt()
@@ -5298,10 +5338,10 @@ private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (Strin
     val ordered = Opts.URGE_LEVELS.reversed()   // Overwhelming (top) -> Barely there (bottom)
     ordered.forEachIndexed { i, level ->
         val f = if (ordered.size > 1) i.toFloat() / (ordered.size - 1) else 0f
-        center.addView(urgeCard(level, URGE_EXAMPLES[level] ?: "", lerpColor(red, blue, f)) { onPick(level) })
+        center.addView(urgeCard(optLabel("urge", level), urgeExample(level), lerpColor(red, blue, f)) { onPick(level) })
     }
     center.addView(TextView(this).apply {
-        text = "low level of urge"; textSize = 12f; gravity = Gravity.CENTER
+text = getString(R.string.urge_low); textSize = 12f; gravity = Gravity.CENTER
         setTextColor(0x33000000); setPadding(0, (6 * dp).toInt(), 0, (4 * dp).toInt())
     })
     root.addView(ScrollView(this).apply {
@@ -5369,7 +5409,7 @@ private fun startWeekStrict() {
         .setPositiveButton("Start") { _, _ ->
             Mode.startWeekStrict(this)
             refreshModeUi()
-            Toast.makeText(this, "Strict mode on for 7 days", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.proto_7day_toast), Toast.LENGTH_SHORT).show()
         }
         .setNegativeButton(android.R.string.cancel, null)
         .show()
@@ -5387,6 +5427,7 @@ private fun startWeekStrict() {
         // the permission gate - both permissions granted means monitoring was live.
         Mode.migrateIfUnset(this, isAccessibilityEnabled() && Settings.canDrawOverlays(this))
         markFirstOpen()
+        FilterData.init(this)          // load word/app/domain lists from assets/filter/
         BlockRules.load(this)
         updateScreen()
     }
@@ -5539,16 +5580,14 @@ private fun startWeekStrict() {
             setOnClickListener { dialog.dismiss() }
         })
         card.addView(TextView(this).apply {
-            text = "Ready to turn the blocking on?"; textSize = 17f
+            text = getString(R.string.perm_ready_title); textSize = 17f
             setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
         })
         card.addView(TextView(this).apply {
-            text = "You've had a look around. To actually block anything, the app needs two " +
-                "permissions: page monitoring (so it can see what's on screen) and the " +
-                "block screen (so it can cover it). Under a minute, all on this phone."
+            text = getString(R.string.perm_ready_body)
             textSize = 13f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
         })
-        card.addView(bigChoice("Continue", 0xFF2E7D32.toInt()) {
+        card.addView(bigChoice(getString(R.string.common_continue), 0xFF2E7D32.toInt()) {
             dialog.dismiss()
             inPermissionFlow = true
             updateScreen()
@@ -5597,7 +5636,7 @@ private fun startWeekStrict() {
             inPermissionFlow = false
             if (Mode.isOff(this)) {
                 Mode.setMode(this, Mode.RELAXED)
-                Toast.makeText(this, "Protection on - Relaxed mode", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.perm_protection_on, modeDisplayName(Mode.RELAXED)), Toast.LENGTH_SHORT).show()
             }
         }
         val step = currentStep()
@@ -5618,26 +5657,19 @@ private fun startWeekStrict() {
             if (voluntary) { { inPermissionFlow = false; updateScreen() } } else null
         when (step) {
             Step.MONITORING -> showPrereq(
-                "Step 1 of 3\nTurn on page monitoring",
-                "This lets the app see which website or app is on screen, so it can block " +
-                    "what it should.\n\nWhen you tap Continue you'll land in Accessibility " +
-                    "settings:\n\n" +
-                    "1.  Tap \u201CInstalled apps\u201D (some phones say \u201CDownloaded apps\u201D).\n" +
-                    "2.  Tap \u201CWeb Traffic Monitor\u201D.\n" +
-                    "3.  Turn the toggle ON and accept.\n\nThen come back to this app.",
-                "Continue to Accessibility",
+                getString(R.string.step_monitoring_title),
+                getString(R.string.step_monitoring_body),
+                getString(R.string.step_monitoring_button),
                 { openAccessibilitySettings() },
-                if (voluntary) "Not now" else null,
+                if (voluntary) getString(R.string.common_not_now) else null,
                 notNow,
             )
             Step.OVERLAY -> showPrereq(
-                "Step 2 of 3\nAllow the block screen",
-                "This lets the app draw the blocking screen on top of other apps.\n\n" +
-                    "When you tap Continue, find \u201CWeb Traffic Monitor\u201D in the list and " +
-                    "turn its toggle ON.\n\nThen come back to this app.",
-                "Continue to \u201CAppear on top\u201D",
+                getString(R.string.step_overlay_title),
+                getString(R.string.step_overlay_body),
+                getString(R.string.step_overlay_button),
                 { requestOverlayPermission() },
-                if (voluntary) "Not now" else null,
+                if (voluntary) getString(R.string.common_not_now) else null,
                 notNow,
             )
             Step.LOCK -> showLockPrompt { markLockPromptSeen(); updateScreen() }
@@ -5667,15 +5699,14 @@ private fun startWeekStrict() {
             setOnClickListener { dialog.dismiss() }
         })
         card.addView(TextView(this).apply {
-            text = "\u26A0  This app isn't protected yet"; textSize = 17f
+            text = getString(R.string.unprotected_title); textSize = 17f
             setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
         })
         card.addView(TextView(this).apply {
-            text = "Without the uninstall lock you can delete this app in a weak moment - " +
-                "and this page is exactly where those moments happen."
+            text = getString(R.string.unprotected_body)
             textSize = 13f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
         })
-        card.addView(bigChoice("Turn on the uninstall lock", 0xFF2E7D32.toInt()) {
+        card.addView(bigChoice(getString(R.string.unprotected_enable), 0xFF2E7D32.toInt()) {
             dialog.dismiss()
             UninstallGuard.setEnabled(this, true)
             startActivity(UninstallGuard.activationIntent(this))
@@ -5690,26 +5721,22 @@ private fun startWeekStrict() {
     private fun showLockPrompt(onDone: () -> Unit) {
         if (UninstallGuard.isAdminActive(this)) {
             showPrereq(
-                "Uninstall lock - ON",
-                "Protection is active: the app can't be uninstalled, and the settings " +
-                    "pages that would switch it off are blocked.\n\nYou can turn it off " +
-                    "from the main screen (you'll need the passcode).",
-                "Continue",
+                getString(R.string.lock_on_title),
+                getString(R.string.lock_on_body),
+                getString(R.string.common_continue),
                 { onDone() },
             )
         } else {
             showPrereq(
-                "Protect this app",
-                "Turn on the uninstall lock so you can't delete the app in a weak moment. " +
-                    "While it's on, the app can't be uninstalled and the settings pages that " +
-                    "would switch it off are blocked.",
-                "Enable uninstall lock",
+                getString(R.string.lock_protect_title),
+                getString(R.string.lock_protect_body),
+                getString(R.string.lock_enable),
                 {
                     UninstallGuard.setEnabled(this, true)
                     startActivity(UninstallGuard.activationIntent(this))
                     onDone()
                 },
-                "Skip for now",
+                getString(R.string.lock_skip),
                 { onDone() },
             )
         }
@@ -5759,6 +5786,7 @@ private fun startWeekStrict() {
             textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
         })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
+        content.addView(homeCard(getString(R.string.settings_language), getString(R.string.settings_language_subtitle)) { showLanguagePicker() })
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
         content.addView(homeCard("Grayscale setup", "Turn on the strict-mode grayscale filter.") { showGreyscaleSetup() })
         content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
@@ -6849,7 +6877,7 @@ private fun startWeekStrict() {
         inSubPage = true
         val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
         val root = vbox(pad)
-        root.addView(titleText("System console"))
+        root.addView(titleText(getString(R.string.dev_console_title)))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
@@ -6940,7 +6968,7 @@ private fun startWeekStrict() {
         }
         val px = (14 * dp).toInt(); val py = (6 * dp).toInt()
         sp.setPadding(px, py, px, py)
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, AppConfig.MODES.map { it.displayName })
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, AppConfig.MODES.map { modeDisplayName(it.id) })
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         sp.adapter = adapter
         fun curIdx() = AppConfig.MODES.indexOfFirst { it.id == Mode.current(this) }.coerceAtLeast(0)
@@ -6954,7 +6982,7 @@ private fun startWeekStrict() {
                 if (chosen == Mode.SUPERHARDCORE &&
                     !(UninstallGuard.isEnabled(this@MainActivity) && UninstallGuard.isAdminActive(this@MainActivity))) {
                     Toast.makeText(this@MainActivity,
-                        "Super hardcore needs the uninstall lock on first", Toast.LENGTH_LONG).show()
+                        getString(R.string.mode_needs_lock_toast), Toast.LENGTH_LONG).show()
                     sp.setSelection(curIdx())
                     showLockPrompt { }
                     return
@@ -6962,9 +6990,9 @@ private fun startWeekStrict() {
                 if (Mode.setMode(this@MainActivity, chosen)) {
                     if (chosen == Mode.OFF) {
                         Toast.makeText(this@MainActivity,
-                            "Monitoring off - nothing is watched or blocked", Toast.LENGTH_SHORT).show()
+                            getString(R.string.mode_off_toast), Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(this@MainActivity, "${AppConfig.modeName(chosen)} mode on", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, getString(R.string.mode_on_toast, modeDisplayName(chosen)), Toast.LENGTH_SHORT).show()
                         // Anything above Off makes the two core permissions MANDATORY:
                         // if either is missing, this drops them straight onto the setup
                         // gate, and the main screen stays out of reach until both are on.

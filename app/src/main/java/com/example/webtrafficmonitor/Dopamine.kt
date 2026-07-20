@@ -574,7 +574,9 @@ object LifeInputs {
      * One option on a habit's scale. [credit] is how much of that habit's full value this
      * option is worth, 0..1 - so the scales can be different lengths and still add up fairly.
      */
-    data class Option(val label: String, val credit: Float)
+    /** [credit] 0..1 = how much of the habit's full value this option is worth. Label is
+     *  in res/values/strings.xml (habit_<key>_options, index-aligned with this list). */
+    data class Option(val credit: Float)
 
     /**
      * A habit, and the answer scale that actually suits it.
@@ -584,76 +586,22 @@ object LifeInputs {
      * a scale. Full credit is set at a level that is GOOD, not heroic - the point is to
      * describe an ordinary decent day, not to make everyone score 20%.
      */
-    data class Habit(val key: String, val label: String, val hint: String, val options: List<Option>)
+    data class Habit(val key: String, val options: List<Option>)
 
-    private fun mins(vararg pairs: Pair<String, Float>) = pairs.map { Option(it.first, it.second) }
+    private fun mins(vararg credits: Float) = credits.map { Option(it) }
 
     val HABITS: List<Habit> = listOf(
-        Habit("deep_rest", "Sleep", "Actual sleep, on a typical night. Not naps.",
-            mins(
-                "under 5h" to 0f, "5-6h" to 0.25f, "6-7h" to 0.6f,
-                "7-8h" to 1f, "8h+" to 1f,
-            )),
-        Habit("offline_focus", "Deep offline focus",
-            "A physical book, studying, screen-free work.",
-            mins(
-                "none" to 0f, "<15 min" to 0.2f, "~30 min" to 0.45f, "~45 min" to 0.65f,
-                "~1 hour" to 0.85f, "2 hours+" to 1f,
-            )),
-        Habit("training", "Intense physical training",
-            "Weights, running, sport - the hard stuff.",
-            mins(
-                "none" to 0f, "<15 min" to 0.25f, "~30 min" to 0.6f,
-                "~45 min" to 0.85f, "1 hour+" to 1f,
-            )),
-        Habit("building", "High-leverage building",
-            "Business, career, planning, learning - work on your future.",
-            mins(
-                "none" to 0f, "<30 min" to 0.2f, "~1 hour" to 0.5f,
-                "~2 hours" to 0.8f, "3 hours+" to 1f,
-            )),
-        Habit("creation", "Active creation",
-            "Writing, music, cooking, making things.",
-            mins(
-                "none" to 0f, "<15 min" to 0.2f, "~30 min" to 0.5f,
-                "~1 hour" to 0.8f, "2 hours+" to 1f,
-            )),
-        Habit("in_person", "In-person time, phones away",
-            "Real time with people, not messaging them.",
-            mins(
-                "none" to 0f, "<30 min" to 0.25f, "~1 hour" to 0.55f,
-                "~2 hours" to 0.85f, "3 hours+" to 1f,
-            )),
-        Habit("reflection", "Screen-free reflection",
-            "Walking alone, meditation, sitting doing nothing. Boredom counts.",
-            mins(
-                "none" to 0f, "<15 min" to 0.35f, "~30 min" to 0.7f,
-                "~45 min" to 0.9f, "1 hour+" to 1f,
-            )),
-        Habit("light_exercise", "Light movement",
-            "A walk. Anything gentle. Being on your feet.",
-            mins(
-                "none" to 0f, "<15 min" to 0.2f, "~30 min" to 0.5f,
-                "~1 hour" to 0.8f, "2 hours+" to 1f,
-            )),
-        Habit("healthy_eating", "Eating",
-            "Not a duration - just how the day went.",
-            listOf(
-                Option("Binged / junk", 0f), Option("Mixed", 0.4f),
-                Option("Mostly good", 0.75f), Option("Clean", 1f),
-            )),
-        Habit("caffeine", "Caffeine",
-            "After about midday it costs you sleep, which costs you tomorrow.",
-            listOf(
-                Option("None", 1f), Option("1 cup, early", 0.9f), Option("2-3 cups", 0.6f),
-                Option("Lots / late in the day", 0.15f),
-            )),
-        Habit("alcohol", "Alcohol",
-            "Wrecks deep sleep even when it helps you drop off.",
-            listOf(
-                Option("None", 1f), Option("1 drink", 0.7f),
-                Option("2-3 drinks", 0.35f), Option("More", 0f),
-            )),
+        Habit("deep_rest", mins(0f, 0.25f, 0.6f, 1f, 1f)),
+        Habit("offline_focus", mins(0f, 0.2f, 0.45f, 0.65f, 0.85f, 1f)),
+        Habit("training", mins(0f, 0.25f, 0.6f, 0.85f, 1f)),
+        Habit("building", mins(0f, 0.2f, 0.5f, 0.8f, 1f)),
+        Habit("creation", mins(0f, 0.2f, 0.5f, 0.8f, 1f)),
+        Habit("in_person", mins(0f, 0.25f, 0.55f, 0.85f, 1f)),
+        Habit("reflection", mins(0f, 0.35f, 0.7f, 0.9f, 1f)),
+        Habit("light_exercise", mins(0f, 0.2f, 0.5f, 0.8f, 1f)),
+        Habit("healthy_eating", listOf(Option(0f), Option(0.4f), Option(0.75f), Option(1f))),
+        Habit("caffeine", listOf(Option(1f), Option(0.9f), Option(0.6f), Option(0.15f))),
+        Habit("alcohol", listOf(Option(1f), Option(0.7f), Option(0.35f), Option(0f))),
     )
 
     /** The stored option INDEX for a habit (defaults to the worst/none end of the scale). */

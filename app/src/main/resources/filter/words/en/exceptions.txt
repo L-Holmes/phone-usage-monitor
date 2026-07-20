@@ -1,0 +1,39 @@
+# Per-word innocent-context EXCEPTIONS. If one of a word's neighbours is within
+# EXCEPTION_WINDOW words of the match, the match scores NOTHING. Looked up by the matched
+# word AND its family head. Format:  word: neighbour1, neighbour2, ...   ("#" = comment.)
+# LANGUAGE-SPECIFIC (English). Loaded by BannedWordExceptions.
+
+naked: mole, rat, rats, eye, eyes, truth, gun, singularity, ape, chef, lunch, bike, cowboy, flame, dna, cell, cells, juice, option, options, short, shorts, shorting, put, puts, call, calls, domain, domains, objects, wines, statistics, economics
+nude: colour, color, coloured, colored, colours, colors, shade, shades, lipstick, lipsticks, makeup, palette, palettes, heels, pumps, tone, tones, beige, nail, nails, polish, blush, foundation, eyeshadow, lip, lips, gloss, matte, painting, paintings, portrait, portraits, art, arts, artist, artists, sculpture, sculptures, figure, figures, drawing, drawings, sketch, sketches, study, studies, gallery, museum, exhibition, renaissance, mice, mouse, descending
+topless: car, cars, convertible, jeep, roadster
+sex: same, opposite, education, gender, ratio, chromosome, offender, offenders, trafficking, discrimination, assault, abuse, crime, crimes, determination, cells, cell, ed, biology, reproduction, characteristics, hormone, hormones, differences, worker, workers, work
+hardcore: punk, gaming, gamer, gamers, band, music, metal, techno, rave, fan, fans, mode, difficulty, minecraft, parkour, speedrun, level
+nsfw: tag, tags, filter, filters, toggle, setting, settings, label, labels, subreddit, flair, blur, blurred, hidden, policy
+bareback: riding, rider, horse, horses, rodeo, bronc
+cock: rooster, hen, gun, pistol, hammer, crow, crowed, crows, bird, birds, tail, fight, fighting, weather
+pussy: cat, cats, willow, willows, kitten, kittens, feline, riot
+tits: bird, birds, blue, great, coal, marsh, crested, nest, feeder, garden, woodland
+anal: retentive, fissure, fissures, fistula, cancer, gland, glands, sac, abscess, itching, fin, fins, stage
+erection: building, buildings, construction, scaffold, scaffolding, steel, tent, mast, crane, structure, statue
+horny: toad, toads, lizard, frog, owl, coral, beetle, skin, layer
+orgy: violence, destruction, spending, self
+semen: analysis, sample, bovine, bull, stallion, cattle, breeding, quality, count
+vagina: health, doctor, doctors, medical, medicine, infection, infections, birth, delivery, discharge, exam, examination, cancer, yeast, bacterial, thrush, dryness, ph, microbiome, symptom, symptoms, treatment, clinic, gynecologist, gynaecologist, obstetric, smear, swab, ultrasound, anatomy, tissue, prolapse, mesh
+penis: health, medical, doctor, doctors, cancer, anatomy, circumcision, urology, urologist, envy, fracture, curvature
+vulva: health, medical, doctor, doctors, anatomy, cancer, vulvar, vulvodynia, itching, itch, pain, swelling, swollen, sore, lichen, sclerosus, cyst, dermatology, exam, examination, biopsy, symptom, symptoms, treatment, clinic, gynecologist, gynaecologist
+clitoris: health, medical, anatomy, clitoral, doctor, hood, swelling, pain, development, surgery, reduction, phimosis
+clitoral: health, medical, anatomy, hood, surgery, swelling, pain
+labia: health, medical, anatomy, majora, minora, swelling, swollen, cyst, surgery, labiaplasty, reduction, pain, sore, asymmetry, tear, doctor, gynecologist, gynaecologist
+foreskin: retraction, retract, tight, phimosis, paraphimosis, circumcision, hygiene, health, swelling, smegma, balanitis, care
+ejaculate: premature, treatment, delayed, delay, retrograde, unable, cannot, difficulty
+vaginal: health, discharge, infection, dryness, birth, delivery, mesh, prolapse, thrush, bleeding, swab, examination, atrophy
+breast: cancer, feeding, feed, fed, milk, pump, pumping, chicken, screening, mammogram, stroke, reduction, augmentation, tissue, exam, lump, lumps, biopsy, implant, implants, density
+nipple: baby, bottle, bottles, confusion, shield, shields, cream, chafing, discharge, inverted, cracked, breastfeeding, sore
+ejaculation: premature, treatment, delayed, delay, retrograde
+whore: attention, babylon
+slut: shaming, shame, shamed, walk
+cum: laude, summa, magna
+porn: addiction, addicted, quit, quitting, blocker, blockers, block, blocking, blocks, filter, filters, ban, bans, banned, law, laws, bill, age, verification, revenge
+masturbate: quit, quitting, addiction, stop, stopping, health, effects, myth, myths
+penetration: testing, test, tests, tester, testers, pen, market, depth, armor, armour, network
+boob: tube

@@ -1,0 +1,6 @@
+# Browsers that stay usable. We standardise on Firefox — only these are allowed; every
+# other browser is blocked (see browsers_blocked.txt + runtime detection).
+# One package per line. LANGUAGE-NEUTRAL. Loaded by FilterData → AppConfig.ALLOWED_BROWSERS.
+
+org.mozilla.firefox
+org.mozilla.fenix

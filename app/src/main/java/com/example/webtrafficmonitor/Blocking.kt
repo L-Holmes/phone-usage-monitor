@@ -440,9 +440,11 @@ object TemptationBlocks {
 // persisted user list extends them, and Whitelist.reload() refreshes the cache.
 object Whitelist {
 
-    val SAFE_APPS: Set<String> = AppConfig.SAFE_APPS
-    val SAFE_DOMAINS: Set<String> = AppConfig.SAFE_DOMAINS
-    val GREYLIST_APPS: Set<String> = AppConfig.GREYLIST_APPS
+    // getters, not vals: the underlying lists load from assets/filter/ at startup (FilterData),
+    // so capturing them once at object-init could grab an empty set before init ran.
+    val SAFE_APPS: Set<String> get() = AppConfig.SAFE_APPS
+    val SAFE_DOMAINS: Set<String> get() = AppConfig.SAFE_DOMAINS
+    val GREYLIST_APPS: Set<String> get() = AppConfig.GREYLIST_APPS
 
     private const val PREFS = "whitelist"
     private const val KEY_APPS = "user_apps"
@@ -837,14 +839,14 @@ object AppBlocklist {
 
     // NEW: browsers that must stay allowed even if detected at runtime.
     // Add a package name here to whitelist a browser.
-    private val ALLOWED_BROWSERS = AppConfig.ALLOWED_BROWSERS
+    private val ALLOWED_BROWSERS get() = AppConfig.ALLOWED_BROWSERS
 
     // ================================================================
     // EDIT BELOW - the browser package names to block. All lowercase.
     // Only Firefox is in ALLOWED_BROWSERS; every other browser (DuckDuckGo included)
     // is blocked, whether it's in the static list below or detected at runtime.
     // ================================================================
-    private val BLOCKED_BROWSERS = AppConfig.BLOCKED_BROWSERS
+    private val BLOCKED_BROWSERS get() = AppConfig.BLOCKED_BROWSERS
 }
 
 // the existing BlockRules engine instead; only URL *greylist* is stored here as a host.
@@ -1049,7 +1051,7 @@ object Lockdown {
     private const val KEY_UNTIL = "until"
     const val DURATION_MS = 30L * 60 * 1000
 
-    private val ALLOW_SUBSTRINGS = AppConfig.LOCKDOWN_ALLOWED_SUBSTRINGS
+    private val ALLOW_SUBSTRINGS get() = AppConfig.LOCKDOWN_ALLOWED_SUBSTRINGS
 
     fun start(context: Context) {
         prefs(context).edit()

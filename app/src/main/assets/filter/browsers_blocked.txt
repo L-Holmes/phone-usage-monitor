@@ -1,0 +1,39 @@
+# Browsers funnelled away so users land on Firefox. One package per line.
+# DuckDuckGo is here (blocked) — only Firefox is allowed. Runtime detection (AppBlocklist)
+# also catches any other installed browser not listed here.
+# LANGUAGE-NEUTRAL. Loaded by FilterData → AppConfig.BLOCKED_BROWSERS.
+
+com.android.chrome
+com.chrome.beta
+com.chrome.dev
+com.chrome.canary
+org.mozilla.firefox_beta
+org.mozilla.fennec_fdroid
+org.mozilla.focus
+org.mozilla.klar
+org.mozilla.rocket
+org.mozilla.reference.browser
+io.github.forkmaintainers.iceraven
+us.spotco.fennec_dos
+com.duckduckgo.mobile.android
+com.microsoft.emmx
+com.opera.browser
+com.opera.browser.beta
+com.opera.mini.native
+com.opera.gx
+com.opera.touch
+com.sec.android.app.sbrowser
+com.sec.android.app.sbrowser.beta
+com.vivaldi.browser
+com.vivaldi.browser.snapshot
+com.yandex.browser
+com.yandex.browser.beta
+com.brave.browser
+com.brave.browser_beta
+com.brave.browser_nightly
+com.android.browser
+com.google.android.browser
+com.miui.browser
+com.mi.globalbrowser
+com.mi.globalbrowser.mini
+com.heytap.browser

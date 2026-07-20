@@ -1,0 +1,103 @@
+# WHITELISTED apps — never blocked/scanned by default (no public feed, no arbitrary
+# adult content). Format:  Friendly Name = com.package.name   ("#" starts a comment.)
+# The friendly name is shown in the "Whitelisted apps" picker. LANGUAGE-NEUTRAL.
+# Loaded by FilterData → AppConfig.SAFE_APPS_BY_NAME / SAFE_APPS.
+
+# Maps & navigation
+Google Maps = com.google.android.apps.maps
+Waze = com.waze
+Google Maps Go = com.google.android.apps.navlite
+HERE WeGo = com.here.app.maps
+Mapbox = com.mapbox.app
+Citymapper = com.citymapper.app.release
+Google Earth = com.google.earth
+
+# Messaging & calls (no public feed)
+WhatsApp = com.whatsapp
+WhatsApp Business = com.whatsapp.w4b
+Telegram = org.telegram.messenger
+Signal = org.thoughtcrime.securesms
+Google Messages = com.google.android.apps.messaging
+AOSP Messaging = com.android.mms
+Viber = com.viber.voip
+Skype = com.skype.raider
+Gmail = com.google.android.gm
+Outlook = com.microsoft.office.outlook
+K-9 Mail = com.fsck.k9
+Google Chat = com.google.android.apps.dynamite
+Zoom = us.zoom.videomeetings
+Google Meet = com.google.android.apps.tachyon
+Microsoft Teams = com.microsoft.teams
+
+# Productivity, notes, office, files
+Google Calendar = com.google.android.calendar
+Google Keep = com.google.android.keep
+Microsoft To Do = com.microsoft.todos
+Todoist = com.todoist
+TickTick = com.ticktick.task
+Evernote = com.evernote
+Notion = com.notion.id
+Obsidian = md.obsidian
+Any.do = com.anydo
+Word = com.microsoft.office.word
+Excel = com.microsoft.office.excel
+PowerPoint = com.microsoft.office.powerpoint
+OneNote = com.microsoft.office.onenote
+Google Drive = com.google.android.apps.docs
+Google Docs = com.google.android.apps.docs.editors.docs
+Google Sheets = com.google.android.apps.docs.editors.sheets
+Google Slides = com.google.android.apps.docs.editors.slides
+Dropbox = com.dropbox.android
+Adobe Reader = com.adobe.reader
+
+# Banking & finance
+PayPal = com.paypal.android.p2pmobile
+Google Wallet = com.google.android.apps.walletnfcrel
+Wise = com.wise.android
+Revolut = com.revolut.revolut
+
+# Utilities & system
+Calculator = com.android.calculator2
+Google Calculator = com.google.android.calculator
+Clock = com.android.deskclock
+Google Clock = com.google.android.deskclock
+Files = com.android.documentsui
+Files by Google = com.google.android.apps.nbu.files
+Contacts = com.android.contacts
+Google Contacts = com.google.android.contacts
+Phone = com.android.dialer
+Google Phone = com.google.android.dialer
+Google Camera = com.google.android.GoogleCamera
+Google Photos = com.google.android.apps.photos
+Samsung Gallery = com.sec.android.gallery3d
+
+# Weather
+Google Weather = com.google.android.apps.weather
+Weather Channel = com.weather.Weather
+Met Office = org.metoffice.weather.android
+
+# Audio & podcasts (no visual feed)
+Spotify = com.spotify.music
+Audible = com.audible.application
+Google Podcasts = com.google.android.apps.podcasts
+Shazam = com.shazam.android
+Deezer = deezer.android.app
+
+# Health & fitness
+Google Fit = com.google.android.apps.fitness
+Fitbit = com.fitbit.FitbitMobile
+MyFitnessPal = com.myfitnesspal.android
+Sleep Cycle = com.sleepcycle.sleepanalysis
+
+# Transit, ride, food
+Uber = com.ubercab
+Uber Eats = com.ubercab.eats
+Deliveroo = com.deliveroo.orderapp
+Grubhub = com.grubhub.android
+Zomato = com.application.zomato
+
+# Reading, reference, translation
+Play Books = com.google.android.apps.books
+Kindle = com.amazon.kindle
+Kobo = com.kobobooks.android
+Google Translate = com.google.android.apps.translate

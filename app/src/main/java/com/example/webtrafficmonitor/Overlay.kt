@@ -269,7 +269,7 @@ class BreathingOverlay(private val context: Context) {
             setTextColor(softText)
             alpha = 0.9f
             gravity = Gravity.CENTER
-            text = "Breathe in"
+            text = context.getString(R.string.overlay_breathe_in)
         }
         root.addView(phase, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -286,7 +286,7 @@ class BreathingOverlay(private val context: Context) {
             setPadding(dp(20), 0, dp(20), (dm.heightPixels * 0.14f).toInt())
         }
         val dontWant = Button(context).apply {
-            text = "I don't want to access $appLabel"
+            text = context.getString(R.string.overlay_dont_want, appLabel)
             isAllCaps = false
             textSize = 19f
             setTypeface(typeface, Typeface.BOLD)
@@ -302,7 +302,7 @@ class BreathingOverlay(private val context: Context) {
             (dm.widthPixels * 0.88f).toInt(), (dm.heightPixels * 0.21f).toInt()))
 
         val cont = TextView(context).apply {
-            text = "Continue to open $appLabel"
+            text = context.getString(R.string.overlay_continue_open, appLabel)
             isAllCaps = false
             textSize = 14f
             setTextColor(0xFF8FC2BA.toInt())
@@ -323,7 +323,7 @@ class BreathingOverlay(private val context: Context) {
         // back for good, and tapping anywhere releases the controls - so a broken animation
         // can never trap you behind this overlay.
         val tapHint = TextView(context).apply {
-            text = "If nothing happens, tap to enter"
+            text = context.getString(R.string.overlay_tap_hint)
             textSize = 13f
             setTextColor(softText)
             alpha = 0f

@@ -1,0 +1,21 @@
+# PERSON words — being near one switches on an AMBIGUOUS/COMBO word or a PHRASE.
+# LANGUAGE-SPECIFIC.
+girl
+girls
+woman
+women
+lady
+ladies
+babe
+babes
+chick
+chicks
+teen
+teens
+model
+models
+gf
+girlfriend
+wife
+she
+her

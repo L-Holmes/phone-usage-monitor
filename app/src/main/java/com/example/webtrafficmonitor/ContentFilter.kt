@@ -210,25 +210,7 @@ object DomainStrikes {
 //  (Provides the data + a matcher; wiring it into the per-domain time limit in the
 //  service is a small follow-up.)
 object DomainGreylist {
-    val DOMAINS: Set<String> = setOf(
-        "reddit.com", "redd.it",
-        "x.com", "twitter.com", "t.co",
-        "tumblr.com",
-        "imgur.com",
-        "pinterest.com",
-        "deviantart.com",
-        "quora.com",
-        "9gag.com",
-        "twitch.tv",
-        "discord.com",
-        "tiktok.com",
-        "instagram.com",
-        "snapchat.com",
-        "facebook.com", "fb.com",
-        "vk.com",
-        "flickr.com",
-        "wattpad.com",
-    )
+    val DOMAINS: Set<String> get() = FilterData.set("domains_greylist.txt")
 
     /** True if the host, or any parent domain, is on our greylist. */
     fun isGreylisted(host: String): Boolean = hostOrParentIn(host, DOMAINS)
@@ -260,39 +242,7 @@ internal fun hostOrParentIn(host: String, set: Set<String>): Boolean {
 //  here; add specific instances as you meet them.
 //  MIRROR TO JS: add these to a matching block list in domains.js.
 object SearchEngineBlocklist {
-    val DOMAINS: Set<String> = setOf(
-        "duckduckgo.com", "duck.com",
-        "bing.com",
-        "search.brave.com",
-        "ecosia.org",
-        "qwant.com",
-        "startpage.com",
-        "search.yahoo.com",
-        "yandex.com", "yandex.ru",
-        "baidu.com",
-        "ask.com",
-        "search.aol.com",
-        "mojeek.com",
-        "you.com",
-        "presearch.com",
-        "swisscows.com",
-        "gibiru.com",
-        "metager.org",
-        "dogpile.com",
-        "searchencrypt.com",
-        "onesearch.com",
-        "lukol.com",
-        "kagi.com",
-        "perplexity.ai",
-        "phind.com",
-        "yep.com",
-        "excite.com",
-        "lycos.com",
-        "webcrawler.com",
-        "search.marginalia.nu",
-        "searx.be", "searx.tiekoetter.com",   // a couple of well-known public SearX instances
-    )
-
+    val DOMAINS: Set<String> get() = FilterData.set("domains_search_engines.txt")
     fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
 }
 
@@ -303,25 +253,7 @@ object SearchEngineBlocklist {
 //  service only consults this when the mode is Strict or Super hardcore. A bare domain also
 //  covers its subdomains. Mirrors StrictOnlyBlocklist in domains.js — keep the two in sync.
 object StrictOnlyBlocklist {
-    val DOMAINS: Set<String> = setOf(
-        // ── Reddit frontends / mirrors / viewers ──────────────────────────────────────
-        "photon-reddit.com", "lite.redgifs.com", "peekstr.com", "redlite.app",
-        "scrolller.com", "rdx.overdevs.com", "viewri.com", "troddit.com",
-        "ghostddit.pages.dev", "search.pullpush.io", "reditr.com", "reddit-viewer.com",
-        "infini.wtf", "inini.wtf", "redditp.com", "reddit-stream.com", "reveddit.com",
-        "rosint.dev", "subranking.com", "veo.world",
-        // ── Reddit itself (Strict+ only; Relaxed keeps it greylisted/limited) ─────────
-        "reddit.com", "redd.it",
-        // ── Borderline shopping / fashion (Strict+ only) ──────────────────────────────
-        "etsy.com", "depop.com", "shein.com",
-        // ── Imageboards / "mixed" forums (Strict+ only) ───────────────────────────────
-        // No canonical open-source list exists for these (the maintained host lists lump in
-        // mainstream social), so this is hand-curated — add freely as you meet more.
-        "4chan.org", "4channel.org", "8kun.top", "2ch.hk", "kohlchan.net",
-        "endchan.org", "endchan.net", "soyjak.party", "sportschan.org",
-        "wizchan.org", "lainchan.org",
-    )
-
+    val DOMAINS: Set<String> get() = FilterData.set("domains_strict_only.txt")
     fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
 }
 

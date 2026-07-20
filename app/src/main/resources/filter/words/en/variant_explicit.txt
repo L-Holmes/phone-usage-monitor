@@ -1,0 +1,96 @@
+# Evasion spellings that are unambiguously adult — score at CORE. (Leetspeak/stretched
+# letters are handled by the scorer's normaliser, NOT listed here.) LANGUAGE-SPECIFIC-ish
+# (some are English slang; site names are neutral but harmless to keep here).
+# naked / nude
+nake
+nakey
+nekked
+nekkid
+nakd
+nekid
+nood
+noods
+nudez
+nudz
+# porn
+pron
+prn0
+pr0no
+prnhub
+pornhub
+xnxx
+xvideos
+redtube
+youporn
+brazzers
+spankbang
+motherless
+xhamster
+# sex
+seggs
+secks
+sechs
+sexo
+sexx
+sexxx
+# breasts
+bewbs
+bewb
+boobz
+titz
+tiddies
+tiddy
+tittys
+milkers
+# masturbation / community words
+fap
+fapping
+fapped
+faps
+fapper
+coom
+coomer
+cooming
+masterbate
+masterbating
+masterbation
+masturbait
+gooner
+cumz
+cummin
+jizz
+jizzed
+# anatomy misspellings
+pussi
+pusy
+pusssy
+vajayjay
+coochie
+cooter
+phuck
+fukk
+# adult platforms / genres
+onlyfanz
+onlyfan
+fansly
+chaturbate
+stripchat
+camsoda
+myfreecams
+hentia
+hentay
+ahegao
+ecchi
+futanari
+futa
+doujin
+doujinshi
+rule34
+r34
+lewds
+lewding
+nudify
+deepnude
+thot
+thots
+thotty

@@ -1,0 +1,17 @@
+# Night guard: what still opens while lying down / in the dark. Matched as SUBSTRINGS of the
+# package name. Keep to genuine essentials. LANGUAGE-NEUTRAL. → AppConfig.NIGHT_GUARD_ALLOWED_SUBSTRINGS
+launcher
+trebuchet
+dialer
+incallui
+telecom
+phone
+contacts
+messaging
+mms
+deskclock
+clock
+alarm
+camera
+maps
+waze

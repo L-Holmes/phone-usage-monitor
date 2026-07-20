@@ -91,151 +91,42 @@ object FilterTuning {
 
 
 // ── The hardcoded word tiers (kept 1:1 with textfilter.js) ────────────────────────────
+// Every tier now loads from a text file under src/main/resources/filter/words/en/ via
+// FilterData (English master, unioned with the device language if we ship one). Getters, not
+// vals, so they read after the classpath is available and stay in step if a file changes.
+// EDIT THE WORDS in those .txt files, not here.
 object BannedWords {
 
-    // CORE — one occurrence is enough to block. Sexual in essentially every context.
-    val CORE: Set<String> = setOf(
-        "bdsm", "blowjob", "bukkake", "buttplug", "camgirl", "camwhore", "creampie",
-        "cuckold", "cumshot", "cunnilingus", "deepthroat", "dildo", "dildos", "doggystyle",
-        "dominatrix", "ejaculation", "fellatio", "femdom", "fisting", "footjob", "gangbang",
-        "gloryhole", "handjob", "hentai", "incest", "jerkoff", "masturbate", "masturbating",
-        "masturbation", "milf", "onlyfans", "orgasm",
-        "orgasms", "orgy", "pegging", "porn", "porno", "pornographic", "pornography",
-        "pornstar", "rimjob", "scissoring", "sextape", "sextoy", "sextoys", "squirting",
-        "strapon", "threesome", "titfuck", "titjob",
-    )
-
-    // MIXED — strongly sexual, real innocent uses. NEVER blocks alone.
-    val MIXED: Set<String> = setOf(
-        "naked", "nude", "nudes", "nudity", "topless", "xxx",
-    )
-
-    // SUPPORT — clearly sexual, but common enough as anatomy/insult/slang that one stray
-    // mention shouldn't nuke a page. Two in the body (or one in the title/URL).
-    val SUPPORT: Set<String> = setOf(
-        "anal", "analsex", "ballsack", "bareback", "bbw", "boob", "boobies", "boobs",
-        "clit", "clitoris", "cock", "cocks", "cum", "cumming", "cunt", "ejaculate",
-        "erection", "foreskin", "hardcore", "hardon", "horny", "labia", "nipple", "nipples",
-        "nsfw", "penetration", "penis", "pussies", "pussy", "semen", "sex", "slut", "sluts",
-        "slutty", "smut", "sodomy", "spunk", "tits", "titties", "titty", "twat", "vagina",
-        "vaginal", "vulva", "wank", "wanking", "whore", "whores", "xrated",
-    )
-
-    // COMBO — suggestive words that count ONLY within CONTEXT_WINDOW of a PERSON word.
-    // Relaxed-only: strict scores these via its DUAL/SUBTLE tiers.
-    val COMBO: Set<String> = setOf(
-        "hot", "sexy", "hottie", "hotties",
-    )
+    val CORE: Set<String> get() = FilterData.langSet("words_core.txt")
+    val MIXED: Set<String> get() = FilterData.langSet("words_mixed.txt")
+    val SUPPORT: Set<String> get() = FilterData.langSet("words_support.txt")
+    val COMBO: Set<String> get() = FilterData.langSet("words_combo.txt")
 
     // ── STRICT-ONLY tiers (merged in when NOT relaxed) ────────────────────────────────
+    val EXTRA_EXPLICIT: Set<String> get() = FilterData.langSet("words_extra_explicit.txt")
+    val EXTRA_SUBTLE: Set<String> get() = FilterData.langSet("words_subtle.txt")
+    val EXTRA_DUAL: Set<String> get() = FilterData.langSet("words_dual.txt")
+    val EXTRA_AMBIGUOUS: Set<String> get() = FilterData.langSet("words_ambiguous.txt")
+    val PERSON: Set<String> get() = FilterData.langSet("words_person.txt")
 
-    // Always-sexual but too context-dependent for relaxed ("fingering" — guitar fingering).
-    val EXTRA_EXPLICIT: Set<String> = setOf(
-        "fingering",
-    )
-
-    val EXTRA_SUBTLE: Set<String> = setOf(
-        "arousal", "aroused", "bikini", "bikinis", "booty", "bosom", "bra", "braless",
-        "breast", "breasts", "busty", "butt", "buttock", "buttocks", "cleavage", "curves",
-        "curvy", "erotic", "erotica", "escort", "escorts", "fetish", "flirt", "flirty",
-        "foreplay", "garter", "hooters", "intercourse", "intimate", "kinky", "lapdance",
-        "lewd", "libido", "lingerie", "lust", "lustful", "negligee", "panties", "provocative",
-        "raunchy", "revealing", "risque", "seduce", "seduction", "seductive", "sensual",
-        "sexual", "sexuality", "sexy", "showgirl", "skimpy", "spank", "spanking", "strip",
-        "stripper", "striptease", "suggestive", "swimsuit", "temptress", "thong", "thongs",
-        "underwear", "undress", "undressing", "voluptuous", "panty",
-    )
-
-    val EXTRA_DUAL: Set<String> = setOf(
-        "adult", "ass", "babe", "babes", "bang", "banged", "banging", "blow", "blown",
-        "bombshell", "cheeks", "chick", "chicks", "dirties", "dirty", "doll", "dolls",
-        "exposed", "fuck", "fucked", "fucking", "gentlemen", "girl", "girls", "hookup", "hot",
-        "hottie", "hotties", "hump", "humping", "kink", "ladies", "lady", "load", "loads",
-        "mature", "moan", "moaning", "naughty", "package", "petite", "pole", "rack", "ride",
-        "riding", "score", "screw", "screwed", "screwing", "spread", "stud", "suck", "sucking",
-        "tease", "teen", "teens", "thick", "tight", "toy", "toys", "vixen", "wet", "women",
-    )
-
-    // Context-only, weakest: frequently NOT about people at all (curtains, video calls, UI,
-    // hosiery). Score NOTHING alone — only with a person/sexual word within CONTEXT_WINDOW.
-    val EXTRA_AMBIGUOUS: Set<String> = setOf(
-        "sheer", "transparent", "webcam", "tights", "cosplay", "pantyhose",
-    )
-
-    // "Person" words — being near one switches on an AMBIGUOUS word, a COMBO word, or a
-    // PHRASE. ("is there anything about women/people nearby?", done locally per match.)
-    val PERSON: Set<String> = setOf(
-        "girl", "girls", "woman", "women", "lady", "ladies", "babe", "babes",
-        "chick", "chicks", "teen", "teens", "model", "models", "gf", "girlfriend",
-        "wife", "she", "her",
-    )
-
-    // ── EVASION SPELLINGS (Kotlin-only; the JS relies on the domain blocklist for these) ──
-    // Deliberate misspellings, shortenings and slang used to get around a filter. Folded in
-    // so they score like the tier they stand in for. Leetspeak and stretched letters do NOT
-    // belong here — the scorer normalises every token first (deleet / collapse), so "p0rn",
-    // "b00bs", "seeexy" already resolve to real list words. Only genuinely DIFFERENT
-    // spellings go here. Everything below is unambiguously adult, so it scores at CORE.
-    val VARIANT_EXPLICIT: Set<String> = setOf(
-        // naked / nude
-        "nake", "nakey", "nekked", "nekkid", "nakd", "nekid", "nood", "noods", "nudez", "nudz",
-        // porn
-        "pron", "prn0", "pr0no", "prnhub", "pornhub", "xnxx", "xvideos", "redtube", "youporn",
-        "brazzers", "spankbang", "motherless", "xhamster",
-        // sex
-        "seggs", "secks", "sechs", "sexo", "sexx", "sexxx",
-        // breasts
-        "bewbs", "bewb", "boobz", "titz", "tiddies", "tiddy", "tittys", "milkers",
-        // masturbation / the community's own words
-        "fap", "fapping", "fapped", "faps", "fapper", "coom", "coomer", "cooming",
-        "masterbate", "masterbating", "masterbation", "masturbait", "gooner",
-        "cumz", "cummin", "jizz", "jizzed",
-        // anatomy misspellings
-        "pussi", "pusy", "pusssy", "vajayjay", "coochie", "cooter", "phuck", "fukk",
-        // adult platforms / genres
-        "onlyfanz", "onlyfan", "fansly", "chaturbate", "stripchat", "camsoda", "myfreecams",
-        "hentia", "hentay", "ahegao", "ecchi", "futanari", "futa", "doujin", "doujinshi",
-        "rule34", "r34", "lewds", "lewding", "nudify", "deepnude", "thot", "thots", "thotty",
-    )
-
-    // Evasion spellings that DO have innocent uses. Context-gated like any DUAL word (score
-    // nothing alone). Strict-only. Keep tight: every entry appears on ordinary pages.
-    val VARIANT_DUAL: Set<String> = setOf(
-        "goon", "gooning", "goonin", "edging", "thicc", "thicce", "phat",
-        "hoe", "hoes", "buns", "melons", "smash",
-    )
+    // Evasion spellings (leetspeak/stretch are handled by the scorer's normaliser, not here).
+    val VARIANT_EXPLICIT: Set<String> get() = FilterData.langSet("variant_explicit.txt")
+    val VARIANT_DUAL: Set<String> get() = FilterData.langSet("variant_dual.txt")
 
     // ── WORD FAMILIES ─────────────────────────────────────────────────────────────────
-    // Inflections of the same word are ONE signal, not several. Caps (PER_WORD_CAP and
-    // SINGLE_WORD_MAX) and any breakdown work per FAMILY.
-    private val FAMILY_GROUPS: List<List<String>> = listOf(
-        listOf("nude", "nudes", "nudity"),
-        listOf("boob", "boobs", "boobies"),
-        listOf("tits", "titties", "titty"),
-        listOf("slut", "sluts", "slutty"),
-        listOf("whore", "whores"),
-        listOf("pussy", "pussies"),
-        listOf("cock", "cocks"),
-        listOf("cum", "cumming"),
-        listOf("nipple", "nipples"),
-        listOf("wank", "wanking"),
-        listOf("vagina", "vaginal"),
-        listOf("dildo", "dildos"),
-        listOf("orgasm", "orgasms"),
-        listOf("sextoy", "sextoys"),
-        listOf("masturbate", "masturbating", "masturbation"),
-        listOf("porn", "porno", "pornographic", "pornography"),
-        listOf("breast", "breasts"),
-        listOf("buttock", "buttocks"),
-        listOf("thong", "thongs"),
-        listOf("hottie", "hotties"),
-        listOf("bikini", "bikinis"),
-    )
-    private val FAMILY: Map<String, String> =
-        HashMap<String, String>().apply { for (g in FAMILY_GROUPS) for (w in g) put(w, g[0]) }
+    // "head, inflection1, inflection2" per line in family_groups.txt. Parsed once, cached.
+    @Volatile private var familyCache: Map<String, String>? = null
+    private fun family(): Map<String, String> = familyCache ?: run {
+        val map = HashMap<String, String>()
+        for (line in FilterData.langLines("family_groups.txt")) {
+            val words = line.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            if (words.isNotEmpty()) for (w in words) map[w] = words[0]
+        }
+        map.also { familyCache = it }
+    }
 
     /** The family head for a word ("nudes" → "nude"), or the word itself if it has no family. */
-    fun famOf(w: String): String = FAMILY[w] ?: w
+    fun famOf(w: String): String = family()[w] ?: w
 }
 
 
@@ -248,94 +139,22 @@ object BannedWords {
 //   "hardcore punk" / "hardcore gaming"         → 0
 //   "vaginal health", "breast cancer", "summa cum laude", "pussy riot", "blue tits" (birds)
 object BannedWordExceptions {
-    val MAP: Map<String, Set<String>> = mapOf(
-        "naked" to setOf("mole", "rat", "rats", "eye", "eyes", "truth", "gun", "singularity",
-            "ape", "chef", "lunch", "bike", "cowboy", "flame", "dna", "cell", "cells", "juice",
-            // finance ("naked options/shorts") and tech ("naked domain")
-            "option", "options", "short", "shorts", "shorting", "put", "puts", "call",
-            "calls", "domain", "domains", "objects", "wines", "statistics", "economics"),
-        "nude" to setOf("colour", "color", "coloured", "colored", "colours", "colors", "shade",
-            "shades", "lipstick", "lipsticks", "makeup", "palette", "palettes", "heels",
-            "pumps", "tone", "tones", "beige", "nail", "nails", "polish", "blush",
-            "foundation", "eyeshadow", "lip", "lips", "gloss", "matte",
-            // art history and lab animals
-            "painting", "paintings", "portrait", "portraits", "art", "arts", "artist",
-            "artists", "sculpture", "sculptures", "figure", "figures", "drawing",
-            "drawings", "sketch", "sketches", "study", "studies", "gallery", "museum",
-            "exhibition", "renaissance", "mice", "mouse", "descending"),
-        "topless" to setOf("car", "cars", "convertible", "jeep", "roadster"),
-        "sex" to setOf("same", "opposite", "education", "gender", "ratio", "chromosome",
-            "offender", "offenders", "trafficking", "discrimination", "assault", "abuse",
-            "crime", "crimes", "determination", "cells", "cell",
-            "ed", "biology", "reproduction", "characteristics", "hormone", "hormones",
-            "differences", "worker", "workers", "work"),
-        "hardcore" to setOf("punk", "gaming", "gamer", "gamers", "band", "music", "metal",
-            "techno", "rave", "fan", "fans", "mode", "difficulty", "minecraft", "parkour",
-            "speedrun", "level"),
-        "nsfw" to setOf("tag", "tags", "filter", "filters", "toggle", "setting", "settings",
-            "label", "labels", "subreddit", "flair", "blur", "blurred", "hidden", "policy"),
-        "bareback" to setOf("riding", "rider", "horse", "horses", "rodeo", "bronc"),
-        "cock" to setOf("rooster", "hen", "gun", "pistol", "hammer", "crow", "crowed", "crows",
-            "bird", "birds", "tail", "fight", "fighting", "weather"),
-        "pussy" to setOf("cat", "cats", "willow", "willows", "kitten", "kittens", "feline", "riot"),
-        "tits" to setOf("bird", "birds", "blue", "great", "coal", "marsh", "crested", "nest",
-            "feeder", "garden", "woodland"),
-        "anal" to setOf("retentive",
-            // medicine, vets and fish anatomy
-            "fissure", "fissures", "fistula", "cancer", "gland", "glands", "sac",
-            "abscess", "itching", "fin", "fins", "stage"),
-        "erection" to setOf("building", "buildings", "construction", "scaffold", "scaffolding",
-            "steel", "tent", "mast", "crane", "structure", "statue"),
-        "horny" to setOf("toad", "toads", "lizard", "frog", "owl", "coral", "beetle", "skin", "layer"),
-        "orgy" to setOf("violence", "destruction", "spending", "self"),
-        "semen" to setOf("analysis", "sample", "bovine", "bull", "stallion", "cattle", "breeding",
-            "quality", "count"),
-        // medical / health contexts
-        "vagina" to setOf("health", "doctor", "doctors", "medical", "medicine", "infection",
-            "infections", "birth", "delivery", "discharge", "exam", "examination",
-            "cancer", "yeast", "bacterial", "thrush", "dryness", "ph", "microbiome",
-            "symptom", "symptoms", "treatment", "clinic", "gynecologist",
-            "gynaecologist", "obstetric", "smear", "swab", "ultrasound", "anatomy",
-            "tissue", "prolapse", "mesh"),
-        "penis" to setOf("health", "medical", "doctor", "doctors", "cancer", "anatomy",
-            "circumcision", "urology", "urologist", "envy", "fracture", "curvature"),
-        // more genital anatomy — overwhelmingly medical/educational when it appears at all
-        "vulva" to setOf("health", "medical", "doctor", "doctors", "anatomy", "cancer",
-            "vulvar", "vulvodynia", "itching", "itch", "pain", "swelling", "swollen", "sore",
-            "lichen", "sclerosus", "cyst", "dermatology", "exam", "examination", "biopsy",
-            "symptom", "symptoms", "treatment", "clinic", "gynecologist", "gynaecologist"),
-        "clitoris" to setOf("health", "medical", "anatomy", "clitoral", "doctor", "hood",
-            "swelling", "pain", "development", "surgery", "reduction", "phimosis"),
-        "clitoral" to setOf("health", "medical", "anatomy", "hood", "surgery", "swelling", "pain"),
-        "labia" to setOf("health", "medical", "anatomy", "majora", "minora", "swelling",
-            "swollen", "cyst", "surgery", "labiaplasty", "reduction", "pain", "sore",
-            "asymmetry", "tear", "doctor", "gynecologist", "gynaecologist"),
-        "foreskin" to setOf("retraction", "retract", "tight", "phimosis", "paraphimosis",
-            "circumcision", "hygiene", "health", "swelling", "smegma", "balanitis", "care"),
-        "ejaculate" to setOf("premature", "treatment", "delayed", "delay", "retrograde",
-            "unable", "cannot", "difficulty"),
-        "vaginal" to setOf("health", "discharge", "infection", "dryness", "birth", "delivery",
-            "mesh", "prolapse", "thrush", "bleeding", "swab", "examination", "atrophy"),
-        "breast" to setOf("cancer", "feeding", "feed", "fed", "milk", "pump", "pumping", "chicken",
-            "screening", "mammogram", "stroke", "reduction", "augmentation", "tissue",
-            "exam", "lump", "lumps", "biopsy", "implant", "implants", "density"),
-        "nipple" to setOf("baby", "bottle", "bottles", "confusion", "shield", "shields", "cream",
-            "chafing", "discharge", "inverted", "cracked", "breastfeeding", "sore"),
-        "ejaculation" to setOf("premature", "treatment", "delayed", "delay", "retrograde"),
-        // discourse / news / help contexts
-        "whore" to setOf("attention", "babylon"),
-        "slut" to setOf("shaming", "shame", "shamed", "walk"),
-        "cum" to setOf("laude", "summa", "magna"),
-        "porn" to setOf("addiction", "addicted", "quit", "quitting", "blocker", "blockers",
-            "block", "blocking", "blocks", "filter", "filters", "ban", "bans", "banned", "law",
-            "laws", "bill", "age", "verification", "revenge"),
-        "masturbate" to setOf("quit", "quitting", "addiction", "stop", "stopping", "health",
-            "effects", "myth", "myths"),
-        // tech
-        "penetration" to setOf("testing", "test", "tests", "tester", "testers", "pen", "market",
-            "depth", "armor", "armour", "network"),
-        "boob" to setOf("tube"),
-    )
+    // Parsed once from exceptions.txt ("word: n1, n2, ..." per line), cached. Keyed by the
+    // matched word AND its family head (see hasExceptionNear). EDIT THE FILE, not here.
+    @Volatile private var cache: Map<String, Set<String>>? = null
+    val MAP: Map<String, Set<String>>
+        get() = cache ?: run {
+            val map = HashMap<String, Set<String>>()
+            for (line in FilterData.langLines("exceptions.txt")) {
+                val colon = line.indexOf(':')
+                if (colon <= 0) continue
+                val word = line.substring(0, colon).trim()
+                val neighbours = line.substring(colon + 1).split(',')
+                    .map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+                if (word.isNotEmpty() && neighbours.isNotEmpty()) map[word] = neighbours
+            }
+            map.also { cache = it }
+        }
 }
 
 
@@ -343,35 +162,13 @@ object BannedWordExceptions {
 // Two switches (see AttractionFilter) let someone turn DOWN the sexualised-women or the
 // sexualised-men side of the filter. Default: both fully on. Only the SOFT, suggestive
 // words/phrases below are affected — anything CORE keeps full weight no matter what.
+// Data now lives in src/main/resources/filter/words/en/gendered_*.txt (loaded via FilterData,
+// English ∪ device language). Edit the .txt files, not here.
 object GenderedTerms {
-
-    /** Suggestive terms about WOMEN's bodies/clothing. Softened when the women switch is off. */
-    val SOFT_FEMALE: Set<String> = setOf(
-        "bikini", "bikinis", "lingerie", "bra", "braless", "panties", "panty", "pantyhose",
-        "thong", "thongs", "negligee", "swimsuit", "tights", "cleavage", "busty", "bosom",
-        "boob", "boobs", "boobies", "breast", "breasts", "booty", "curves", "curvy",
-        "voluptuous", "hooters", "showgirl", "temptress", "skimpy", "garter", "underwear",
-        "topless", "milkers", "bewbs", "bewb", "boobz", "titz", "tiddies", "tiddy",
-    )
-
-    /** Suggestive terms about MEN's bodies. Softened when the men switch is off. */
-    val SOFT_MALE: Set<String> = setOf(
-        "shirtless", "abs", "sixpack", "bulge", "speedo", "speedos", "hardon", "beefcake",
-        "hunk", "hunks", "himbo", "dadbod", "musclebound",
-    )
-
-    /** Phrases that only make sense as sexualised-women content. */
-    val PHRASES_FEMALE: Set<String> = setOf(
-        "bikini haul", "lingerie haul", "underwear haul", "swimwear try on", "braless try on",
-        "no bra", "no panties", "nip slip", "nipple slip", "camel toe", "micro bikini",
-        "bikini body", "curvy model", "plus size model", "boudoir shoot",
-        "naked girls", "nude girls", "hot girls", "sexy girls", "naked women",
-    )
-
-    /** Phrases that only make sense as sexualised-men content. */
-    val PHRASES_MALE: Set<String> = setOf(
-        "shirtless men", "hot guys", "sexy men", "male stripper", "naked men",
-    )
+    val SOFT_FEMALE: Set<String> get() = FilterData.langSet("gendered_female.txt")
+    val SOFT_MALE: Set<String> get() = FilterData.langSet("gendered_male.txt")
+    val PHRASES_FEMALE: Set<String> get() = FilterData.langSet("gendered_phrases_female.txt")
+    val PHRASES_MALE: Set<String> get() = FilterData.langSet("gendered_phrases_male.txt")
 }
 
 
@@ -381,26 +178,7 @@ object GenderedTerms {
 // just needs more evidence. (The per-word EXCEPTIONS above are the finer-grained veto; this
 // is the broad safety net for a page that is medical top-to-bottom.)
 object MedicalContext {
-    val WORDS: Set<String> = setOf(
-        "symptom", "symptoms", "diagnosis", "diagnosed", "treatment", "treated", "infection",
-        "infected", "discharge", "itching", "itchy", "rash", "swelling", "swollen", "lump",
-        "lumps", "pain", "painful", "bleeding", "cramps", "doctor", "gp", "clinic", "clinical",
-        "nhs", "hospital", "nurse", "medical", "medicine", "prescription", "antibiotics",
-        "cancer", "screening", "smear", "biopsy", "cyst", "thrush", "yeast", "bacterial",
-        "vaginosis", "uti", "cystitis", "std", "sti", "chlamydia", "herpes", "hpv",
-        "contraception", "contraceptive", "pregnancy", "pregnant", "menstrual", "menstruation",
-        "period", "periods", "menopause", "ovulation", "fertility", "endometriosis",
-        "prostate", "testicular", "erectile", "dysfunction", "puberty", "hormone", "hormonal",
-        "surgery", "examination", "health", "healthcare", "gynaecologist", "gynecologist",
-        "urologist", "dermatologist", "mastectomy", "mammogram",
-        // broadened so a page that is medical/educational top-to-bottom is recognised as such
-        "gynaecology", "gynecology", "urology", "dermatology", "obstetrics", "obstetric",
-        "genital", "genitals", "genitalia", "reproductive", "sexually", "vulvar", "vulvodynia",
-        "labiaplasty", "circumcision", "phimosis", "balanitis", "wellbeing", "condition",
-        "conditions", "disorder", "disorders", "syndrome", "inflammation", "inflamed",
-        "diagnostic", "clinician", "patient", "patients", "nhs.uk", "healthline", "webmd",
-        "mayo", "planned", "parenthood",
-    )
+    val WORDS: Set<String> get() = FilterData.langSet("medical_context.txt")
 }
 
 
@@ -413,32 +191,9 @@ object MedicalContext {
 // SOFT = leans adult but has a real innocent life (a genuine fashion haul); strict-only; weak.
 object BannedPhrases {
 
-    val LOUD: Set<String> = setOf(
-        // the "technically clothed" genre
-        "nip slip", "nipple slip", "wardrobe malfunction", "accidental exposure",
-        "see through", "see thru", "sheer top", "sheer dress", "nothing underneath",
-        "no panties", "no underwear", "no bra", "no pants", "no leggings", "no clothes",
-        "without underwear", "without a bra", "without panties", "braless try on",
-        // haul / try-on as a delivery vehicle
-        "try on haul", "tryon haul", "lingerie haul", "bikini haul", "sheer haul",
-        "transparent haul", "underwear haul", "nude haul", "see through haul",
-        "mesh haul", "micro bikini",
-        // the obvious ones
-        "leaked nudes", "leaked onlyfans", "onlyfans leak", "sex tape", "adult film",
-        "free porn", "porn site", "live cam", "cam girls", "webcam girls", "camel toe",
-        "thirst trap", "hidden cam", "spy cam", "strip tease", "pole dance",
-        "naked girls", "nude girls", "hot girls", "sexy girls", "naked women",
-        "only fans", "adult content", "not safe for work",
-    )
+    val LOUD: Set<String> get() = FilterData.langSet("phrases_loud.txt")
 
-    val SOFT: Set<String> = setOf(
-        "try on", "tryon", "haul video", "clothing haul", "fashion haul", "swimsuit haul",
-        "tight dress", "short skirt", "mini skirt", "crop top", "yoga pants", "leggings haul",
-        "gym fit", "workout fit", "body check", "before and after body", "beach body",
-        "bikini body", "hot tub", "shower scene", "bed scene", "massage video",
-        "asmr girl", "girl next door", "curvy model", "plus size model", "fitness model",
-        "swimwear try on", "boudoir shoot", "glamour shoot", "photo shoot bikini",
-    )
+    val SOFT: Set<String> get() = FilterData.langSet("phrases_soft.txt")
 }
 
 

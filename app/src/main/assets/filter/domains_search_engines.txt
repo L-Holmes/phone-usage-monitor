@@ -1,0 +1,40 @@
+# Search engines to BLOCK — every one EXCEPT Google, in every mode.
+# One host per line. "#" starts a comment. A bare domain also covers its subdomains.
+# Only the SEARCH host is listed, not a whole company (search.yahoo.com, not yahoo.com).
+# LANGUAGE-NEUTRAL: the same list applies to every language.
+# Loaded by FilterData → SearchEngineBlocklist.
+
+duckduckgo.com
+duck.com
+bing.com
+search.brave.com
+ecosia.org
+qwant.com
+startpage.com
+search.yahoo.com
+yandex.com
+yandex.ru
+baidu.com
+ask.com
+search.aol.com
+mojeek.com
+you.com
+presearch.com
+swisscows.com
+gibiru.com
+metager.org
+dogpile.com
+searchencrypt.com
+onesearch.com
+lukol.com
+kagi.com
+perplexity.ai
+phind.com
+yep.com
+excite.com
+lycos.com
+webcrawler.com
+search.marginalia.nu
+# a couple of well-known public SearX instances (self-hosted ones can't be enumerated)
+searx.be
+searx.tiekoetter.com

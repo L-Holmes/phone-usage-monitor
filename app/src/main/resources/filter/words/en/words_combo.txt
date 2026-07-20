@@ -1,0 +1,6 @@
+# COMBO tier — count ONLY within CONTEXT_WINDOW of a PERSON word. Relaxed-only.
+# LANGUAGE-SPECIFIC (English).
+hot
+sexy
+hottie
+hotties

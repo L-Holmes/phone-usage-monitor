@@ -219,7 +219,7 @@ class BreathOrbAnimator(
         inhaling = true
         phaseStart = SystemClock.uptimeMillis()
         lastDrawAt = 0L
-        phase?.text = "Breathe in"
+        phase?.let { it.text = it.context.getString(R.string.overlay_breathe_in) }
 
         val ch = Choreographer.getInstance()
         choreographer = ch
@@ -269,7 +269,7 @@ class BreathOrbAnimator(
         if (inhaling) {
             inhaling = false
             phaseStart = now
-            phase?.text = "Breathe out"
+            phase?.let { it.text = it.context.getString(R.string.overlay_breathe_out) }
             onExhaleStart()
         } else {
             done++
@@ -279,7 +279,7 @@ class BreathOrbAnimator(
             } else {
                 inhaling = true
                 phaseStart = now
-                phase?.text = "Breathe in"
+                phase?.let { it.text = it.context.getString(R.string.overlay_breathe_in) }
             }
         }
     }
@@ -314,7 +314,8 @@ class BreathOrbAnimator(
 // =====================================================================================
 class FeelingFaceView(
     context: Context,
-    private val labels: List<String>,
+    private val labels: List<String>,              // STABLE values (stored / returned by nearestLabel)
+    private val displayLabels: List<String>,       // localized text drawn on the circles
     private val circleColor: Int,
     private val positiveInside: Boolean,
     private val startZoneLabel: String? = null,
@@ -335,7 +336,7 @@ class FeelingFaceView(
     private var cenY = 0f
     private var vennR = 1f
 
-    private class Circ(val cx: Float, val cy: Float, val r: Float, val label: String)
+    private class Circ(val cx: Float, val cy: Float, val r: Float, val value: String, val label: String)
     private var circles = listOf<Circ>()
 
     private val circleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -370,7 +371,7 @@ class FeelingFaceView(
         val cr = vennR * 0.56f
         circles = labels.mapIndexed { i, lab ->
             val ang = (-90.0 + i * 360.0 / labels.size) * Math.PI / 180.0
-            Circ(cenX + off * kotlin.math.cos(ang).toFloat(), cenY + off * kotlin.math.sin(ang).toFloat(), cr, lab)
+            Circ(cenX + off * kotlin.math.cos(ang).toFloat(), cenY + off * kotlin.math.sin(ang).toFloat(), cr, lab, displayLabels.getOrElse(i) { lab })
         }
         if (!placed) {
             placed = true
@@ -402,7 +403,7 @@ class FeelingFaceView(
         var best: String? = null; var bestD = Float.MAX_VALUE
         for (c in circles) {
             val d = kotlin.math.hypot(fx - c.cx, fy - c.cy)
-            if (d < c.r && d < bestD) { bestD = d; best = c.label }
+            if (d < c.r && d < bestD) { bestD = d; best = c.value }
         }
         return best
     }
@@ -538,7 +539,7 @@ class PeakCurveView(
         val la = ((anim - 0.45f) / 0.55f).coerceIn(0f, 1f)
         if (la > 0f && showMarker) {
             tag.textSize = 11f * dp; tag.alpha = (la * 200).toInt()
-            canvas.drawText("past the peak", px(0.42f), yB + 18f * dp, tag)
+            canvas.drawText(context.getString(R.string.chart_past_peak), px(0.42f), yB + 18f * dp, tag)
         }
         if (la > 0f && labelTop != null) {
             // label sits up high, clear of the curve, with an arrow down to the faded tail
@@ -651,7 +652,7 @@ class PeakTapView(
         val tx = tappedX
         if (tx == null) {
             hint.textSize = 13f * dp
-            canvas.drawText("tap where you think you are", w / 2f, py(u(0.5f)) - 8f * dp, hint)
+            canvas.drawText(context.getString(R.string.chart_tap_where), w / 2f, py(u(0.5f)) - 8f * dp, hint)
         } else {
             val mx = px(tx); val my = py(u(tx))
             dotFill.color = if (correct) gold else accent
@@ -753,8 +754,8 @@ class RecoveryBrainView(context: Context) : View(context) {
         // faint frame + axis hints
         canvas.drawLine(xL, yB, xR, yB, axis)
         axisLab.textSize = 10.5f * dp
-        axisLab.textAlign = Paint.Align.LEFT; canvas.drawText("more pull", xL, yT + 4f * dp, axisLab)
-        canvas.drawText("free", xL, yB - 4f * dp, axisLab)
+        axisLab.textAlign = Paint.Align.LEFT; canvas.drawText(context.getString(R.string.chart_more_pull), xL, yT + 4f * dp, axisLab)
+        canvas.drawText(context.getString(R.string.chart_free), xL, yB - 4f * dp, axisLab)
 
         // progress so far: coming down from a high point to "now"
         val nowX = 0.40f; val nowF = 0.56f
@@ -782,8 +783,8 @@ class RecoveryBrainView(context: Context) : View(context) {
         // branch labels (fade in)
         val la = ((anim - 0.5f) / 0.5f).coerceIn(0f, 1f)
         lab.textSize = 12.5f * dp; lab.textAlign = Paint.Align.RIGHT; lab.alpha = (la * 255).toInt()
-        lab.color = amber; canvas.drawText("one-off \u2192 back up", px(0.95f), py(0.30f) - 6f * dp, lab)
-        lab.color = green; canvas.drawText("keep going \u2192 free", px(0.95f), py(0.88f) + 16f * dp, lab)
+        lab.color = amber; canvas.drawText(context.getString(R.string.chart_oneoff_backup), px(0.95f), py(0.30f) - 6f * dp, lab)
+        lab.color = green; canvas.drawText(context.getString(R.string.chart_keep_going), px(0.95f), py(0.88f) + 16f * dp, lab)
 
         // a brain at "now"
         emoji.textSize = 26f * dp
@@ -850,7 +851,7 @@ class WastedDonutView(context: Context) : View(context) {
         big.textSize = 30f * dp
         canvas.drawText("${Math.round(anim * 100)}%", cx, cy + 4f * dp, big)
         small.textSize = 12.5f * dp
-        canvas.drawText("of your waking life", cx, cy + 24f * dp, small)
+        canvas.drawText(context.getString(R.string.chart_waking_life), cx, cy + 24f * dp, small)
     }
 }
 

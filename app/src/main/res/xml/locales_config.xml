@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The list of languages this app ships. English ("en") is the master/default.
+  To add a language: create res/values-<code>/strings.xml (translated) AND add a
+  <locale> line below. Keep this in step with the values-* folders — checkTranslations
+  (see app/build.gradle.kts) verifies the strings; this file drives the in-app picker
+  and the system per-app-language screen.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <!-- <locale android:name="es" /> -->
+    <!-- <locale android:name="fr" /> -->
+</locale-config>

@@ -211,10 +211,6 @@ object RelapseLog {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val DAYS = arrayOf(
-        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-    )
-
     fun record(context: Context, report: RelapseReport) {
         val dao = RelapseDatabase.get(context).dao()
         scope.launch { dao.insert(report) }
@@ -227,73 +223,55 @@ object RelapseLog {
      * Compare [report] against the user's [priors] (their earlier reports — this one is
      * excluded) and build gentle, useful pattern feedback. Pure function: no DB, no UI.
      */
-    fun analyze(report: RelapseReport, priors: List<RelapseReport>): RelapseFeedback {
+    fun analyze(context: Context, report: RelapseReport, priors: List<RelapseReport>): RelapseFeedback {
         val n = priors.size
         val lines = mutableListOf<String>()
 
         if (n == 0) {
-            lines.add(
-                "This is your first report, so there's nothing to compare it against yet. " +
-                    "From here on, every one helps a pattern come into focus.",
-            )
-            return RelapseFeedback(1, lines, encouragement(1))
+            lines.add(context.getString(R.string.relapse_fb_first))
+            return RelapseFeedback(1, lines, encouragement(context, 1))
         }
 
         val sameTime = priors.count { hourDiff(it.hourOfDay, report.hourOfDay) <= 2 }
-        lines.add(
-            "It happened around ${hourLabel(report.hourOfDay)} \u2014 the same time of day as " +
-                "${pct(sameTime, n)} of your past reports.",
-        )
+        lines.add(context.getString(R.string.relapse_fb_time, hourLabel(report.hourOfDay), pct(sameTime, n)))
 
         val sameDay = priors.count { it.dayOfWeek == report.dayOfWeek }
-        lines.add(
-            "It fell on a ${dayName(report.dayOfWeek)}, like ${pct(sameDay, n)} of your past reports.",
-        )
+        lines.add(context.getString(R.string.relapse_fb_day, dayName(context, report.dayOfWeek), pct(sameDay, n)))
 
         report.feeling?.let { f ->
             val same = priors.count { it.feeling == f }
-            lines.add("You felt ${f.lowercase()} \u2014 so did ${pct(same, n)} of your past reports.")
+            lines.add(context.getString(R.string.relapse_fb_feeling, f.lowercase(), pct(same, n)))
         }
 
         report.atHome?.let { home ->
             val same = priors.count { it.atHome == home }
-            val where = if (home) "at home" else "away from home"
-            lines.add("You were $where, like ${pct(same, n)} of your past reports.")
+            val where = if (home) context.getString(R.string.relapse_fb_where_home) else context.getString(R.string.relapse_fb_where_away)
+            lines.add(context.getString(R.string.relapse_fb_where, where, pct(same, n)))
         }
 
         if (report.alone == true) {
             val same = priors.count { it.alone == true }
-            lines.add("You were on your own \u2014 true for ${pct(same, n)} of your past reports.")
+            lines.add(context.getString(R.string.relapse_fb_alone, pct(same, n)))
         }
 
         if (report.activity != null) {
             val same = priors.count { it.activity == report.activity }
             if (same > 0) {
-                lines.add(
-                    "Just before, you were \"${report.activity}\" \u2014 the same lead-in as " +
-                        "${pct(same, n)} of your past reports.",
-                )
+                lines.add(context.getString(R.string.relapse_fb_activity, report.activity, pct(same, n)))
             }
         }
 
         if (n in 1..3) {
-            lines.add("(Only a few reports so far, so these numbers will sharpen as you log more.)")
+            lines.add(context.getString(R.string.relapse_fb_few))
         }
 
-        return RelapseFeedback(n + 1, lines, encouragement(n + 1))
+        return RelapseFeedback(n + 1, lines, encouragement(context, n + 1))
     }
 
-    private fun encouragement(total: Int): String = when {
-        total <= 1 ->
-            "You did the right thing by logging this \u2014 honestly, that's the hardest part. " +
-                "Be kind to yourself: this is the start of understanding it, not a scorecard."
-        total < 5 ->
-            "You did the right thing by logging this. Each report is a piece of the puzzle, and " +
-                "you're already starting to see its shape. This isn't about guilt \u2014 it's about understanding."
-        else ->
-            "You did the right thing by logging this. $total reports in, the patterns are getting " +
-                "clearer \u2014 and a pattern you can see is one you can plan around. You're closer to " +
-                "beating this than you were before."
+    private fun encouragement(context: Context, total: Int): String = when {
+        total <= 1 -> context.getString(R.string.relapse_enc_first)
+        total < 5 -> context.getString(R.string.relapse_enc_early)
+        else -> context.getString(R.string.relapse_enc_many, total)
     }
 
     // ── small helpers ──────────────────────────────────────────────────────────
@@ -313,5 +291,6 @@ object RelapseLog {
         return "$twelve$suffix"
     }
 
-    private fun dayName(dow: Int): String = DAYS.getOrElse(dow - 1) { "that day" }
+    private fun dayName(context: Context, dow: Int): String =
+        context.resources.getStringArray(R.array.relapse_days).getOrElse(dow - 1) { context.getString(R.string.relapse_day_fallback) }
 }

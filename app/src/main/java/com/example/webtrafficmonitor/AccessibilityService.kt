@@ -203,7 +203,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 // Enforce even while the app sits idle with no events.
                 if (greyIsApp && GreyUsage.isOverLimit(this@PageMonitorAccessibilityService, t)) {
                     showAppBlock(
-                        "That's your ${GreyUsage.LIMIT_MIN} min for this hour - it'll open again soon", t)
+                        getString(R.string.br_grey_limit, GreyUsage.LIMIT_MIN), t)
                 }
                 mainHandler.postDelayed(this, GREY_TICK_MS)
             }
@@ -301,6 +301,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         Mode.migrateIfUnset(this, Settings.canDrawOverlays(this))
         overlay = OverlayController(this)
         breathing = BreathingOverlay(this)
+        FilterData.init(this)          // load word/app/domain lists from assets/filter/
         BlockRules.load(this)
         AppBlocklist.refresh(this)
         loadKeyboardPackages()
@@ -771,18 +772,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         nightGuardReason(pkg)?.let { return it }
         roomGuardReason(pkg)?.let { return it }
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
-            return "Locked down - ride out the urge"
+            return getString(R.string.br_lockdown)
         }
         if (LoosenWait.isActive(this) && pkg != packageName && !LoosenWait.isAllowed(pkg)) {
-            return "Waiting it out - stay off other apps for now"
+            return getString(R.string.br_waiting)
         }
         when (AppRules.appTier(this, pkg)) {                   // user "Report an app" rules
-            AppRules.BLOCK -> return "Blocked app"
+            AppRules.BLOCK -> return getString(R.string.br_blocked_app)
             AppRules.GREY ->
                 if (pkg != null && GreyUsage.isOverLimit(this, pkg.lowercase()))
-                    return "That's your ${GreyUsage.LIMIT_MIN} min for this hour - it'll open again soon"
+                    return getString(R.string.br_grey_limit, GreyUsage.LIMIT_MIN)
         }
-        AppBlocklist.blockedReason(pkg)?.let { return "Blocked app: $it" }
+        AppBlocklist.blockedReason(pkg)?.let { return getString(R.string.br_blocked_app_pkg, it) }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
 
@@ -809,9 +810,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val lying = spec.flagLyingDown && SensorContext.lyingDown
         val dark = darkEnoughForGuard(spec)
         return when {
-            lying && dark -> "Not while you're lying down in the dark.\nSit up, or turn a light on."
-            lying -> "Not while you're lying down.\nSit up and this opens again."
-            dark -> "Not in the dark.\nTurn a light on and this opens again."
+            lying && dark -> getString(R.string.br_night_lying_dark)
+            lying -> getString(R.string.br_night_lying)
+            dark -> getString(R.string.br_night_dark)
             else -> null
         }
     }
@@ -875,9 +876,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val room = RoomGuard.activeRoom ?: return null
         if (isNightGuardAllowed(pkg)) return null
         val roomName = room.replaceFirstChar { it.uppercase() }
-        return "Protected room: you're in the $roomName.\n" +
-            "In strict mode only calls, texts and other essentials open here.\n" +
-            "Step out of the $roomName and everything unlocks."
+        return getString(R.string.br_room, roomName)
     }
 
     /**
@@ -1116,18 +1115,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val modeKeyword = ModeKeywords.match(this, title, url)
         val baseReason = when {
                appGuard != null -> appGuard
-               host != null && DomainBlocklist.isBlocked(host) -> "Adult site (blocklist): $host"
+               host != null && DomainBlocklist.isBlocked(host) -> getString(R.string.br_adult_site, host)
                // Search engines: only Google is allowed, in every mode.
-               host != null && SearchEngineBlocklist.isBlocked(host) -> "Search engine blocked: $host"
+               host != null && SearchEngineBlocklist.isBlocked(host) -> getString(R.string.br_search_engine, host)
                // Our hand-maintained hosts (reddit frontends, reddit, borderline shops):
                // blocked in Strict / Super hardcore, allowed in Relaxed.
                host != null && !Mode.isRelaxed(this) && StrictOnlyBlocklist.isBlocked(host) ->
-                   "Blocked site: $host"
-               modeKeyword != null -> "Blocked term: $modeKeyword"
+                   getString(R.string.br_blocked_site, host)
+               modeKeyword != null -> getString(R.string.br_blocked_term, modeKeyword)
                rule != null -> describeRule(rule)
                host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
                    GreyUsage.isOverLimit(this, host) ->
-                       "That's your ${GreyUsage.LIMIT_MIN} min for this hour - $host opens again soon"
+                       getString(R.string.br_grey_limit_host, GreyUsage.LIMIT_MIN, host)
                host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
                // The heuristic - and ONLY the heuristic - waits for real page text.
                contentReady && (host != null || AppBlocklist.isBrowser(packageName)) ->
@@ -1150,9 +1149,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             val backStatus = if (!freshShow && awaitingBackResult) {
                 awaitingBackResult = false
                 if (host != null && host == shownBlockHost)
-                    "Still the SAME blocked page. Press Back again, or go home."
+                    getString(R.string.br_back_same)
                 else
-                    "That's a DIFFERENT page - but it's blocked too. Press Back again, or go home."
+                    getString(R.string.br_back_diff)
             } else {
                 null
             }
@@ -1168,10 +1167,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 RapidBlockMonitor.record(packageName)?.let { penaltyMs ->
                     AppTimedBlock.blockFor(
                         this, packageName, penaltyMs,
-                        "App blocked for ${RapidBlockMonitor.PENALTY_LABEL} (too many blocks)",
+                        getString(R.string.br_app_too_many, RapidBlockMonitor.PENALTY_LABEL),
                     )
                     showAppBlock(
-                        AppTimedBlock.reasonIfBlocked(this, packageName) ?: "App blocked",
+                        AppTimedBlock.reasonIfBlocked(this, packageName) ?: getString(R.string.br_app_blocked),
                         packageName,
                     )
                     return
@@ -1220,7 +1219,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /** Turn a raw block rule into readable wording: a dot means a site, otherwise a keyword. */
     private fun describeRule(rule: String): String =
-        if ('.' in rule) "Blocked site: $rule" else "Blocked keyword: \"$rule\""
+        if ('.' in rule) getString(R.string.br_blocked_site, rule) else getString(R.string.br_blocked_keyword, rule)
 
     /** The package of the application window that is actually in front, or null. */
     private fun currentForegroundPackage(): String? {
@@ -1590,7 +1589,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private val BREATHING_APPS = AppConfig.BREATHING_APPS
 
         // Still allowed while the night guard is up (lying down / in the dark).
-        private val NIGHT_GUARD_ALLOWED = AppConfig.NIGHT_GUARD_ALLOWED_SUBSTRINGS
+        private val NIGHT_GUARD_ALLOWED get() = AppConfig.NIGHT_GUARD_ALLOWED_SUBSTRINGS
 
         private val NOT_LOGGED_PACKAGES = AppConfig.NOT_LOGGED_PACKAGES
 

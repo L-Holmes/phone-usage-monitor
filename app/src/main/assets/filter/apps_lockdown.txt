@@ -1,0 +1,14 @@
+# Lockdown / unlock-wait essentials (kept usable even while locked down). Matched as SUBSTRINGS
+# of the package name. LANGUAGE-NEUTRAL. → AppConfig.LOCKDOWN_ALLOWED_SUBSTRINGS
+launcher
+trebuchet
+dialer
+incallui
+telecom
+phone
+contacts
+messaging
+mms
+deskclock
+clock
+alarm

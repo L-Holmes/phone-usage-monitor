@@ -99,17 +99,16 @@ object AppConfig {
     // ┌───────────────────────────────────────────────────────────────────────────────┐
     // │  AI / MAINTAINER - READ THIS BEFORE CHANGING ANY MODE BEHAVIOUR               │
     // │                                                                               │
-    // │  `summary` is what the user reads on the in-app "What each mode does" screen  │
-    // │  (Main.kt -> showModeRules, reachable from the Sexual arousal page). It is    │
-    // │  the ONLY explanation they get, so it must stay true.                         │
+    // │  The plain-English rules the user reads on the "What each mode does" screen   │
+    // │  (Main.kt -> showModeRules) now live in res/values/strings.xml as the         │
+    // │  string-arrays mode_<id>_rules and the always_on_* strings (so they can be    │
+    // │  translated). This ModeSpec holds ONLY the behaviour flags.                   │
     // │                                                                               │
     // │  Whenever you change what a mode does - here, or anywhere in the code that    │
     // │  branches on Mode.current()/Mode.isStrict()/Mode.isSuperHardcore()/spec() -   │
-    // │  you MUST update that mode's `summary` lines in the same change. A rule the   │
-    // │  user can't see is a rule they'll feel blindsided by.                         │
-    // │                                                                               │
-    // │  Keep each line short, concrete and in plain English ("Breathing pause: every │
-    // │  time you open a watched app"), never jargon or internal names.               │
+    // │  you MUST update that mode's mode_<id>_rules in strings.xml in the same        │
+    // │  change. A rule the user can't see is a rule they'll feel blindsided by.      │
+    // │  Keep each line short, concrete and in plain English, never internal names.   │
     // └───────────────────────────────────────────────────────────────────────────────┘
     data class ModeSpec(
         val id: String,
@@ -124,68 +123,34 @@ object AppConfig {
         val nightGuard: Boolean = false,
         // NOT WIRED INTO THE SCORER. flagThreshold is dev-console display only - the live
         // scorer uses one flat FilterTuning.THRESHOLD for every mode. Do NOT describe it in
-        // `summary` until it is actually wired, or the rules screen becomes a lie.
+        // the mode_<id>_rules strings until it is actually wired, or the screen becomes a lie.
         val flagThreshold: Int,
         // These two ARE live, but only as the night-guard's triggers (see nightGuard above).
         val flagLyingDown: Boolean = false,
         val lightFlagBelow: LightLevel = LightLevel.DARK,
-        val summary: List<String> = emptyList(),     // plain-English rules shown to the user
     )
     val MODES: List<ModeSpec> = listOf(
         ModeSpec(id = "off", displayName = "Off",
             breathingOn = false, breathEveryOpen = false, greyscale = false,
             nightGuard = false,
-            flagThreshold = 0, flagLyingDown = false, lightFlagBelow = LightLevel.DARK,
-            summary = listOf(
-                "Monitoring is OFF. Nothing is scanned and nothing is blocked - none of the \"Always on\" rules run in this mode.",
-                "This is the starting mode on a fresh install.",
-                "The two permissions the blocker needs (page monitoring and the block screen) are OPTIONAL while you are here - the app never demands them.",
-                "Pick ANY other mode and both permissions become required: the app walks you through turning them on, and won't leave this screen until they are.",
-                "The Productivity page and its screen-time stats keep working either way.",
-            )),
+            flagThreshold = 0, flagLyingDown = false, lightFlagBelow = LightLevel.DARK),
         ModeSpec(id = "relaxed", displayName = "Relaxed",
             breathingOn = false, breathEveryOpen = false, greyscale = false,
             nightGuard = false,
-            flagThreshold = 60, flagLyingDown = false, lightFlagBelow = LightLevel.DARK,
-            summary = listOf(
-                "Breathing pause: NEVER. Watched apps open straight away.",
-                "Greyscale: off. Your screen stays in colour.",
-                "Lying down or sitting in the dark changes nothing. Every app still opens.",
-                "The \"who is the filter for\" switches (Adult content -> Settings) can be changed here (and in Off). In any stricter mode they are forced fully on.",
-                "Everything in \"Always on\" above still applies - blocking does not stop in Relaxed.",
-                "You can switch out of this mode whenever you like, unless the 7-day strict lock is running.",
-            )),
+            flagThreshold = 60, flagLyingDown = false, lightFlagBelow = LightLevel.DARK),
         ModeSpec(id = "strict",  displayName = "Strict",
             breathingOn = true,  breathEveryOpen = false, greyscale = true,
             nightGuard = true,
             // DARK, not DULL: lightFlagBelow means "this band OR DARKER", so DULL was also
             // catching an ordinary dim room. Only genuine darkness should trip Strict.
-            flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK,
-            summary = listOf(
-                "Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.",
-                "The daily pass resets at midnight.",
-                "NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.",
-                "That is the whole point: the phone in bed, in the dark, is where this goes wrong.",
-                "The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.",
-                "Greyscale: your screen turns grey while you are lying down.",
-                "Everything in \"Always on\" above still applies.",
-                "The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.",
-            )),
+            flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK),
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
             nightGuard = true,
             // DARK here too (2026-07-15). This used to be DULL ("a dim room counts"), but
             // lightFlagBelow means "this band OR DARKER", so DULL tripped the guard in an
             // ordinary 35-lux evening room. Only genuine darkness should block, in every mode.
-            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK,
-            summary = listOf(
-                "Breathing pause: EVERY single time you open a watched app. There is no daily pass.",
-                "Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.",
-                "NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - same triggers as Strict.",
-                "Greyscale: your screen turns grey while you are lying down, same as Strict.",
-                "Everything in \"Always on\" above still applies.",
-                "This is Strict with the daily pass taken away.",
-            )),
+            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK),
     )
 
     // === Night guard: what still opens while lying down / in the dark =================
@@ -193,10 +158,8 @@ object AppConfig {
     // is worthless if the thing you actually reach for is on it. WhatsApp is deliberately NOT
     // here (it is a scroll surface like any other); the dialer and SMS are, so you can still
     // be contacted in an emergency.
-    val NIGHT_GUARD_ALLOWED_SUBSTRINGS: List<String> = listOf(
-        "launcher", "trebuchet", "dialer", "incallui", "telecom", "phone", "contacts",
-        "messaging", "mms", "deskclock", "clock", "alarm", "camera", "maps", "waze",
-    )
+    // Data now in assets/filter/apps_night_guard.txt (FilterData).
+    val NIGHT_GUARD_ALLOWED_SUBSTRINGS: List<String> get() = FilterData.lines("apps_night_guard.txt")
 
     /** The lux ceiling of a light band - the level is "at or below" this. */
     fun lightBandMax(level: LightLevel): Float = when (level) {
@@ -213,26 +176,9 @@ object AppConfig {
     const val NIGHT_GUARD_LIGHT_RELEASE = 1.6f
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
 
-    /**
-     * Rules that are TRUE IN EVERY MODE - the "Always on" block at the top of the in-app
-     * rules screen. Same maintenance contract as ModeSpec.summary: change the behaviour,
-     * change these lines in the same commit.
-     */
-    val ALWAYS_ON_RULES: List<String> = listOf(
-        "One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.",
-        "Known adult sites are blocked outright. Beyond Off, mode makes no difference.",
-        "Pages are scanned for sexual words. Enough of them and the page is blocked, in every mode - including Relaxed.",
-        "Anything on your ban list is blocked - the sites, pages, search terms and keywords you have banned yourself from.",
-        "Blocked browsers are covered the moment you open them. DuckDuckGo is deliberately left usable.",
-        "Dismiss a block on the same site enough times in one day and the whole site gets banned automatically for a while.",
-        "Short-form feeds (Reels, Shorts, TikTok-style) are blocked if you have that switch on.",
-        "Greylisted apps (TikTok, Instagram and friends) get ${GreyUsage.LIMIT_MIN} minutes per hour, then they close.",
-        "\"Ride out the urge\" lockdown: ${Lockdown.DURATION_MS / 60_000} minutes where only the essentials - calls, texts, alarms, maps - will open. It cannot be cancelled early.",
-        "Unlocking a relaxed window is limited: once a day, and only ${LoosenLimit.LIFETIME_MAX} times ever.",
-        "There is no \"let me look anyway\" button. It is not on any screen, on purpose - a button like that is just a door with a handle, and sooner or later the urge tries the handle.",
-        "It IS still there, but you only get offered it if you go for the uninstall button, the device-admin lock, the monitoring switch, or try to escape a locked strict mode. Reach for the destructive option and you'll be offered the honest one instead - a wait, a written commitment, a fixed window, and everything still standing afterwards.",
-        "The app never presses Back for you. Blocking covers the screen and offers you the way out; it never navigates your browser behind your back.",
-    )
+    // ALWAYS-ON rules + per-mode rule bullets now live in res/values/strings.xml
+    // (always_on_* and mode_*_rules), resolved at display time in Main.showModeRules.
+    // ModeSpec keeps only the behaviour flags; the user-facing prose is the string master.
 
     // === Ambient light (from the phone's light sensor, in lux) =======================
     // Thresholds are rough, drawn from common lighting references: a dark room (lights off,
@@ -298,80 +244,18 @@ object AppConfig {
 
     // === Safe apps (friendly name -> package) ========================================
     // No public scrolling feed and no arbitrary adult content. The monitor SKIPS these
-    // entirely - no screenshot, scan, or log - to save battery/CPU. Add freely.
-    val SAFE_APPS_BY_NAME: Map<String, String> = linkedMapOf(
-        // Maps & navigation
-        "Google Maps" to "com.google.android.apps.maps", "Waze" to "com.waze",
-        "Google Maps Go" to "com.google.android.apps.navlite", "HERE WeGo" to "com.here.app.maps",
-        "Mapbox" to "com.mapbox.app", "Citymapper" to "com.citymapper.app.release",
-        "Google Earth" to "com.google.earth",
-        // Messaging & calls (no public feed)
-        "WhatsApp" to "com.whatsapp", "WhatsApp Business" to "com.whatsapp.w4b",
-        "Telegram" to "org.telegram.messenger", "Signal" to "org.thoughtcrime.securesms",
-        "Google Messages" to "com.google.android.apps.messaging", "AOSP Messaging" to "com.android.mms",
-        "Viber" to "com.viber.voip", "Skype" to "com.skype.raider",
-        "Gmail" to "com.google.android.gm", "Outlook" to "com.microsoft.office.outlook",
-        "K-9 Mail" to "com.fsck.k9", "Google Chat" to "com.google.android.apps.dynamite",
-        "Zoom" to "us.zoom.videomeetings", "Google Meet" to "com.google.android.apps.tachyon",
-        "Microsoft Teams" to "com.microsoft.teams",
-        // Productivity, notes, office, files
-        "Google Calendar" to "com.google.android.calendar", "Google Keep" to "com.google.android.keep",
-        "Microsoft To Do" to "com.microsoft.todos", "Todoist" to "com.todoist",
-        "TickTick" to "com.ticktick.task", "Evernote" to "com.evernote", "Notion" to "com.notion.id",
-        "Obsidian" to "md.obsidian", "Any.do" to "com.anydo",
-        "Word" to "com.microsoft.office.word", "Excel" to "com.microsoft.office.excel",
-        "PowerPoint" to "com.microsoft.office.powerpoint", "OneNote" to "com.microsoft.office.onenote",
-        "Google Drive" to "com.google.android.apps.docs",
-        "Google Docs" to "com.google.android.apps.docs.editors.docs",
-        "Google Sheets" to "com.google.android.apps.docs.editors.sheets",
-        "Google Slides" to "com.google.android.apps.docs.editors.slides",
-        "Dropbox" to "com.dropbox.android", "Adobe Reader" to "com.adobe.reader",
-        // Banking & finance
-        "PayPal" to "com.paypal.android.p2pmobile", "Google Wallet" to "com.google.android.apps.walletnfcrel",
-        "Wise" to "com.wise.android", "Revolut" to "com.revolut.revolut",
-        // Utilities & system
-        "Calculator" to "com.android.calculator2", "Google Calculator" to "com.google.android.calculator",
-        "Clock" to "com.android.deskclock", "Google Clock" to "com.google.android.deskclock",
-        "Files" to "com.android.documentsui", "Files by Google" to "com.google.android.apps.nbu.files",
-        "Contacts" to "com.android.contacts", "Google Contacts" to "com.google.android.contacts",
-        "Phone" to "com.android.dialer", "Google Phone" to "com.google.android.dialer",
-        "Google Camera" to "com.google.android.GoogleCamera", "Google Photos" to "com.google.android.apps.photos",
-        "Samsung Gallery" to "com.sec.android.gallery3d",
-        // Weather
-        "Google Weather" to "com.google.android.apps.weather", "Weather Channel" to "com.weather.Weather",
-        "Met Office" to "org.metoffice.weather.android",
-        // Audio & podcasts (no visual feed)
-        "Spotify" to "com.spotify.music", "Audible" to "com.audible.application",
-        "Google Podcasts" to "com.google.android.apps.podcasts", "Shazam" to "com.shazam.android",
-        "Deezer" to "deezer.android.app",
-        // Health & fitness
-        "Google Fit" to "com.google.android.apps.fitness", "Fitbit" to "com.fitbit.FitbitMobile",
-        "MyFitnessPal" to "com.myfitnesspal.android", "Sleep Cycle" to "com.sleepcycle.sleepanalysis",
-        // Transit, ride, food
-        "Uber" to "com.ubercab", "Uber Eats" to "com.ubercab.eats", "Deliveroo" to "com.deliveroo.orderapp",
-        "Grubhub" to "com.grubhub.android", "Zomato" to "com.application.zomato",
-        // Reading, reference, translation
-        "Play Books" to "com.google.android.apps.books", "Kindle" to "com.amazon.kindle",
-        "Kobo" to "com.kobobooks.android", "Google Translate" to "com.google.android.apps.translate",
-    )
-    val SAFE_APPS: Set<String> = SAFE_APPS_BY_NAME.values.toSet()
+    // entirely - no screenshot, scan, or log - to save battery/CPU.
+    // Data now lives in assets/filter/apps_safe.txt (edit there); loaded via FilterData.
+    val SAFE_APPS_BY_NAME: Map<String, String> get() = FilterData.map("apps_safe.txt")
+
+    val SAFE_APPS: Set<String> get() = SAFE_APPS_BY_NAME.values.toSet()
 
     // === Greylist apps (friendly name -> package) ====================================
     // Social / short-form apps that MAY contain bad stuff. Never whitelisted; defaulted
     // to the time-limited GREY tier unless the user overrides.
-    val GREYLIST_APPS_BY_NAME: Map<String, String> = linkedMapOf(
-        "TikTok" to "com.zhiliaoapp.musically", "TikTok (trill)" to "com.ss.android.ugc.trill",
-        "TikTok Lite" to "com.zhiliaoapp.musically.go",
-        "Instagram" to "com.instagram.android", "Instagram Lite" to "com.instagram.lite",
-        "Snapchat" to "com.snapchat.android", "Reddit" to "com.reddit.frontpage",
-        "X / Twitter" to "com.twitter.android", "X Lite" to "com.twitter.android.lite",
-        "Facebook" to "com.facebook.katana", "Facebook Lite" to "com.facebook.lite",
-        "Messenger" to "com.facebook.orca", "Pinterest" to "com.pinterest", "Tumblr" to "com.tumblr",
-        "Twitch" to "tv.twitch.android.app", "Discord" to "com.discord",
-        "YouTube" to "com.google.android.youtube", "LinkedIn" to "com.linkedin.android",
-        "Bluesky" to "xyz.blueskyweb.app",
-    )
-    val GREYLIST_APPS: Set<String> = GREYLIST_APPS_BY_NAME.values.toSet()
+    // Data now lives in assets/filter/apps_greylist.txt; loaded via FilterData.
+    val GREYLIST_APPS_BY_NAME: Map<String, String> get() = FilterData.map("apps_greylist.txt")
+    val GREYLIST_APPS: Set<String> get() = GREYLIST_APPS_BY_NAME.values.toSet()
 
     // === Short-form / feed patterns (the toggleable category) ========================
     // Page rules where only the feed should die; host rules where the whole thing is feed.
@@ -391,66 +275,34 @@ object AppConfig {
     // someone recognise themselves on the page; it is not a feature list.
     data class TemptationSpec(
         val id: String,
-        val title: String,
-        val subtitle: String,
-        /** "Does this sound like you?" - the bullets they read to self-identify. */
-        val covers: List<String>,
         /** BlockRules entries the "block what feeds this" switch adds/removes. */
         val blockPatterns: List<String> = emptyList(),
         /** Packages the same switch drops to the GREY tier (time-limited, not banned). */
         val greyApps: List<String> = emptyList(),
-        /** One concrete thing to do instead. One. Not a menu. */
-        val insteadOf: String,
+        // Display text (title / subtitle / covers / insteadOf) now lives in
+        // res/values/strings.xml as temptspec_<id>_* (keyed by id) so it can be translated.
+        // Resolved at display time in Main.kt (temptTitle/temptSubtitle/temptCovers/temptInsteadOf).
     )
 
     val TEMPTATIONS: List<TemptationSpec> = listOf(
         TemptationSpec(
             id = "scrolling",
-            title = "Endless Scrolling / Brain Rot  🤳",
-            subtitle = "Break the infinite feed loop.",
-            covers = listOf(
-                "TikTok, Reels, Shorts, Reddit feeds - anything that never ends",
-                "The \"just one more scroll\" loop",
-                "Passively consuming until your attention is shredded and you feel drained",
-                "Content built on constant novelty, to keep you hunting the next hit",
-                "Losing an hour without ever deciding to spend it",
-            ),
             blockPatterns = SHORT_FORM_PATTERNS,
             greyApps = listOf(
                 "com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.zhiliaoapp.musically.go",
                 "com.instagram.android", "com.reddit.frontpage", "com.snapchat.android",
             ),
-            insteadOf = "Put the phone in another room and do the one thing you were avoiding for ten minutes.",
         ),
         TemptationSpec(
             id = "binge",
-            title = "Binge Watching  📺",
-            subtitle = "Escape loops through endless viewing.",
-            covers = listOf(
-                "Netflix, YouTube, streaming, autoplay running on and on",
-                "Watching hours longer than you meant to",
-                "Using a show to escape boredom, stress, or a task you don't want to start",
-                "Autoplay and \"recommended for you\" deciding your evening for you",
-                "The gap between choosing to watch something and losing control of the night",
-            ),
             blockPatterns = listOf(
                 "netflix.com", "hulu.com", "disneyplus.com", "primevideo.com", "twitch.tv",
                 "youtube.com/feed/recommended",
             ),
             greyApps = listOf("com.netflix.mediaclient", "tv.twitch.android.app"),
-            insteadOf = "Decide the ONE episode before you start, and set a timer for when it ends.",
         ),
         TemptationSpec(
             id = "comparison",
-            title = "Social Comparison / Social Media  👥",
-            subtitle = "Break the comparison and validation loop.",
-            covers = listOf(
-                "Watching friends, influencers and peers post the highlight reel of their lives",
-                "FOMO - the sense that everyone else is somewhere better",
-                "Fishing for validation in likes, comments and views",
-                "Measuring your looks, money, job and progress against strangers",
-                "Coming away feeling behind, small, or quietly anxious",
-            ),
             blockPatterns = listOf(
                 "instagram.com", "facebook.com", "x.com", "twitter.com", "linkedin.com/feed",
             ),
@@ -458,70 +310,29 @@ object AppConfig {
                 "com.instagram.android", "com.instagram.lite", "com.facebook.katana",
                 "com.facebook.lite", "com.twitter.android", "com.pinterest",
             ),
-            insteadOf = "Message one person you actually care about, instead of watching a hundred you don't.",
         ),
         TemptationSpec(
             id = "checking",
-            title = "Phone Checking  📱",
-            subtitle = "Stop the automatic checking habit.",
-            covers = listOf(
-                "Unlocking the phone with no idea why you picked it up",
-                "Checking notifications and messages purely out of reflex",
-                "Reaching for it the second you feel bored or uncomfortable",
-                "Doing it dozens of times a day without noticing",
-                "Wanting the choice back",
-            ),
             // Nothing to block: the pull here is the device itself, not a site. The page
             // offers the 30-minute lockdown instead.
-            insteadOf = "Leave the phone face-down in another room for the next hour.",
         ),
         TemptationSpec(
             id = "news",
-            title = "News Cycles / Existential Anxiety  📰",
-            subtitle = "Step away from endless worry.",
-            covers = listOf(
-                "Refreshing the news all day for an update that never settles anything",
-                "Reading the same bad story again and again, and doing nothing with it",
-                "Drowning in politics, disasters and problems you cannot personally touch",
-                "The loop: fear, uncertainty, check, brief relief, fear again",
-                "Being informed is fine. Being consumed by it is not.",
-            ),
             blockPatterns = listOf(
                 "news.google.com", "cnn.com", "foxnews.com", "bbc.co.uk/news",
                 "theguardian.com", "dailymail.co.uk", "reddit.com/r/worldnews",
             ),
-            insteadOf = "Pick one time tomorrow to read the news once, and act on nothing else until then.",
         ),
         TemptationSpec(
             id = "gaming",
-            title = "Gaming & Reward Loops  🎮",
-            subtitle = "Understand digital reward cycles.",
-            covers = listOf(
-                "Games built around streaks, unlocks, levels and daily rewards",
-                "Chasing progress that only exists inside the game",
-                "\"One more run\" turning into three hours",
-                "Playing to dodge boredom, stress, or something you owe someone",
-                "The point where entertainment quietly became a compulsion",
-            ),
             blockPatterns = listOf("poki.com", "crazygames.com", "miniclip.com", "coolmathgames.com"),
-            insteadOf = "Name what you're avoiding by playing, and do five minutes of it.",
         ),
         TemptationSpec(
             id = "shopping",
-            title = "Impulse Shopping  💳",
-            subtitle = "Break the buying-for-a-feeling loop.",
-            covers = listOf(
-                "Amazon, Temu, discount sites, ads following you around",
-                "Buying because you're bored, stressed, or high on getting a deal",
-                "\"Limited time\" offers engineered to stop you thinking",
-                "The hit is the ordering and the parcel - not the thing itself",
-                "Wanting to spend on purpose again",
-            ),
             blockPatterns = listOf(
                 "amazon.com", "amazon.co.uk", "temu.com", "ebay.com", "aliexpress.com",
                 "shein.com", "wish.com",
             ),
-            insteadOf = "Put it in the basket and leave it there for 48 hours. Most of it dies on its own.",
         ),
     )
 
@@ -553,21 +364,9 @@ object AppConfig {
     // === Browsers ====================================================================
     // We standardise on Firefox. ALLOWED_BROWSERS stay usable; everything in
     // BLOCKED_BROWSERS is funnelled away so users land on Firefox.
-    val ALLOWED_BROWSERS: Set<String> = setOf("org.mozilla.firefox", "org.mozilla.fenix")
-    val BLOCKED_BROWSERS: Set<String> = setOf(
-        "com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary",
-        "org.mozilla.firefox_beta", "org.mozilla.fennec_fdroid", "org.mozilla.focus",
-        "org.mozilla.klar", "org.mozilla.rocket", "org.mozilla.reference.browser",
-        "io.github.forkmaintainers.iceraven", "us.spotco.fennec_dos",
-        "com.duckduckgo.mobile.android",
-        "com.microsoft.emmx", "com.opera.browser", "com.opera.browser.beta", "com.opera.mini.native",
-        "com.opera.gx", "com.opera.touch", "com.sec.android.app.sbrowser",
-        "com.sec.android.app.sbrowser.beta", "com.vivaldi.browser", "com.vivaldi.browser.snapshot",
-        "com.yandex.browser", "com.yandex.browser.beta",
-        "com.brave.browser", "com.brave.browser_beta", "com.brave.browser_nightly",
-        "com.android.browser", "com.google.android.browser",
-        "com.miui.browser", "com.mi.globalbrowser", "com.mi.globalbrowser.mini", "com.heytap.browser",
-    )
+    // Data now lives in assets/filter/browsers_allowed.txt / browsers_blocked.txt (FilterData).
+    val ALLOWED_BROWSERS: Set<String> get() = FilterData.set("browsers_allowed.txt")
+    val BLOCKED_BROWSERS: Set<String> get() = FilterData.set("browsers_blocked.txt")
 
     // === Firefox address-bar detection (Firefox-only now) ============================
     // The view-ids the URL lives in. Trimmed to Firefox since that's the one browser
@@ -703,10 +502,8 @@ object AppConfig {
     // === Lockdown / unlock-wait essentials (kept usable even while locked down) =======
     // Matched as substrings of the package name. (Related to SAFE_APPS but narrower:
     // only the bare essentials, so a lockdown still lets you call/text/navigate.)
-    val LOCKDOWN_ALLOWED_SUBSTRINGS: List<String> = listOf(
-        "launcher", "trebuchet", "dialer", "incallui", "telecom", "phone", "contacts",
-        "messaging", "mms", "deskclock", "clock", "alarm",
-    )
+    // Data now in assets/filter/apps_lockdown.txt (FilterData).
+    val LOCKDOWN_ALLOWED_SUBSTRINGS: List<String> get() = FilterData.lines("apps_lockdown.txt")
 
     // === Domain-strike escalation ====================================================
     const val DOMAIN_BLOCK_MS = 60 * 60 * 1000L   // whole-domain block length
