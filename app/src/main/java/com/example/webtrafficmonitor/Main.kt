@@ -524,6 +524,41 @@ private fun showLanguagePicker() {
     setContentWithThumb(root) { setupMainScreen() }
 }
 
+/**
+ * The in-app currency picker, sibling of the language one. Money figures default to the
+ * DEVICE REGION's currency; this is the escape hatch for anyone whose money and phone
+ * disagree (a British salary on an Italian phone). Nothing is converted - see Units.
+ */
+private fun showCurrencyPicker() {
+    inSubPage = true
+    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val root = vbox(pad)
+    root.addView(titleText(getString(R.string.settings_currency)))
+    root.addView(TextView(this).apply {
+        text = getString(R.string.settings_currency_subtitle)
+        textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val current = Units.currencyOverride(this)
+    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
+    })
+    Units.SUPPORTED_CURRENCIES.forEach { code ->
+        val name =
+            if (code.isBlank()) getString(R.string.currency_device_default, Units.currencyCode(this))
+            else getString(R.string.currency_row, Units.currencySymbol(this, code), Units.currencyName(this, code))
+        list.addView(Button(this).apply {
+            text = if (code == current) "✓  $name" else name
+            setOnClickListener {
+                Units.setCurrencyOverride(this@MainActivity, code)
+                Toast.makeText(this@MainActivity, getString(R.string.currency_changed), Toast.LENGTH_SHORT).show()
+                recreate()   // every money figure on every screen is re-rendered
+            }
+        })
+    }
+    setContentWithThumb(root) { setupMainScreen() }
+}
+
 // ── Statistics ─────────────────────────────────────────────────────────────
 // Localized short weekday names, Mon..Sun order (shortWeekdays is 1=Sun..7=Sat). Used as chart
 // labels AND matched against dowName(ts) below, so both derive from the SAME locale.
@@ -583,7 +618,9 @@ private fun showAboutYou() {
     setContentWithThumb(root) { aboutYouBack() }
 
     c.addView(TextView(this).apply {
-        text = getString(R.string.about_intro, AboutYou.DEFAULT_HOURLY_GBP * AboutYou.HOURS_PER_YEAR / 1000, AboutYou.DEFAULT_HOURLY_GBP)
+        text = getString(R.string.about_intro,
+            Units.money(this@MainActivity, AboutYou.DEFAULT_HOURLY * AboutYou.HOURS_PER_YEAR),
+            Units.money(this@MainActivity, AboutYou.DEFAULT_HOURLY))
         textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (16 * dp).toInt())
     })
@@ -600,7 +637,7 @@ private fun showAboutYou() {
         c.addView(EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             setText(get().takeIf { it > 0 }?.toString().orEmpty())
-            hint = getString(R.string.about_per_year)
+            hint = getString(R.string.about_per_year, Units.symbol(this@MainActivity))
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) {
                     set(s?.toString()?.toIntOrNull() ?: 0)
@@ -612,14 +649,16 @@ private fun showAboutYou() {
     }
 
     moneyRow(getString(R.string.about_earn_label),
-        getString(R.string.about_earn_sub, AboutYou.HOURS_PER_YEAR),
+        getString(R.string.about_earn_sub, AboutYou.HOURS_PER_YEAR,
+            Units.money(this, AboutYou.EXAMPLE_HOURLY),
+            Units.money(this, AboutYou.EXAMPLE_HOURLY * AboutYou.HOURS_PER_YEAR / 1000 * 1000)),
         { AboutYou.annualWage(this) }, { AboutYou.setAnnualWage(this, it) })
     moneyRow(getString(R.string.about_side_label),
         getString(R.string.about_side_sub),
         { AboutYou.annualSide(this) }, { AboutYou.setAnnualSide(this, it) })
 
     c.addView(TextView(this).apply {
-        text = getString(R.string.about_whyask)
+        text = getString(R.string.about_whyask, Units.money(this@MainActivity, AboutYou.EXAMPLE_WHYASK_ANNUAL))
         textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
     })
@@ -1234,7 +1273,7 @@ private fun showProgress() {
     })
 
     c.addView(sectionTitle(getString(R.string.stats_sec_reclaimed)))
-    c.addView(statBigCard("${s.reclaimedHours}h", getString(R.string.stats_prog_reclaimed_label),
+    c.addView(statBigCard(Units.hours(this, s.reclaimedHours), getString(R.string.stats_prog_reclaimed_label),
         getString(R.string.stats_prog_reclaimed_sub, Progress.EST_MIN_PER_WIN), teal))
 
     c.addView(sectionTitle(getString(R.string.stats_sec_heading_right)))
@@ -1247,16 +1286,16 @@ private fun showProgress() {
 
     c.addView(sectionTitle(getString(R.string.stats_sec_pace)))
     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-    val cardH = statBigCard("~${s.projYearHours}h", getString(R.string.stats_prog_per_year), null, teal).apply {
+    val cardH = statBigCard("~" + Units.hours(this, s.projYearHours), getString(R.string.stats_prog_per_year), null, teal).apply {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = (4 * dp).toInt() }
     }
-    val cardM = statBigCard("~\u00a3${s.projYearGbp}", getString(R.string.stats_prog_per_year), null, green).apply {
+    val cardM = statBigCard("~" + Units.money(this, s.projYearMoney), getString(R.string.stats_prog_per_year), null, green).apply {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = (4 * dp).toInt() }
     }
     row.addView(cardH); row.addView(cardM)
     c.addView(row)
     c.addView(TextView(this).apply {
-        text = getString(R.string.stats_prog_projected, Progress.VALUE_PER_HOUR_GBP)
+        text = getString(R.string.stats_prog_projected, Units.money(this@MainActivity, Progress.VALUE_PER_HOUR))
         textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
     })
 
@@ -2259,7 +2298,7 @@ private fun setupHomeScreen() {
         if (trendScores[i].isNaN()) 0xFF9AA0A6.toInt()
         else DopamineTuning.bandColour(Math.round(trendScores[i]))
     }
-    val trendChart = StatLineChartView(this, trendScores, trendLabels, unit = "",
+    val trendChart = StatLineChartView(this, trendScores, trendLabels, hoursUnit = false,
         gridStep = 25f, segmentColours = trendColours)
     val trendInfo = scrubLabel()
     trendChart.onScrub = { i ->
@@ -2282,7 +2321,7 @@ private fun setupHomeScreen() {
 
     // ── 2. Usage, strava-style. Metric: screen-on time. EVERY chart falls back to
     //    labelled EXAMPLE data whenever its real data is missing OR too thin to mean
-    //    anything - and examples always use the real £ rate and goal, because the same
+    //    anything - and examples always use the real money rate and goal, because the same
     //    graphs get the real arrays later.
     val history90 = DopamineLog.history(this, 90)
     fun hoursOf(day: DopamineDay): Float =
@@ -2305,7 +2344,7 @@ private fun setupHomeScreen() {
         weekVals, weekLabels,
         stats = listOf(
             fmtHours(weekTotal) to getString(R.string.home_time_wasted),
-            "£${Math.round(weekTotal * rate)}" to getString(R.string.home_money_wasted),
+            Units.money(this, Math.round(weekTotal * rate)) to getString(R.string.home_money_wasted),
         ),
         goal = goalHours, gridStep = 1f, minorStep = 0.5f,
         legendMain = getString(R.string.home_legend_week),
@@ -2315,10 +2354,10 @@ private fun setupHomeScreen() {
             when {
                 d == null -> ""
                 !weekIsReal -> readoutText("${niceDate(d.date)} · ",
-                    "${fmtHours(v)} (£${Math.round(v * rate)})", "\n[Example data]", teal)
+                    hoursAndMoney(v, rate), "\n[Example data]", teal)
                 v.isNaN() -> readoutText("${niceDate(d.date)} · ", "no data", "", 0xFF9AA0A6.toInt())
                 else -> readoutText("${niceDate(d.date)} · ",
-                    "${fmtHours(v)} (£${Math.round(v * rate)})", "", teal)
+                    hoursAndMoney(v, rate), "", teal)
             }
         },
     ))
@@ -2345,7 +2384,7 @@ private fun setupHomeScreen() {
             val v = monthly.getOrNull(i)
             if (v != null) monthInfo.text = readoutText(
                 "${monthLabels.getOrNull(i) ?: ""} · ",
-                "${fmtHours(v)} (£${Math.round(v * rate)})",
+                hoursAndMoney(v, rate),
                 if (hasUsage) "" else getString(R.string.home_example_data), teal)
         }
         content.addView(monthChart,
@@ -2392,8 +2431,8 @@ private fun setupHomeScreen() {
     content.addView(chartStatCard(
         soFar, yearLabels,
         stats = listOf(
-            "${Math.round(yearHours)}h" to getString(R.string.home_this_year),
-            "£${Math.round(yearHours * rate)}" to getString(R.string.home_of_your_time),
+            Units.hours(this, Math.round(yearHours)) to getString(R.string.home_this_year),
+            Units.money(this, Math.round(yearHours * rate)) to getString(R.string.home_of_your_time),
             "${Math.round(yearHours / 3f)}" to getString(R.string.home_evenings),
         ),
         dotted = toCome, goalPerSlot = goalHours,
@@ -2403,7 +2442,7 @@ private fun setupHomeScreen() {
         pointInfo = { i, v, projected ->
             val date = niceDoyFmt.format(Date(yearStartMs + i * 24L * 60 * 60 * 1000))
             readoutText(getString(R.string.home_readout_by, date),
-                "${Math.round(v)}h (£${Math.round(v * rate)})",
+                hoursAndMoney(v, rate, whole = true),
                 (if (projected) getString(R.string.home_projected) else "") + (if (yearIsReal) "" else getString(R.string.home_example_data)),
                 if (projected) 0xFF9AA0A6.toInt() else teal)
         },
@@ -2446,10 +2485,15 @@ private fun setupHomeScreen() {
     setContentNoThumb(withBottomBar(root, 0))   // the landing screen - nothing behind it
 }
 
-private fun fmtHours(h: Float): String {
-    val m = Math.round(h * 60)
-    return if (m % 60 == 0) "${m / 60}h" else "${m / 60}h ${m % 60}m"
-}
+private fun fmtHours(h: Float): String = Units.fromHours(this, h)
+
+/** "1h 20m (£16)" - the paired time+money readout under every usage chart. Both halves
+ *  are localised (see Units); [whole] rounds to entire hours, for the year-long chart where
+ *  the minutes are noise. */
+private fun hoursAndMoney(hours: Float, rate: Int, whole: Boolean = false): String =
+    getString(R.string.readout_time_money,
+        if (whole) Units.hours(this, Math.round(hours)) else fmtHours(hours),
+        Units.money(this, Math.round(hours * rate)))
 
 /** The amber "this is fake data" tag under example charts. */
 private fun exampleTag(msg: String? = null) =
@@ -2625,12 +2669,12 @@ private fun showScrollCost() {
     val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
     val s = Progress.snapshot(this)
     if (s.hasData) {
-        content.addView(statBigCard("${s.reclaimedHours}h", getString(R.string.stats_prog_reclaimed_label),
+        content.addView(statBigCard(Units.hours(this, s.reclaimedHours), getString(R.string.stats_prog_reclaimed_label),
             getString(R.string.scroll_reclaimed_sub, Progress.EST_MIN_PER_WIN), teal))
         content.addView(statBigCard("${s.consistency}%", getString(R.string.stats_prog_consistency),
             getString(R.string.scroll_consistency_sub, s.cleanDays, s.trackedDays), green))
     } else {
-        content.addView(statBigCard("0h", getString(R.string.stats_prog_reclaimed_label),
+        content.addView(statBigCard(Units.hours(this, 0), getString(R.string.stats_prog_reclaimed_label),
             getString(R.string.scroll_reclaimed_empty_sub), teal))
     }
 
@@ -2679,13 +2723,14 @@ private fun showScrollCost() {
         val perYearHours = min * 365.0 / 60.0
         val wakingDaysYr = (perYearHours / Usage.WAKING_HOURS)
         val rate = AboutYou.effectiveHourly(this)
-        val gbpYr = Math.round(perYearHours * rate)
+        val moneyYr = Math.round(perYearHours * rate)
         val totalWakingYears = perYearHours * yrs / Usage.WAKING_HOURS / 365.0
-        val gbpTotal = gbpYr * yrs
+        val moneyTotal = moneyYr * yrs
         donut.setFraction((min / (Usage.WAKING_HOURS * 60f)))
         bigStat.text = getString(R.string.scroll_waking_days, Math.round(wakingDaysYr).toInt())
-        subStat.text = getString(R.string.scroll_per_year_value, gbpYr.toInt())
-        lifeStat.text = getString(R.string.scroll_over_years, yrs, if (yrs == 1) "" else "s", String.format("%.1f", totalWakingYears), gbpTotal)
+        subStat.text = getString(R.string.scroll_per_year_value, Units.money(this, moneyYr))
+        lifeStat.text = getString(R.string.scroll_over_years, yrs, if (yrs == 1) "" else "s",
+            Units.decimal1(this, totalWakingYears.toFloat()), Units.money(this, moneyTotal))
         minLabel.text = getString(R.string.scroll_min_per_day, min)
         yearLabel.text = getString(R.string.scroll_looking_ahead, yrs, if (yrs == 1) "" else "s")
 
@@ -2696,7 +2741,7 @@ private fun showScrollCost() {
         otherStat.text = getString(R.string.scroll_that_year, gymSessions.toInt(), eveningsWithPeople.toInt(), booksRead.toInt())
 
         aboutYouLink.text = if (AboutYou.hasData(this))
-            getString(R.string.scroll_valued, AboutYou.effectiveAnnual(this))
+            getString(R.string.scroll_valued, Units.money(this, AboutYou.effectiveAnnual(this)))
         else
             getString(R.string.scroll_add_rate)
     }
@@ -2753,7 +2798,7 @@ private fun showProductivity() {
 
     // The cost projector + reclaimed stats used to live on the landing page; they moved
     // here so the landing page can stay graphs-only.
-    content.addView(homeCard(getString(R.string.prod_scroll_cost_title), getString(R.string.prod_scroll_cost_sub)) { showScrollCost() })
+    content.addView(homeCard(getString(R.string.prod_scroll_cost_title), getString(R.string.prod_scroll_cost_sub, Units.symbol(this))) { showScrollCost() })
 
     // ── This week, reclaimed: the same cumulative card as the home page's year chart,
     //    but green and pointing the right way - solid line Mon→today, grey dotted
@@ -2784,7 +2829,7 @@ private fun showProductivity() {
             soFar, weekDays,
             stats = listOf(
                 fmtHours(soFar.last()) to getString(R.string.stats_prog_reclaimed_label),
-                "£${Math.round(soFar.last() * rate)}" to getString(R.string.prod_value_reclaimed),
+                Units.money(this, Math.round(soFar.last() * rate)) to getString(R.string.prod_value_reclaimed),
                 fmtHours(weekProj) to getString(R.string.prod_by_sunday),
             ),
             accent = 0xFF2E7D32.toInt(),
@@ -2793,7 +2838,7 @@ private fun showProductivity() {
             exampleMsg = if (hasWins) null else getString(R.string.prod_week_example),
             pointInfo = { i, v, projected ->
                 readoutText("${weekDays.getOrNull(i) ?: ""} · ",
-                    "${fmtHours(v)} (£${Math.round(v * rate)})",
+                    hoursAndMoney(v, rate),
                     (if (projected) getString(R.string.home_projected) else "") + (if (hasWins) "" else getString(R.string.home_example_data)),
                     if (projected) 0xFF9AA0A6.toInt() else 0xFF2E7D32.toInt())
             },
@@ -3214,7 +3259,7 @@ private fun showProtocol() {
         getString(R.string.proto_holiday_sub),
         holidayDone) { showProtocolHoliday() })
     val sevenSub = when {
-        strictActive -> getString(R.string.proto_seven_active, Mode.daysLeft(this))
+        strictActive -> getString(R.string.proto_seven_active, Mode.timeLeft(this))
         sevenStarted -> getString(R.string.proto_seven_completed)
         !holidayDone -> getString(R.string.proto_seven_needholiday)
         else -> getString(R.string.proto_seven_ready)
@@ -3602,7 +3647,7 @@ private fun showProtocol7Day() {
     root.addView(body(getString(R.string.proto_7day_intro)))
     if (Mode.isLocked(this)) {
         root.addView(TextView(this).apply {
-            text = getString(R.string.proto_seven_active, Mode.daysLeft(this@MainActivity))
+            text = getString(R.string.proto_seven_active, Mode.timeLeft(this@MainActivity))
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
             setPadding(0, (12 * dp).toInt(), 0, 0)
         })
@@ -3928,7 +3973,7 @@ private fun showModeRules() {
 
     if (Mode.isLocked(this)) {
         list.addView(TextView(this).apply {
-            text = getString(R.string.moderules_lock, Mode.daysLeft(this@MainActivity))
+            text = getString(R.string.moderules_lock, Mode.timeLeft(this@MainActivity))
             textSize = 13f; setTextColor(0xFFB1541F.toInt()); setTypeface(typeface, Typeface.BOLD)
             setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
         })
@@ -5385,8 +5430,8 @@ private fun refreshModeUi() {
     spinnerMode.isEnabled = !locked
     val btn = findViewById<Button>(R.id.btn_strict_week)
     btn.isEnabled = true
-    btn.text = if (locked) "Break the addiction protocol  \u00b7  strict ${Mode.daysLeft(this)}d left"
-               else "Break the addiction protocol"
+    btn.text = if (locked) getString(R.string.proto_break_locked, Mode.timeLeft(this))
+               else getString(R.string.report_protocol)
 }
 
 private fun startWeekStrict() {
@@ -5774,6 +5819,7 @@ private fun startWeekStrict() {
         })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         content.addView(homeCard(getString(R.string.settings_language), getString(R.string.settings_language_subtitle)) { showLanguagePicker() })
+        content.addView(homeCard(getString(R.string.settings_currency), getString(R.string.settings_currency_subtitle)) { showCurrencyPicker() })
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
         content.addView(homeCard("Grayscale setup", "Turn on the strict-mode grayscale filter.") { showGreyscaleSetup() })
         content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
@@ -6886,7 +6932,7 @@ private fun startWeekStrict() {
         val spec = AppConfig.MODES.firstOrNull { it.id == modeId }
         header("Mode")
         row("Current mode", spec?.displayName ?: modeId)
-        row("Week-long strict lock", if (Mode.isLocked(this)) "locked - ${Mode.daysLeft(this)}" else "off", Mode.isLocked(this))
+        row("Week-long strict lock", if (Mode.isLocked(this)) "locked - ${Mode.timeLeft(this)}" else "off", Mode.isLocked(this))
         row("Breathing pause", if (spec?.breathingOn == true) "on" else "off", spec?.breathingOn == true)
         row("Page flag threshold", "${spec?.flagThreshold ?: "-"} (score \u2265 this is flagged)")
         row("Flag when lying down", if (spec?.flagLyingDown == true) "on" else "off", spec?.flagLyingDown == true)
@@ -6933,7 +6979,7 @@ private fun startWeekStrict() {
 
     private fun minLeft(ms: Long): String {
         val m = ms / 60000; val s = (ms / 1000) % 60
-        return if (m > 0) "${m}m" else "${s}s"
+        return if (m > 0) Units.mins(this, m) else Units.secs(this, s)
     }
 
     private fun setDot(view: TextView, label: String, on: Boolean) {
@@ -7135,7 +7181,7 @@ private fun startWeekStrict() {
         if (Lockdown.isActive(this)) timers.add(getString(R.string.status_lockdown, minLeft(Lockdown.remaining(this))))
         if (LoosenWindow.isActive(this)) timers.add(getString(R.string.status_unlock_window, minLeft(LoosenWindow.remaining(this))))
         if (LoosenWait.isActive(this)) timers.add(getString(R.string.status_unlock_wait, minLeft(LoosenWait.remaining(this))))
-        if (Mode.isLocked(this)) timers.add(getString(R.string.status_week_strict, Mode.daysLeft(this)))
+        if (Mode.isLocked(this)) timers.add(getString(R.string.status_week_strict, Mode.timeLeft(this)))
         if (timers.isNotEmpty()) box.addView(TextView(this).apply {
             text = timers.joinToString("\n"); textSize = 13f; setTextColor(0xFF7B848C.toInt())
             setPadding(0, (8 * dp).toInt(), 0, 0)

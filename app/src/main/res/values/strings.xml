@@ -28,6 +28,28 @@
     <string name="language_system_default">System default</string>
     <string name="language_changed">Language updated</string>
 
+    <!-- ── Currency picker ─────────────────────────────────────────────────────────── -->
+    <string name="settings_currency">Currency</string>
+    <string name="settings_currency_subtitle">The currency your money figures are shown in (defaults to your device\'s region). Amounts are never converted — this only changes how they are written.</string>
+    <string name="currency_device_default">Device default (%1$s)</string>
+    <string name="currency_changed">Currency updated</string>
+    <string name="currency_row">%1$s  ·  %2$s</string>
+
+    <!-- ── Units ───────────────────────────────────────────────────────────────────────
+         Short time suffixes, used everywhere a duration is shown (stats, graph axes,
+         countdowns). Translators: keep the placeholders and the order; change only the
+         letters and spacing to whatever is normal in your language (Italian, e.g., writes
+         "1 h 20 min"). Keep them SHORT — several of these land on a narrow chart axis.
+    -->
+    <string name="unit_h">%1$sh</string>
+    <string name="unit_m">%1$sm</string>
+    <string name="unit_s">%1$ss</string>
+    <string name="unit_h_m">%1$sh %2$sm</string>
+    <string name="unit_d_h">%1$sd %2$sh</string>
+    <!-- A chart readout pairing a duration with what it cost: "1h 20m (£16)". -->
+    <string name="readout_time_money">%1$s (%2$s)</string>
+    <string name="unit_under_1h">&lt;1h</string>
+
     <string name="accessibility_label">Web Traffic Monitor — page monitoring</string>
     <string name="accessibility_description">Lets the app read the current website/app and on-screen text so it can record the pages you view, for accountability.</string>
 
@@ -157,6 +179,7 @@
 
     <!-- ── Report screen (Main.kt) ───────────────────────────────────────────────────── -->
     <string name="report_protocol">Break the addiction protocol</string>
+    <string name="proto_break_locked">Break the addiction protocol  \u00b7  strict %1$s left</string>
     <string name="report_pane_appsite">Report an app/site</string>
     <string name="report_pane_temptation">I feel temptation</string>
     <string name="report_pane_relapse">Report relapse</string>
@@ -190,7 +213,7 @@
     <string name="moderules_always_sub">Even in Relaxed. Off is the one exception - see its card below.</string>
     <string name="moderules_section_modes">THE MODES - WHAT CHANGES</string>
     <string name="moderules_current">You are in this mode right now</string>
-    <string name="moderules_lock">Strict lock is running: %1$s. You cannot go back to Relaxed until it ends. You can still go up to Super hardcore.</string>
+    <string name="moderules_lock">Strict lock is running: %1$s left. You cannot go back to Relaxed until it ends. You can still go up to Super hardcore.</string>
     <string name="moderules_watched">\"Watched apps\" are the ones that get the breathing pause: %1$s.</string>
 
     <!-- Always-on rules (shown in every mode). 8/9/10 take a numeric arg. -->
@@ -325,7 +348,7 @@
     <string name="stats_prog_weekly">urges ridden out per week (last 8 weeks)</string>
     <string name="stats_sec_pace">If you keep this pace</string>
     <string name="stats_prog_per_year">per year</string>
-    <string name="stats_prog_projected">projected from your recent pace · reclaimed time valued at ~£%1$d/hr</string>
+    <string name="stats_prog_projected">projected from your recent pace · reclaimed time valued at ~%1$s/hr</string>
     <string name="stats_sec_milestones">Milestones</string>
     <string name="stats_prog_no_milestones">None yet - they\'re coming.</string>
     <string name="stats_prog_milestone_item">🏅  %1$s</string>
@@ -346,13 +369,13 @@
 
     <!-- ── About you / About &amp; privacy (Main.kt) ─────────────────────────────────────── -->
     <string name="about_you_title">About you</string>
-    <string name="about_intro">Optional. We use this only to estimate what the lost time is actually costing you — nothing here leaves your phone, and nothing here is shared.\n\nLeave it blank and we\'ll assume £%1$dk a year (£%2$d/hr). Everything on the home page updates the moment you type.</string>
-    <string name="about_per_year">£ per year</string>
+    <string name="about_intro">Optional. We use this only to estimate what the lost time is actually costing you — nothing here leaves your phone, and nothing here is shared.\n\nLeave it blank and we\'ll assume %1$s a year (%2$s/hr). Everything on the home page updates the moment you type.</string>
+    <string name="about_per_year">%1$s per year</string>
     <string name="about_earn_label">What you earn a year</string>
-    <string name="about_earn_sub">Your day job, after tax if you like. Only know your hourly rate? About %1$d working hours make a year - £15/hr ≈ £29,000.</string>
+    <string name="about_earn_sub">Your day job, after tax if you like. Only know your hourly rate? About %1$d working hours make a year - %2$s/hr ≈ %3$s.</string>
     <string name="about_side_label">Side income a year (optional)</string>
     <string name="about_side_sub">A business you\'re building, freelance work. Don\'t know? LEAVE IT BLANK - a guess here just skews your numbers. If it\'s higher than your wage, we use it.</string>
-    <string name="about_whyask">\nWhy we ask: \"3 hours a day\" is abstract and easy to shrug off. \"£13,000 a year\" is not.</string>
+    <string name="about_whyask">\nWhy we ask: \"3 hours a day\" is abstract and easy to shrug off. \"%1$s a year\" is not.</string>
 
     <!-- ── Relapse report flow (Main.kt) ─────────────────────────────────────────────── -->
     <string name="relapse_device_q">Where did it happen?</string>
@@ -738,18 +761,18 @@
     <string name="scroll_reclaimed_empty_sub">ride out your first urge and your reclaimed time starts here</string>
     <string name="scroll_projector">The projector</string>
     <string name="scroll_waking_days">%1$d waking days a year</string>
-    <string name="scroll_per_year_value">≈ £%1$d a year of your time</string>
-    <string name="scroll_over_years">Over %1$d year%2$s: about %3$s years of waking life - and £%4$d</string>
+    <string name="scroll_per_year_value">≈ %1$s a year of your time</string>
+    <string name="scroll_over_years">Over %1$d year%2$s: about %3$s years of waking life - and %4$s</string>
     <string name="scroll_min_per_day">%1$d minutes a day on short video &amp; feeds</string>
     <string name="scroll_looking_ahead">Looking %1$d year%2$s ahead</string>
     <string name="scroll_that_year">That same year is also:\n%1$d hours of training  ·  %2$d evenings with people  ·  about %3$d books</string>
-    <string name="scroll_valued">Valued at £%1$d/yr, from your numbers  ·  change</string>
+    <string name="scroll_valued">Valued at %1$s/yr, from your numbers  ·  change</string>
     <string name="scroll_add_rate">Add your hourly rate to see what it\'s really costing you  ›</string>
     <string name="prod_block_sf">Block reels, shorts &amp; feeds</string>
     <string name="prod_sf_on">On - the endless feeds are blocked.</string>
     <string name="prod_sf_off">Off - tap to cut the doomscroll.</string>
     <string name="prod_scroll_cost_title">What the scroll costs</string>
-    <string name="prod_scroll_cost_sub">The projector: minutes per day → years and £ - plus what you\'ve reclaimed.</string>
+    <string name="prod_scroll_cost_sub">The projector: minutes per day → years and %1$s - plus what you\'ve reclaimed.</string>
     <string name="prod_week_reclaimed">This week - reclaimed</string>
     <string name="prod_value_reclaimed">value reclaimed</string>
     <string name="prod_by_sunday">by Sunday</string>
@@ -789,7 +812,7 @@
     <string name="proto_theme_sub">Make the phone feel like a different, less familiar device.</string>
     <string name="proto_holiday_title">Go on holiday - without your device</string>
     <string name="proto_holiday_sub">Step right out of the environment the habit lives in. The single biggest reset.</string>
-    <string name="proto_seven_active">Active - %1$d days left.</string>
+    <string name="proto_seven_active">Active - %1$s left.</string>
     <string name="proto_seven_completed">Completed. You can run it again any time.</string>
     <string name="proto_seven_needholiday">Do the holiday first - it\'s what protects the fresh start.</string>
     <string name="proto_seven_ready">Lock yourself out for 7 days straight, right after the holiday.</string>
@@ -944,7 +967,7 @@
     <string name="status_lockdown">App lockdown - %1$s left</string>
     <string name="status_unlock_window">Unlock window - %1$s left</string>
     <string name="status_unlock_wait">Unlock wait - %1$s left</string>
-    <string name="status_week_strict">Week-long strict - %1$s</string>
+    <string name="status_week_strict">Week-long strict - %1$s left</string>
     <string name="sensors_console_header">CONNECTED SENSORS</string>
     <string name="sensors_none">No sensors connected\nTap here to set up room sensors.</string>
     <string name="sensors_no_rooms">No rooms yet\nTap here to add your first room.</string>

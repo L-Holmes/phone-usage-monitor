@@ -173,15 +173,18 @@ object Mode {
     fun lockRemaining(ctx: Context): Long =
         (prefs(ctx).getLong(KEY_LOCK_UNTIL, 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
 
-    /** A short "3d 4h left" style label for the lock. */
-    fun daysLeft(ctx: Context): String {
+    /**
+     * A short "3d 4h" / "4h" / "<1h" countdown for the lock, in the app's language (Units).
+     * The DURATION only - every caller's string supplies its own "left"/"remaining" wording.
+     */
+    fun timeLeft(ctx: Context): String {
         val hours = lockRemaining(ctx) / (60 * 60 * 1000)
         val d = hours / 24
         val h = hours % 24
         return when {
-            d > 0 -> "${d}d ${h}h left"
-            h > 0 -> "${h}h left"
-            else -> "<1h left"
+            d > 0 -> Units.daysHours(ctx, d, h)
+            h > 0 -> Units.hours(ctx, h)
+            else -> ctx.getString(R.string.unit_under_1h)
         }
     }
 
@@ -531,14 +534,16 @@ object Progress {
     private const val KEY_BEST = "best_clean30"
     private const val WINDOW = 30
     const val EST_MIN_PER_WIN = 25          // est. minutes reclaimed per urge ridden out
-    const val VALUE_PER_HOUR_GBP = 12       // assumed value of reclaimed time, for the £ projection
+    // Assumed value of reclaimed time, for the money projection. A bare number in the
+    // user's OWN currency (see Units) - never converted, so it means 12 of whatever they use.
+    const val VALUE_PER_HOUR = 12
 
     data class Snapshot(
         val hasData: Boolean,
         val trackedDays: Int, val cleanDays: Int, val slipDays: Int, val consistency: Int,
         val forgivingRun: Int, val bestClean: Int,
         val totalWins: Int, val reclaimedHours: Int,
-        val projYearHours: Int, val projYearGbp: Int,
+        val projYearHours: Int, val projYearMoney: Int,
         val weeklyWins: FloatArray,
         val milestones: List<String>, val nextMilestone: String?,
     )
@@ -584,7 +589,7 @@ object Progress {
         val weeklyRate = if (trackedDays > 0) winsInWindow * 7.0 / trackedDays else 0.0
         val reclaimedHours = (totalWins * EST_MIN_PER_WIN) / 60
         val projYearHours = Math.round(weeklyRate * 52 * EST_MIN_PER_WIN / 60.0).toInt()
-        val projYearGbp = projYearHours * VALUE_PER_HOUR_GBP
+        val projYearMoney = projYearHours * VALUE_PER_HOUR
 
         val weeks = FloatArray(8)
         for (ts in winTs) {
@@ -615,7 +620,7 @@ object Progress {
         }
 
         return Snapshot(true, trackedDays, cleanDays, slipDaysInWindow, consistency, run, best,
-            totalWins, reclaimedHours, projYearHours, projYearGbp, weeks, ms, next)
+            totalWins, reclaimedHours, projYearHours, projYearMoney, weeks, ms, next)
     }
 
     private fun readSlips(c: Context) =
@@ -638,7 +643,7 @@ object Usage {
     private const val YEARS = "years"
     const val WAKING_HOURS = 16
     const val LIFE_EXPECTANCY = 80
-    const val VALUE_PER_HOUR_GBP = 12
+    const val VALUE_PER_HOUR = 12
     fun minutes(c: Context) = prefs(c).getInt(MIN, 75)
     fun setMinutes(c: Context, v: Int) = prefs(c).edit().putInt(MIN, v).apply()
     fun age(c: Context) = prefs(c).getInt(AGE, 30)

@@ -2,27 +2,15 @@
 
 
 
-----
-
-Also can we not convert the pounds to a different currency? like euros or USD etc?
 
 
 
-
-
-
-
-
-don't show the 'you're not protected yet' warning on the adult content page, until the mode is not off (i.e. relaxed or strict etc.) and also until the user has enabled both of the other monitroing permissions (you know the ones they get asked for when they first change off of adult monitoring 'off'..
 
 -------------
 
 - second page unclear
 - light and maybe angle blocking too harsh.
 - --> do we always allow say just a Google search not no websites (regardless of light and angle?)
-
----------------------------------
-
 
 ------------------------------
 

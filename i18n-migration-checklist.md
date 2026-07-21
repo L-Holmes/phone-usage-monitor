@@ -157,6 +157,25 @@ screen at a time** — never the whole file at once.
 - 2026-07-20 · i18n batch 19: RelapseLog.analyze generated feedback → resources (Context threaded through; `relapse_fb_*`/`relapse_enc_*`/`relapse_days`). Scanned all other .kt files: NONE build UI (0 sites). ALL non-Main files now DONE/N/A. Remaining: dev screens (English by design) + deferred config-data lists only.
 - 2026-07-20 · data-files: GenderedTerms → words/en/gendered_*.txt (FilterData). ALL filter word lists now in files. Unit tests pass. Filter data-file extraction COMPLETE.
 - 2026-07-20 · batch 25 (cleanup): night-guard/lockdown substrings → assets/filter/ (getters); removed dead DEFAULT_ROOMS; SHORT_FORM_PATTERNS/SEARCH_ENGINES left in code (rationale). compiles + validates + tests pass. ALL actionable remaining items closed.
+- 2026-07-21 · batch 28 (UNITS — money + durations): the numbers next to the strings are now
+  localized too, via a new `Units.kt`.
+  MONEY: no more hardcoded "£" anywhere. Currency = the DEVICE REGION's (read from
+  `Resources.getSystem()`, NOT `Locale.getDefault()` — the per-app language override rewrites that
+  to a bare "it" with no country, which loses the region and throws in `Currency.getInstance`),
+  overridable in Settings → Currency (sibling of the language picker). Amounts are NEVER converted:
+  they are the user's own salary, so only the WRITING changes (symbol side + separators follow the
+  app language: "£13,000" vs "13.000 £"). `*_GBP` constants renamed (`DEFAULT_HOURLY`,
+  `VALUE_PER_HOUR`, `Snapshot.projYearMoney`); the 9 strings with a baked-in £ now take a `%s`.
+  DURATIONS: "h"/"m"/"s"/"d" suffixes moved to `unit_h`/`unit_m`/`unit_s`/`unit_h_m`/`unit_d_h`
+  (+ `unit_under_1h`), so Italian reads "1 h 20 min" / "3 g 4 h". Covers `fmtHours`,
+  `DopamineScore.fmtDuration(ctx, …)`, `minLeft`, the stat cards, and the chart y-axis
+  (`StatLineChartView.unit: String` → `hoursUnit: Boolean`). Numbers/decimals/percent go through
+  `NumberFormat`/`String.format(locale)` so grouping and the decimal mark follow the language.
+  FIXED EN ROUTE: `proto_seven_active` was `%1$d` but passed a String (guaranteed
+  `IllegalFormatConversionException`), and the strict-week button rendered "3d 4h leftd left" from
+  hardcoded English. `Mode.daysLeft` → `Mode.timeLeft`, returning the duration only; the "left"
+  wording now lives in each caller's string. compiles + checkTranslations (values-it 99%, no
+  drift) + assembleDebug + unit tests pass.
 - 2026-07-21 · batch 27 (FULL Italian + missed strings): user reported most pages showed English.
   TWO causes fixed: (1) values-it was only 19% — now FULLY translated (781 keys, 99%; only app_name
   = brand falls back) + ALL 31 string-arrays. (2) A batch of strings were never extracted: home
@@ -169,8 +188,8 @@ screen at a time** — never the whole file at once.
 - 2026-07-20 · batch 26 (PRODUCTION + Italian): checkTranslations now FAILS on drift (extra keys) but WARNS on missing (coverage %) — the rational multi-market policy (translations lag code; Android falls back to English). Added `resourceConfigurations=[en,it]` (bundle carries only shipped langs). Added Italian: values-it/strings.xml (partial, 135/684 = 19%, real coherent chunk — first-run/main flows/block reasons/modes), words/it/ filter files (core/support/mixed/medical/exceptions), locales_config + LocaleHelper (Italiano). processDebugResources OK; build passes (partial locale ships fine, falls back). TRANSLATING.md updated with the Play multi-market rationale.
 - 2026-07-20 · batch 24: SimpleDateFormat/axis-label pass — DOW_ORDER/cal/monthNames/weekDays now from DateFormatSymbols(Locale.getDefault()) (DOW_ORDER + dowName + cal derive from the SAME locale so matching holds); display date formatters (weekdayFmt/niceDateFmt/niceDoyFmt) → Locale.getDefault(); numeric/storage formats stay Locale.US. compiles + validates.
   · LEFT BY DESIGN: HOUR_LABELS ("12a/6a/…") compact English am/p markers — minor, low value.
-  · Currency £ NOT localized: the amounts are actual GBP (VALUE_PER_HOUR_GBP, "£13,000/year"),
-    so £ is correct regardless of UI language — localizing the symbol would misrepresent the currency.
+  · Currency £ NOT localized in this batch — SUPERSEDED by batch 28 (see the top of this list),
+    which localizes it properly via Units.kt (device region + override, no fx conversion).
 - 2026-07-20 · i18n batch 23: FeelingFaceView key/label split (stable values + localized displayLabels; feel_neg/feel_pos) + Views.kt chart annotations (chart_*). compiles + validates. Picker-data now fully done bar DEFAULT_ROOMS (dev).
 - 2026-07-20 · i18n batch 22: PICKER-DATA key/label refactor — Choice(value=stable English key, label=localized); optLabel via opt_<cat> arrays; pickers store English + display localized; stats hBars localized; urge scale + examples; TGroup enum content (tgroup_*). No data migration. compiles + validates + tests pass. Deferred: NEG/POS face feelings + DEFAULT_ROOMS.
 - 2026-07-20 · i18n batch 21: LifeInputs.HABITS → resources (`habit_<key>_label/_hint/_options`). SAFE because options are stored by INDEX not label. Dopamine.kt Habit/Option keep only key + credits; Main resolves labels/hints/options via habitLabel/habitHint/habitOption helpers. compiles + validates + unit tests pass.

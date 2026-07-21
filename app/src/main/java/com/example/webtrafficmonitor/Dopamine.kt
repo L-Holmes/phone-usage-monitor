@@ -364,7 +364,7 @@ object DopamineScore {
             val pts = base * timeOfDayMult
             if (pts >= 0.5f) {
                 total += pts
-                up.add(ScoreLine(cat.name, catLabel(context, cat), Math.round(pts), context.getString(R.string.sl_cat_today, fmtDuration(secs))))
+                up.add(ScoreLine(cat.name, catLabel(context, cat), Math.round(pts), context.getString(R.string.sl_cat_today, fmtDuration(context, secs))))
             }
         }
         if (timeOfDayMult > 1f && loadSecs > 0) {
@@ -415,14 +415,14 @@ object DopamineScore {
             val pts = f * t.LYING_MAX_POINTS
             if (pts >= 0.5f) {
                 total += pts
-                up.add(ScoreLine("lying", context.getString(R.string.sl_lying), Math.round(pts), fmtDuration(day.lyingSeconds)))
+                up.add(ScoreLine("lying", context.getString(R.string.sl_lying), Math.round(pts), fmtDuration(context, day.lyingSeconds)))
             }
         }
         fraction(day.darkSeconds, t.POSTURE_FULL_HOURS).let { f ->
             val pts = f * t.DARK_MAX_POINTS
             if (pts >= 0.5f) {
                 total += pts
-                up.add(ScoreLine("dark", context.getString(R.string.sl_dark), Math.round(pts), fmtDuration(day.darkSeconds)))
+                up.add(ScoreLine("dark", context.getString(R.string.sl_dark), Math.round(pts), fmtDuration(context, day.darkSeconds)))
             }
         }
 
@@ -432,7 +432,7 @@ object DopamineScore {
             if (pts >= 0.5f) {
                 total -= pts
                 down.add(ScoreLine("screenoff", context.getString(R.string.sl_screenoff), -Math.round(pts),
-                    context.getString(R.string.sl_screenoff_detail, fmtDuration(day.screenOffSeconds))))
+                    context.getString(R.string.sl_screenoff_detail, fmtDuration(context, day.screenOffSeconds))))
             }
         }
 
@@ -469,10 +469,7 @@ object DopamineScore {
     private fun fraction(seconds: Long, fullHours: Float): Float =
         ((seconds / 3600f) / fullHours).coerceIn(0f, 1f)
 
-    fun fmtDuration(seconds: Long): String {
-        val m = seconds / 60
-        return if (m >= 60) "${m / 60}h ${m % 60}m" else "${m}m"
-    }
+    fun fmtDuration(c: Context, seconds: Long): String = Units.fromSeconds(c, seconds)
 }
 
 
@@ -661,11 +658,20 @@ object AboutYou {
     private const val KEY_WAGE_YR = "annual_wage"
     private const val KEY_SIDE_YR = "annual_side"
 
-    /** UK median-ish. Used when the user hasn't told us theirs. */
-    const val DEFAULT_HOURLY_GBP = 12
+    /**
+     * Median-ish. Used when the user hasn't told us theirs. Denominated in whatever
+     * currency they see (see Units): a bare 12/hr, never converted between currencies.
+     */
+    const val DEFAULT_HOURLY = 12
 
     /** Full-time working hours in a year (~37.5 h × 52) - the annual↔hourly bridge. */
     const val HOURS_PER_YEAR = 1950
+
+    // Figures that appear ONLY in the explanatory copy on the About-you screen ("15/hr ≈
+    // 29,000", "13,000 a year"). Like the rest of this object they are bare numbers shown
+    // in the user's own currency - see Units.
+    const val EXAMPLE_HOURLY = 15
+    const val EXAMPLE_WHYASK_ANNUAL = 13_000
 
     // The UI asks PER YEAR now ("£28,000" is how people actually know their income).
     // The old per-hour keys are kept as a read-only fallback for anyone who already
@@ -685,7 +691,7 @@ object AboutYou {
     /** What we value a year of their time at: theirs if given, else the default rate. */
     fun effectiveAnnual(c: Context): Int =
         maxOf(annualWage(c), annualSide(c)).takeIf { it > 0 }
-            ?: (DEFAULT_HOURLY_GBP * HOURS_PER_YEAR)
+            ?: (DEFAULT_HOURLY * HOURS_PER_YEAR)
 
     /** The per-hour rate every projection uses, derived from the annual figure. */
     fun effectiveHourly(c: Context): Int =

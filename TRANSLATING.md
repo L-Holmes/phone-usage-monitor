@@ -12,6 +12,7 @@ right strings for the device's language and falls back to English for anything m
 | A translation | `app/src/main/res/values-<code>/strings.xml` | Same keys, translated values. e.g. `values-es`, `values-fr`, `values-pt-rBR`. |
 | Shipped-languages list | `app/src/main/res/xml/locales_config.xml` | Drives the in-app picker + the system per-app-language screen. |
 | In-app picker | `LocaleHelper.kt` + **Developer tools → Language** | Lets the user override the language; defaults to system, then English. |
+| Units (money + time) | `Units.kt` + **Developer tools → Currency** | The currency symbol and the `h`/`m` duration suffixes. See "Units" below. |
 | Validation | `./gradlew checkTranslations` | **Fails on drift (EXTRA keys), warns on MISSING (with coverage %).** Runs automatically in every build (`preBuild`). |
 | Shipped languages (build) | `app/build.gradle.kts` → `resourceConfigurations` | Declares which languages the bundle carries (currently `en`, `it`). Keep in step with the three rows above. |
 | Filter words per language | `src/main/resources/filter/words/<code>/*.txt` | Adult-content word lists for that language (unioned with English). Optional; the scorer works English-only without it. |
@@ -38,6 +39,58 @@ right strings for the device's language and falls back to English for anything m
 
 **Example locale shipped:** Italian (`it`) — a partial translation demonstrating the whole flow.
 Run `./gradlew checkTranslations` to see its coverage. Untranslated keys fall back to English.
+
+## Units: money and durations
+
+Strings alone are not a translation. `£13,000` and `1h 20m` are as English as the sentence
+around them, so every number-with-a-unit goes through **`Units.kt`**.
+
+**Money.** There is **no fx conversion anywhere**, on purpose: the amounts are the user's own
+salary, typed by them, so converting would invent a number they never entered. Only the
+*writing* changes:
+
+- **Which currency** comes from the **device region** (a UK phone → GBP, an Italian phone → EUR),
+  overridable in **Settings → Currency**. The region is read from `Resources.getSystem()`, *not*
+  `Locale.getDefault()` — our per-app language override rewrites that to a bare language tag with
+  no country at all.
+- **How it is written** follows the **app language**, via `NumberFormat.getCurrencyInstance`:
+  `£13,000` in English, `13.000 £` in Italian. Symbol side and separators come free.
+
+So picking Italian does not silently re-denominate a British salary, and moving to Italy does
+not force you to read your pay in English punctuation.
+
+```kotlin
+Units.money(this, 13000)   // "£13,000" / "13.000 €"
+Units.symbol(this)         // "£" — for a hint, or a bare "years and £" sentence
+```
+
+Strings that mention money take a `%s` and are handed a formatted amount — never a bare `%d`
+next to a currency symbol typed into the string.
+
+**Durations.** The short suffixes are ordinary translatable strings, so a translator can change
+them (Italian ships `1 h 20 min`, `3 g 4 h`):
+
+| Key | English | Italian |
+|---|---|---|
+| `unit_h` / `unit_m` / `unit_s` | `%1$sh` / `%1$sm` / `%1$ss` | `%1$s h` / `%1$s min` / `%1$s s` |
+| `unit_h_m` | `%1$sh %2$sm` | `%1$s h %2$s min` |
+| `unit_d_h` | `%1$sd %2$sh` | `%1$s g %2$s h` |
+| `unit_under_1h` | `<1h` | `<1 h` |
+
+Keep them **short** — several land on a narrow chart axis. Use the helpers rather than
+concatenating:
+
+```kotlin
+Units.fromHours(this, 1.33f)     // "1h 20m"   (stats / graph house style)
+Units.fromSeconds(this, 4800)    // "1h 20m"   (score-breakdown house style)
+Units.hours(this, 3)             // "3h"
+Units.number(this, 13000)        // "13,000" / "13.000"
+Units.decimal1(this, 2.5f)       // "2.5" / "2,5"
+Units.percent(this, 0.42f)       // "42%"
+```
+
+**Rule of thumb:** never build a user-facing number by string concatenation (`"${h}h"`, `"£$n"`).
+If you catch yourself typing a unit inside a Kotlin string, it belongs in `Units`.
 
 ## Fallback (why nothing is ever blank)
 

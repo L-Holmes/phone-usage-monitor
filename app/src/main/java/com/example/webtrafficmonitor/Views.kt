@@ -851,7 +851,7 @@ class WastedDonutView(context: Context) : View(context) {
         canvas.drawArc(rect, 0f, 360f, false, ringBg)
         canvas.drawArc(rect, -90f, 360f * anim, false, ringFg)
         big.textSize = 30f * dp
-        canvas.drawText("${Math.round(anim * 100)}%", cx, cy + 4f * dp, big)
+        canvas.drawText(Units.percent(context, anim), cx, cy + 4f * dp, big)
         small.textSize = 12.5f * dp
         canvas.drawText(context.getString(R.string.chart_waking_life), cx, cy + 24f * dp, small)
     }
@@ -1006,7 +1006,9 @@ class StatLineChartView(
     context: Context,
     private val values: FloatArray,
     private val labels: List<String>,
-    private val unit: String = "h",
+    // Y axis in hours: labels get the localised "h"/"m" suffix (see Units). False = a bare
+    // number (the dopamine score, which has no unit at all).
+    private val hoursUnit: Boolean = true,
     private val goal: Float? = null,
     private val dotted: FloatArray = FloatArray(0),
     private val goalPerSlot: Float? = null,
@@ -1060,9 +1062,13 @@ class StatLineChartView(
     private val fillP = Paint(Paint.ANTI_ALIAS_FLAG)
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    private fun fmtVal(v: Float): String =
-        if (unit == "h" && v < 1f && v > 0f) "${Math.round(v * 60)}m"
-        else "${if (v == Math.floor(v.toDouble()).toFloat()) v.toInt().toString() else String.format("%.1f", v)}$unit"
+    private fun fmtVal(v: Float): String {
+        // Under an hour, an hours axis counts in minutes ("45m") rather than "0.8h".
+        if (hoursUnit && v < 1f && v > 0f) return Units.mins(context, Math.round(v * 60))
+        val n = if (v == Math.floor(v.toDouble()).toFloat()) Units.number(context, v.toInt())
+                else Units.decimal1(context, v)
+        return if (hoursUnit) Units.hours(context, n) else n
+    }
 
     /** A round gridline step (1/2/5 × 10^k) giving 3-5 lines up the axis. */
     private fun niceStep(mx: Float): Float {
@@ -1100,7 +1106,7 @@ class StatLineChartView(
         // so an hours chart counts up in real hours whatever data is passed in.
         canvas.drawLine(xL, yB, xR, yB, axis)
         text.textSize = 10f * dp; text.color = 0xFF9AA0A6.toInt(); text.textAlign = Paint.Align.RIGHT
-        canvas.drawText("0", xL - 4f * dp, yB + 3.5f * dp, text)
+        canvas.drawText(Units.number(context, 0), xL - 4f * dp, yB + 3.5f * dp, text)
         val stepMain = gridStep ?: niceStep(mx)
         val stepDraw = minorStep ?: stepMain
         var v = stepDraw

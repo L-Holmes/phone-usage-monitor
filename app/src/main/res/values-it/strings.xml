@@ -6,6 +6,20 @@
     <string name="language_system_default">Predefinita di sistema</string>
     <string name="language_changed">Lingua aggiornata</string>
 
+    <string name="settings_currency">Valuta</string>
+    <string name="settings_currency_subtitle">La valuta in cui vengono mostrati i tuoi importi (per impostazione predefinita quella della regione del dispositivo). Gli importi non vengono mai convertiti: cambia solo il modo in cui sono scritti.</string>
+    <string name="currency_device_default">Predefinita del dispositivo (%1$s)</string>
+    <string name="currency_changed">Valuta aggiornata</string>
+    <string name="currency_row">%1$s  ·  %2$s</string>
+
+    <string name="unit_h">%1$s h</string>
+    <string name="unit_m">%1$s min</string>
+    <string name="unit_s">%1$s s</string>
+    <string name="unit_h_m">%1$s h %2$s min</string>
+    <string name="unit_d_h">%1$s g %2$s h</string>
+    <string name="readout_time_money">%1$s (%2$s)</string>
+    <string name="unit_under_1h">&lt;1 h</string>
+
     <string name="accessibility_label">Web Traffic Monitor — monitoraggio delle pagine</string>
     <string name="accessibility_description">Consente all\'app di leggere il sito/l\'app attuale e il testo sullo schermo per registrare le pagine che visualizzi, a scopo di responsabilità.</string>
     <string name="disclosure">Questa app registra ciò che visualizzi su questo dispositivo a scopo di responsabilità: il sito/l\'app e il testo sullo schermo (Accessibilità) e schermate periodiche del tuo schermo (acquisizione schermo). Tutto resta su questo dispositivo. Attivala solo con il consenso dell\'utente.</string>
@@ -111,6 +125,7 @@
     <string name="step_overlay_button">Continua verso “Mostra sopra le altre app”</string>
 
     <string name="report_protocol">Protocollo per spezzare la dipendenza</string>
+    <string name="proto_break_locked">Protocollo per spezzare la dipendenza  \u00b7  rigida, ancora %1$s</string>
     <string name="report_pane_appsite">Segnala un\'app/un sito</string>
     <string name="report_pane_temptation">Sento una tentazione</string>
     <string name="report_pane_relapse">Segnala una ricaduta</string>
@@ -159,7 +174,7 @@
     <string name="moderules_always_sub">Anche in Rilassata. Off è l\'unica eccezione - vedi la sua scheda sotto.</string>
     <string name="moderules_section_modes">LE MODALITÀ - COSA CAMBIA</string>
     <string name="moderules_current">Sei in questa modalità in questo momento</string>
-    <string name="moderules_lock">Il blocco rigido è attivo: %1$s. Non puoi tornare a Rilassata finché non finisce. Puoi comunque salire a Super rigida.</string>
+    <string name="moderules_lock">Il blocco rigido è attivo: ancora %1$s. Non puoi tornare a Rilassata finché non finisce. Puoi comunque salire a Super rigida.</string>
     <string name="moderules_watched">Le \"app monitorate\" sono quelle che ricevono la pausa di respiro: %1$s.</string>
 
     <string name="always_on_01">Un\'eccezione a tutto ciò che segue: la modalità OFF. In Off il monitoraggio è completamente disattivato e nessuna di queste regole viene applicata.</string>
@@ -251,7 +266,7 @@
     <string name="stats_prog_weekly">impulsi superati a settimana (ultime 8 settimane)</string>
     <string name="stats_sec_pace">Se mantieni questo ritmo</string>
     <string name="stats_prog_per_year">all\'anno</string>
-    <string name="stats_prog_projected">proiettato dal tuo ritmo recente · tempo recuperato valutato a ~£%1$d/ora</string>
+    <string name="stats_prog_projected">proiettato dal tuo ritmo recente · tempo recuperato valutato a ~%1$s/ora</string>
     <string name="stats_sec_milestones">Traguardi</string>
     <string name="stats_prog_no_milestones">Ancora nessuno - stanno arrivando.</string>
     <string name="stats_prog_milestone_item">🏅  %1$s</string>
@@ -270,13 +285,13 @@
     <string name="stats_outcome_looked">Guardato</string>
 
     <string name="about_you_title">Su di te</string>
-    <string name="about_intro">Facoltativo. Lo usiamo solo per stimare quanto ti costa davvero il tempo perso — niente qui lascia il telefono e niente viene condiviso.\n\nLascialo vuoto e daremo per scontato £%1$dmila all\'anno (£%2$d/ora). Tutto nella schermata Home si aggiorna nel momento in cui scrivi.</string>
-    <string name="about_per_year">£ all\'anno</string>
+    <string name="about_intro">Facoltativo. Lo usiamo solo per stimare quanto ti costa davvero il tempo perso — niente qui lascia il telefono e niente viene condiviso.\n\nLascialo vuoto e daremo per scontato %1$s all\'anno (%2$s/ora). Tutto nella schermata Home si aggiorna nel momento in cui scrivi.</string>
+    <string name="about_per_year">%1$s all\'anno</string>
     <string name="about_earn_label">Quanto guadagni all\'anno</string>
-    <string name="about_earn_sub">Il tuo lavoro, al netto delle tasse se vuoi. Conosci solo la tariffa oraria? Circa %1$d ore lavorative fanno un anno - £15/ora ≈ £29.000.</string>
+    <string name="about_earn_sub">Il tuo lavoro, al netto delle tasse se vuoi. Conosci solo la tariffa oraria? Circa %1$d ore lavorative fanno un anno - %2$s/ora ≈ %3$s.</string>
     <string name="about_side_label">Reddito extra all\'anno (facoltativo)</string>
     <string name="about_side_sub">Un\'attività che stai costruendo, lavoro freelance. Non lo sai? LASCIALO VUOTO - un\'ipotesi qui altera solo i tuoi numeri. Se è più alto del tuo stipendio, usiamo quello.</string>
-    <string name="about_whyask">\nPerché lo chiediamo: \"3 ore al giorno\" è astratto e facile da ignorare. \"£13.000 all\'anno\" no.</string>
+    <string name="about_whyask">\nPerché lo chiediamo: \"3 ore al giorno\" è astratto e facile da ignorare. \"%1$s all\'anno\" no.</string>
 
     <string name="relapse_device_q">Dove è successo?</string>
     <string name="relapse_device_yes">Sì, su questo dispositivo</string>
@@ -617,18 +632,18 @@
     <string name="scroll_reclaimed_empty_sub">resisti al tuo primo impulso e il tuo tempo recuperato inizia qui</string>
     <string name="scroll_projector">Il proiettore</string>
     <string name="scroll_waking_days">%1$d giorni da sveglio all\'anno</string>
-    <string name="scroll_per_year_value">≈ £%1$d all\'anno del tuo tempo</string>
-    <string name="scroll_over_years">In %1$d ann%2$s: circa %3$s anni di vita da sveglio - e £%4$d</string>
+    <string name="scroll_per_year_value">≈ %1$s all\'anno del tuo tempo</string>
+    <string name="scroll_over_years">In %1$d ann%2$s: circa %3$s anni di vita da sveglio - e %4$s</string>
     <string name="scroll_min_per_day">%1$d minuti al giorno su video brevi e feed</string>
     <string name="scroll_looking_ahead">Guardando %1$d ann%2$s avanti</string>
     <string name="scroll_that_year">Quello stesso anno è anche:\n%1$d ore di allenamento  ·  %2$d serate con le persone  ·  circa %3$d libri</string>
-    <string name="scroll_valued">Valutato a £%1$d/anno, dai tuoi numeri  ·  modifica</string>
+    <string name="scroll_valued">Valutato a %1$s/anno, dai tuoi numeri  ·  modifica</string>
     <string name="scroll_add_rate">Aggiungi la tua tariffa oraria per vedere quanto ti costa davvero  ›</string>
     <string name="prod_block_sf">Blocca reels, shorts e feed</string>
     <string name="prod_sf_on">Attivo - i feed infiniti sono bloccati.</string>
     <string name="prod_sf_off">Disattivo - tocca per tagliare il doomscroll.</string>
     <string name="prod_scroll_cost_title">Quanto costa lo scroll</string>
-    <string name="prod_scroll_cost_sub">Il proiettore: minuti al giorno → anni e £ - più ciò che hai recuperato.</string>
+    <string name="prod_scroll_cost_sub">Il proiettore: minuti al giorno → anni e %1$s - più ciò che hai recuperato.</string>
     <string name="prod_week_reclaimed">Questa settimana - recuperato</string>
     <string name="prod_value_reclaimed">valore recuperato</string>
     <string name="prod_by_sunday">entro domenica</string>
@@ -667,7 +682,7 @@
     <string name="proto_theme_sub">Fai sentire il telefono come un dispositivo diverso, meno familiare.</string>
     <string name="proto_holiday_title">Vai in vacanza - senza il tuo dispositivo</string>
     <string name="proto_holiday_sub">Esci del tutto dall\'ambiente in cui vive l\'abitudine. Il più grande reset in assoluto.</string>
-    <string name="proto_seven_active">Attivo - %1$d giorni rimasti.</string>
+    <string name="proto_seven_active">Attivo - %1$s rimasti.</string>
     <string name="proto_seven_completed">Completato. Puoi rifarlo quando vuoi.</string>
     <string name="proto_seven_needholiday">Fai prima la vacanza - è ciò che protegge il nuovo inizio.</string>
     <string name="proto_seven_ready">Chiuditi fuori per 7 giorni di fila, subito dopo la vacanza.</string>
@@ -770,7 +785,7 @@
     <string name="status_lockdown">Isolamento app - %1$s rimasti</string>
     <string name="status_unlock_window">Finestra di sblocco - %1$s rimasti</string>
     <string name="status_unlock_wait">Attesa di sblocco - %1$s rimasti</string>
-    <string name="status_week_strict">Rigida settimanale - %1$s</string>
+    <string name="status_week_strict">Rigida settimanale - ancora %1$s</string>
     <string name="sensors_console_header">SENSORI CONNESSI</string>
     <string name="sensors_none">Nessun sensore connesso\nTocca qui per configurare i sensori delle stanze.</string>
     <string name="sensors_no_rooms">Ancora nessuna stanza\nTocca qui per aggiungere la tua prima stanza.</string>
