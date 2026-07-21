@@ -25,6 +25,12 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
         </intent>
+        <!-- The setup gate has to be able to SEE whether Firefox is installed (BrowserSetup),
+             and package visibility is filtered from Android 11 on. Keep in step with
+             AppConfig.FIREFOX_PACKAGES. -->
+        <package android:name="org.mozilla.firefox" />
+        <package android:name="org.mozilla.firefox_beta" />
+        <package android:name="org.mozilla.fenix" />
     </queries>
 
     <application

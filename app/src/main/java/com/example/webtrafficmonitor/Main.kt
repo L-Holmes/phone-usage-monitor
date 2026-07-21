@@ -5474,7 +5474,10 @@ private fun startWeekStrict() {
     private var entriesJob: kotlinx.coroutines.Job? = null
     private var shownStep: Step? = null
 
-    private enum class Step { MONITORING, OVERLAY, LOCK, READY }
+    // The setup gate in order. MONITORING/OVERLAY are OS permissions; FIREFOX/EXTENSION are
+    // the browser half (see BrowserSetup) - watching a browser from outside cannot see images,
+    // which is the extension's job. LOCK is the one-time uninstall-lock offer.
+    private enum class Step { MONITORING, OVERLAY, FIREFOX, EXTENSION, LOCK, READY }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -5541,13 +5544,14 @@ private fun startWeekStrict() {
     // ── Setup gate ────────────────────────────────────────────────────────────
     // Shows the prerequisites in order (monitoring -> overlay -> uninstall lock).
     //
-    // The two permissions are only MANDATORY while the adult-content monitoring mode is
-    // above Off (the fresh-install default). In Off you land straight on the main screen;
-    // the app nudges instead: a one-time popup once you've seen all three tabs (or 30
-    // minutes in), then a quiet amber banner on Overview. Both routes set
-    // inPermissionFlow, which walks the same two prereq screens VOLUNTARILY (with a
-    // "Not now" escape). Completing them bumps the mode to Relaxed - and from that moment
-    // the permissions are mandatory again: drop either one and you're back at the gate.
+    // FOUR things are only MANDATORY while the adult-content monitoring mode is above Off
+    // (the fresh-install default): the two OS permissions, Firefox, and our Firefox add-on
+    // (see BrowserSetup for why the browser half is part of the gate at all). In Off you land
+    // straight on the main screen; the app nudges instead: a one-time popup once you've seen
+    // all three tabs (or 30 minutes in), then a quiet amber banner on Overview. Both routes
+    // set inPermissionFlow, which walks the same prereq screens VOLUNTARILY (with a "Not now"
+    // escape). Completing them bumps the mode to Relaxed - and from that moment the setup is
+    // mandatory again: drop any part of it and you're back at the gate.
 
     // The full-screen uninstall-lock prompt shows only during FIRST setup (persisted
     // below). The arousal page instead shows a dismissible centred popup EVERY time it
@@ -5601,7 +5605,7 @@ private fun startWeekStrict() {
 
     /** Should Overview carry the amber "set up the permissions" banner right now? */
     private fun shouldNudgePermissions(): Boolean =
-        Mode.isOff(this) && !corePermsGranted() &&
+        Mode.isOff(this) && !setupComplete() &&
             (permPopupDone() || System.currentTimeMillis() - firstOpenAt() > PERM_NUDGE_AFTER_MS)
 
     /** The subtle amber strip at the top of Overview. Tapping it starts the flow. */
@@ -5691,10 +5695,19 @@ private fun startWeekStrict() {
     private fun corePermsGranted(): Boolean =
         isAccessibilityEnabled() && Settings.canDrawOverlays(this)
 
+    /**
+     * EVERYTHING a mode above Off needs: the two OS permissions plus the browser half.
+     * This - not corePermsGranted - is what lets a mode change land, so uninstalling Firefox
+     * is no more a way to keep an unenforced mode than revoking accessibility is.
+     */
+    private fun setupComplete(): Boolean =
+        corePermsGranted() && BrowserSetup.firefoxInstalled(this) &&
+            BrowserSetup.extensionConfirmed(this)
+
     /** True while the setup gate is up because the CURRENT mode demands it - no way past. */
     private fun atMandatoryGate(): Boolean =
-        (shownStep == Step.MONITORING || shownStep == Step.OVERLAY) &&
-            !Mode.isOff(this) && !corePermsGranted()
+        shownStep in setOf(Step.MONITORING, Step.OVERLAY, Step.FIREFOX, Step.EXTENSION) &&
+            !Mode.isOff(this) && !setupComplete()
 
     private fun currentStep(): Step {
         // Above Off the permissions are mandatory; in Off they're only shown while the
@@ -5704,24 +5717,28 @@ private fun startWeekStrict() {
         return when {
             needPerms && !isAccessibilityEnabled()       -> Step.MONITORING
             needPerms && !Settings.canDrawOverlays(this) -> Step.OVERLAY
+            // Firefox is VERIFIABLE, so this step clears itself the moment they come back
+            // from the store. The extension is not, so that one ends in their own word.
+            needPerms && !BrowserSetup.firefoxInstalled(this)  -> Step.FIREFOX
+            needPerms && !BrowserSetup.extensionConfirmed(this) -> Step.EXTENSION
             corePermsGranted() && !AppConfig.DEV_MODE && !lockPromptSeen() -> Step.LOCK
             else                                         -> Step.READY
         }
     }
 
     private fun updateScreen() {
-        // A mode change parked at the gate (see modeSpinner) lands HERE, once both
-        // permissions are genuinely on - never at the moment it was picked.
+        // A mode change parked at the gate (see modeSpinner) lands HERE, once the WHOLE
+        // setup is genuinely done - never at the moment it was picked.
         val pending = pendingMode
-        if (pending != null && corePermsGranted()) {
+        if (pending != null && setupComplete()) {
             pendingMode = null
             inPermissionFlow = false
             if (Mode.setMode(this, pending))
                 Toast.makeText(this, getString(R.string.mode_on_toast, modeDisplayName(pending)), Toast.LENGTH_SHORT).show()
         }
         // Finishing the voluntary flow turns monitoring on at its lowest level. From here
-        // the two permissions are mandatory (currentStep) until the mode is set back to Off.
-        if (inPermissionFlow && corePermsGranted()) {
+        // every setup step is mandatory (currentStep) until the mode is set back to Off.
+        if (inPermissionFlow && setupComplete()) {
             inPermissionFlow = false
             if (Mode.isOff(this)) {
                 Mode.setMode(this, Mode.RELAXED)
@@ -5758,6 +5775,25 @@ private fun startWeekStrict() {
                 getString(R.string.step_overlay_body),
                 getString(R.string.step_overlay_button),
                 { requestOverlayPermission() },
+                if (voluntary) getString(R.string.common_not_now) else null,
+                notNow,
+            )
+            Step.FIREFOX -> showPrereq(
+                getString(R.string.step_firefox_title),
+                getString(R.string.step_firefox_body),
+                getString(R.string.step_firefox_button),
+                { openFirefoxInStore() },
+                if (voluntary) getString(R.string.common_not_now) else null,
+                notNow,
+            )
+            Step.EXTENSION -> showPrereq(
+                getString(R.string.step_extension_title),
+                getString(R.string.step_extension_body, BrowserSetup.EXTENSION_URL),
+                getString(R.string.step_extension_button),
+                { openExtensionPage() },
+                // We cannot see inside Firefox, so the step closes on their say-so.
+                getString(R.string.step_extension_done),
+                { BrowserSetup.confirmExtension(this); updateScreen() },
                 if (voluntary) getString(R.string.common_not_now) else null,
                 notNow,
             )
@@ -5838,6 +5874,8 @@ private fun startWeekStrict() {
         onContinue: () -> Unit,
         secondaryText: String? = null,
         onSecondary: (() -> Unit)? = null,
+        tertiaryText: String? = null,
+        onTertiary: (() -> Unit)? = null,
     ) {
         entriesJob?.cancel()
         onReportScreen = false
@@ -5855,6 +5893,48 @@ private fun startWeekStrict() {
                 visibility = View.VISIBLE
                 text = secondaryText
                 setOnClickListener { onSecondary?.invoke() }
+            }
+        }
+        findViewById<Button>(R.id.prereq_tertiary).apply {
+            if (tertiaryText == null) {
+                visibility = View.GONE
+            } else {
+                visibility = View.VISIBLE
+                text = tertiaryText
+                setOnClickListener { onTertiary?.invoke() }
+            }
+        }
+    }
+
+    /** Play Store page for Firefox, falling back to the web store on devices with no Play app. */
+    private fun openFirefoxInStore() {
+        val store = Intent(Intent.ACTION_VIEW, Uri.parse(BrowserSetup.STORE_URI))
+        try {
+            startActivity(store)
+        } catch (_: android.content.ActivityNotFoundException) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BrowserSetup.STORE_URL)))
+            } catch (_: android.content.ActivityNotFoundException) {
+                Toast.makeText(this, getString(R.string.step_firefox_nostore), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /**
+     * The add-on page, opened IN Firefox on purpose - "Add to Firefox" only does anything
+     * there. If Firefox has gone missing since the last step, fall back to whatever can open
+     * a link rather than dropping the user on a dead button.
+     */
+    private fun openExtensionPage() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(BrowserSetup.EXTENSION_URL))
+        BrowserSetup.firefoxPackage(this)?.let { intent.setPackage(it) }
+        try {
+            startActivity(intent)
+        } catch (_: android.content.ActivityNotFoundException) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BrowserSetup.EXTENSION_URL)))
+            } catch (_: android.content.ActivityNotFoundException) {
+                Toast.makeText(this, getString(R.string.step_extension_nobrowser), Toast.LENGTH_LONG).show()
             }
         }
     }

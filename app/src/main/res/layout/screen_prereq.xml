@@ -42,5 +42,15 @@
             android:layout_marginTop="4dp"
             android:visibility="gone" />
 
+        <!-- Third slot: steps that need BOTH an action and a confirmation (install the
+             add-on / I've done it) still have to leave room for the "Not now" escape. -->
+        <Button
+            android:id="@+id/prereq_tertiary"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:visibility="gone" />
+
     </LinearLayout>
 </ScrollView>

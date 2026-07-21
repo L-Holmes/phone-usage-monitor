@@ -234,6 +234,37 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /**
+     * The image-monitor add-on's own page is where you switch it back OFF - the dump we
+     * built this from carried "Enabled / Run in private browsing / Details / Permissions /
+     * Remove / Report" - so once the user has confirmed the add-on is installed, that page
+     * is off limits. Exactly the same reasoning as the uninstall lock: the guard is worth
+     * nothing if the guard's own off-switch is one tap away.
+     *
+     * Armed ONLY after confirmation (BrowserSetup.extensionConfirmed) - otherwise setup
+     * step 4 would block the very page it sends the user to.
+     *
+     * Matched two ways, because AMO serves the page under a locale segment
+     * (".../en-GB/android/addon/<slug>") and Firefox's own add-on manager shows the same
+     * switches with no web URL at all:
+     *   • the URL carries the add-on's slug, or the title names it on addons.mozilla.org;
+     *   • the screen names the add-on AND carries one of its switches.
+     */
+    private fun extensionPageBlock(
+        packageName: String, host: String?, url: String?, title: String?, content: String?,
+    ): String? {
+        if (!BrowserSetup.extensionConfirmed(this)) return null
+        if (packageName !in AppConfig.FIREFOX_PACKAGES) return null
+        val u = url?.lowercase().orEmpty()
+        val t = title?.lowercase().orEmpty()
+        val c = content?.lowercase().orEmpty()
+        val name = BrowserSetup.EXTENSION_NAME.lowercase()
+        val onAddonPage = BrowserSetup.EXTENSION_SLUG in u ||
+            (host != null && BrowserSetup.EXTENSION_HOST in host && name in t)
+        val onManagerPage = name in c && ("run in private browsing" in c || "remove" in c)
+        return if (onAddonPage || onManagerPage) getString(R.string.br_extension_page) else null
+    }
+
     // ════════════════════════════════════════════════════════════════════════
     //  UNINSTALL-LOCK GUARDED PAGES  ──  FUTURE DEVS: READ THIS  ──
     // ════════════════════════════════════════════════════════════════════════
@@ -1099,6 +1130,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         updateGreyTracking(greyTarget, isApp = greyTarget != null && host == null)
 
         val appGuard = if (host == null) appScreenBlock(packageName, title, content) else null
+        val extGuard = extensionPageBlock(packageName, host, url, title, content)
         val rule = if (appGuard == null) {
             if (host == null) {
                 // Off the web: keyword rules vs the screen title only (deliberately
@@ -1115,6 +1147,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val modeKeyword = ModeKeywords.match(this, title, url)
         val baseReason = when {
                appGuard != null -> appGuard
+               extGuard != null -> extGuard
                host != null && DomainBlocklist.isBlocked(host) -> getString(R.string.br_adult_site, host)
                // Search engines: only Google is allowed, in every mode.
                host != null && SearchEngineBlocklist.isBlocked(host) -> getString(R.string.br_search_engine, host)

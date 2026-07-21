@@ -753,3 +753,51 @@ object UsageGoal {
     private fun prefs(c: Context) =
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
+
+
+// =====================================================================================
+// BrowserSetup  (the browser half of the setup gate: Firefox + the content add-on)
+// =====================================================================================
+/**
+ * Monitoring a browser from the outside only gets you so far - the accessibility service
+ * sees the URL and the page text, but not the IMAGES. That job belongs to our Firefox
+ * extension, so the setup gate requires both halves before any mode above Off can run:
+ * Firefox itself (steps 3) and the extension (step 4).
+ *
+ * The asymmetry is deliberate. Firefox we can VERIFY - it is either installed or it is
+ * not, so that step advances by itself the moment the user comes back from the store.
+ * The extension we CANNOT see from outside Firefox, so that step ends in the user's own
+ * word for it. Once given, [extensionConfirmed] also arms the block on the add-on's own
+ * page - the page carrying the "Remove" and "Run in private browsing" switches.
+ */
+object BrowserSetup {
+    private const val PREFS = "browser_setup"
+    private const val KEY_EXT = "extension_confirmed"
+
+    /** Where the user installs the add-on from (opened IN Firefox, so "Add" is available). */
+    const val EXTENSION_URL = "https://addons.mozilla.org/android/addon/distracting-image-monitor/"
+
+    /** The add-on's page whatever locale AMO serves it in (".../en-GB/android/addon/<slug>"). */
+    const val EXTENSION_SLUG = "addon/distracting-image-monitor"
+
+    const val EXTENSION_HOST = "addons.mozilla.org"
+    const val EXTENSION_NAME = "Distracting Image Monitor"
+
+    /** Play Store deep link, with a plain https fallback for devices with no Play app. */
+    const val STORE_URI = "market://details?id=org.mozilla.firefox"
+    const val STORE_URL = "https://play.google.com/store/apps/details?id=org.mozilla.firefox"
+
+    /** The Firefox build actually on this device, or null. Needs the manifest <queries>. */
+    fun firefoxPackage(c: Context): String? =
+        AppConfig.FIREFOX_PACKAGES.firstOrNull { pkg ->
+            runCatching { c.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+        }
+
+    fun firefoxInstalled(c: Context): Boolean = firefoxPackage(c) != null
+
+    fun extensionConfirmed(c: Context): Boolean = prefs(c).getBoolean(KEY_EXT, false)
+    fun confirmExtension(c: Context) = prefs(c).edit().putBoolean(KEY_EXT, true).apply()
+
+    private fun prefs(c: Context) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}

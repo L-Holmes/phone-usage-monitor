@@ -107,7 +107,7 @@
     <string name="common_not_now">Non ora</string>
 
     <string name="perm_ready_title">Pronto ad attivare il blocco?</string>
-    <string name="perm_ready_body">Hai dato un\'occhiata in giro. Per bloccare davvero qualcosa, l\'app ha bisogno di due autorizzazioni: il monitoraggio delle pagine (per vedere cosa c\'è sullo schermo) e la schermata di blocco (per coprirlo). Meno di un minuto, tutto su questo telefono.</string>
+    <string name="perm_ready_body">Hai dato un\'occhiata in giro. Per bloccare davvero qualcosa, l\'app ha bisogno di una breve configurazione: il monitoraggio delle pagine (per vedere cosa c\'è sullo schermo), la schermata di blocco (per coprirlo), Firefox e la sua estensione monitor immagini. Un paio di minuti, tutto su questo telefono.</string>
     <string name="perm_protection_on">Protezione attiva - modalità %1$s</string>
     <string name="unprotected_title">⚠  Questa app non è ancora protetta</string>
     <string name="unprotected_body">Senza il blocco della disinstallazione puoi eliminare l\'app in un momento di debolezza - ed è proprio qui che quei momenti succedono.</string>
@@ -118,12 +118,23 @@
     <string name="lock_protect_body">Attiva il blocco della disinstallazione così non puoi eliminare l\'app in un momento di debolezza. Mentre è attivo, l\'app non può essere disinstallata e le pagine delle impostazioni che la disattiverebbero sono bloccate.</string>
     <string name="lock_enable">Attiva il blocco disinstallazione</string>
     <string name="lock_skip">Salta per ora</string>
-    <string name="step_monitoring_title">Passo 1 di 3\nAttiva il monitoraggio delle pagine</string>
+    <string name="step_monitoring_title">Passo 1 di 5\nAttiva il monitoraggio delle pagine</string>
     <string name="step_monitoring_body">Questo consente all\'app di vedere quale sito o app è sullo schermo, così può bloccare ciò che deve.\n\nQuando tocchi Continua arriverai nelle impostazioni di Accessibilità:\n\n1.  Tocca “App installate” (su alcuni telefoni “App scaricate”).\n2.  Tocca “Web Traffic Monitor”.\n3.  Attiva l\'interruttore e accetta.\n\nPoi torna a questa app.</string>
     <string name="step_monitoring_button">Continua verso Accessibilità</string>
-    <string name="step_overlay_title">Passo 2 di 3\nConsenti la schermata di blocco</string>
+    <string name="step_overlay_title">Passo 2 di 5\nConsenti la schermata di blocco</string>
     <string name="step_overlay_body">Questo consente all\'app di disegnare la schermata di blocco sopra le altre app.\n\nQuando tocchi Continua, trova “Web Traffic Monitor” nell\'elenco e attiva il suo interruttore.\n\nPoi torna a questa app.</string>
     <string name="step_overlay_button">Continua verso “Mostra sopra le altre app”</string>
+
+    <string name="step_firefox_title">Passo 3 di 5\nInstalla Firefox</string>
+    <string name="step_firefox_body">Questa app controlla bene un solo browser invece di controllarne male tanti, e quel browser è Firefox.\n\nQuando tocchi Continua arriverai sulla pagina dello store:\n\n1.  Tocca “Installa”.\n2.  Aspetta che finisca.\n\nPoi torna a questa app: questo passo si completa da solo.</string>
+    <string name="step_firefox_button">Ottieni Firefox</string>
+    <string name="step_firefox_nostore">Nessuno store trovato. Installa Firefox, poi torna qui.</string>
+
+    <string name="step_extension_title">Passo 4 di 5\nAggiungi il monitor delle immagini a Firefox</string>
+    <string name="step_extension_body">L\'ultimo pezzo. Questa app può leggere l\'indirizzo di una pagina e il suo testo, ma non può vederne le IMMAGINI: di quello si occupa l\'estensione di Firefox.\n\nQuando tocchi Continua, Firefox si apre su:\n\n%1$s\n\n1.  Tocca “Aggiungi a Firefox”.\n2.  Spunta “Consenti l\'esecuzione dell\'estensione in navigazione anonima”.\n3.  Tocca “Aggiungi”.\n\nPoi torna qui e conferma. Da quel momento quella pagina è bloccata, così l\'estensione resta attiva.</string>
+    <string name="step_extension_button">Apri la pagina dell\'estensione</string>
+    <string name="step_extension_done">L\'ho aggiunta</string>
+    <string name="step_extension_nobrowser">Nessun browser trovato per aprire la pagina dell\'estensione.</string>
 
     <string name="report_protocol">Protocollo per spezzare la dipendenza</string>
     <string name="proto_break_locked">Protocollo per spezzare la dipendenza  \u00b7  rigida, ancora %1$s</string>
@@ -776,7 +787,7 @@
     <string name="temp_slip_body">Questa è onestà, e vale più di una serie pulita per cui hai dovuto mentire.\n\n%1$d questa settimana. Il numero non è un verdetto - sono solo dati. Guarda in che direzione si muove.</string>
     <string name="temp_slip_next">La prossima volta, prova:  %1$s</string>
 
-    <string name="home_banner_blocking_off">⚠  Il blocco è disattivo - all\'app servono ancora due rapide autorizzazioni. Tocca per impostarle.</string>
+    <string name="home_banner_blocking_off">⚠  Il blocco è disattivo - manca ancora una rapida configurazione. Tocca per completarla.</string>
     <string name="status_header">STATO</string>
     <string name="status_on_label">Attivo</string>
     <string name="status_off_label">Disattivo</string>
@@ -839,6 +850,7 @@
     <string name="br_search_engine">Motore di ricerca bloccato: %1$s</string>
     <string name="br_blocked_site">Sito bloccato: %1$s</string>
     <string name="br_blocked_term">Termine bloccato: %1$s</string>
+    <string name="br_extension_page">La pagina dell\'estensione monitor immagini è bloccata: l\'estensione resta attiva.</string>
     <string name="br_blocked_keyword">Parola chiave bloccata: \"%1$s\"</string>
     <string name="br_back_same">È ancora LA STESSA pagina bloccata. Premi di nuovo Indietro, o vai alla Home.</string>
     <string name="br_back_diff">È una pagina DIVERSA - ma è bloccata anche questa. Premi di nuovo Indietro, o vai alla Home.</string>
@@ -861,7 +873,7 @@
     <string-array name="mode_off_rules">
         <item>Il monitoraggio è OFF. Niente viene analizzato e niente viene bloccato - nessuna delle regole \"Sempre attive\" viene applicata in questa modalità.</item>
         <item>È la modalità iniziale su un\'installazione nuova.</item>
-        <item>Le due autorizzazioni che servono al blocco (monitoraggio delle pagine e schermata di blocco) sono FACOLTATIVE mentre sei qui - l\'app non le richiede mai.</item>
+        <item>La configurazione che serve al blocco (monitoraggio delle pagine, schermata di blocco, Firefox e la sua estensione) è FACOLTATIVA mentre sei qui - l\'app non la richiede mai.</item>
         <item>Scegli QUALSIASI altra modalità ed entrambe le autorizzazioni diventano obbligatorie: l\'app ti guida ad attivarle e non lascia questa schermata finché non lo sono.</item>
         <item>La pagina Produttività e le sue statistiche di tempo schermo continuano a funzionare comunque.</item>
     </string-array>

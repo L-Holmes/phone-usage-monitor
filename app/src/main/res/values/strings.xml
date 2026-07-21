@@ -159,7 +159,7 @@
 
     <!-- ── Permission / setup flow (Main.kt) ─────────────────────────────────────────── -->
     <string name="perm_ready_title">Ready to turn the blocking on?</string>
-    <string name="perm_ready_body">You\'ve had a look around. To actually block anything, the app needs two permissions: page monitoring (so it can see what\'s on screen) and the block screen (so it can cover it). Under a minute, all on this phone.</string>
+    <string name="perm_ready_body">You\'ve had a look around. To actually block anything, the app needs a short setup: page monitoring (so it can see what\'s on screen), the block screen (so it can cover it), Firefox and its image-monitor add-on. A couple of minutes, all on this phone.</string>
     <string name="perm_protection_on">Protection on - %1$s mode</string>
 
     <string name="unprotected_title">⚠  This app isn\'t protected yet</string>
@@ -173,12 +173,25 @@
     <string name="lock_enable">Enable uninstall lock</string>
     <string name="lock_skip">Skip for now</string>
 
-    <string name="step_monitoring_title">Step 1 of 3\nTurn on page monitoring</string>
+    <string name="step_monitoring_title">Step 1 of 5\nTurn on page monitoring</string>
     <string name="step_monitoring_body">This lets the app see which website or app is on screen, so it can block what it should.\n\nWhen you tap Continue you\'ll land in Accessibility settings:\n\n1.  Tap “Installed apps” (some phones say “Downloaded apps”).\n2.  Tap “Web Traffic Monitor”.\n3.  Turn the toggle ON and accept.\n\nThen come back to this app.</string>
     <string name="step_monitoring_button">Continue to Accessibility</string>
-    <string name="step_overlay_title">Step 2 of 3\nAllow the block screen</string>
+    <string name="step_overlay_title">Step 2 of 5\nAllow the block screen</string>
     <string name="step_overlay_body">This lets the app draw the blocking screen on top of other apps.\n\nWhen you tap Continue, find “Web Traffic Monitor” in the list and turn its toggle ON.\n\nThen come back to this app.</string>
     <string name="step_overlay_button">Continue to “Appear on top”</string>
+
+    <!-- Step 3: Firefox itself. Verifiable, so the step ticks itself off on return. -->
+    <string name="step_firefox_title">Step 3 of 5\nInstall Firefox</string>
+    <string name="step_firefox_body">This app watches one browser properly rather than all of them badly, and that browser is Firefox.\n\nWhen you tap Continue you\'ll land on the store page:\n\n1.  Tap “Install”.\n2.  Wait for it to finish.\n\nThen come back to this app - this step ticks itself off.</string>
+    <string name="step_firefox_button">Get Firefox</string>
+    <string name="step_firefox_nostore">No app store found. Install Firefox, then come back.</string>
+
+    <!-- Step 4: the add-on. NOT verifiable from outside Firefox, so it ends on the user's word. -->
+    <string name="step_extension_title">Step 4 of 5\nAdd the image monitor to Firefox</string>
+    <string name="step_extension_body">The last piece. This app can read a page\'s address and its text, but it cannot see the IMAGES on it - the Firefox add-on does that part.\n\nWhen you tap Continue, Firefox opens at:\n\n%1$s\n\n1.  Tap “Add to Firefox”.\n2.  Tick “Allow extension to run in private browsing”.\n3.  Tap “Add”.\n\nThen come back here and confirm. From then on that page is blocked, so the add-on stays on.</string>
+    <string name="step_extension_button">Open the add-on page</string>
+    <string name="step_extension_done">I\'ve added it</string>
+    <string name="step_extension_nobrowser">No browser found to open the add-on page.</string>
 
     <!-- ── Report screen (Main.kt) ───────────────────────────────────────────────────── -->
     <string name="report_protocol">Break the addiction protocol</string>
@@ -240,7 +253,7 @@
     <string-array name="mode_off_rules">
         <item>Monitoring is OFF. Nothing is scanned and nothing is blocked - none of the \"Always on\" rules run in this mode.</item>
         <item>This is the starting mode on a fresh install.</item>
-        <item>The two permissions the blocker needs (page monitoring and the block screen) are OPTIONAL while you are here - the app never demands them.</item>
+        <item>The setup the blocker needs (page monitoring, the block screen, Firefox and its add-on) is OPTIONAL while you are here - the app never demands it.</item>
         <item>Pick ANY other mode and both permissions become required: the app walks you through turning them on, and won\'t leave this screen until they are.</item>
         <item>The Productivity page and its screen-time stats keep working either way.</item>
     </string-array>
@@ -960,7 +973,7 @@
     <string name="temp_slip_next">Next time, try:  %1$s</string>
 
     <!-- ── Home permission-nudge banner + STATUS + sensors console (Main.kt) ─────────── -->
-    <string name="home_banner_blocking_off">⚠  Blocking is off - the app still needs two quick permissions. Tap to set them up.</string>
+    <string name="home_banner_blocking_off">⚠  Blocking is off - the app still needs a quick setup. Tap to finish it.</string>
     <string name="status_header">STATUS</string>
     <string name="status_on_label">On</string>
     <string name="status_off_label">Off</string>
@@ -1025,6 +1038,7 @@
     <string name="br_search_engine">Search engine blocked: %1$s</string>
     <string name="br_blocked_site">Blocked site: %1$s</string>
     <string name="br_blocked_term">Blocked term: %1$s</string>
+    <string name="br_extension_page">The image-monitor add-on\'s page is blocked - the add-on stays on.</string>
     <string name="br_blocked_keyword">Blocked keyword: \"%1$s\"</string>
     <string name="br_back_same">Still the SAME blocked page. Press Back again, or go home.</string>
     <string name="br_back_diff">That\'s a DIFFERENT page - but it\'s blocked too. Press Back again, or go home.</string>
