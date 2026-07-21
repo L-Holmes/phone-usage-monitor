@@ -634,7 +634,7 @@ private fun showDopamine() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val today = DopamineLog.today(this)
-    val r = DopamineScore.of(today)
+    val r = DopamineScore.of(this, today)
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.dop_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -680,7 +680,7 @@ private fun showDopamine() {
 
     // ── the trend ──
     val history = DopamineLog.history(this, 14)
-    val scores = history.map { DopamineScore.of(it).score.toFloat() }.toFloatArray()
+    val scores = history.map { DopamineScore.of(this@MainActivity, it).score.toFloat() }.toFloatArray()
     if (scores.count { it > 0f } >= 2) {
         c.addView(statHeader(getString(R.string.dop_last14), dp))
         c.addView(TrendView(this, scores), LinearLayout.LayoutParams(
@@ -743,7 +743,7 @@ private fun showDopamineRanks() {
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
     val current = DopamineRank.of(this).longTitle
-    for (level in DopamineRank.levels()) {
+    for (level in DopamineRank.levels(this)) {
         val mine = level.longTitle == current
         c.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -831,13 +831,13 @@ private fun showDopamineMaths() {
         .forEach { cat ->
             val pts = Math.round(t.CATEGORY_POINTS[cat] ?: 0f)
             c.addView(TextView(this).apply {
-                text = getString(R.string.dop_maths_cat_line, cat.label, pts)
+                text = getString(R.string.dop_maths_cat_line, DopamineScore.catLabel(this@MainActivity, cat), pts)
                 textSize = 14f; setTextColor(0xFF3C4650.toInt())
                 setPadding(0, (7 * dp).toInt(), 0, 0)
             })
         }
     c.addView(TextView(this).apply {
-        text = getString(R.string.dop_maths_example, DopamineCategory.FAST_VIDEO.label.lowercase(), Math.round(t.doseMultiplier(2f) * 100), Math.round(t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f), Math.round(t.doseMultiplier(2f) * (t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f)))
+        text = getString(R.string.dop_maths_example, DopamineScore.catLabel(this@MainActivity, DopamineCategory.FAST_VIDEO).lowercase(), Math.round(t.doseMultiplier(2f) * 100), Math.round(t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f), Math.round(t.doseMultiplier(2f) * (t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f)))
         textSize = 12f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
         setPadding(0, (10 * dp).toInt(), 0, 0)
     })
@@ -868,7 +868,7 @@ private fun showDopamineMaths() {
     c.addView(statHeader(getString(R.string.dop_maths_h4), dp))
     listOf(0, 15, 30, 45, 60, 80).forEach { lo ->
         c.addView(TextView(this).apply {
-            text = getString(R.string.dop_maths_band_line, lo, t.band(lo))
+            text = getString(R.string.dop_maths_band_line, lo, DopamineScore.bandLabel(this@MainActivity, lo))
             textSize = 14f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(t.bandColour(lo)); setPadding(0, (6 * dp).toInt(), 0, 0)
         })
@@ -910,7 +910,7 @@ private fun scoreLineRow(label: String, points: Int, detail: String, colour: Int
 private fun showDopamineGuidance() {
     val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
     val today = DopamineLog.today(this)
-    val r = DopamineScore.of(today)
+    val r = DopamineScore.of(this, today)
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.dop_guid_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -924,7 +924,7 @@ private fun showDopamineGuidance() {
     if (top != null) {
         c.addView(statHeader(getString(R.string.dop_guid_biggest), dp))
         c.addView(TextView(this).apply {
-            text = getString(R.string.dop_guid_biggest_body, top.label, top.detail, adviceFor(top.label))
+            text = getString(R.string.dop_guid_biggest_body, top.label, top.detail, adviceFor(top.key))
             textSize = 15f; setTextColor(0xFF1F2933.toInt()); setLineSpacing(0f, 1.2f)
             setPadding(0, 0, 0, (8 * dp).toInt())
         })
@@ -955,35 +955,23 @@ private fun showDopamineGuidance() {
     })
 }
 
-private fun adviceFor(label: String): String = when (label) {
-    DopamineCategory.ADULT.label ->
-        getString(R.string.dop_adv_adult)
-    DopamineCategory.FAST_VIDEO.label ->
-        getString(R.string.dop_adv_fastvideo)
-    DopamineCategory.FAST_SOCIAL.label ->
-        getString(R.string.dop_adv_fastsocial)
-    DopamineCategory.IMPULSE.label ->
-        getString(R.string.dop_adv_impulse)
-    DopamineCategory.FORUMS_NEWS.label ->
-        getString(R.string.dop_adv_forums)
-    DopamineCategory.LONG_VIDEO.label ->
-        getString(R.string.dop_adv_longvideo)
-    DopamineCategory.MOBILE_GAMING.label ->
-        getString(R.string.dop_adv_gaming)
-    DopamineCategory.GAMBLING.label ->
-        getString(R.string.dop_adv_gambling)
-    "Phone unlocks" ->
-        getString(R.string.dop_adv_unlocks)
-    "Straight-in opens" ->
-        getString(R.string.dop_adv_straightin)
-    "Compulsive checking" ->
-        getString(R.string.dop_adv_checking)
-    "Constant scrolling / tapping" ->
-        getString(R.string.dop_adv_scrolling)
-    "Using it lying down", "Using it in the dark" ->
-        getString(R.string.dop_adv_lyingdark)
-    else -> getString(R.string.dop_adv_default)
-}
+// Keys on the ScoreLine's STABLE key (category enum name / fixed id), never the localized label.
+private fun adviceFor(key: String): String = getString(when (key) {
+    DopamineCategory.ADULT.name -> R.string.dop_adv_adult
+    DopamineCategory.FAST_VIDEO.name -> R.string.dop_adv_fastvideo
+    DopamineCategory.FAST_SOCIAL.name -> R.string.dop_adv_fastsocial
+    DopamineCategory.IMPULSE.name -> R.string.dop_adv_impulse
+    DopamineCategory.FORUMS_NEWS.name -> R.string.dop_adv_forums
+    DopamineCategory.LONG_VIDEO.name -> R.string.dop_adv_longvideo
+    DopamineCategory.MOBILE_GAMING.name -> R.string.dop_adv_gaming
+    DopamineCategory.GAMBLING.name -> R.string.dop_adv_gambling
+    "unlocks" -> R.string.dop_adv_unlocks
+    "straightin" -> R.string.dop_adv_straightin
+    "checking" -> R.string.dop_adv_checking
+    "scrolling" -> R.string.dop_adv_scrolling
+    "lying", "dark" -> R.string.dop_adv_lyingdark
+    else -> R.string.dop_adv_default
+})
 
 // ── The self-reported habits: a SEPARATE estimate, never mixed into the score ──
 private fun showLifeInputs() {
@@ -2217,7 +2205,7 @@ private fun setupHomeScreen() {
     // ── 1. Productivity score: gauge + score + full rank name + the 14-day trend.
     //    The trend line wears the gauge's band colours (a bad stretch goes red), and
     //    scrubbing it updates the readout line - in the page, never a toast.
-    val today = DopamineScore.of(DopamineLog.today(this))
+    val today = DopamineScore.of(this, DopamineLog.today(this))
     val rank = DopamineRank.of(this)
     val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.UK)
     val weekdayFmt = SimpleDateFormat("EEE", Locale.getDefault())
@@ -2252,7 +2240,7 @@ private fun setupHomeScreen() {
         })
     })
     val history14 = DopamineLog.history(this, 14)
-    val realScores = history14.map { DopamineScore.of(it).let { r -> if (r.hasData) r.score.toFloat() else Float.NaN } }
+    val realScores = history14.map { DopamineScore.of(this@MainActivity, it).let { r -> if (r.hasData) r.score.toFloat() else Float.NaN } }
     val haveTrend = realScores.count { !it.isNaN() } >= 4
     // Example trend: ORGANIC (plateaus, one big drop, small wobbles) descending from
     // its peak to end EXACTLY on today's real score, so the graph always finishes on
@@ -2280,7 +2268,7 @@ private fun setupHomeScreen() {
             !haveTrend -> readoutText("${niceDate(d.date)} · ",
                 "${Math.round(trendScores[i])}", "\n[Example data]", trendColours[i])
             else -> {
-                val r = DopamineScore.of(d)
+                val r = DopamineScore.of(this@MainActivity, d)
                 if (r.hasData) readoutText("${niceDate(d.date)} · ", "${r.score} (${r.band})", "", r.colour)
                 else readoutText("${niceDate(d.date)} · ", "no data that day", "", 0xFF9AA0A6.toInt())
             }
@@ -2298,7 +2286,7 @@ private fun setupHomeScreen() {
     //    graphs get the real arrays later.
     val history90 = DopamineLog.history(this, 90)
     fun hoursOf(day: DopamineDay): Float =
-        if (DopamineScore.of(day).hasData) day.screenOnSeconds / 3600f else Float.NaN
+        if (DopamineScore.of(this@MainActivity, day).hasData) day.screenOnSeconds / 3600f else Float.NaN
     // Sensible default baseline: under an hour a day. A user-set goal replaces it.
     val goalHours = UsageGoal.hoursPerDay(this) ?: 1f
     val rate = AboutYou.effectiveHourly(this)
@@ -2337,7 +2325,7 @@ private fun setupHomeScreen() {
 
     // By month - only once there's more than two months of real data (or as the example).
     val monthNames = java.text.DateFormatSymbols(Locale.getDefault()).shortMonths  // localized Jan..Dec
-    val byMonth = history90.filter { DopamineScore.of(it).hasData }
+    val byMonth = history90.filter { DopamineScore.of(this@MainActivity, it).hasData }
         .groupBy { it.date.substring(0, 7) }.toSortedMap()
     val hasUsage = history90.sumOf { d -> hoursOf(d).takeIf { !it.isNaN() }?.toDouble() ?: 0.0 } >= 1.0
     if ((hasUsage && byMonth.size > 2) || !hasUsage) {
@@ -2464,9 +2452,9 @@ private fun fmtHours(h: Float): String {
 }
 
 /** The amber "this is fake data" tag under example charts. */
-private fun exampleTag(msg: String = "EXAMPLE - your real data replaces this after a day or two") =
+private fun exampleTag(msg: String? = null) =
     TextView(this).apply {
-        text = msg; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB07800.toInt())
+        text = msg ?: getString(R.string.home_example); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB07800.toInt())
         setPadding(0, (2 * resources.displayMetrics.density).toInt(), 0, 0)
     }
 
@@ -2539,7 +2527,7 @@ private fun chartStatCard(
     dotted: FloatArray = FloatArray(0),
     goal: Float? = null, goalPerSlot: Float? = null,
     gridStep: Float? = null, minorStep: Float? = null,
-    legendMain: String = "— so far",
+    legendMain: String? = null,
     worth: String? = null,
     exampleMsg: String? = null,
     onStatsClick: (() -> Unit)? = null,
@@ -2564,9 +2552,9 @@ private fun chartStatCard(
         fun key(t: String, colour: Int) = addView(TextView(this@MainActivity).apply {
             text = t; textSize = 11f; setTextColor(colour); setPadding(0, 0, (14 * dp).toInt(), 0)
         })
-        key(legendMain, accent)
-        if (dotted.isNotEmpty()) key("- - projected", 0xFF9AA0A6.toInt())
-        if (goal != null || goalPerSlot != null) key("- - goal", 0xFF2E7D32.toInt())
+        key(legendMain ?: getString(R.string.chart_so_far), accent)
+        if (dotted.isNotEmpty()) key(getString(R.string.chart_projected), 0xFF9AA0A6.toInt())
+        if (goal != null || goalPerSlot != null) key(getString(R.string.chart_goal_legend), 0xFF2E7D32.toInt())
     })
 
     if (pointInfo != null) {
@@ -2818,7 +2806,7 @@ private fun showProductivity() {
 
     // ── Dopamine baseline: a whole-phone measure, so it belongs here and not buried in
     //    the adult-content statistics.
-    val todayScore = DopamineScore.of(DopamineLog.today(this))
+    val todayScore = DopamineScore.of(this, DopamineLog.today(this))
     content.addView(sectionTitle(getString(R.string.prod_dopamine_title)))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -5541,8 +5529,7 @@ private fun startWeekStrict() {
     private fun permissionNudgeBanner(): View {
         val dp = resources.displayMetrics.density
         return TextView(this).apply {
-            text = "⚠  Blocking is off - the app still needs two quick permissions. " +
-                "Tap to set them up."
+            text = getString(R.string.home_banner_blocking_off)
             textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
             setLineSpacing(0f, 1.15f)
             background = android.graphics.drawable.GradientDrawable().apply {
@@ -7028,12 +7015,12 @@ private fun startWeekStrict() {
             ).apply { topMargin = (24 * dp).toInt() }
         }
         box.addView(TextView(this).apply {
-            text = "CONNECTED SENSORS"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            text = getString(R.string.sensors_console_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
             setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
         })
         if (!RoomBeacons.ownsSensors(this)) {
             box.addView(TextView(this).apply {
-                text = "No sensors connected\nTap here to set up room sensors."
+                text = getString(R.string.sensors_none)
                 textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
                 isClickable = true; isFocusable = true
                 setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
@@ -7046,7 +7033,7 @@ private fun startWeekStrict() {
         val canReceive = bt && RoomBeacons.hasPermissions(this)
         if (RoomBeacons.rooms(this).isEmpty()) {
             box.addView(TextView(this).apply {
-                text = "No rooms yet\nTap here to add your first room."
+                text = getString(R.string.sensors_no_rooms)
                 textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
                 isClickable = true; isFocusable = true
                 setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
@@ -7058,12 +7045,12 @@ private fun startWeekStrict() {
             val calibrated = RoomBeacons.isCalibrated(this, room)
             val colour: Int; val label: String
             when {
-                !calibrated -> { colour = 0xFF9AA0A6.toInt(); label = "Not set up" }
-                !canReceive -> { colour = 0xFFE0A800.toInt(); label = "No data - check Bluetooth & permissions" }
-                else -> { colour = 0xFF2E9E44.toInt(); label = "On" }
+                !calibrated -> { colour = 0xFF9AA0A6.toInt(); label = getString(R.string.sensors_status_notsetup) }
+                !canReceive -> { colour = 0xFFE0A800.toInt(); label = getString(R.string.sensors_status_nodata) }
+                else -> { colour = 0xFF2E9E44.toInt(); label = getString(R.string.sensors_status_on) }
             }
             box.addView(TextView(this).apply {
-                text = "●  ${room.replaceFirstChar { it.uppercase() }} sensor - $label"
+                text = getString(R.string.sensors_room_row, room.replaceFirstChar { it.uppercase() }, label)
                 textSize = 14f; setTextColor(colour)
                 isClickable = true; isFocusable = true
                 setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
@@ -7078,17 +7065,16 @@ private fun startWeekStrict() {
         inSubPage = true
         val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
         val root = vbox(pad)
-        root.addView(titleText("Room sensors"))
+        root.addView(titleText(getString(R.string.sensors_gate_title)))
         root.addView(TextView(this).apply {
-            text = "Room detection uses small Bluetooth beacons - one per room you want " +
-                "protected. Have you got yours?"
+            text = getString(R.string.sensors_gate_body)
             textSize = 15f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
         })
-        root.addView(bigChoice("Yes - I have my room sensors and am ready to set them up", 0xFF7C8B88.toInt()) {
+        root.addView(bigChoice(getString(R.string.sensors_gate_yes), 0xFF7C8B88.toInt()) {
             RoomBeacons.setOwnsSensors(this, true)
             showRoomBeaconDebug()
         })
-        root.addView(bigChoice("No - I do not have any room sensors", 0xFF9AA0A6.toInt()) {
+        root.addView(bigChoice(getString(R.string.sensors_gate_no), 0xFF9AA0A6.toInt()) {
             showSensorPitch()
         })
         setContentWithThumb(root) { setupHomeScreen() }
@@ -7099,16 +7085,13 @@ private fun startWeekStrict() {
         inSubPage = true
         val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
         val root = vbox(pad)
-        root.addView(titleText("Room sensors"))
+        root.addView(titleText(getString(R.string.sensors_gate_title)))
         root.addView(TextView(this).apply {
-            text = "- Small Bluetooth beacons, one per room you want protected.\n" +
-                "- The app learns each room and knows when you're in it.\n" +
-                "- In strict mode, protected rooms lock away every non-essential app automatically.\n" +
-                "- No pairing, years of battery, and nothing ever leaves your phone."
+            text = getString(R.string.sensors_pitch_body)
             textSize = 15f; setTextColor(0xFF3A434B.toInt()); setLineSpacing(0f, 1.35f)
             setPadding(0, (4 * dp).toInt(), 0, (18 * dp).toInt())
         })
-        root.addView(bigChoice("Take me to the order page", 0xFF2E9E8F.toInt()) { showSensorOrderPage() })
+        root.addView(bigChoice(getString(R.string.sensors_pitch_order), 0xFF2E9E8F.toInt()) { showSensorOrderPage() })
         setContentWithThumb(root) { showSensorGate() }
     }
 
@@ -7116,9 +7099,9 @@ private fun startWeekStrict() {
         inSubPage = true
         val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
         val root = vbox(pad)
-        root.addView(titleText("Order sensors"))
+        root.addView(titleText(getString(R.string.sensors_order_title)))
         root.addView(TextView(this).apply {
-            text = "Coming soon."
+            text = getString(R.string.sensors_order_body)
             textSize = 16f; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
         })
         setContentWithThumb(root) { showSensorPitch() }
@@ -7134,25 +7117,25 @@ private fun startWeekStrict() {
             ).apply { topMargin = (24 * dp).toInt() }
         }
         box.addView(TextView(this).apply {
-            text = "STATUS"; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            text = getString(R.string.status_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
             setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
         })
         fun row(label: String, on: Boolean, onClick: () -> Unit) = box.addView(TextView(this).apply {
-            text = "${if (on) "\u25CF" else "\u25CB"}  $label - ${if (on) "On" else "Off"}"
+            text = getString(R.string.status_row, if (on) "\u25CF" else "\u25CB", label, getString(if (on) R.string.status_on_label else R.string.status_off_label))
             textSize = 14f; setTextColor(if (on) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
             isClickable = true; isFocusable = true; setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
             setOnClickListener { onClick() }
         })
-        row("Page monitoring", isAccessibilityEnabled()) {
+        row(getString(R.string.status_page_monitoring), isAccessibilityEnabled()) {
             openAccessibilitySettings()
         }
-        row("Block overlay permission", Settings.canDrawOverlays(this)) { requestOverlayPermission() }
-        row("Uninstall lock", UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)) { toggleUninstallGuard() }
+        row(getString(R.string.status_block_overlay), Settings.canDrawOverlays(this)) { requestOverlayPermission() }
+        row(getString(R.string.status_uninstall_lock), UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)) { toggleUninstallGuard() }
         val timers = mutableListOf<String>()
-        if (Lockdown.isActive(this)) timers.add("App lockdown - ${minLeft(Lockdown.remaining(this))} left")
-        if (LoosenWindow.isActive(this)) timers.add("Unlock window - ${minLeft(LoosenWindow.remaining(this))} left")
-        if (LoosenWait.isActive(this)) timers.add("Unlock wait - ${minLeft(LoosenWait.remaining(this))} left")
-        if (Mode.isLocked(this)) timers.add("Week-long strict - ${Mode.daysLeft(this)}")
+        if (Lockdown.isActive(this)) timers.add(getString(R.string.status_lockdown, minLeft(Lockdown.remaining(this))))
+        if (LoosenWindow.isActive(this)) timers.add(getString(R.string.status_unlock_window, minLeft(LoosenWindow.remaining(this))))
+        if (LoosenWait.isActive(this)) timers.add(getString(R.string.status_unlock_wait, minLeft(LoosenWait.remaining(this))))
+        if (Mode.isLocked(this)) timers.add(getString(R.string.status_week_strict, Mode.daysLeft(this)))
         if (timers.isNotEmpty()) box.addView(TextView(this).apply {
             text = timers.joinToString("\n"); textSize = 13f; setTextColor(0xFF7B848C.toInt())
             setPadding(0, (8 * dp).toInt(), 0, 0)

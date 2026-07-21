@@ -467,8 +467,8 @@ class FeelingFaceView(
 class PeakCurveView(
     context: Context,
     private val showMarker: Boolean = true,
-    private val labelTop: String? = "you're strong -",
-    private val labelBot: String? = "you can get here",
+    private val labelTop: String? = null,
+    private val labelBot: String? = null,
 ) : View(context) {
     private var anim = 0f
     private val accent = 0xFF2E9E8F.toInt()
@@ -541,13 +541,15 @@ class PeakCurveView(
             tag.textSize = 11f * dp; tag.alpha = (la * 200).toInt()
             canvas.drawText(context.getString(R.string.chart_past_peak), px(0.42f), yB + 18f * dp, tag)
         }
-        if (la > 0f && labelTop != null) {
+        val topText = labelTop ?: context.getString(R.string.peak_strong)
+        val botText = labelBot ?: context.getString(R.string.peak_get_here)
+        if (la > 0f) {
             // label sits up high, clear of the curve, with an arrow down to the faded tail
             label.textSize = 12.5f * dp; label.alpha = (la * 255).toInt()
             val tx = xR
             val ty = yT + 13f * dp
-            canvas.drawText(labelTop, tx, ty, label)
-            if (labelBot != null) canvas.drawText(labelBot, tx, ty + 16f * dp, label)
+            canvas.drawText(topText, tx, ty, label)
+            canvas.drawText(botText, tx, ty + 16f * dp, label)
             // arrow from just below the label down to the curve's end
             arrow.alpha = (la * 200).toInt()
             val ax = px(0.9f); val aTopY = ty + 26f * dp; val aEndY = py(u(0.9f)) - 8f * dp
@@ -1115,11 +1117,11 @@ class StatLineChartView(
         if (goalPerSlot != null) {
             canvas.drawLine(px(0), py(0f), px(n - 1), py(goalPerSlot * n), goalP)
             text.textAlign = Paint.Align.RIGHT; text.color = 0xFF2E7D32.toInt()
-            canvas.drawText("goal", xR, py(goalPerSlot * n) - 3f * dp, text)
+            canvas.drawText(context.getString(R.string.chart_goal), xR, py(goalPerSlot * n) - 3f * dp, text)
         } else if (goal != null) {
             canvas.drawLine(xL, py(goal), xR, py(goal), goalP)
             text.textAlign = Paint.Align.RIGHT; text.color = 0xFF2E7D32.toInt()
-            canvas.drawText("goal ${fmtVal(goal)}", xR, py(goal) - 3f * dp, text)
+            canvas.drawText(context.getString(R.string.chart_goal_val, fmtVal(goal)), xR, py(goal) - 3f * dp, text)
         }
 
         // the real line (skipping NaN gaps), filled underneath

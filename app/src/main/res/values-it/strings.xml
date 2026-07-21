@@ -1,0 +1,942 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ITALIAN (it) — full translation of the English master. app_name omitted (brand). -->
+<resources>
+    <string name="settings_language">Lingua</string>
+    <string name="settings_language_subtitle">Scegli la lingua dell\'app (usa la lingua di sistema, poi l\'inglese).</string>
+    <string name="language_system_default">Predefinita di sistema</string>
+    <string name="language_changed">Lingua aggiornata</string>
+
+    <string name="accessibility_label">Web Traffic Monitor — monitoraggio delle pagine</string>
+    <string name="accessibility_description">Consente all\'app di leggere il sito/l\'app attuale e il testo sullo schermo per registrare le pagine che visualizzi, a scopo di responsabilità.</string>
+    <string name="disclosure">Questa app registra ciò che visualizzi su questo dispositivo a scopo di responsabilità: il sito/l\'app e il testo sullo schermo (Accessibilità) e schermate periodiche del tuo schermo (acquisizione schermo). Tutto resta su questo dispositivo. Attivala solo con il consenso dell\'utente.</string>
+    <string name="page_monitoring">Monitoraggio delle pagine (Accessibilità)</string>
+    <string name="status_on">ATTIVO</string>
+    <string name="status_off">DISATTIVO</string>
+    <string name="enable">Attiva</string>
+    <string name="clear_list">Svuota elenco</string>
+    <string name="empty_list">Ancora niente di registrato. Attiva il monitoraggio qui sopra.</string>
+    <string name="overlay_permission">Autorizzazione schermata di blocco</string>
+    <string name="grant">Concedi</string>
+    <string name="blocking_label">Blocco (tocca una riga qui sotto per bloccarla):</string>
+    <string name="blocking_none">(niente bloccato)</string>
+    <string name="block_hint">dominio o parola chiave</string>
+    <string name="block">Blocca</string>
+    <string name="clear_blocks">Svuota blocchi</string>
+    <string name="clear_log">Svuota registro</string>
+    <string name="toast_blocking">Blocco: %1$s</string>
+    <string name="block_title">Bloccato</string>
+    <string name="block_explanation">Identificato da Web Traffic Monitor come probabilmente fonte di distrazione.</string>
+    <string name="leave">Vai alla schermata Home</string>
+    <string name="go_back">Torna invece indietro di una pagina</string>
+    <string name="report_block">Segnala blocco errato</string>
+
+    <string name="nav_overview">Panoramica</string>
+    <string name="nav_productivity">Produttività</string>
+    <string name="nav_temptations">Tentazioni</string>
+
+    <string name="picker_select_all">Seleziona tutte quelle pertinenti.</string>
+    <string name="picker_type_it">Scrivilo</string>
+    <string name="picker_add_own">Aggiungi il tuo</string>
+    <string name="picker_add_own_row">Aggiungi il tuo…</string>
+    <string name="picker_add">Aggiungi</string>
+
+    <string name="temp_groups_title">Cosa la sta alimentando adesso?</string>
+    <string name="temp_groups_sub">Scegli quelle pertinenti.</string>
+    <string name="tgroup_screen_short">Qualcosa su uno schermo</string>
+    <string name="tgroup_screen_example">es. il telefono, il computer, la TV</string>
+    <string name="tgroup_screen_title">Che tipo di schermo?</string>
+    <string name="tgroup_place_short">Legato a dove mi trovo</string>
+    <string name="tgroup_place_example">es. camera, bagno, in casa</string>
+    <string name="tgroup_place_title">Dove sei?</string>
+    <string name="tgroup_feeling_short">Come mi sento</string>
+    <string name="tgroup_feeling_example">es. ansioso, giù, frustrato</string>
+    <string name="tgroup_feeling_title">Come ti senti?</string>
+    <string name="tgroup_doing_short">Per abitudine</string>
+    <string name="tgroup_doing_example">es. scrollare, rilassarsi, appena svegli</string>
+    <string name="tgroup_doing_title">Cosa stavi facendo?</string>
+
+    <string name="temp_urge_q">Quanto è forte l\'impulso?</string>
+    <string name="ride_walk_q">Puoi uscire - anche solo una breve camminata?</string>
+    <string name="ride_walk_yes">Sì - vado adesso</string>
+    <string name="ride_walk_no">Non ora</string>
+    <string name="ride_move_q">Puoi spostarti in un\'altra stanza?</string>
+    <string name="ride_move_yes">Fatto - mi sono spostato</string>
+    <string name="ride_move_no">Non posso ora</string>
+    <string name="ride_phys_q">Puoi fare qualcosa di fisico - stretching, flessioni, riordinare?</string>
+    <string name="ride_phys_yes">Sì - lo sto facendo</string>
+    <string name="ride_phys_no">Non posso fare nessuna di queste</string>
+    <string name="ride_stuck_title">Allora respira e aspetta</string>
+    <string name="ride_stuck_body">Non devi fare altro che resistere. L\'onda passa sempre - devi solo superare questa.</string>
+    <string name="ride_stuck_btn">Ho respirato - e adesso?</string>
+    <string name="ride_peak_title">Hai già superato la parte più difficile.</string>
+    <string name="ride_peak_body">Un impulso raggiunge il picco entro i primi 30 secondi circa - e tu ci sei passato dritto attraverso. Da qui in poi cala soltanto. Ce la puoi fare.</string>
+    <string name="ride_success_stats">%1$d superate  ·  %2$d questa settimana</string>
+    <string name="ride_lock_apps">oppure blocca le app per 30 minuti</string>
+    <string name="ride_follow_orb">Segui la sfera - %1$d respiri lenti</string>
+    <string name="ride_ms_10">10 minuti - è svanito. Ce l\'hai fatta.</string>
+    <string name="ride_ms_2">2 minuti - lo stai superando.</string>
+    <string name="ride_ms_1">1 minuto - il picco è passato.</string>
+    <string name="ride_ms_30">30 secondi - lo stai facendo, continua.</string>
+
+    <string name="recent_title">Blocchi recenti (ultima ora)</string>
+    <string name="recent_empty">(niente nell\'ultima ora)</string>
+    <string name="log_title">Registro</string>
+    <string name="log_clear">Svuota registro</string>
+    <string name="log_cleared">Registro svuotato</string>
+    <string name="log_empty">Ancora nessuna voce</string>
+    <string name="dev_console_title">Console di sistema</string>
+
+    <string name="common_done">Fatto</string>
+    <string name="common_remove">Rimuovi</string>
+    <string name="common_continue">Continua</string>
+    <string name="common_not_now">Non ora</string>
+
+    <string name="perm_ready_title">Pronto ad attivare il blocco?</string>
+    <string name="perm_ready_body">Hai dato un\'occhiata in giro. Per bloccare davvero qualcosa, l\'app ha bisogno di due autorizzazioni: il monitoraggio delle pagine (per vedere cosa c\'è sullo schermo) e la schermata di blocco (per coprirlo). Meno di un minuto, tutto su questo telefono.</string>
+    <string name="perm_protection_on">Protezione attiva - modalità %1$s</string>
+    <string name="unprotected_title">⚠  Questa app non è ancora protetta</string>
+    <string name="unprotected_body">Senza il blocco della disinstallazione puoi eliminare l\'app in un momento di debolezza - ed è proprio qui che quei momenti succedono.</string>
+    <string name="unprotected_enable">Attiva il blocco della disinstallazione</string>
+    <string name="lock_on_title">Blocco disinstallazione - ATTIVO</string>
+    <string name="lock_on_body">La protezione è attiva: l\'app non può essere disinstallata e le pagine delle impostazioni che la disattiverebbero sono bloccate.\n\nPuoi disattivarla dalla schermata principale (ti servirà il codice).</string>
+    <string name="lock_protect_title">Proteggi questa app</string>
+    <string name="lock_protect_body">Attiva il blocco della disinstallazione così non puoi eliminare l\'app in un momento di debolezza. Mentre è attivo, l\'app non può essere disinstallata e le pagine delle impostazioni che la disattiverebbero sono bloccate.</string>
+    <string name="lock_enable">Attiva il blocco disinstallazione</string>
+    <string name="lock_skip">Salta per ora</string>
+    <string name="step_monitoring_title">Passo 1 di 3\nAttiva il monitoraggio delle pagine</string>
+    <string name="step_monitoring_body">Questo consente all\'app di vedere quale sito o app è sullo schermo, così può bloccare ciò che deve.\n\nQuando tocchi Continua arriverai nelle impostazioni di Accessibilità:\n\n1.  Tocca “App installate” (su alcuni telefoni “App scaricate”).\n2.  Tocca “Web Traffic Monitor”.\n3.  Attiva l\'interruttore e accetta.\n\nPoi torna a questa app.</string>
+    <string name="step_monitoring_button">Continua verso Accessibilità</string>
+    <string name="step_overlay_title">Passo 2 di 3\nConsenti la schermata di blocco</string>
+    <string name="step_overlay_body">Questo consente all\'app di disegnare la schermata di blocco sopra le altre app.\n\nQuando tocchi Continua, trova “Web Traffic Monitor” nell\'elenco e attiva il suo interruttore.\n\nPoi torna a questa app.</string>
+    <string name="step_overlay_button">Continua verso “Mostra sopra le altre app”</string>
+
+    <string name="report_protocol">Protocollo per spezzare la dipendenza</string>
+    <string name="report_pane_appsite">Segnala un\'app/un sito</string>
+    <string name="report_pane_temptation">Sento una tentazione</string>
+    <string name="report_pane_relapse">Segnala una ricaduta</string>
+    <string name="report_pane_stats">Statistiche</string>
+    <string name="report_settings">Impostazioni</string>
+
+    <string name="mode_off_name">Spenta</string>
+    <string name="chart_so_far">— finora</string>
+    <string name="chart_projected">- - previsto</string>
+    <string name="chart_goal_legend">- - obiettivo</string>
+    <string name="peak_strong">sei forte -</string>
+    <string name="peak_get_here">puoi arrivare qui</string>
+    <string name="ms_first_urge">Primo impulso superato</string>
+    <string name="ms_first_week">Prima settimana passata</string>
+    <string name="ms_clean_week">Una settimana pulita in tasca</string>
+    <string name="ms_25_urges">25 impulsi battuti</string>
+    <string name="ms_two_weeks">Due settimane pulite</string>
+    <string name="ms_clean_month">Un mese pulito - ogni giorno conta</string>
+    <string name="ms_100_urges">100 impulsi battuti</string>
+    <string name="next_first_urge">Supera il tuo primo impulso</string>
+    <string name="next_first_week">Raggiungi la tua prima settimana intera</string>
+    <string name="next_7_clean">Arriva a 7 giorni puliti nella tua finestra</string>
+    <string name="next_25_urges">Supera 25 impulsi (%1$d/25)</string>
+    <string name="next_clean_month">Punta a un mese pulito (%1$d/30)</string>
+    <string name="next_100_urges">Supera 100 impulsi (%1$d/100)</string>
+    <string name="mode_relaxed_name">Rilassata</string>
+    <string name="mode_strict_name">Rigida</string>
+    <string name="mode_superhardcore_name">Super rigida</string>
+    <string name="mode_on_toast">Modalità %1$s attivata</string>
+    <string name="mode_off_toast">Monitoraggio disattivato: niente è controllato o bloccato</string>
+    <string name="mode_needs_lock_toast">La modalità Super rigida richiede prima il blocco della disinstallazione</string>
+
+    <string name="adult_section_looks">Cosa cerca il filtro</string>
+    <string name="adult_intro">Per impostazione predefinita il filtro tratta allo stesso modo le immagini sessualizzate di donne e di uomini. Se una delle due semplicemente non è una tentazione per te, puoi ridurla — così puoi cercare costumi o intimo senza combattere.\n\nQuesto ammorbidisce solo il lato ALLUSIVO. I contenuti espliciti e i siti per adulti noti restano bloccati comunque, qualunque cosa dicano questi interruttori.</string>
+    <string name="adult_locked">Bloccato mentre sei in modalità %1$s.\nEntrambi sono al massimo. Passa a Rilassata per modificarli.</string>
+    <string name="adult_block_women">Blocca donne sessualizzate</string>
+    <string name="adult_block_women_sub">Bikini, intimo, décolleté e simili.</string>
+    <string name="adult_block_men">Blocca uomini sessualizzati</string>
+    <string name="adult_block_men_sub">A torso nudo, rigonfiamenti e simili.</string>
+    <string name="adult_medical_note">Le pagine mediche e di salute sono già trattate diversamente — cercare un sintomo non è come guardare porno, e il filtro conosce la differenza.</string>
+
+    <string name="moderules_title">Le regole, in parole semplici</string>
+    <string name="moderules_subtitle">Tutto ciò che l\'app ti fa, ed esattamente quando. Nessuna sorpresa.</string>
+    <string name="moderules_section_always">SEMPRE ATTIVE - IN OGNI MODALITÀ</string>
+    <string name="moderules_always_title">Queste non si disattivano mai</string>
+    <string name="moderules_always_sub">Anche in Rilassata. Off è l\'unica eccezione - vedi la sua scheda sotto.</string>
+    <string name="moderules_section_modes">LE MODALITÀ - COSA CAMBIA</string>
+    <string name="moderules_current">Sei in questa modalità in questo momento</string>
+    <string name="moderules_lock">Il blocco rigido è attivo: %1$s. Non puoi tornare a Rilassata finché non finisce. Puoi comunque salire a Super rigida.</string>
+    <string name="moderules_watched">Le \"app monitorate\" sono quelle che ricevono la pausa di respiro: %1$s.</string>
+
+    <string name="always_on_01">Un\'eccezione a tutto ciò che segue: la modalità OFF. In Off il monitoraggio è completamente disattivato e nessuna di queste regole viene applicata.</string>
+    <string name="always_on_02">I siti per adulti noti vengono bloccati del tutto. Oltre a Off, la modalità non fa differenza.</string>
+    <string name="always_on_03">Le pagine vengono analizzate per parole a sfondo sessuale. Se sono abbastanza, la pagina viene bloccata, in ogni modalità - Rilassata compresa.</string>
+    <string name="always_on_04">Tutto ciò che è nella tua lista di blocco viene bloccato - i siti, le pagine, i termini di ricerca e le parole chiave che ti sei vietato.</string>
+    <string name="always_on_05">I browser bloccati vengono coperti nel momento in cui li apri. Solo Firefox resta utilizzabile.</string>
+    <string name="always_on_06">Rifiuta un blocco sullo stesso sito abbastanza volte in un giorno e l\'intero sito viene vietato automaticamente per un po\'.</string>
+    <string name="always_on_07">I feed a formato breve (Reels, Shorts, stile TikTok) vengono bloccati se hai attivato quell\'interruttore.</string>
+    <string name="always_on_08">Le app in lista grigia (TikTok, Instagram e simili) hanno %1$d minuti all\'ora, poi si chiudono.</string>
+    <string name="always_on_09">Isolamento \"resisti all\'impulso\": %1$d minuti in cui si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, mappe. Non può essere annullato prima.</string>
+    <string name="always_on_10">Sbloccare una finestra rilassata è limitato: una volta al giorno, e solo %1$d volte in tutto.</string>
+    <string name="always_on_11">Non c\'è nessun pulsante \"guardo comunque\". Non è su nessuna schermata, di proposito - un pulsante così è solo una porta con una maniglia, e prima o poi l\'impulso prova la maniglia.</string>
+    <string name="always_on_12">C\'È ancora, ma ti viene offerto solo se punti al pulsante di disinstallazione, al blocco amministratore del dispositivo, all\'interruttore del monitoraggio, o provi a uscire da una modalità rigida bloccata. Punta all\'opzione distruttiva e ti verrà offerta invece quella onesta - un\'attesa, un impegno scritto, una finestra fissa, e tutto resta in piedi dopo.</string>
+    <string name="always_on_13">L\'app non preme mai Indietro al posto tuo. Il blocco copre lo schermo e ti offre la via d\'uscita; non naviga mai nel tuo browser alle tue spalle.</string>
+
+    <string name="manage_title">Gestisci i blocchi</string>
+    <string name="manage_blocked_apps">App bloccate</string>
+    <string name="manage_greylisted_apps">App in lista grigia (%1$d min/ora)</string>
+    <string name="manage_blocked_sites">Siti e pagine bloccati</string>
+    <string name="manage_greylisted_sites">Siti in lista grigia (%1$d min/ora)</string>
+    <string name="manage_nothing">Ancora niente di bloccato.</string>
+
+    <string name="appsite_kind_title">Cosa vuoi limitare?</string>
+    <string name="appsite_kind_subtitle">Impostalo ora, mentre sei calmo - l\'app lo rispetta soltanto dopo. Nessuna analisi dei contenuti, nessuna schermata.</string>
+    <string name="appsite_kind_app">Un\'app su questo telefono</string>
+    <string name="appsite_kind_website">Un sito web</string>
+    <string name="appsite_site_title">Aggiungi un sito web</string>
+    <string name="appsite_site_hint">incolla o scrivi un indirizzo web</string>
+    <string name="appsite_pick_app">Scegli un\'app</string>
+    <string name="appsite_loading">Caricamento app…</string>
+    <string name="appsite_limit_app">Limitare %1$s?</string>
+    <string name="appsite_greylist">Lista grigia - %1$d min/ora</string>
+    <string name="appsite_greylist_it">Lista grigia - %1$d min/ora</string>
+    <string name="appsite_blocklist">Lista di blocco - blocca del tutto</string>
+    <string name="appsite_blocklist_it">Lista di blocco - blocca del tutto</string>
+    <string name="appsite_bad_url">Impossibile leggere un indirizzo web.</string>
+    <string name="appsite_tier_note">Lista grigia = %1$d minuti all\'ora, poi in pausa.\nLista di blocco = bloccato del tutto.</string>
+    <string name="appsite_saved_title">Salvato</string>
+    <string name="appsite_saved_msg">%1$s ora è %2$s. È in vigore subito.</string>
+    <string name="appsite_saved_greylisted">in lista grigia - %1$d minuti all\'ora</string>
+    <string name="appsite_saved_blocklisted">in lista di blocco - bloccato del tutto</string>
+    <string name="appsite_add_another">Aggiungine un altro</string>
+
+    <string name="blockapps_title">App autorizzate</string>
+    <string name="blockapps_subtitle_prefix">Queste app non sono mai bloccate di default. Toccane una per bloccarla comunque. </string>
+    <string name="blockapps_subtitle_relaxed">Tocca un\'app bloccata per sbloccarla.</string>
+    <string name="blockapps_subtitle_strict">Le app bloccate possono essere sbloccate solo in modalità Rilassata.</string>
+    <string name="blockapps_none_installed">Nessuna delle app autorizzate è installata.</string>
+    <string name="blockapps_blocked_tag">Bloccata</string>
+    <string name="blockapps_cant_unblock">Puoi sbloccare le app solo in modalità Rilassata.</string>
+
+    <string name="stats_title">Statistiche</string>
+    <string name="stats_progress">Progressi e ricompensa</string>
+    <string name="stats_context">Dove e come succede</string>
+    <string name="stats_temptation">Schemi delle tentazioni</string>
+    <string name="stats_relapse">Schemi delle ricadute</string>
+    <string name="stats_unlock">Tentativi di sblocco</string>
+    <string name="stats_empty">Ancora niente registrato.</string>
+    <string name="common_loading">Caricamento…</string>
+    <string name="stats_sec_time">Ora del giorno</string>
+    <string name="stats_sec_dow">Giorno della settimana</string>
+    <string name="stats_sec_where">Dove</string>
+    <string name="stats_sec_felt">Come ti sentivi</string>
+    <string name="stats_ctx_empty">Ancora niente da mostrare.\n\nD\'ora in poi, ogni blocco e ogni ricaduta segnalata registra se eri sdraiato e quanto era buia la stanza. Una volta accumulati alcuni, lo schema comparirà qui.</string>
+    <string name="stats_ctx_lying">Di solito sei SDRAIATO quando succede (%1$d%% delle volte).</string>
+    <string name="stats_ctx_upright">Di solito sei IN PIEDI quando succede (%1$d%% delle volte).</string>
+    <string name="stats_ctx_light">Il livello di luce di solito è %1$s (%2$d%% delle volte).</string>
+    <string name="stats_hdr_posture">POSIZIONE DEL CORPO</string>
+    <string name="stats_hdr_light">LUCE NELLA STANZA</string>
+    <string name="stats_lying">Sdraiato</string>
+    <string name="stats_upright">In piedi</string>
+    <string name="stats_ctx_unknown">%1$d segnalazion(e/i) senza dati dei sensori, quindi esclus(a/e) dalle percentuali qui sopra.</string>
+    <string name="stats_bar_row">%1$s   ·   %2$d  (%3$d%%)</string>
+    <string name="light_dark">buio</string>
+    <string name="light_dim">soffuso</string>
+    <string name="light_normal">luce interna normale</string>
+    <string name="light_bright">luminoso</string>
+    <string name="stats_progress_title">Progressi</string>
+    <string name="stats_prog_empty">Si riempie man mano che usi l\'app. Resisti a un impulso o supera un\'attesa, e la tua costanza e il tempo recuperato iniziano a comparire qui.</string>
+    <string name="stats_prog_consistency">costanza</string>
+    <string name="stats_prog_clean">%1$d degli ultimi %2$d giorni puliti</string>
+    <string name="stats_prog_noreset">Una ricaduta non azzera mai questo dato - lo abbassa solo un po\'. L\'obiettivo è la tendenza, non una serie perfetta.</string>
+    <string name="stats_prog_run">Serie attuale: %1$d giorn%2$s - una ricaduta non la interromperà.</string>
+    <string name="stats_sec_reclaimed">Tempo recuperato</string>
+    <string name="stats_prog_reclaimed_label">recuperato finora</string>
+    <string name="stats_prog_reclaimed_sub">stima - circa %1$d min per ogni impulso a cui hai resistito</string>
+    <string name="stats_sec_heading_right">Sulla strada giusta</string>
+    <string name="stats_prog_weekly">impulsi superati a settimana (ultime 8 settimane)</string>
+    <string name="stats_sec_pace">Se mantieni questo ritmo</string>
+    <string name="stats_prog_per_year">all\'anno</string>
+    <string name="stats_prog_projected">proiettato dal tuo ritmo recente · tempo recuperato valutato a ~£%1$d/ora</string>
+    <string name="stats_sec_milestones">Traguardi</string>
+    <string name="stats_prog_no_milestones">Ancora nessuno - stanno arrivando.</string>
+    <string name="stats_prog_milestone_item">🏅  %1$s</string>
+    <string name="stats_prog_next">○  Prossimo: %1$s</string>
+    <string name="stats_temp_count">%1$d impulsi superati</string>
+    <string name="stats_sec_saw">Cosa hai visto</string>
+    <string name="stats_sec_urge">Intensità dell\'impulso</string>
+    <string name="stats_sec_14d">Ultimi 14 giorni</string>
+    <string name="stats_relapse_count">%1$d segnalazioni</string>
+    <string name="stats_sec_ledin">Cosa ha portato a questo</string>
+    <string name="stats_loosen_count">%1$d tentativi</string>
+    <string name="stats_sec_ended">Come sono finiti</string>
+    <string name="stats_sec_quiet">Cosa speravano di placare</string>
+    <string name="stats_outcome_stopped">Fermato</string>
+    <string name="stats_outcome_tomorrow">Rimandato a domani</string>
+    <string name="stats_outcome_looked">Guardato</string>
+
+    <string name="about_you_title">Su di te</string>
+    <string name="about_intro">Facoltativo. Lo usiamo solo per stimare quanto ti costa davvero il tempo perso — niente qui lascia il telefono e niente viene condiviso.\n\nLascialo vuoto e daremo per scontato £%1$dmila all\'anno (£%2$d/ora). Tutto nella schermata Home si aggiorna nel momento in cui scrivi.</string>
+    <string name="about_per_year">£ all\'anno</string>
+    <string name="about_earn_label">Quanto guadagni all\'anno</string>
+    <string name="about_earn_sub">Il tuo lavoro, al netto delle tasse se vuoi. Conosci solo la tariffa oraria? Circa %1$d ore lavorative fanno un anno - £15/ora ≈ £29.000.</string>
+    <string name="about_side_label">Reddito extra all\'anno (facoltativo)</string>
+    <string name="about_side_sub">Un\'attività che stai costruendo, lavoro freelance. Non lo sai? LASCIALO VUOTO - un\'ipotesi qui altera solo i tuoi numeri. Se è più alto del tuo stipendio, usiamo quello.</string>
+    <string name="about_whyask">\nPerché lo chiediamo: \"3 ore al giorno\" è astratto e facile da ignorare. \"£13.000 all\'anno\" no.</string>
+
+    <string name="relapse_device_q">Dove è successo?</string>
+    <string name="relapse_device_yes">Sì, su questo dispositivo</string>
+    <string name="relapse_device_no">No, un altro dispositivo</string>
+    <string name="relapse_home_q">Eri a casa?</string>
+    <string name="relapse_home_yes">A casa</string>
+    <string name="relapse_home_no">Fuori / da un\'altra parte</string>
+    <string name="relapse_room_q">Dove eri?</string>
+    <string name="relapse_activity_q">Cosa stavi facendo poco prima?</string>
+    <string name="relapse_feeling_q">Come ti sentivi?</string>
+    <string name="relapse_urge_q">Quanto era forte l\'impulso?</string>
+    <string name="relapse_note_title">Vuoi annotare qualcosa?</string>
+    <string name="relapse_note_private">Privato. Resta su questo dispositivo e non ti viene mai rimostrato come giudizio.</string>
+    <string name="relapse_note_hint">Cosa è successo, cosa l\'ha scatenato… (facoltativo)</string>
+    <string name="relapse_skip">Salta</string>
+    <string name="relapse_save">Salva segnalazione</string>
+    <string name="relapse_saved">Segnalazione salvata ✓</string>
+    <string name="relapse_noticed">Cosa abbiamo notato</string>
+    <string name="relapse_fb_first">Questa è la tua prima segnalazione, quindi non c\'è ancora nulla con cui confrontarla. D\'ora in poi, ognuna aiuta a mettere a fuoco uno schema.</string>
+    <string name="relapse_fb_time">È successo intorno alle %1$s — la stessa ora del giorno del %2$s delle tue segnalazioni passate.</string>
+    <string name="relapse_fb_day">È capitato di %1$s, come il %2$s delle tue segnalazioni passate.</string>
+    <string name="relapse_fb_feeling">Ti sentivi %1$s — come il %2$s delle tue segnalazioni passate.</string>
+    <string name="relapse_fb_where">Eri %1$s, come il %2$s delle tue segnalazioni passate.</string>
+    <string name="relapse_fb_where_home">a casa</string>
+    <string name="relapse_fb_where_away">fuori casa</string>
+    <string name="relapse_fb_alone">Eri da solo — vero per il %1$s delle tue segnalazioni passate.</string>
+    <string name="relapse_fb_activity">Poco prima, stavi \"%1$s\" — la stessa premessa del %2$s delle tue segnalazioni passate.</string>
+    <string name="relapse_fb_few">(Ancora poche segnalazioni, quindi questi numeri si affineranno man mano che ne registri.)</string>
+    <string name="relapse_day_fallback">quel giorno</string>
+    <string name="relapse_enc_first">Hai fatto la cosa giusta a registrarlo — onestamente, è la parte più difficile. Sii gentile con te stesso: questo è l\'inizio della comprensione, non una pagella.</string>
+    <string name="relapse_enc_early">Hai fatto la cosa giusta a registrarlo. Ogni segnalazione è un pezzo del puzzle, e ne stai già iniziando a vedere la forma. Non si tratta di senso di colpa — si tratta di capire.</string>
+    <string name="relapse_enc_many">Hai fatto la cosa giusta a registrarlo. Con %1$d segnalazioni, gli schemi si fanno più chiari — e uno schema che vedi è uno schema attorno a cui puoi organizzarti. Sei più vicino a sconfiggerlo di prima.</string>
+
+    <string name="loosen_intro_title">Questo è uno sblocco supervisionato, solo per i momenti di disperazione.</string>
+    <string name="loosen_intro_boldword">disperazione</string>
+    <string name="loosen_unlocks_avail">%1$d di %2$d sblocchi disponibili</string>
+    <string name="loosen_intro_urge">Ogni impulso funziona allo stesso modo - sale di colpo, poi svanisce. Chi aspetta che passi scopre quasi sempre che sparisce in pochi minuti.</string>
+    <string name="loosen_curve_top">passa</string>
+    <string name="loosen_curve_bot">sempre</string>
+    <string name="loosen_stop_instead">Voglio invece fermarmi</string>
+    <string name="loosen_stop_strong">Sono forte e ce la posso fare</string>
+    <string name="loosen_understand">Ho capito</string>
+    <string name="loosen_understand_sub">e voglio continuare</string>
+    <string name="loosen_feel_after_title">Come ti sentirai dopo?</string>
+    <string name="loosen_drag_after">Trascina la faccia dove ti sentirai dopo…</string>
+    <string name="loosen_startzone">tu, se superi questo\n(solo 5 minuti di attesa)</string>
+    <string name="loosen_wait_title">E se aspetti che passi?</string>
+    <string name="loosen_drag_30">Trascina la faccia dove sarai tra 30 minuti…</string>
+    <string name="loosen_challenge_title">Una sfida di 30 minuti</string>
+    <string name="loosen_challenge_body">Batti l\'impulso non facendo altro che aspettare che passi.</string>
+    <string name="loosen_howlikely">Adesso, quanto è probabile che tu resista per 30 minuti?</string>
+    <string name="loosen_nochance">nessuna possibilità</string>
+    <string name="loosen_gotthis">Ce la faccio</string>
+    <string name="loosen_continue_anyway">Voglio continuare comunque</string>
+    <string name="loosen_band_impossible">Adesso sembra impossibile</string>
+    <string name="loosen_band_veryhard">Molto difficile - ma non impossibile</string>
+    <string name="loosen_band_either">Potrebbe andare in un modo o nell\'altro</string>
+    <string name="loosen_band_canhold">Penso di potercela fare</string>
+    <string name="loosen_band_gotthis">Ce la faccio - 30 minuti non sono niente</string>
+    <string name="loosen_oneoff_title">È davvero una volta sola?</string>
+    <string name="loosen_oneoff_body">Ogni sblocco spinge il tuo cervello di nuovo verso il vecchio schema. \"Solo questa volta\" è esattamente il modo in cui lo schema si tiene in vita.</string>
+    <string name="loosen_oneoff_yes">Sì - davvero una volta sola</string>
+    <string name="loosen_follow_title_yes">Allora aspettare non ti costa nulla</string>
+    <string name="loosen_follow_title_no">Allora che sia qui che si spezza</string>
+    <string name="loosen_follow_body_yes">Se è davvero solo una volta, 30 minuti non cambieranno la cosa - se non che l\'avrai alle spalle, pulito, con ogni sblocco ancora in banca.</string>
+    <string name="loosen_follow_body_no">Gli schemi si spezzano in un momento ordinario che assomiglia esattamente a questo. Il te del futuro ti chiede di renderlo questo.</string>
+    <string name="loosen_wait_it_out">Aspetterò che passi</string>
+    <string name="loosen_stop_msg_hard">È stata la scelta difficile, fatta bene. L\'impulso passa; questo resta con te. Non è stato consumato nulla.</string>
+    <string name="loosen_continue_anyway_short">Continua comunque</string>
+    <string name="loosen_emotions_q">Quali emozioni provi adesso?</string>
+    <string name="loosen_place_q">Dove sei adesso?</string>
+    <string name="loosen_wave_title">A che punto dell\'onda sei?</string>
+    <string name="loosen_wave_body">L\'impulso sale, poi svanisce. Tocca dove pensi di essere adesso.</string>
+    <string name="loosen_wave_correct">Esatto - devi solo battere i prossimi 5 minuti. Tutto qui, e ti allena per la vita.</string>
+    <string name="loosen_wave_wrong">Non proprio - in realtà hai già superato il picco. Tocca di nuovo, più avanti, dove l\'impulso sta svanendo.</string>
+    <string name="loosen_stop_msg_stepback">Ti sei tirato indietro - non è stato consumato nulla. L\'attesa stava già funzionando.</string>
+    <string name="loosen_wait_short">Prima una breve attesa</string>
+    <string name="loosen_wait_sub">potrai continuare tra 5 minuti</string>
+    <string name="loosen_lock5">Bloccami per 5 min - ce la posso fare</string>
+    <string name="loosen_waited_continue">Ho aspettato - continua</string>
+    <string name="loosen_longer_title">Vuoi darti più tempo? Aiuta soltanto.</string>
+    <string name="loosen_keep5">Tieni i 5 minuti</string>
+    <string name="loosen_lock10">Bloccami per 10 minuti</string>
+    <string name="loosen_lock30">Bloccami per 30 minuti</string>
+    <string name="loosen_lock2h">Bloccami per 2 ore</string>
+    <string name="loosen_step1">Passo 1 di 4</string>
+    <string name="loosen_step2">Passo 2 di 4</string>
+    <string name="loosen_step3">Passo 3 di 4</string>
+    <string name="loosen_step4">Passo 4 di 4</string>
+    <string name="loosen_honest_head">Sii onesto con te stesso</string>
+    <string name="loosen_honest_stmt">Sto scegliendo questo, sapendo come mi sentirò dopo.</string>
+    <string name="loosen_honest_btn">Sì, sto scegliendo questo</string>
+    <string name="loosen_promise_head">Una promessa</string>
+    <string name="loosen_promise_stmt">La prossima volta non lo farò.</string>
+    <string name="loosen_promise_btn">Lo prometto</string>
+    <string name="loosen_note_title">Cosa guarderai?</string>
+    <string name="loosen_note_private">Privato - resta su questo dispositivo.</string>
+    <string name="loosen_note_hint">Chiamalo con il suo nome…</string>
+    <string name="loosen_note_btn">È questo che guarderò</string>
+    <string name="loosen_note_toast">Scrivilo prima.</string>
+    <string name="loosen_duration_title">Per quanto tempo?</string>
+    <string name="loosen_min">%1$d min</string>
+    <string name="loosen_unlock_for">Sblocca per %1$d min</string>
+    <string name="loosen_unlocked_title">Sbloccato per %1$d min</string>
+    <string name="loosen_unlocked_body">La sfera del respiro e l\'attrito sulle immagini restano attivi. Si riblocca da solo quando il timer finisce.</string>
+    <string name="loosen_go">Vai</string>
+    <string name="loosen_relocked">Ribloccato</string>
+    <string name="loosen_continue_now">ora puoi continuare</string>
+    <string name="loosen_continue_in">potrai continuare tra %1$d minut%2$s</string>
+
+    <string name="urge_high">livello di impulso alto</string>
+    <string name="urge_low">livello di impulso basso</string>
+    <string name="misc_no_data">Ancora nessun dato.</string>
+    <string name="chart_past_peak">oltre il picco</string>
+    <string name="chart_tap_where">tocca dove pensi di essere</string>
+    <string name="chart_more_pull">più forte</string>
+    <string name="chart_free">libero</string>
+    <string name="chart_oneoff_backup">una volta sola → si risale</string>
+    <string name="chart_keep_going">continua → libero</string>
+    <string name="chart_waking_life">della tua vita da sveglio</string>
+    <string name="misc_drag_graph">Trascina sul grafico per esplorare</string>
+    <string name="chart_goal">obiettivo</string>
+    <string name="chart_goal_val">obiettivo %1$s</string>
+
+    <string name="loosen_stop_good">Bene.</string>
+    <string name="loosen_blocked_title">Non disponibile in questo momento</string>
+    <string name="loosen_blocked_today">Hai già usato il tuo unico sblocco per oggi. Si ripristina domani - e quell\'attesa sta facendo il suo lavoro.</string>
+    <string name="loosen_blocked_lifetime">Hai usato tutti i tuoi %1$d sblocchi a vita, per tua scelta precedente. Ce la fai anche senza.</string>
+    <string name="bypass_title">Prima di buttare giù tutto</string>
+    <string name="bypass_moment">Poco fa, %1$s.\n\n</string>
+    <string name="bypass_body">Se hai intenzione di guardare, fallo invece nel modo onesto: un\'attesa, un impegno scritto, una finestra fissa, e la protezione ancora in piedi dopo.\n\nTi costa uno dei tuoi %1$d sblocchi a vita. Rompere l\'app ti costa tutto ciò che hai costruito.</string>
+    <string name="bypass_look_anyway">Guardo comunque  ›</string>
+    <string name="panic_title">Spezziamo il circolo</string>
+    <string name="panic_body">Segui le parole. Inspira dal naso, espira dalla bocca.</string>
+    <string name="panic_ground_1">Appoggia entrambi i piedi a terra e siediti dritto.</string>
+    <string name="panic_ground_2">Nomina 5 cose che vedi, 4 che senti, 3 che tocchi.</string>
+    <string name="panic_ground_3">Alzati e cammina in un\'altra stanza.</string>
+    <string name="panic_ground_4">Versa un bicchiere d\'acqua e bevilo lentamente.</string>
+    <string name="panic_ground_line">%1$d.  %2$s</string>
+    <string name="panic_lock_apps">Blocca le app per 30 minuti</string>
+    <string name="panic_apps_locked">App bloccate per 30 min</string>
+    <string name="panic_lockdown_toast">In isolamento. L\'essenziale funziona ancora.</string>
+    <string name="panic_lock_screen">Blocca lo schermo ora</string>
+    <string name="panic_okay">Ora sto bene</string>
+    <string name="panic_cant_lock">Impossibile bloccare lo schermo.</string>
+    <string name="panic_need_lock">Attiva prima la funzione di blocco per usarla.</string>
+    <string name="panic_button">PANICO - devo fermarmi</string>
+
+    <string name="dopband_severe">Gravemente sovrastimolato</string>
+    <string name="dopband_verypoor">Molto scarso</string>
+    <string name="dopband_poor">Scarso</string>
+    <string name="dopband_middling">Mediocre</string>
+    <string name="dopband_good">Buono</string>
+    <string name="dopband_calm">Calmo</string>
+    <string name="dopcat_adult">Contenuti per adulti</string>
+    <string name="dopcat_fast_video">Video a formato breve</string>
+    <string name="dopcat_gambling">Gioco d\'azzardo</string>
+    <string name="dopcat_fast_social">Social veloci</string>
+    <string name="dopcat_impulse">Acquisti d\'impulso</string>
+    <string name="dopcat_mobile_gaming">Gaming mobile</string>
+    <string name="dopcat_live">Live streaming</string>
+    <string name="dopcat_forums_news">Forum e notizie</string>
+    <string name="dopcat_long_video">Video a formato lungo</string>
+    <string name="dopcat_other">Tutto il resto</string>
+    <string name="sl_cat_today">%1$s oggi</string>
+    <string name="sl_latenight">Uso a tarda notte / appena svegli</string>
+    <string name="sl_latenight_detail">×%1$s applicato al tempo qui sopra</string>
+    <string name="sl_unlocks">Sblocchi del telefono</string>
+    <string name="sl_unlocks_detail">%1$d oggi (~%2$s/ora)</string>
+    <string name="sl_straightin">Aperture immediate</string>
+    <string name="sl_straightin_detail">%1$d× hai sbloccato ed eri in un feed entro %2$ds</string>
+    <string name="sl_checking">Controllo compulsivo</string>
+    <string name="sl_checking_detail">%1$d aperture di una sola app in un\'unica ora</string>
+    <string name="sl_scrolling">Scroll / tap continui</string>
+    <string name="sl_scrolling_detail">~%1$d interazioni al minuto</string>
+    <string name="sl_lying">Usarlo da sdraiato</string>
+    <string name="sl_dark">Usarlo al buio</string>
+    <string name="sl_screenoff">Tempo con lo schermo spento</string>
+    <string name="sl_screenoff_detail">%1$s da sveglio e lontano dal telefono</string>
+    <string name="rank_monk">Monaco</string>
+    <string name="rank_monk_long">Monaco della melatonina</string>
+    <string name="rank_guru">Guru</string>
+    <string name="rank_guru_long">Guru radicato</string>
+    <string name="rank_sensei">Sensei</string>
+    <string name="rank_sensei_long">Sensei della serotonina</string>
+    <string name="rank_disciple">Discepolo</string>
+    <string name="rank_disciple_long">Discepolo della dopamina</string>
+    <string name="rank_apprentice">Apprendista</string>
+    <string name="rank_apprentice_long">Apprendista dell\'adenosina</string>
+    <string name="rank_drifter">Alla deriva</string>
+    <string name="rank_drifter_long">Alla deriva della dopamina</string>
+    <string name="rank_twitchy">Nervoso</string>
+    <string name="rank_twitchy_long">Il pollice nervoso</string>
+    <string name="rank_doomscroller">Doomscroller</string>
+    <string name="rank_doomscroller_long">Doomscroller certificato</string>
+    <string name="rank_fried">Fritto</string>
+    <string name="rank_fried_long">Completamente fritto</string>
+    <string name="rank_initiate">Iniziato</string>
+    <string name="rank_journey_long">Il viaggio inizia</string>
+    <string name="rank_flavour_0">In pratica: ben meno di un\'ora al giorno su app non autorizzate, niente a tarda notte, per due mesi di fila. La cima della montagna.</string>
+    <string name="rank_flavour_1">Circa un\'ora al giorno, mantenuta per un mese intero.</string>
+    <string name="rank_flavour_2">Due settimane pulite - i feed ti vedono a malapena.</string>
+    <string name="rank_flavour_3">Una settimana controllata. La prima cintura.</string>
+    <string name="rank_req">%1$d giorni di fila con un valore di base di %2$d o meno. %3$s</string>
+    <string name="rank_req_apprentice">Una media di 7 giorni sotto 40. L\'abitudine si sta piegando - tienila per una settimana e le cinture iniziano.</string>
+    <string name="rank_req_drifter">Una media di 7 giorni sotto 50. Alla deriva - potrebbe andare in un modo o nell\'altro.</string>
+    <string name="rank_req_twitchy">Una media di 7 giorni sotto 60. Il telefono vince più round di te.</string>
+    <string name="rank_req_doomscroller">Una media di 7 giorni sotto 75. Ore al giorno che se ne vanno nello scroll.</string>
+    <string name="rank_req_fried">Una media di 7 giorni di 75 o più. Il fondo - da qui si può solo salire.</string>
+    <string name="rank_req_journey">Dove tutti iniziano: installa l\'app, vivi una giornata normale.</string>
+    <string name="rank_detail_top">La cima della montagna. Continua a restarci.</string>
+    <string name="rank_detail_belt">%1$d+ giorni con un valore di base ≤ %2$d. Prossimo: %3$s - %4$d giorni ≤ %5$d.</string>
+    <string name="rank_detail_avg">Media di 7 giorni %1$d. %2$s</string>
+    <string name="rank_detail_fried">Media di 7 giorni %1$d. Da qui si può solo salire. %2$s</string>
+    <string name="rank_path">Prossimo: %1$s - %2$d giorni ≤ %3$d (serie finora: %4$d).</string>
+    <string name="rank_initiate_detail">Il passo uno - accorgersene - è fatto. Una giornata di uso normale del telefono sblocca il tuo vero rango.</string>
+
+    <string name="dop_title">Livello di base della dopamina</string>
+    <string name="dop_empty">Ancora niente misurato oggi.\n\nSi costruisce man mano che usi il telefono - a cosa dedichi tempo, quanto spesso lo sblocchi, quanto velocemente scrolli, quando e dove lo fai. Torna più tardi oggi.</string>
+    <string name="dop_out_of_100">su 100 · più alto è più fritto\noggi finora</string>
+    <string name="dop_last14">ULTIMI 14 GIORNI</string>
+    <string name="dop_average">Media %1$d nei giorni per cui abbiamo dati.</string>
+    <string name="dop_driving">COSA LO STA ALIMENTANDO OGGI</string>
+    <string name="dop_pulling_down">COSA LO STA ABBASSANDO</string>
+    <string name="dop_more">ALTRO</string>
+    <string name="dop_ranks_btn">I ranghi</string>
+    <string name="dop_ranks_sub">ogni livello, e cosa serve per raggiungerlo</string>
+    <string name="dop_maths_btn">Come viene calcolato?</string>
+    <string name="dop_maths_sub">ogni regola, e quanto vale</string>
+    <string name="dop_guidance_btn">Come lo abbasso?</string>
+    <string name="dop_guidance_sub">cosa sposta davvero il numero</string>
+    <string name="dop_habits_btn">La tua stima delle abitudini</string>
+    <string name="dop_habits_sub">auto-riportata · NON influisce sul punteggio qui sopra</string>
+    <string name="dop_disclaimer">Un modello approssimativo, non una misura medica. Esiste per rendere visibile uno schema, niente di più.</string>
+    <string name="dop_ranks_title">I ranghi</string>
+    <string name="dop_ranks_intro">Mantieni un livello di base basso e sali. Le cinture si guadagnano con il TEMPO - non con un giorno buono, ma con settimane. Una settimana storta ti fa scendere in fretta; risalire è il gioco lungo. È questo il punto.</string>
+    <string name="dop_ranks_you">   ← tu</string>
+    <string name="dop_guid_title">Abbassarlo</string>
+    <string name="dop_guid_biggest">IL TUO PIÙ GRANDE</string>
+    <string name="dop_guid_biggest_body">%1$s — %2$s.\n\n%3$s</string>
+    <string name="dop_guid_moves">COSA LO SPOSTA DAVVERO</string>
+    <string name="dop_guid_h1">Il tempo è la leva più grande, di gran lunga.</string>
+    <string name="dop_guid_b1">Tutto il resto nel punteggio conta poco rispetto a quanto tempo passi nelle categorie peggiori. Un\'ora in meno di video a formato breve sposterà questo numero più di una giornata perfetta di tutto il resto.</string>
+    <string name="dop_guid_h2">La prima ora conta meno, la quarta di più.</string>
+    <string name="dop_guid_b2">La curva è volutamente ripida in alto. Tagliare una giornata da quattro ore a tre fa più di tagliarne una da un\'ora a zero.</string>
+    <string name="dop_guid_h3">Non iniziare la giornata in un feed.</string>
+    <string name="dop_guid_b3">L\'uso appena dopo il risveglio pesa di più, e dà il tono a tutta la giornata. Metti il primo sblocco altrove.</string>
+    <string name="dop_guid_h4">E non finirla in uno.</string>
+    <string name="dop_guid_b4">L\'uso a tarda notte pesa più di tutto, perché paghi due volte: la scarica e il sonno.</string>
+    <string name="dop_guid_h5">Gli sblocchi sono un\'abitudine, non un bisogno.</string>
+    <string name="dop_guid_b5">La maggior parte degli sblocchi non è per niente. Il conteggio stesso è il segnale - se è alto, lo stai prendendo con il pilota automatico.</string>
+    <string name="dop_guid_h6">Rallenta.</string>
+    <string name="dop_guid_b6">Un\'alta frequenza di interazione significa scorrere un feed con il pollice. Una bassa significa leggere qualcosa. La stessa ora può essere l\'una o l\'altra.</string>
+    <string name="dop_guid_h7">Alzati dal letto e accendi una luce.</string>
+    <string name="dop_guid_b7">Sdraiato al buio con un telefono è la situazione più affidabile per una brutta serata. La guardia notturna della modalità rigida esiste proprio per questo.</string>
+    <string name="dop_guid_honest">\nE la parte onesta: si recupera lentamente. Le anti-regole nel punteggio sono deboli di proposito, perché una passeggiata non annulla un\'abbuffata di quattro ore e un numero che fingesse il contrario ti sarebbe inutile.</string>
+    <string name="dop_adv_adult">Questa è quella attorno a cui è costruita tutta l\'app. Tutto nella pagina Contenuti per adulti - modalità rigida, lista di blocco, guardia notturna - punta proprio a questo.</string>
+    <string name="dop_adv_fastvideo">Il video a formato breve è la dose più concentrata a tua disposizione. Attiva il blocco del formato breve (Tentazioni → Scrolling infinito) e i feed muoiono mentre il resto dell\'app continua a funzionare.</string>
+    <string name="dop_adv_fastsocial">Portale al livello grigio così hanno pochi minuti all\'ora e poi si chiudono. Tentazioni → Confronto sociale ha l\'interruttore.</string>
+    <string name="dop_adv_impulse">Tentazioni → Acquisti d\'impulso blocca i siti. La regola del carrello a 48 ore fa il resto.</string>
+    <string name="dop_adv_forums">Tentazioni → Cicli di notizie. Scegli un momento al giorno per leggerle, e bloccale il resto del tempo.</string>
+    <string name="dop_adv_longvideo">Meno concentrato del formato breve, ma divora intere serate. Tentazioni → Binge watching.</string>
+    <string name="dop_adv_gaming">Tentazioni → Gaming e cicli di ricompensa. Dai un nome a ciò che eviti giocando.</string>
+    <string name="dop_adv_gambling">Questa è l\'unica categoria qui che può portarti via più del tempo. Se compare anche solo un po\', vale la pena trattarla seriamente come i contenuti per adulti.</string>
+    <string name="dop_adv_unlocks">Lascialo in un\'altra stanza. La maggior parte non sono decisioni - non ti mancherà ciò che non hai mai cercato.</string>
+    <string name="dop_adv_straightin">Hai sbloccato ed eri in un feed prima di averci pensato. È il pilota automatico più puro che ci sia. Spostare l\'app dalla schermata Home spezza il riflesso più della forza di volontà.</string>
+    <string name="dop_adv_checking">Aprire la stessa app in continuazione in un\'ora è un tic, non un uso. Il livello grigio (pochi minuti all\'ora, poi si chiude) è fatto apposta.</string>
+    <string name="dop_adv_scrolling">Un\'alta frequenza significa che stai scorrendo, non leggendo. Rallentare È l\'intervento.</string>
+    <string name="dop_adv_lyingdark">La guardia notturna della modalità rigida blocca le app non essenziali proprio in questo stato. È l\'interruttore col maggior effetto che hai.</string>
+    <string name="dop_adv_default">Taglia prima il tempo. Pesa più di tutto il resto nel punteggio.</string>
+    <string name="dop_life_title">La tua stima delle abitudini</string>
+    <string name="dop_life_banner">Questo NON influisce sul tuo livello di base della dopamina.\n\nÈ auto-riportato, quindi non può - altrimenti potresti spuntare qualche casella e guardare scendere il numero che sei venuto ad affrontare. Questa è una stima separata del lato rigenerante della tua vita, e va nel verso opposto: PIÙ ALTO È MEGLIO.</string>
+    <string name="dop_life_score">Abitudini rigeneranti: %1$d / 100</string>
+    <string name="dop_life_typical">In una giornata tipo.</string>
+
+    <string name="habit_deep_rest_label">Sonno</string>
+    <string name="habit_deep_rest_hint">Sonno effettivo, in una notte tipo. Non i pisolini.</string>
+    <string name="habit_offline_focus_label">Concentrazione offline profonda</string>
+    <string name="habit_offline_focus_hint">Un libro cartaceo, studio, lavoro senza schermo.</string>
+    <string name="habit_training_label">Allenamento fisico intenso</string>
+    <string name="habit_training_hint">Pesi, corsa, sport - la roba dura.</string>
+    <string name="habit_building_label">Costruire ad alto impatto</string>
+    <string name="habit_building_hint">Impresa, carriera, pianificazione, apprendimento - lavoro sul tuo futuro.</string>
+    <string name="habit_creation_label">Creazione attiva</string>
+    <string name="habit_creation_hint">Scrivere, musica, cucinare, creare cose.</string>
+    <string name="habit_in_person_label">Tempo di persona, telefoni via</string>
+    <string name="habit_in_person_hint">Tempo vero con le persone, non messaggiarle.</string>
+    <string name="habit_reflection_label">Riflessione senza schermo</string>
+    <string name="habit_reflection_hint">Camminare da soli, meditazione, stare senza fare nulla. Anche la noia conta.</string>
+    <string name="habit_light_exercise_label">Movimento leggero</string>
+    <string name="habit_light_exercise_hint">Una camminata. Qualsiasi cosa delicata. Stare in piedi.</string>
+    <string name="habit_healthy_eating_label">Alimentazione</string>
+    <string name="habit_healthy_eating_hint">Non una durata - solo com\'è andata la giornata.</string>
+    <string name="habit_caffeine_label">Caffeina</string>
+    <string name="habit_caffeine_hint">Dopo mezzogiorno circa ti costa il sonno, che ti costa il domani.</string>
+    <string name="habit_alcohol_label">Alcol</string>
+    <string name="habit_alcohol_hint">Rovina il sonno profondo anche quando ti aiuta ad addormentarti.</string>
+
+    <string name="dop_maths_title">Come viene calcolato</string>
+    <string name="dop_maths_intro">Ogni regola qui sotto aggiunge punti a un totale giornaliero, con un tetto di 100. Più alto è peggio. Niente qui ti è nascosto.</string>
+    <string name="dop_maths_h1">1 · TEMPO PASSATO — QUELLO GROSSO</string>
+    <string name="dop_maths_dose">Ogni categoria vale dei punti a dose piena. Una \"dose piena\" è %1$d ore o più in un giorno. Sotto quella soglia sale su una curva, quindi la quarta ora ti costa più della prima.</string>
+    <string name="dop_maths_cat_line">•  %1$s — fino a %2$d punti</string>
+    <string name="dop_maths_example">Esempio: 2 ore di %1$s sono metà della dose massima, che sulla curva è circa il %2$d%% di %3$d punti ≈ %4$d punti.</string>
+    <string name="dop_maths_h2">2 · TUTTO IL RESTO</string>
+    <string name="dop_maths_up_to">fino a %1$d</string>
+    <string name="dop_maths_when_title">Quando l\'hai fatto</string>
+    <string name="dop_maths_when_worth">×%1$s / ×%2$s</string>
+    <string name="dop_maths_when_body">Il tempo passato tra le %1$d:00 e le 0%2$d:00 è moltiplicato per %3$s — paghi due volte, una per la scarica e una per il sonno. L\'uso nei primi %4$d minuti dopo il risveglio è moltiplicato per %5$s.</string>
+    <string name="dop_maths_unlocks_title">Sblocchi del telefono</string>
+    <string name="dop_maths_unlocks_body">Niente sotto %1$d all\'ora. Punti pieni a %2$d all\'ora o più.</string>
+    <string name="dop_maths_straightin_title">Aperture immediate</string>
+    <string name="dop_maths_straightin_body">%1$d punti ogni volta che sblocchi il telefono e sei dentro un feed entro %2$d secondi. Lì non è avvenuta alcuna decisione.</string>
+    <string name="dop_maths_checking_title">Controllo compulsivo</string>
+    <string name="dop_maths_checking_body">Basato sul MAGGIOR numero di volte che hai aperto una singola app in un\'ora. Niente sotto %1$s aperture; punti pieni a %2$s.</string>
+    <string name="dop_maths_scrolling_title">Ritmo di scroll/tap</string>
+    <string name="dop_maths_scrolling_body">Interazioni al minuto di tempo schermo. Niente sotto %1$d/min (è leggere). Punti pieni a %2$d/min (è scorrere un feed).</string>
+    <string name="dop_maths_lying_title">Sdraiato</string>
+    <string name="dop_maths_lying_body">Punti pieni a %1$d ore di uso del telefono da sdraiato.</string>
+    <string name="dop_maths_dark_title">Al buio</string>
+    <string name="dop_maths_dark_body">Punti pieni a %1$d ore di uso del telefono in una stanza buia.</string>
+    <string name="dop_maths_h3">3 · COSA TOGLIE PUNTI</string>
+    <string name="dop_maths_screenoff">Tempo con lo schermo spento — fino a %1$d punti indietro, con credito pieno a %2$d ore da sveglio lontano dal telefono.\n\nÈ volutamente poco. Una serata tranquilla non annulla un\'abbuffata di quattro ore, e un punteggio che fingesse di sì non ti servirebbe.</string>
+    <string name="dop_maths_h4">4 · COME SI CHIAMA IL NUMERO</string>
+    <string name="dop_maths_band_line">•  %1$d+  ·  %2$s</string>
+    <string name="dop_maths_h5">COSA NON POSSIAMO MISURARE</string>
+    <string name="dop_maths_cant">Per essere onesti sui limiti:\n\n• Non possiamo sapere quando ti sei svegliato. Android non ci dà alcun segnale di sveglia, quindi trattiamo il primo sblocco dopo un intervallo di %1$d+ ore come \"appena svegliato\". Se fai un pisolino, sbaglierà.\n\n• Il credito a schermo spento non sa se sta suonando un podcast. Vederlo richiederebbe un\'autorizzazione che questa app di proposito non prende.</string>
+
+    <string name="usage_goal_title">Obiettivo di utilizzo</string>
+    <string name="usage_goal_intro">Scegli quanto tempo al telefono al giorno ti andrebbe bene. I grafici della schermata Home lo disegnano come la linea tratteggiata. Finché non ne imposti uno, si usa un valore di base di 1 ora al giorno.</string>
+    <string name="usage_goal_perday">%1$s al giorno</string>
+    <string name="usage_goal_set">Imposta obiettivo</string>
+    <string name="usage_goal_set_toast">Obiettivo impostato: %1$s al giorno</string>
+    <string name="usage_goal_remove">Rimuovi l\'obiettivo</string>
+    <string name="scroll_title">Quanto ti costa lo scroll</string>
+    <string name="scroll_reclaimed_sub">circa %1$d min recuperati per ogni impulso a cui hai resistito</string>
+    <string name="scroll_consistency_sub">%1$d degli ultimi %2$d giorni puliti - una ricaduta non lo azzera mai</string>
+    <string name="scroll_reclaimed_empty_sub">resisti al tuo primo impulso e il tuo tempo recuperato inizia qui</string>
+    <string name="scroll_projector">Il proiettore</string>
+    <string name="scroll_waking_days">%1$d giorni da sveglio all\'anno</string>
+    <string name="scroll_per_year_value">≈ £%1$d all\'anno del tuo tempo</string>
+    <string name="scroll_over_years">In %1$d ann%2$s: circa %3$s anni di vita da sveglio - e £%4$d</string>
+    <string name="scroll_min_per_day">%1$d minuti al giorno su video brevi e feed</string>
+    <string name="scroll_looking_ahead">Guardando %1$d ann%2$s avanti</string>
+    <string name="scroll_that_year">Quello stesso anno è anche:\n%1$d ore di allenamento  ·  %2$d serate con le persone  ·  circa %3$d libri</string>
+    <string name="scroll_valued">Valutato a £%1$d/anno, dai tuoi numeri  ·  modifica</string>
+    <string name="scroll_add_rate">Aggiungi la tua tariffa oraria per vedere quanto ti costa davvero  ›</string>
+    <string name="prod_block_sf">Blocca reels, shorts e feed</string>
+    <string name="prod_sf_on">Attivo - i feed infiniti sono bloccati.</string>
+    <string name="prod_sf_off">Disattivo - tocca per tagliare il doomscroll.</string>
+    <string name="prod_scroll_cost_title">Quanto costa lo scroll</string>
+    <string name="prod_scroll_cost_sub">Il proiettore: minuti al giorno → anni e £ - più ciò che hai recuperato.</string>
+    <string name="prod_week_reclaimed">Questa settimana - recuperato</string>
+    <string name="prod_value_reclaimed">valore recuperato</string>
+    <string name="prod_by_sunday">entro domenica</string>
+    <string name="prod_worth">Il tuo tempo recuperato vale…</string>
+    <string name="prod_week_example">ESEMPIO - resisti agli impulsi e il tuo tempo recuperato reale compare qui</string>
+    <string name="prod_set_goal">Imposta un obiettivo di utilizzo  ›</string>
+    <string name="prod_goal_change">Il tuo obiettivo: %1$s al giorno - modifica  ›</string>
+    <string name="prod_dopamine_title">Il tuo livello di base della dopamina</string>
+    <string name="prod_still_measuring">Ancora in misurazione</string>
+    <string name="prod_out_of_100">su 100 oggi · più alto è più fritto</string>
+    <string name="prod_habits_estimate">La tua stima delle abitudini  ›</string>
+    <string name="prod_about_you">Su di te — tariffa oraria, quanto vale il tuo tempo  ›</string>
+    <string name="prod_next_year">Il tuo prossimo anno</string>
+    <string name="prod_grid_caption">%1$d dei prossimi 365 giorni, andati al feed</string>
+    <string name="prod_reclaim_could">Recuperandolo potresti</string>
+    <string name="prod_opp_b1">%1$d libri letti - circa 6 ore ciascuno</string>
+    <string name="prod_opp_b2">%1$d allenamenti veri, 45 minuti l\'uno</string>
+    <string name="prod_opp_b3">%1$d%% del percorso verso il livello conversazionale in una nuova lingua</string>
+    <string name="prod_opp_b4">%1$d notti intere di sonno in più</string>
+
+    <string name="proto_intro">Due mosse fanno gran parte del lavoro: una vera pausa lontano dal tuo dispositivo, poi bloccarlo duramente per la settimana successiva. Tutto il resto sostiene queste due.</string>
+    <string name="proto_hdr_walls">COSTRUISCI I MURI INTORNO</string>
+    <string name="proto_bullet">•  %1$s</string>
+    <string name="proto_done">Fatto ✓</string>
+    <string name="proto_apps_title">Riorganizza le tue app</string>
+    <string name="proto_apps_sub">Metti quelle problematiche fuori dalla portata immediata.</string>
+    <string name="proto_bedroom_title">Tieni il telefono fuori dalla camera da letto</string>
+    <string name="proto_bedroom_sub">Una sveglia così non viene mai a letto - tocca per il come.</string>
+    <string name="proto_outhouse_title">Stai fuori casa il più possibile</string>
+    <string name="proto_outhouse_sub">Spendi i soldi se serve - in qualsiasi cosa non crei dipendenza. Amici e circoli sociali soprattutto.</string>
+    <string name="proto_delete_title">Elimina i tuoi account social</string>
+    <string name="proto_delete_sub">Non solo le app - gli account. Togli del tutto l\'attrazione.</string>
+    <string name="proto_bg_title">Imposta un nuovo sfondo del telefono</string>
+    <string name="proto_bg_sub">Un reset visivo pulito ogni volta che sblocchi.</string>
+    <string name="proto_theme_title">Cambia il tema dell\'app, se puoi</string>
+    <string name="proto_theme_sub">Fai sentire il telefono come un dispositivo diverso, meno familiare.</string>
+    <string name="proto_holiday_title">Vai in vacanza - senza il tuo dispositivo</string>
+    <string name="proto_holiday_sub">Esci del tutto dall\'ambiente in cui vive l\'abitudine. Il più grande reset in assoluto.</string>
+    <string name="proto_seven_active">Attivo - %1$d giorni rimasti.</string>
+    <string name="proto_seven_completed">Completato. Puoi rifarlo quando vuoi.</string>
+    <string name="proto_seven_needholiday">Fai prima la vacanza - è ciò che protegge il nuovo inizio.</string>
+    <string name="proto_seven_ready">Chiuditi fuori per 7 giorni di fila, subito dopo la vacanza.</string>
+    <string name="proto_seven_title">Blocco super rigido per una settimana dopo</string>
+    <string name="proto_seven_toast_needholiday">Fai prima la vacanza - è ciò che fa reggere il blocco.</string>
+    <string name="proto_tips_card_title">💡  Consigli aggiuntivi</string>
+    <string name="proto_tips_card_sub">Altri modi per tenere il telefono lontano dalle mani.</string>
+    <string name="proto_replace_title">Sostituisci ciò che fa il telefono</string>
+    <string name="proto_replace_intro">L\'obiettivo è semplice: non aver mai bisogno di portare il telefono in camera. Se il telefono di notte non è lì, i momenti più a rischio in gran parte spariscono.</string>
+    <string name="proto_alarm_title">Compra una vera sveglia</string>
+    <string name="proto_alarm_sub">L\'acquisto più importante. Toglie l\'unico motivo onesto per avere il telefono vicino al letto.</string>
+    <string name="proto_charge_title">Carica il telefono in un\'altra stanza</string>
+    <string name="proto_charge_sub">Scegli un posto - cucina, corridoio - e rendilo la casa notturna permanente del telefono.</string>
+    <string name="proto_watch_title">Porta un orologio</string>
+    <string name="proto_watch_sub">Così non prendi mai il telefono solo per guardare l\'ora.</string>
+    <string name="proto_tips_title">Consigli aggiuntivi</string>
+    <string name="proto_tip1_title">Non portare il telefono a letto o nei posti a rischio</string>
+    <string name="proto_tip1_sub">La camera, il bagno, ovunque tu sia ricaduto prima. Lascialo in carica in un\'altra stanza.</string>
+    <string name="proto_tip2_title">Cambia il tuo stato quando arriva un impulso</string>
+    <string name="proto_tip2_sub">Una doccia, un getto freddo alla fine, un allenamento veloce, uscire fuori, una routine ferrea per andare a letto e svegliarsi, persino un gioco - qualsiasi cosa spezzi il momento e cambi come ti senti.</string>
+    <string name="proto_apps_intro">Rendi l\'abitudine più difficile da raggiungere per caso. Prima di tutto:</string>
+    <string name="proto_apps_b1">Sposta tutto ciò che tende a portarti dentro dalla schermata Home - seppelliscilo in una cartella, o rimuovi il collegamento.</string>
+    <string name="proto_apps_b2">Esci dagli account così aprirli non è a un tocco.</string>
+    <string name="proto_apps_b3">Elimina le app di cui non hai davvero bisogno. L\'attrito è il punto.</string>
+    <string name="proto_apps_b4">Aggiungi il resto alla lista di blocco di questa app così sono gestite per te.</string>
+    <string name="proto_apps_btn">Ho riorganizzato le mie app</string>
+    <string name="proto_holiday_page_title">Vai in vacanza / spezza la routine</string>
+    <string name="proto_holiday_intro">L\'abitudine è legata a un luogo e a un ritmo. Il modo più rapido per indebolirla è lasciare fisicamente quell\'ambiente per un po\'.</string>
+    <string name="proto_holiday_b1">Punta a una vera pausa - idealmente circa due settimane.</string>
+    <string name="proto_holiday_b2">Vai senza il telefono se puoi, o lascialo bloccato per tutto il tempo.</string>
+    <string name="proto_holiday_b3">Riempi le giornate di persone, movimento e luce del giorno - non schermi.</string>
+    <string name="proto_holiday_b4">Torna a una casa che hai già riorganizzato, e inizia il blocco di 7 giorni da capo.</string>
+    <string name="proto_holiday_btn">Ho fatto la pausa</string>
+    <string name="proto_7day_title">Blocco rigido di 7 giorni</string>
+    <string name="proto_7day_intro">La modalità rigida resta attiva per 7 giorni. Non puoi tornare a rilassata finché non finisce. È più efficace dopo esserti resettato con la vacanza - stai proteggendo terreno fresco, non combattendo in salita.</string>
+    <string name="proto_7day_btn">Avvia il blocco di 7 giorni</string>
+    <string name="proto_7day_toast">Modalità rigida attiva per 7 giorni</string>
+
+    <string name="temptspec_scrolling_title">Scrolling infinito / Brain rot  🤳</string>
+    <string name="temptspec_scrolling_subtitle">Spezza il ciclo del feed infinito.</string>
+    <string name="temptspec_scrolling_insteadof">Metti il telefono in un\'altra stanza e fai per dieci minuti l\'unica cosa che stavi evitando.</string>
+    <string name="temptspec_binge_title">Binge watching  📺</string>
+    <string name="temptspec_binge_subtitle">Sfuggi ai loop di evasione con la visione infinita.</string>
+    <string name="temptspec_binge_insteadof">Decidi l\'UNICO episodio prima di iniziare, e imposta un timer per quando finisce.</string>
+    <string name="temptspec_comparison_title">Confronto sociale / Social media  👥</string>
+    <string name="temptspec_comparison_subtitle">Spezza il ciclo di confronto e ricerca di approvazione.</string>
+    <string name="temptspec_comparison_insteadof">Scrivi a una persona a cui tieni davvero, invece di guardarne cento a cui non tieni.</string>
+    <string name="temptspec_checking_title">Controllo del telefono  📱</string>
+    <string name="temptspec_checking_subtitle">Ferma l\'abitudine del controllo automatico.</string>
+    <string name="temptspec_checking_insteadof">Lascia il telefono a faccia in giù in un\'altra stanza per la prossima ora.</string>
+    <string name="temptspec_news_title">Cicli di notizie / Ansia esistenziale  📰</string>
+    <string name="temptspec_news_subtitle">Allontanati dalla preoccupazione infinita.</string>
+    <string name="temptspec_news_insteadof">Scegli un momento domani per leggere le notizie una volta, e non agire su nient\'altro fino ad allora.</string>
+    <string name="temptspec_gaming_title">Gaming e cicli di ricompensa  🎮</string>
+    <string name="temptspec_gaming_subtitle">Comprendi i cicli di ricompensa digitali.</string>
+    <string name="temptspec_gaming_insteadof">Dai un nome a ciò che eviti giocando, e fanne cinque minuti.</string>
+    <string name="temptspec_shopping_title">Acquisti d\'impulso  💳</string>
+    <string name="temptspec_shopping_subtitle">Spezza il ciclo del comprare per un\'emozione.</string>
+    <string name="temptspec_shopping_insteadof">Mettilo nel carrello e lascialo lì per 48 ore. Gran parte muore da sola.</string>
+
+    <string name="temp_managing">Cosa stai gestendo?</string>
+    <string name="temp_adult_title">Contenuti per adulti 🔞</string>
+    <string name="temp_adult_sub">Strumenti per il momento, e per il lungo periodo.</string>
+    <string name="temp_sound_like">Ti ci ritrovi?</string>
+    <string name="temp_stats">%1$d superate  ·  %2$d ricadut(a/e) questa settimana</string>
+    <string name="temp_pull_title">Sento l\'impulso adesso</string>
+    <string name="temp_pull_sub">resisti - passa</string>
+    <string name="temp_slipped_title">Sono ricaduto</string>
+    <string name="temp_slipped_sub">registralo, senza vergogna</string>
+    <string name="temp_try_instead">Prova invece:  %1$s</string>
+    <string name="temp_lockdown">oppure blocca tutto per 30 minuti</string>
+    <string name="temp_lockdown_toast">In isolamento per 30 min. L\'essenziale funziona ancora.</string>
+    <string name="temp_block_on">●  Sta bloccando ciò che lo alimenta</string>
+    <string name="temp_block_off">○  Blocca ciò che lo alimenta</string>
+    <string name="temp_block_applimit"> e limita %1$d app a %2$d min/ora</string>
+    <string name="temp_block_sub_on">Sta bloccando %1$d sit(o/i)%2$s.  Tocca per disattivare.</string>
+    <string name="temp_block_sub_off">Blocca %1$d sit(o/i)%2$s.  Tocca per attivare.</string>
+    <string name="temp_ride_title">Resisti</string>
+    <string name="temp_ride_body">L\'impulso arriva al picco in fretta, poi svanisce. Segui la sfera - %1$d respiri lenti.</string>
+    <string name="temp_ride_done_btn">Ce l\'ho fatta</string>
+    <string name="temp_ride_paced">Fatto - ben ritmato</string>
+    <string name="temp_ride_counter">%1$d di %2$d fatti</string>
+    <string name="temp_ridedone_title">Sei stato tu, a batterlo.</string>
+    <string name="temp_ridedone_body">Ogni impulso a cui resisti rende il successivo più debole.</string>
+    <string name="temp_ridden_out">%1$d superate</string>
+    <string name="temp_put_down">Posa il telefono</string>
+    <string name="temp_put_down_sub">chiude l\'app</string>
+    <string name="temp_slip_title">Registrato.</string>
+    <string name="temp_slip_body">Questa è onestà, e vale più di una serie pulita per cui hai dovuto mentire.\n\n%1$d questa settimana. Il numero non è un verdetto - sono solo dati. Guarda in che direzione si muove.</string>
+    <string name="temp_slip_next">La prossima volta, prova:  %1$s</string>
+
+    <string name="home_banner_blocking_off">⚠  Il blocco è disattivo - all\'app servono ancora due rapide autorizzazioni. Tocca per impostarle.</string>
+    <string name="status_header">STATO</string>
+    <string name="status_on_label">Attivo</string>
+    <string name="status_off_label">Disattivo</string>
+    <string name="status_row">%1$s  %2$s - %3$s</string>
+    <string name="status_page_monitoring">Monitoraggio delle pagine</string>
+    <string name="status_block_overlay">Autorizzazione schermata di blocco</string>
+    <string name="status_uninstall_lock">Blocco disinstallazione</string>
+    <string name="status_lockdown">Isolamento app - %1$s rimasti</string>
+    <string name="status_unlock_window">Finestra di sblocco - %1$s rimasti</string>
+    <string name="status_unlock_wait">Attesa di sblocco - %1$s rimasti</string>
+    <string name="status_week_strict">Rigida settimanale - %1$s</string>
+    <string name="sensors_console_header">SENSORI CONNESSI</string>
+    <string name="sensors_none">Nessun sensore connesso\nTocca qui per configurare i sensori delle stanze.</string>
+    <string name="sensors_no_rooms">Ancora nessuna stanza\nTocca qui per aggiungere la tua prima stanza.</string>
+    <string name="sensors_status_notsetup">Non configurato</string>
+    <string name="sensors_status_nodata">Nessun dato - controlla Bluetooth e autorizzazioni</string>
+    <string name="sensors_status_on">Attivo</string>
+    <string name="sensors_room_row">●  Sensore %1$s - %2$s</string>
+    <string name="sensors_gate_title">Sensori delle stanze</string>
+    <string name="sensors_gate_body">Il rilevamento delle stanze usa piccoli beacon Bluetooth - uno per ogni stanza che vuoi proteggere. Ce li hai?</string>
+    <string name="sensors_gate_yes">Sì - ho i miei sensori delle stanze e sono pronto a configurarli</string>
+    <string name="sensors_gate_no">No - non ho nessun sensore delle stanze</string>
+    <string name="sensors_pitch_body">- Piccoli beacon Bluetooth, uno per ogni stanza che vuoi proteggere.\n- L\'app impara ogni stanza e sa quando ci sei dentro.\n- In modalità rigida, le stanze protette bloccano automaticamente ogni app non essenziale.\n- Nessun accoppiamento, anni di batteria, e niente lascia mai il tuo telefono.</string>
+    <string name="sensors_pitch_order">Portami alla pagina d\'ordine</string>
+    <string name="sensors_order_title">Ordina i sensori</string>
+    <string name="sensors_order_body">In arrivo.</string>
+
+    <string name="home_productivity_title">Il tuo punteggio di produttività</string>
+    <string name="home_productivity_sub">riepilogo settimanale</string>
+    <string name="home_usage_title">Uso del telefono</string>
+    <string name="home_usage_week_sub">Questa settimana</string>
+    <string name="home_usage_month_sub">Per mese</string>
+    <string name="home_usage_overview_title">Panoramica dell\'uso del telefono</string>
+    <string name="home_usage_year_sub">Quest\'anno</string>
+    <string name="home_time_wasted">tempo sprecato</string>
+    <string name="home_money_wasted">denaro sprecato</string>
+    <string name="home_example">ESEMPIO - il tuo uso reale sostituisce questo dopo un giorno o due</string>
+    <string name="home_this_year">quest\'anno</string>
+    <string name="home_of_your_time">del tuo tempo</string>
+    <string name="home_evenings">serate</string>
+    <string name="home_worth">Il tuo uso del telefono vale…</string>
+    <string name="home_legend_week">— questa settimana</string>
+    <string name="home_example_data">\n[Dati di esempio]</string>
+    <string name="home_projected"> · proiettato</string>
+    <string name="home_readout_by">Al %1$s · </string>
+    <string name="home_dev_tools">🔧  Strumenti sviluppatore</string>
+    <string name="home_about_privacy">Info e privacy</string>
+
+    <string name="br_lockdown">In isolamento - resisti all\'impulso</string>
+    <string name="br_waiting">Aspetta che passi - stai lontano dalle altre app per ora</string>
+    <string name="br_blocked_app">App bloccata</string>
+    <string name="br_blocked_app_pkg">App bloccata: %1$s</string>
+    <string name="br_grey_limit">Questi sono i tuoi %1$d min per quest\'ora - si riaprirà a breve</string>
+    <string name="br_grey_limit_host">Questi sono i tuoi %1$d min per quest\'ora - %2$s si riaprirà a breve</string>
+    <string name="br_night_lying_dark">Non mentre sei sdraiato al buio.\nMettiti seduto, o accendi una luce.</string>
+    <string name="br_night_lying">Non mentre sei sdraiato.\nMettiti seduto e si riaprirà.</string>
+    <string name="br_night_dark">Non al buio.\nAccendi una luce e si riaprirà.</string>
+    <string name="br_room">Stanza protetta: sei in %1$s.\nIn modalità rigida qui si aprono solo chiamate, messaggi e altri elementi essenziali.\nEsci da %1$s e tutto si sblocca.</string>
+    <string name="br_adult_site">Sito per adulti (lista di blocco): %1$s</string>
+    <string name="br_search_engine">Motore di ricerca bloccato: %1$s</string>
+    <string name="br_blocked_site">Sito bloccato: %1$s</string>
+    <string name="br_blocked_term">Termine bloccato: %1$s</string>
+    <string name="br_blocked_keyword">Parola chiave bloccata: \"%1$s\"</string>
+    <string name="br_back_same">È ancora LA STESSA pagina bloccata. Premi di nuovo Indietro, o vai alla Home.</string>
+    <string name="br_back_diff">È una pagina DIVERSA - ma è bloccata anche questa. Premi di nuovo Indietro, o vai alla Home.</string>
+    <string name="br_app_too_many">App bloccata per %1$s (troppi blocchi)</string>
+    <string name="br_app_blocked">App bloccata</string>
+
+    <string name="overlay_breathe_in">Inspira</string>
+    <string name="overlay_breathe_out">Espira</string>
+    <string name="overlay_dont_want">Non voglio accedere a %1$s</string>
+    <string name="overlay_continue_open">Continua e apri %1$s</string>
+    <string name="overlay_tap_hint">Se non succede nulla, tocca per entrare</string>
+
+    <!-- ── String-arrays ─────────────────────────────────────────────────────────────── -->
+    <string-array name="opt_feeling"><item>Annoiato</item><item>Ansioso / teso</item><item>Stressato</item><item>Giù / abbattuto</item><item>Solo</item><item>Stanco</item><item>Frustrato / arrabbiato</item><item>Felice / entusiasta</item><item>Neutro</item></string-array>
+    <string-array name="opt_urge"><item>Appena percepibile</item><item>Lieve</item><item>Evidente</item><item>Forte</item><item>Travolgente</item></string-array>
+    <string-array name="opt_urge_examples"><item>Solo un guizzo - si nota a malapena.</item><item>Una piccola spinta - facile da mettere da parte.</item><item>Chiaramente presente, ma riesco ancora a evitarlo.</item><item>Difficile pensare ad altro adesso.</item><item>Sento di non poterlo controllare - come se fosse inevitabile che cederò.</item></string-array>
+    <string-array name="opt_location"><item>Camera da letto</item><item>Bagno</item><item>Soggiorno</item><item>Cucina</item><item>Ufficio / scrivania</item><item>Fuori / in pubblico</item></string-array>
+    <string-array name="opt_screen"><item>Telefono</item><item>Tablet</item><item>Computer / portatile</item><item>TV</item><item>Lo schermo di qualcun altro</item></string-array>
+    <string-array name="opt_activity"><item>A letto / cercando di dormire</item><item>Appena sveglio</item><item>Scrollando i social</item><item>Guardando video o TV</item><item>Navigando sul web</item><item>Rimandando qualcosa che dovrei fare</item><item>Appena finito lavoro o studio</item><item>Annoiato senza niente da fare</item><item>Dopo qualcosa di stressante</item><item>Rilassandomi la sera</item></string-array>
+    <string-array name="mode_off_rules">
+        <item>Il monitoraggio è OFF. Niente viene analizzato e niente viene bloccato - nessuna delle regole \"Sempre attive\" viene applicata in questa modalità.</item>
+        <item>È la modalità iniziale su un\'installazione nuova.</item>
+        <item>Le due autorizzazioni che servono al blocco (monitoraggio delle pagine e schermata di blocco) sono FACOLTATIVE mentre sei qui - l\'app non le richiede mai.</item>
+        <item>Scegli QUALSIASI altra modalità ed entrambe le autorizzazioni diventano obbligatorie: l\'app ti guida ad attivarle e non lascia questa schermata finché non lo sono.</item>
+        <item>La pagina Produttività e le sue statistiche di tempo schermo continuano a funzionare comunque.</item>
+    </string-array>
+    <string-array name="mode_relaxed_rules">
+        <item>Pausa di respiro: MAI. Le app monitorate si aprono subito.</item>
+        <item>Scala di grigi: disattivata. Lo schermo resta a colori.</item>
+        <item>Essere sdraiato o al buio non cambia nulla. Ogni app si apre comunque.</item>
+        <item>Gli interruttori \"per chi è il filtro\" (Contenuti per adulti → Impostazioni) si possono modificare qui (e in Off). In qualsiasi modalità più rigida sono forzati al massimo.</item>
+        <item>Tutto in \"Sempre attive\" qui sopra vale ancora - il blocco non si ferma in Rilassata.</item>
+        <item>Puoi uscire da questa modalità quando vuoi, a meno che sia attivo il blocco rigido di 7 giorni.</item>
+    </string-array>
+    <string-array name="mode_strict_rules">
+        <item>Pausa di respiro: la PRIMA volta che apri un\'app monitorata ogni giorno. Riaprila più tardi lo stesso giorno e va dritta - così codici 2FA e controlli rapidi non vengono interrotti.</item>
+        <item>Il pass giornaliero si ripristina a mezzanotte.</item>
+        <item>GUARDIA NOTTURNA: mentre sei SDRAIATO, o la stanza è davvero BUIA, si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, contatti, fotocamera, mappe. Tutto il resto, WhatsApp compreso, è bloccato finché non ti siedi o accendi una luce.</item>
+        <item>È tutto qui il punto: il telefono a letto, al buio, è dove va storto.</item>
+        <item>Gli interruttori \"per chi è il filtro\" sono BLOCCATI al massimo. Puoi cambiarli solo in Rilassata.</item>
+        <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato.</item>
+        <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
+        <item>Il blocco rigido di 7 giorni (se lo avvii) ti impedisce di tornare a Rilassata per una settimana. Puoi comunque salire a Super rigida.</item>
+    </string-array>
+    <string-array name="mode_superhardcore_rules">
+        <item>Pausa di respiro: OGNI singola volta che apri un\'app monitorata. Non c\'è nessun pass giornaliero.</item>
+        <item>Attenzione: questo TI interromperà quando salti a un\'app di autenticazione per un codice 2FA. È il compromesso che stai scegliendo.</item>
+        <item>GUARDIA NOTTURNA: mentre sei SDRAIATO, o la stanza è davvero BUIA, si aprono solo gli elementi essenziali - stessi trigger di Rigida.</item>
+        <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato, come in Rigida.</item>
+        <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
+        <item>Questa è Rigida senza il pass giornaliero.</item>
+    </string-array>
+    <string-array name="relapse_days">
+        <item>Domenica</item><item>Lunedì</item><item>Martedì</item><item>Mercoledì</item><item>Giovedì</item><item>Venerdì</item><item>Sabato</item>
+    </string-array>
+    <string-array name="feel_neg"><item>Rimpianto</item><item>Intorpidito</item><item>Vuoto</item><item>In colpa</item></string-array>
+    <string-array name="feel_pos"><item>Fiero</item><item>Sollevato</item><item>Lucido</item><item>In controllo</item></string-array>
+    <string-array name="habit_deep_rest_options"><item>meno di 5h</item><item>5-6h</item><item>6-7h</item><item>7-8h</item><item>8h+</item></string-array>
+    <string-array name="habit_offline_focus_options"><item>niente</item><item>&lt;15 min</item><item>~30 min</item><item>~45 min</item><item>~1 ora</item><item>2 ore+</item></string-array>
+    <string-array name="habit_training_options"><item>niente</item><item>&lt;15 min</item><item>~30 min</item><item>~45 min</item><item>1 ora+</item></string-array>
+    <string-array name="habit_building_options"><item>niente</item><item>&lt;30 min</item><item>~1 ora</item><item>~2 ore</item><item>3 ore+</item></string-array>
+    <string-array name="habit_creation_options"><item>niente</item><item>&lt;15 min</item><item>~30 min</item><item>~1 ora</item><item>2 ore+</item></string-array>
+    <string-array name="habit_in_person_options"><item>niente</item><item>&lt;30 min</item><item>~1 ora</item><item>~2 ore</item><item>3 ore+</item></string-array>
+    <string-array name="habit_reflection_options"><item>niente</item><item>&lt;15 min</item><item>~30 min</item><item>~45 min</item><item>1 ora+</item></string-array>
+    <string-array name="habit_light_exercise_options"><item>niente</item><item>&lt;15 min</item><item>~30 min</item><item>~1 ora</item><item>2 ore+</item></string-array>
+    <string-array name="habit_healthy_eating_options"><item>Abbuffata / cibo spazzatura</item><item>Mista</item><item>Per lo più buona</item><item>Pulita</item></string-array>
+    <string-array name="habit_caffeine_options"><item>Nessuna</item><item>1 tazza, presto</item><item>2-3 tazze</item><item>Tanta / a fine giornata</item></string-array>
+    <string-array name="habit_alcohol_options"><item>Nessuno</item><item>1 drink</item><item>2-3 drink</item><item>Di più</item></string-array>
+    <string-array name="temptspec_scrolling_covers">
+        <item>TikTok, Reels, Shorts, feed di Reddit - qualsiasi cosa non finisca mai</item>
+        <item>Il loop del \"solo un altro scroll\"</item>
+        <item>Consumare passivamente finché la tua attenzione è a pezzi e ti senti svuotato</item>
+        <item>Contenuti costruiti sulla novità costante, per tenerti a caccia della prossima scarica</item>
+        <item>Perdere un\'ora senza mai aver deciso di spenderla</item>
+    </string-array>
+    <string-array name="temptspec_binge_covers">
+        <item>Netflix, YouTube, streaming, riproduzione automatica che va avanti all\'infinito</item>
+        <item>Guardare ore più a lungo di quanto volessi</item>
+        <item>Usare una serie per sfuggire alla noia, allo stress, o a un compito che non vuoi iniziare</item>
+        <item>Riproduzione automatica e \"consigliati per te\" che decidono la tua serata</item>
+        <item>Lo scarto tra lo scegliere di guardare qualcosa e perdere il controllo della notte</item>
+    </string-array>
+    <string-array name="temptspec_comparison_covers">
+        <item>Guardare amici, influencer e coetanei pubblicare il meglio della loro vita</item>
+        <item>FOMO - la sensazione che tutti gli altri siano in un posto migliore</item>
+        <item>Cercare approvazione in like, commenti e visualizzazioni</item>
+        <item>Misurare aspetto, soldi, lavoro e progressi contro degli sconosciuti</item>
+        <item>Uscirne sentendoti indietro, piccolo, o silenziosamente ansioso</item>
+    </string-array>
+    <string-array name="temptspec_checking_covers">
+        <item>Sbloccare il telefono senza sapere perché l\'hai preso in mano</item>
+        <item>Controllare notifiche e messaggi puramente per riflesso</item>
+        <item>Prenderlo appena ti senti annoiato o a disagio</item>
+        <item>Farlo decine di volte al giorno senza accorgertene</item>
+        <item>Voler riavere la scelta</item>
+    </string-array>
+    <string-array name="temptspec_news_covers">
+        <item>Aggiornare le notizie tutto il giorno per un aggiornamento che non risolve mai nulla</item>
+        <item>Leggere la stessa brutta storia più e più volte, senza farne nulla</item>
+        <item>Annegare in politica, disastri e problemi che non puoi toccare personalmente</item>
+        <item>Il loop: paura, incertezza, controllo, breve sollievo, di nuovo paura</item>
+        <item>Essere informati va bene. Esserne consumati no.</item>
+    </string-array>
+    <string-array name="temptspec_gaming_covers">
+        <item>Giochi costruiti su serie, sblocchi, livelli e ricompense giornaliere</item>
+        <item>Inseguire progressi che esistono solo dentro il gioco</item>
+        <item>\"Ancora una partita\" che diventa tre ore</item>
+        <item>Giocare per schivare la noia, lo stress, o qualcosa che devi a qualcuno</item>
+        <item>Il punto in cui l\'intrattenimento è diventato in silenzio una compulsione</item>
+    </string-array>
+    <string-array name="temptspec_shopping_covers">
+        <item>Amazon, Temu, siti di sconti, pubblicità che ti seguono</item>
+        <item>Comprare perché sei annoiato, stressato, o su di giri per un affare</item>
+        <item>Offerte a \"tempo limitato\" progettate per farti smettere di pensare</item>
+        <item>La scarica è l\'ordine e il pacco - non l\'oggetto in sé</item>
+        <item>Voler tornare a spendere con intenzione</item>
+    </string-array>
+</resources>

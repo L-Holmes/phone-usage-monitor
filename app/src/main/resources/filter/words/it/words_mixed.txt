@@ -1,0 +1,7 @@
+# MIXED tier — Italian: strongly sexual but with innocent uses (art, medicine). Needs a 2nd signal.
+# Unioned with words/en/words_mixed.txt. STARTER SET.
+nudo
+nuda
+nudi
+nude
+nudità

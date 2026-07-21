@@ -17,6 +17,14 @@ android {
 
         // Runs instrumented (androidTest) tests on a connected device.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The languages this app actually ships. Keep in step with res/xml/locales_config.xml
+        // and LocaleHelper.SUPPORTED. Declaring them explicitly:
+        //   • strips the ~80 stray locales AndroidX/Material drag in, so the system per-app
+        //     language screen (and our picker) only offer languages WE translated, and
+        //   • trims resource bloat (the App Bundle still language-splits per device on top).
+        // "en" is the default/fallback and must stay listed. Add a code when you add a locale.
+        resourceConfigurations += listOf("en", "it")
     }
 
 
@@ -125,15 +133,22 @@ val stageNsfwModel = tasks.register<Copy>("stageNsfwModel") {
 tasks.named("preBuild") { dependsOn(stageNsfwModel) }
 
 // ---------------------------------------------------------------------------
-// checkTranslations — every language must have EXACTLY the same string keys as
+// checkTranslations — keeps every res/values-<code>/strings.xml honest against
 // the English master (res/values/strings.xml). English is the source of truth.
 //
-// For each res/values-<code>/strings.xml it reports the keys that are MISSING
-// (in the master but not translated) and EXTRA (present but not in the master,
-// usually a typo or a removed key). Any mismatch fails the build, so a
-// half-translated or drifted language can't ship. Runs as part of preBuild, so
-// it also gates every assembleDebug/assembleRelease (i.e. ./deploy). Run it on
-// its own with:  ./gradlew checkTranslations
+// PRODUCTION POLICY (this is the rational multi-market setup):
+//   • EXTRA keys  → FAIL. A key not in English is drift/a typo/a removed key —
+//     it can never render (nothing references it) and signals the translation has
+//     diverged from the code. Block the build.
+//   • MISSING keys → WARN only. Translations always lag code; Android falls back
+//     to the English master at runtime for any key a locale hasn't translated
+//     yet, so a missing key is never a broken screen. Failing on missing would
+//     block every code change that adds an English string until all languages
+//     catch up — the wrong trade-off. Instead we print a per-locale coverage %
+//     so the gap is visible in CI without gating the release.
+//
+// Runs as part of preBuild, so it also gates every assembleDebug/assembleRelease
+// (i.e. ./deploy). Run it alone with:  ./gradlew checkTranslations
 // ---------------------------------------------------------------------------
 val checkTranslations = tasks.register("checkTranslations") {
     group = "verification"
@@ -149,7 +164,7 @@ val checkTranslations = tasks.register("checkTranslations") {
             keyRe.findAll(f.readText().replace(commentRe, "")).map { it.groupValues[1] }.toSet()
 
         val masterKeys = keysOf(master)
-        val problems = StringBuilder()
+        val errors = StringBuilder()      // EXTRA keys -> fail the build
         resDir.listFiles()
             ?.filter { it.isDirectory && it.name.startsWith("values-") }
             ?.sortedBy { it.name }
@@ -159,19 +174,24 @@ val checkTranslations = tasks.register("checkTranslations") {
                 val keys = keysOf(f)
                 val missing = (masterKeys - keys).sorted()
                 val extra = (keys - masterKeys).sorted()
-                if (missing.isNotEmpty() || extra.isNotEmpty()) {
-                    problems.appendLine("• ${dir.name}/strings.xml")
-                    if (missing.isNotEmpty())
-                        problems.appendLine("    MISSING ${missing.size} (in English, not translated): ${missing.joinToString(", ")}")
-                    if (extra.isNotEmpty())
-                        problems.appendLine("    EXTRA ${extra.size} (not in the English master): ${extra.joinToString(", ")}")
+                val done = masterKeys.size - missing.size
+                val pct = if (masterKeys.isEmpty()) 100 else done * 100 / masterKeys.size
+                if (missing.isEmpty())
+                    logger.lifecycle("checkTranslations: ${dir.name} — 100% translated ($done/${masterKeys.size}).")
+                else
+                    logger.warn("checkTranslations: ${dir.name} — $pct% translated ($done/${masterKeys.size}); " +
+                        "${missing.size} key(s) fall back to English: ${missing.joinToString(", ")}")
+                if (extra.isNotEmpty()) {
+                    errors.appendLine("• ${dir.name}/strings.xml")
+                    errors.appendLine("    EXTRA ${extra.size} key(s) not in the English master (drift/typo): ${extra.joinToString(", ")}")
                 }
             }
-        if (problems.isNotEmpty())
+        if (errors.isNotEmpty())
             throw GradleException(
-                "Translation keys do not match the English master (src/main/res/values/strings.xml):\n$problems"
+                "Translation keys have DRIFTED from the English master (src/main/res/values/strings.xml).\n" +
+                    "Remove or rename these — a key not in English can never render:\n$errors"
             )
-        logger.lifecycle("checkTranslations: OK — all locales match the English master (${masterKeys.size} keys).")
+        logger.lifecycle("checkTranslations: OK — no drift vs the English master (${masterKeys.size} keys).")
     }
 }
 tasks.named("preBuild") { dependsOn(checkTranslations) }

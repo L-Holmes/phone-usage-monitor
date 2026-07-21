@@ -596,21 +596,21 @@ object Progress {
         prefs(context).edit().putInt(KEY_BEST, best).apply()
 
         val ms = mutableListOf<String>()
-        if (totalWins >= 1) ms.add("First urge ridden out")
-        if (daysSinceFirst >= 7) ms.add("First week in")
-        if (best >= 7) ms.add("A clean week in the bag")
-        if (totalWins >= 25) ms.add("25 urges beaten")
-        if (best >= 14) ms.add("Two clean weeks")
-        if (best >= 30) ms.add("A clean month - every day counted")
-        if (totalWins >= 100) ms.add("100 urges beaten")
+        if (totalWins >= 1) ms.add(context.getString(R.string.ms_first_urge))
+        if (daysSinceFirst >= 7) ms.add(context.getString(R.string.ms_first_week))
+        if (best >= 7) ms.add(context.getString(R.string.ms_clean_week))
+        if (totalWins >= 25) ms.add(context.getString(R.string.ms_25_urges))
+        if (best >= 14) ms.add(context.getString(R.string.ms_two_weeks))
+        if (best >= 30) ms.add(context.getString(R.string.ms_clean_month))
+        if (totalWins >= 100) ms.add(context.getString(R.string.ms_100_urges))
 
         val next = when {
-            totalWins < 1 -> "Ride out your first urge"
-            daysSinceFirst < 7 -> "Reach your first full week"
-            best < 7 -> "Get to 7 clean days in your window"
-            totalWins < 25 -> "Ride out 25 urges ($totalWins/25)"
-            best < 30 -> "Build toward a clean month ($best/30)"
-            totalWins < 100 -> "Ride out 100 urges ($totalWins/100)"
+            totalWins < 1 -> context.getString(R.string.next_first_urge)
+            daysSinceFirst < 7 -> context.getString(R.string.next_first_week)
+            best < 7 -> context.getString(R.string.next_7_clean)
+            totalWins < 25 -> context.getString(R.string.next_25_urges, totalWins)
+            best < 30 -> context.getString(R.string.next_clean_month, best)
+            totalWins < 100 -> context.getString(R.string.next_100_urges, totalWins)
             else -> null
         }
 

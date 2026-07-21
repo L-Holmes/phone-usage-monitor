@@ -157,6 +157,16 @@ screen at a time** — never the whole file at once.
 - 2026-07-20 · i18n batch 19: RelapseLog.analyze generated feedback → resources (Context threaded through; `relapse_fb_*`/`relapse_enc_*`/`relapse_days`). Scanned all other .kt files: NONE build UI (0 sites). ALL non-Main files now DONE/N/A. Remaining: dev screens (English by design) + deferred config-data lists only.
 - 2026-07-20 · data-files: GenderedTerms → words/en/gendered_*.txt (FilterData). ALL filter word lists now in files. Unit tests pass. Filter data-file extraction COMPLETE.
 - 2026-07-20 · batch 25 (cleanup): night-guard/lockdown substrings → assets/filter/ (getters); removed dead DEFAULT_ROOMS; SHORT_FORM_PATTERNS/SEARCH_ENGINES left in code (rationale). compiles + validates + tests pass. ALL actionable remaining items closed.
+- 2026-07-21 · batch 27 (FULL Italian + missed strings): user reported most pages showed English.
+  TWO causes fixed: (1) values-it was only 19% — now FULLY translated (781 keys, 99%; only app_name
+  = brand falls back) + ALL 31 string-arrays. (2) A batch of strings were never extracted: home
+  "Blocking is off" banner, STATUS console, CONNECTED SENSORS console + sensor gate/pitch/order,
+  Views.kt "goal" chart labels, and the ENTIRE Dopamine.kt config (6 bands, 10 categories, the
+  score-line breakdown, and the whole rank ladder incl. "The Journey Begins") — all migrated to
+  resources + Italian. DopamineScore.of / DopamineRank.of / .levels() now take Context; ScoreLine
+  got a stable key so adviceFor keys on it (not the localized label). compiles + validates + tests pass.
+  Dev tools / sensor-debug / room-beacon CALIBRATION remain English by design.
+- 2026-07-20 · batch 26 (PRODUCTION + Italian): checkTranslations now FAILS on drift (extra keys) but WARNS on missing (coverage %) — the rational multi-market policy (translations lag code; Android falls back to English). Added `resourceConfigurations=[en,it]` (bundle carries only shipped langs). Added Italian: values-it/strings.xml (partial, 135/684 = 19%, real coherent chunk — first-run/main flows/block reasons/modes), words/it/ filter files (core/support/mixed/medical/exceptions), locales_config + LocaleHelper (Italiano). processDebugResources OK; build passes (partial locale ships fine, falls back). TRANSLATING.md updated with the Play multi-market rationale.
 - 2026-07-20 · batch 24: SimpleDateFormat/axis-label pass — DOW_ORDER/cal/monthNames/weekDays now from DateFormatSymbols(Locale.getDefault()) (DOW_ORDER + dowName + cal derive from the SAME locale so matching holds); display date formatters (weekdayFmt/niceDateFmt/niceDoyFmt) → Locale.getDefault(); numeric/storage formats stay Locale.US. compiles + validates.
   · LEFT BY DESIGN: HOUR_LABELS ("12a/6a/…") compact English am/p markers — minor, low value.
   · Currency £ NOT localized: the amounts are actual GBP (VALUE_PER_HOUR_GBP, "£13,000/year"),

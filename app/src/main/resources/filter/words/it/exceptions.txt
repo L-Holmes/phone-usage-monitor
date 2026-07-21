@@ -1,0 +1,6 @@
+# Italian innocent-context EXCEPTIONS. "word: neighbour1, neighbour2, ..." — vetoes the match.
+# Unioned with words/en/exceptions.txt. STARTER SET.
+sesso: genere, opposto, educazione, biologia, differenza, cellule, lavoratore, lavoratrice
+nudo: crudo, verità, occhio, dipinto, arte, artista, scultura, statua
+seno: cancro, tumore, allattamento, latte, mammografia, ecografia
+erezione: costruzione, edificio, montaggio

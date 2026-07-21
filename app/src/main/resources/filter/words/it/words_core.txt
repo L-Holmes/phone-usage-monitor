@@ -1,0 +1,18 @@
+# CORE tier — Italian, unambiguously adult (one hit blocks). Unioned with words/en/words_core.txt.
+# STARTER SET for the example locale — review/expand with a native speaker.
+porno
+pornografia
+pornografico
+pornografica
+pornostar
+masturbazione
+masturbarsi
+eiaculazione
+sborrata
+sborra
+pompino
+cunnilingus
+ditalino
+gangbang
+orgasmo
+orgasmi

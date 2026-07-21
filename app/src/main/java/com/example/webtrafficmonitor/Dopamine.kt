@@ -317,7 +317,7 @@ data class DopamineDay(
 // =====================================================================================
 // DopamineScore  (the raw counters -> a number out of 100, plus WHY)
 // =====================================================================================
-data class ScoreLine(val label: String, val points: Int, val detail: String)
+data class ScoreLine(val key: String, val label: String, val points: Int, val detail: String)
 
 data class DopamineResult(
     val score: Int,
@@ -330,7 +330,23 @@ data class DopamineResult(
 
 object DopamineScore {
 
-    fun of(day: DopamineDay): DopamineResult {
+    /** Localised band name for a score (display only; bandColour uses the same thresholds). */
+    fun bandLabel(context: Context, score: Int): String = context.getString(when {
+        score >= 80 -> R.string.dopband_severe
+        score >= 60 -> R.string.dopband_verypoor
+        score >= 45 -> R.string.dopband_poor
+        score >= 30 -> R.string.dopband_middling
+        score >= 15 -> R.string.dopband_good
+        else -> R.string.dopband_calm
+    })
+
+    /** Localised category label (the enum's English name stays the stable key elsewhere). */
+    fun catLabel(context: Context, cat: DopamineCategory): String {
+        val id = context.resources.getIdentifier("dopcat_${cat.name.lowercase()}", "string", context.packageName)
+        return if (id == 0) cat.label else context.getString(id)
+    }
+
+    fun of(context: Context, day: DopamineDay): DopamineResult {
         val t = DopamineTuning
         val up = mutableListOf<ScoreLine>()
         val down = mutableListOf<ScoreLine>()
@@ -348,15 +364,12 @@ object DopamineScore {
             val pts = base * timeOfDayMult
             if (pts >= 0.5f) {
                 total += pts
-                up.add(ScoreLine(cat.label, Math.round(pts), "${fmtDuration(secs)} today"))
+                up.add(ScoreLine(cat.name, catLabel(context, cat), Math.round(pts), context.getString(R.string.sl_cat_today, fmtDuration(secs))))
             }
         }
         if (timeOfDayMult > 1f && loadSecs > 0) {
-            up.add(ScoreLine(
-                "Late night / just-woken use",
-                0,
-                "×${String.format("%.2f", timeOfDayMult)} applied to the time above",
-            ))
+            up.add(ScoreLine("latenight", context.getString(R.string.sl_latenight), 0,
+                context.getString(R.string.sl_latenight_detail, String.format("%.2f", timeOfDayMult))))
         }
 
         // 2. Unlocks.
@@ -364,16 +377,16 @@ object DopamineScore {
         ramp(unlocksPerHour, t.UNLOCKS_PER_HOUR_OK, t.UNLOCKS_PER_HOUR_BAD, t.UNLOCKS_MAX_POINTS)
             .takeIf { it >= 0.5f }?.let {
                 total += it
-                up.add(ScoreLine("Phone unlocks", Math.round(it),
-                    "${day.unlocks} today (~${String.format("%.1f", unlocksPerHour)}/hr)"))
+                up.add(ScoreLine("unlocks", context.getString(R.string.sl_unlocks), Math.round(it),
+                    context.getString(R.string.sl_unlocks_detail, day.unlocks, String.format("%.1f", unlocksPerHour))))
             }
 
         // 4. Urgent opens.
         if (day.urgentOpens > 0) {
             val pts = (day.urgentOpens * t.URGENT_OPEN_POINTS).coerceAtMost(t.URGENT_OPEN_MAX_POINTS)
             total += pts
-            up.add(ScoreLine("Straight-in opens", Math.round(pts),
-                "${day.urgentOpens}× you unlocked and were in a feed within ${t.URGENT_OPEN_SECONDS}s"))
+            up.add(ScoreLine("straightin", context.getString(R.string.sl_straightin), Math.round(pts),
+                context.getString(R.string.sl_straightin_detail, day.urgentOpens, t.URGENT_OPEN_SECONDS)))
         }
 
         // 5. Checking the same app over and over.
@@ -381,8 +394,8 @@ object DopamineScore {
             t.CHECKS_PER_HOUR_BAD.toFloat(), t.CHECKS_MAX_POINTS)
             .takeIf { it >= 0.5f }?.let {
                 total += it
-                up.add(ScoreLine("Compulsive checking", Math.round(it),
-                    "${day.maxChecksInHour} opens of one app in a single hour"))
+                up.add(ScoreLine("checking", context.getString(R.string.sl_checking), Math.round(it),
+                    context.getString(R.string.sl_checking_detail, day.maxChecksInHour)))
             }
 
         // 6. Interaction rate.
@@ -392,8 +405,8 @@ object DopamineScore {
             ramp(rate, t.INTERACTIONS_PER_MIN_OK, t.INTERACTIONS_PER_MIN_BAD, t.INTERACTIONS_MAX_POINTS)
                 .takeIf { it >= 0.5f }?.let {
                     total += it
-                    up.add(ScoreLine("Constant scrolling / tapping", Math.round(it),
-                        "~${Math.round(rate)} interactions a minute"))
+                    up.add(ScoreLine("scrolling", context.getString(R.string.sl_scrolling), Math.round(it),
+                        context.getString(R.string.sl_scrolling_detail, Math.round(rate))))
                 }
         }
 
@@ -402,14 +415,14 @@ object DopamineScore {
             val pts = f * t.LYING_MAX_POINTS
             if (pts >= 0.5f) {
                 total += pts
-                up.add(ScoreLine("Using it lying down", Math.round(pts), fmtDuration(day.lyingSeconds)))
+                up.add(ScoreLine("lying", context.getString(R.string.sl_lying), Math.round(pts), fmtDuration(day.lyingSeconds)))
             }
         }
         fraction(day.darkSeconds, t.POSTURE_FULL_HOURS).let { f ->
             val pts = f * t.DARK_MAX_POINTS
             if (pts >= 0.5f) {
                 total += pts
-                up.add(ScoreLine("Using it in the dark", Math.round(pts), fmtDuration(day.darkSeconds)))
+                up.add(ScoreLine("dark", context.getString(R.string.sl_dark), Math.round(pts), fmtDuration(day.darkSeconds)))
             }
         }
 
@@ -418,15 +431,15 @@ object DopamineScore {
             val pts = f * t.SCREEN_OFF_MAX_POINTS
             if (pts >= 0.5f) {
                 total -= pts
-                down.add(ScoreLine("Time with the screen off", -Math.round(pts),
-                    "${fmtDuration(day.screenOffSeconds)} awake and off the phone"))
+                down.add(ScoreLine("screenoff", context.getString(R.string.sl_screenoff), -Math.round(pts),
+                    context.getString(R.string.sl_screenoff_detail, fmtDuration(day.screenOffSeconds))))
             }
         }
 
         val score = total.coerceIn(0f, 100f).let { Math.round(it) }
         return DopamineResult(
             score = score,
-            band = t.band(score),
+            band = bandLabel(context, score),
             colour = t.bandColour(score),
             contributors = up.sortedByDescending { it.points },
             credits = down,
@@ -730,40 +743,56 @@ object DopamineRank {
 
     /** The full ladder, best first, with what each takes. Belt numbers are interpolated
      *  from BELTS so this page can never drift out of sync with the real rules. */
-    fun levels(): List<RankLevel> = BELTS.mapIndexed { i, b ->
-        val flavour = when (i) {
-            0 -> "Roughly: well under an hour a day on non-whitelisted apps, nothing late at night, for two months straight. The top of the mountain."
-            1 -> "About an hour a day, kept up for a whole month."
-            2 -> "Two clean weeks - the feeds barely see you."
-            else -> "One controlled week. The first belt."
-        }
-        RankLevel(b.longTitle, b.colour,
-            "${b.streakDays} days in a row with a baseline of ${b.maxScore} or less. $flavour")
+    private fun longRes(context: Context, long: String): String = context.getString(when (long) {
+        "Melatonin Monk" -> R.string.rank_monk_long
+        "Grounded Guru" -> R.string.rank_guru_long
+        "Serotonin Sensei" -> R.string.rank_sensei_long
+        "Dopamine Disciple" -> R.string.rank_disciple_long
+        "Adenosine Apprentice" -> R.string.rank_apprentice_long
+        "Dopamine Drifter" -> R.string.rank_drifter_long
+        "The Twitchy Thumb" -> R.string.rank_twitchy_long
+        "Certified Doomscroller" -> R.string.rank_doomscroller_long
+        "Fully Fried" -> R.string.rank_fried_long
+        else -> R.string.rank_journey_long
+    })
+    private fun shortRes(context: Context, short: String): String = context.getString(when (short) {
+        "Monk" -> R.string.rank_monk
+        "Guru" -> R.string.rank_guru
+        "Sensei" -> R.string.rank_sensei
+        "Disciple" -> R.string.rank_disciple
+        "Apprentice" -> R.string.rank_apprentice
+        "Drifter" -> R.string.rank_drifter
+        "Twitchy" -> R.string.rank_twitchy
+        "Doomscroller" -> R.string.rank_doomscroller
+        "Fried" -> R.string.rank_fried
+        else -> R.string.rank_initiate
+    })
+
+    fun levels(context: Context): List<RankLevel> = BELTS.mapIndexed { i, b ->
+        val flavour = context.getString(when (i) {
+            0 -> R.string.rank_flavour_0
+            1 -> R.string.rank_flavour_1
+            2 -> R.string.rank_flavour_2
+            else -> R.string.rank_flavour_3
+        })
+        RankLevel(longRes(context, b.longTitle), b.colour,
+            context.getString(R.string.rank_req, b.streakDays, b.maxScore, flavour))
     } + listOf(
-        RankLevel("Adenosine Apprentice", 0xFF52796F.toInt(),
-            "A 7-day average under 40. The habit is bending - hold it for a week and the belts start."),
-        RankLevel("Dopamine Drifter", 0xFF9A7B00.toInt(),
-            "A 7-day average under 50. Coasting - could go either way."),
-        RankLevel("The Twitchy Thumb", 0xFFB07800.toInt(),
-            "A 7-day average under 60. The phone is winning more rounds than you are."),
-        RankLevel("Certified Doomscroller", 0xFFC0392B.toInt(),
-            "A 7-day average under 75. Hours a day going to the scroll."),
-        RankLevel("Fully Fried", 0xFF8E1600.toInt(),
-            "A 7-day average of 75 or more. Rock bottom - from here it only goes up."),
-        RankLevel("The Journey Begins", 0xFF2E9E8F.toInt(),
-            "Where everyone starts: install the app, live one normal day."),
+        RankLevel(longRes(context, "Adenosine Apprentice"), 0xFF52796F.toInt(), context.getString(R.string.rank_req_apprentice)),
+        RankLevel(longRes(context, "Dopamine Drifter"), 0xFF9A7B00.toInt(), context.getString(R.string.rank_req_drifter)),
+        RankLevel(longRes(context, "The Twitchy Thumb"), 0xFFB07800.toInt(), context.getString(R.string.rank_req_twitchy)),
+        RankLevel(longRes(context, "Certified Doomscroller"), 0xFFC0392B.toInt(), context.getString(R.string.rank_req_doomscroller)),
+        RankLevel(longRes(context, "Fully Fried"), 0xFF8E1600.toInt(), context.getString(R.string.rank_req_fried)),
+        RankLevel(longRes(context, "The Journey Begins"), 0xFF2E9E8F.toInt(), context.getString(R.string.rank_req_journey)),
     )
 
     fun of(context: Context): DopamineRankResult {
         val history = DopamineLog.history(context, 90)
-        val scored = history.map { d -> DopamineScore.of(d).let { if (it.hasData) it.score else -1 } }
-        // Day one is already a rank: installing the thing that watches the habit IS the
-        // first step of the journey, and it should read that way, not as "unranked".
+        val scored = history.map { d -> DopamineScore.of(context, d).let { if (it.hasData) it.score else -1 } }
         if (scored.none { it >= 0 }) return DopamineRankResult(
-            "Initiate", "The Journey Begins", 0xFF2E9E8F.toInt(),
-            "Step one - noticing - is done. A day of normal phone use unlocks your real rank.", false)
+            context.getString(R.string.rank_initiate), longRes(context, "The Journey Begins"), 0xFF2E9E8F.toInt(),
+            context.getString(R.string.rank_initiate_detail), false)
 
-        // Streak per threshold: newest-first walk; no-data days are skipped.
         fun streak(maxScore: Int): Int {
             var n = 0
             for (s in scored.asReversed()) {
@@ -777,24 +806,23 @@ object DopamineRank {
         for ((i, belt) in BELTS.withIndex()) {
             if (streak(belt.maxScore) >= belt.streakDays) {
                 val next = BELTS.getOrNull(i - 1)
-                val detail = if (next == null) "The top of the mountain. Keep sitting on it."
-                else "${belt.streakDays}+ days with a baseline ≤ ${belt.maxScore}. " +
-                    "Next: ${next.title} - ${next.streakDays} days ≤ ${next.maxScore}."
-                return DopamineRankResult(belt.title, belt.longTitle, belt.colour, detail, true)
+                val detail = if (next == null) context.getString(R.string.rank_detail_top)
+                else context.getString(R.string.rank_detail_belt, belt.streakDays, belt.maxScore,
+                    shortRes(context, next.title), next.streakDays, next.maxScore)
+                return DopamineRankResult(shortRes(context, belt.title), longRes(context, belt.longTitle), belt.colour, detail, true)
             }
         }
 
-        // No belt yet: rank straight off the recent average, and show the path in.
         val recent = scored.takeLast(7).filter { it >= 0 }
         val avg = if (recent.isEmpty()) scored.last { it >= 0 } else recent.average().toInt()
         val entry = BELTS.last()
-        val path = "Next: ${entry.title} - ${entry.streakDays} days ≤ ${entry.maxScore} (streak so far: ${streak(entry.maxScore)})."
+        val path = context.getString(R.string.rank_path, shortRes(context, entry.title), entry.streakDays, entry.maxScore, streak(entry.maxScore))
         return when {
-            avg < 40 -> DopamineRankResult("Apprentice", "Adenosine Apprentice", 0xFF52796F.toInt(), "7-day average $avg. $path", true)
-            avg < 50 -> DopamineRankResult("Drifter", "Dopamine Drifter", 0xFF9A7B00.toInt(), "7-day average $avg. $path", true)
-            avg < 60 -> DopamineRankResult("Twitchy", "The Twitchy Thumb", 0xFFB07800.toInt(), "7-day average $avg. $path", true)
-            avg < 75 -> DopamineRankResult("Doomscroller", "Certified Doomscroller", 0xFFC0392B.toInt(), "7-day average $avg. $path", true)
-            else -> DopamineRankResult("Fried", "Fully Fried", 0xFF8E1600.toInt(), "7-day average $avg. It only goes up from here. $path", true)
+            avg < 40 -> DopamineRankResult(shortRes(context, "Apprentice"), longRes(context, "Adenosine Apprentice"), 0xFF52796F.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
+            avg < 50 -> DopamineRankResult(shortRes(context, "Drifter"), longRes(context, "Dopamine Drifter"), 0xFF9A7B00.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
+            avg < 60 -> DopamineRankResult(shortRes(context, "Twitchy"), longRes(context, "The Twitchy Thumb"), 0xFFB07800.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
+            avg < 75 -> DopamineRankResult(shortRes(context, "Doomscroller"), longRes(context, "Certified Doomscroller"), 0xFFC0392B.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
+            else -> DopamineRankResult(shortRes(context, "Fried"), longRes(context, "Fully Fried"), 0xFF8E1600.toInt(), context.getString(R.string.rank_detail_fried, avg, path), true)
         }
     }
 }

@@ -1,0 +1,12 @@
+# SUPPORT tier — Italian anatomy/slang: never blocks alone, most have medical EXCEPTIONS.
+# Unioned with words/en/words_support.txt. STARTER SET.
+vagina
+vaginale
+pene
+clitoride
+testicoli
+erezione
+tette
+culo
+cazzo
+figa

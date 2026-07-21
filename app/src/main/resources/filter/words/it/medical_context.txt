@@ -1,0 +1,27 @@
+# Italian medical/health context — damps the SOFT score so medical pages don't block.
+# Unioned with words/en/medical_context.txt. STARTER SET.
+sintomo
+sintomi
+diagnosi
+cura
+trattamento
+infezione
+salute
+medico
+dottore
+dottoressa
+ospedale
+clinica
+malattia
+tumore
+cancro
+gravidanza
+mestruazioni
+ciclo
+menopausa
+anatomia
+ginecologo
+ginecologa
+urologo
+visita
+esame
