@@ -184,7 +184,7 @@ object Mode {
         return when {
             d > 0 -> Units.daysHours(ctx, d, h)
             h > 0 -> Units.hours(ctx, h)
-            else -> ctx.getString(R.string.unit_under_1h)
+            else -> Units.underAnHour(ctx)
         }
     }
 

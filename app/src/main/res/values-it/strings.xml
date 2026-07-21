@@ -15,8 +15,9 @@
     <string name="unit_h">%1$s h</string>
     <string name="unit_m">%1$s min</string>
     <string name="unit_s">%1$s s</string>
-    <string name="unit_h_m">%1$s h %2$s min</string>
-    <string name="unit_d_h">%1$s g %2$s h</string>
+    <string name="unit_d">%1$s g</string>
+    <string name="unit_h_m">%1$s %2$s</string>
+    <string name="unit_d_h">%1$s %2$s</string>
     <string name="readout_time_money">%1$s (%2$s)</string>
     <string name="unit_under_1h">&lt;1 h</string>
 
@@ -157,6 +158,7 @@
     <string name="mode_on_toast">Modalità %1$s attivata</string>
     <string name="mode_off_toast">Monitoraggio disattivato: niente è controllato o bloccato</string>
     <string name="mode_needs_lock_toast">La modalità Super rigida richiede prima il blocco della disinstallazione</string>
+    <string name="mode_reverted_toast">Il monitoraggio richiede entrambe le autorizzazioni: la modalità è tornata su Off.</string>
 
     <string name="adult_section_looks">Cosa cerca il filtro</string>
     <string name="adult_intro">Per impostazione predefinita il filtro tratta allo stesso modo le immagini sessualizzate di donne e di uomini. Se una delle due semplicemente non è una tentazione per te, puoi ridurla — così puoi cercare costumi o intimo senza combattere.\n\nQuesto ammorbidisce solo il lato ALLUSIVO. I contenuti espliciti e i siti per adulti noti restano bloccati comunque, qualunque cosa dicano questi interruttori.</string>

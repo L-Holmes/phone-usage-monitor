@@ -157,6 +157,17 @@ screen at a time** — never the whole file at once.
 - 2026-07-20 · i18n batch 19: RelapseLog.analyze generated feedback → resources (Context threaded through; `relapse_fb_*`/`relapse_enc_*`/`relapse_days`). Scanned all other .kt files: NONE build UI (0 sites). ALL non-Main files now DONE/N/A. Remaining: dev screens (English by design) + deferred config-data lists only.
 - 2026-07-20 · data-files: GenderedTerms → words/en/gendered_*.txt (FilterData). ALL filter word lists now in files. Unit tests pass. Filter data-file extraction COMPLETE.
 - 2026-07-20 · batch 25 (cleanup): night-guard/lockdown substrings → assets/filter/ (getters); removed dead DEFAULT_ROOMS; SHORT_FORM_PATTERNS/SEARCH_ENGINES left in code (rationale). compiles + validates + tests pass. ALL actionable remaining items closed.
+- 2026-07-21 · batch 29 (unit SPACING + compact symbols): follow-up to 28, from real-device
+  measurement. (1) A value and its unit are now joined by WORD JOINER + HAIR SPACE + WORD JOINER
+  (`Units.tighten`). NARROW NO-BREAK SPACE (U+202F) — the textbook choice — measured IDENTICAL to
+  a full space on a Samsung device (22px both ways): plenty of vendor fonts have no glyph and fall
+  back to a normal space. U+200A is honoured (22px → 13px). (2) `Units.narrowSymbol` borrows a
+  compact symbol from another locale when the UI language has none — Italian CLDR writes USD as
+  "USD", which wrapped mid-token to "16.890 U" / "SD". (3) `statValue` (shared by statRow +
+  statBigCard): maxLines 1, BREAK_STRATEGY_SIMPLE, HYPHENATION_NONE, autosize down to 11sp, so a
+  code with no symbol anywhere (CHF, SEK) shrinks instead of breaking in half. (4) Unit strings
+  restructured so TRANSLATORS write a plain space: `unit_d` added, `unit_h_m`/`unit_d_h` now just
+  JOIN two finished parts ("%1$s %2$s"), and each atom tightens itself.
 - 2026-07-21 · batch 28 (UNITS — money + durations): the numbers next to the strings are now
   localized too, via a new `Units.kt`.
   MONEY: no more hardcoded "£" anywhere. Currency = the DEVICE REGION's (read from

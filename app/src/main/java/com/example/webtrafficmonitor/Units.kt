@@ -3,6 +3,7 @@ package com.example.webtrafficmonitor
 import android.content.Context
 import android.content.res.Resources
 import androidx.core.os.ConfigurationCompat
+import java.text.DecimalFormat
 import java.text.NumberFormat
 import java.util.Currency
 import java.util.Locale
@@ -82,25 +83,69 @@ object Units {
             ?: Currency.getInstance(FALLBACK)
 
     /** Just the symbol ("£", "€", "$") - for hints and prose with no amount attached. */
-    fun symbol(c: Context): String = currencyOf(c).getSymbol(uiLocale(c))
+    fun symbol(c: Context): String = narrowSymbol(c, currencyCode(c))
 
     /** A currency's name in the UI language, e.g. "British Pound" - for the picker. */
     fun currencyName(c: Context, code: String): String =
         runCatching { Currency.getInstance(code).getDisplayName(uiLocale(c)) }.getOrNull() ?: code
 
-    /** A currency's symbol in the UI language - for the picker. */
-    fun currencySymbol(c: Context, code: String): String =
-        runCatching { Currency.getInstance(code).getSymbol(uiLocale(c)) }.getOrNull() ?: code
+    /**
+     * The most COMPACT symbol this language will accept for [code].
+     *
+     * CLDR gives some currencies no symbol in some languages - Italian writes the US dollar
+     * "USD", Japanese yen "JPY". That is correct, but three letters in a stat cell wrap, and
+     * a wrapped currency renders as "16.890 U" / "SD". "$" is understood in every language,
+     * so we borrow the symbol from a locale that has one. Currencies with no symbol ANYWHERE
+     * (CHF, SEK, NOK, ...) legitimately stay as their code.
+     */
+    fun narrowSymbol(c: Context, code: String): String {
+        val cur = runCatching { Currency.getInstance(code) }.getOrNull() ?: return code
+        val local = cur.getSymbol(uiLocale(c))
+        if (local != code) return local
+        for (l in listOf(Locale.US, Locale.ROOT)) {
+            val s = cur.getSymbol(l)
+            if (s != code && s.length < code.length) return s
+        }
+        return code
+    }
 
     /**
      * A whole-money amount written the way this language writes money: "£13,000",
-     * "13.000 €", "$13,000". Never any pence - these are all estimates and projections.
+     * "13.000 $", "13,000 €". Never any pence - these are all estimates and projections.
+     *
+     * The gap before/after the symbol is tightened (see [tighten]): the default is a full-width
+     * space, which both reads as though the symbol belongs to the next word and lets a narrow
+     * cell wrap the value away from its own currency.
      */
-    fun money(c: Context, amount: Number): String =
-        NumberFormat.getCurrencyInstance(uiLocale(c)).apply {
-            currency = currencyOf(c)
-            maximumFractionDigits = 0
-        }.format(amount)
+    fun money(c: Context, amount: Number): String {
+        val nf = NumberFormat.getCurrencyInstance(uiLocale(c))
+        nf.maximumFractionDigits = 0
+        if (nf is DecimalFormat) {
+            // Order matters: setting the currency also resets the symbol, so ours goes second.
+            nf.decimalFormatSymbols = nf.decimalFormatSymbols.apply {
+                currency = currencyOf(c)
+                currencySymbol = narrowSymbol(c, currencyCode(c))
+            }
+        } else {
+            nf.currency = currencyOf(c)
+        }
+        return nf.format(amount).tighten()
+    }
+
+    /**
+     * Bind a value to the unit beside it: a small gap that cannot be wrapped across.
+     *
+     * The obvious character, NARROW NO-BREAK SPACE, is no good in practice - plenty of vendor
+     * fonts have no glyph for it and fall back to a full-width space, which is exactly the
+     * "the € is miles from the number" look we are fixing (measured: no change at all on a
+     * Samsung device). HAIR SPACE is honoured, so we use that and put the no-break back with
+     * WORD JOINERs either side.
+     */
+    private fun String.tighten(): String =
+        replace("\u00A0", TIGHT).replace(" ", TIGHT)
+
+    /** WORD JOINER + HAIR SPACE + WORD JOINER: as narrow as fonts will actually render. */
+    private const val TIGHT = "\u2060\u200A\u2060"
 
     // ── Durations ────────────────────────────────────────────────────────────────────
 
@@ -109,20 +154,26 @@ object Units {
 
     /** A whole percentage from a 0..1 fraction, spaced the way this language spaces it. */
     fun percent(c: Context, fraction: Float): String =
-        NumberFormat.getPercentInstance(uiLocale(c)).apply { maximumFractionDigits = 0 }.format(fraction)
+        NumberFormat.getPercentInstance(uiLocale(c)).apply { maximumFractionDigits = 0 }
+            .format(fraction).tighten()
 
     /** One decimal place, this language's decimal mark ("1.5" / "1,5"). */
     fun decimal1(c: Context, v: Float): String = String.format(uiLocale(c), "%.1f", v)
 
-    fun hours(c: Context, v: String): String = c.getString(R.string.unit_h, v)
+    // Each unit tightens its own gap, so translators write a NORMAL space ("%1$s min") and
+    // never have to know about hair spaces. The COMPOUND forms just join two finished parts,
+    // which keeps the space BETWEEN them a real, breakable one.
+    fun hours(c: Context, v: String): String = c.getString(R.string.unit_h, v).tighten()
     fun hours(c: Context, v: Number): String = hours(c, number(c, v))
-    fun mins(c: Context, v: String): String = c.getString(R.string.unit_m, v)
+    fun mins(c: Context, v: String): String = c.getString(R.string.unit_m, v).tighten()
     fun mins(c: Context, v: Number): String = mins(c, number(c, v))
-    fun secs(c: Context, v: Number): String = c.getString(R.string.unit_s, number(c, v))
+    fun secs(c: Context, v: Number): String = c.getString(R.string.unit_s, number(c, v)).tighten()
+    fun days(c: Context, v: Number): String = c.getString(R.string.unit_d, number(c, v)).tighten()
     fun hoursMins(c: Context, h: Number, m: Number): String =
-        c.getString(R.string.unit_h_m, number(c, h), number(c, m))
+        c.getString(R.string.unit_h_m, hours(c, h), mins(c, m))
     fun daysHours(c: Context, d: Number, h: Number): String =
-        c.getString(R.string.unit_d_h, number(c, d), number(c, h))
+        c.getString(R.string.unit_d_h, days(c, d), hours(c, h))
+    fun underAnHour(c: Context): String = c.getString(R.string.unit_under_1h).tighten()
 
     /** "3h" / "0h 45m" from a count of hours - the stats/graph house style. */
     fun fromHours(c: Context, hours: Float): String {

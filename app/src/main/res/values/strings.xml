@@ -44,8 +44,11 @@
     <string name="unit_h">%1$sh</string>
     <string name="unit_m">%1$sm</string>
     <string name="unit_s">%1$ss</string>
-    <string name="unit_h_m">%1$sh %2$sm</string>
-    <string name="unit_d_h">%1$sd %2$sh</string>
+    <string name="unit_d">%1$sd</string>
+    <!-- Compound durations just JOIN two finished parts ("1h" + "20m"), so translators only
+         choose the separator here, never repeat the unit letters. -->
+    <string name="unit_h_m">%1$s %2$s</string>
+    <string name="unit_d_h">%1$s %2$s</string>
     <!-- A chart readout pairing a duration with what it cost: "1h 20m (£16)". -->
     <string name="readout_time_money">%1$s (%2$s)</string>
     <string name="unit_under_1h">&lt;1h</string>
@@ -194,6 +197,7 @@
     <string name="mode_on_toast">%1$s mode on</string>
     <string name="mode_off_toast">Monitoring off - nothing is watched or blocked</string>
     <string name="mode_needs_lock_toast">Super hardcore needs the uninstall lock on first</string>
+    <string name="mode_reverted_toast">Monitoring needs both permissions - the mode is back to Off.</string>
 
     <!-- ── Adult-content settings screen (Main.kt) ───────────────────────────────────── -->
     <string name="adult_section_looks">What the filter looks for</string>

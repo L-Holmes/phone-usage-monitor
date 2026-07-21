@@ -72,10 +72,13 @@ them (Italian ships `1 h 20 min`, `3 g 4 h`):
 
 | Key | English | Italian |
 |---|---|---|
-| `unit_h` / `unit_m` / `unit_s` | `%1$sh` / `%1$sm` / `%1$ss` | `%1$s h` / `%1$s min` / `%1$s s` |
-| `unit_h_m` | `%1$sh %2$sm` | `%1$s h %2$s min` |
-| `unit_d_h` | `%1$sd %2$sh` | `%1$s g %2$s h` |
+| `unit_h` / `unit_m` / `unit_s` / `unit_d` | `%1$sh` / `%1$sm` / `%1$ss` / `%1$sd` | `%1$s h` / `%1$s min` / `%1$s s` / `%1$s g` |
+| `unit_h_m` / `unit_d_h` | `%1$s %2$s` | `%1$s %2$s` |
 | `unit_under_1h` | `<1h` | `<1 h` |
+
+Write a **normal space** if your language wants one — `Units` narrows it for you (see
+"Spacing" below). The compound forms only JOIN two finished parts (`"1h"` + `"20m"`), so you
+choose the separator there and never repeat the unit letters.
 
 Keep them **short** — several land on a narrow chart axis. Use the helpers rather than
 concatenating:
@@ -88,6 +91,20 @@ Units.number(this, 13000)        // "13,000" / "13.000"
 Units.decimal1(this, 2.5f)       // "2.5" / "2,5"
 Units.percent(this, 0.42f)       // "42%"
 ```
+
+**Spacing.** A value and its unit are glued together with a **hair space fenced by word
+joiners**, so they read as one thing and can never wrap apart. Two findings behind that, both
+measured on a real device rather than assumed:
+
+- `NARROW NO-BREAK SPACE` (U+202F), the textbook choice, is **not** narrow in practice — plenty
+  of vendor fonts have no glyph and fall back to a full-width space. It made no difference at
+  all on a Samsung device (22px gap before and after). `HAIR SPACE` (U+200A) is honoured: the
+  same gap dropped to 13px.
+- Some currencies have **no compact symbol in some languages** — Italian CLDR writes the US
+  dollar as `USD`, which wrapped mid-token in a stat cell and rendered `16.890 U` / `SD`.
+  `Units.narrowSymbol` borrows `$` from a locale that has one. Currencies with no symbol
+  anywhere (CHF, SEK, NOK…) keep their code, and `statValue` shrinks the type rather than
+  letting a value break in half.
 
 **Rule of thumb:** never build a user-facing number by string concatenation (`"${h}h"`, `"£$n"`).
 If you catch yourself typing a unit inside a Kotlin string, it belongs in `Units`.

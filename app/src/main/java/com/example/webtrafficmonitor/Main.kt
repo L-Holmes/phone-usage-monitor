@@ -24,6 +24,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.EditText
 import android.text.Editable
+import android.text.Layout
 import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
@@ -546,7 +547,7 @@ private fun showCurrencyPicker() {
     Units.SUPPORTED_CURRENCIES.forEach { code ->
         val name =
             if (code.isBlank()) getString(R.string.currency_device_default, Units.currencyCode(this))
-            else getString(R.string.currency_row, Units.currencySymbol(this, code), Units.currencyName(this, code))
+            else getString(R.string.currency_row, Units.narrowSymbol(this, code), Units.currencyName(this, code))
         list.addView(Button(this).apply {
             text = if (code == current) "✓  $name" else name
             setOnClickListener {
@@ -1316,6 +1317,26 @@ private fun showProgress() {
     }
 }
 
+/**
+ * A big stat NUMBER. Every value here carries a unit ("1.408 h", "16.890 $"), and a unit
+ * split off its number is nonsense - a cell narrow enough to wrap once rendered
+ * "16.890 U" / "SD". So: one line, no hyphenation, no clever line breaking, and if a long
+ * currency CODE still will not fit (CHF, SEK - CLDR gives those no symbol in any language)
+ * the type shrinks rather than the value breaking apart.
+ */
+private fun statValue(value: String, sizeSp: Float, colour: Int): TextView =
+    TextView(this).apply {
+        text = value; textSize = sizeSp; setTypeface(typeface, Typeface.BOLD); setTextColor(colour)
+        maxLines = 1
+        breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
+        hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+        // Autosizing needs a bounded width - it is undefined against wrap_content.
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+            this, 11, sizeSp.toInt(), 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+    }
+
 private fun statBigCard(value: String, label: String, sub: String?, accent: Int): LinearLayout {
     val dp = resources.displayMetrics.density
     return LinearLayout(this).apply {
@@ -1327,9 +1348,7 @@ private fun statBigCard(value: String, label: String, sub: String?, accent: Int)
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = (8 * dp).toInt() }
-        addView(TextView(this@MainActivity).apply {
-            text = value; textSize = 30f; setTypeface(typeface, Typeface.BOLD); setTextColor(accent)
-        })
+        addView(statValue(value, 30f, accent))
         addView(TextView(this@MainActivity).apply {
             text = label; textSize = 14f; setTextColor(0xFF4A4F54.toInt())
         })
@@ -2513,9 +2532,7 @@ private fun statRow(stats: List<Pair<String, String>>, colour: Int, onClick: (()
         for ((value, label) in stats) addView(LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(TextView(this@MainActivity).apply {
-                text = value; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(colour)
-            })
+            addView(statValue(value, 20f, colour))
             addView(TextView(this@MainActivity).apply {
                 text = label; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
             })
@@ -3668,7 +3685,12 @@ private fun showReportScreen(offerLock: Boolean = false) {
     // The centred "this app isn't protected yet" popup shows every time the page is
     // ENTERED from the Temptations menu (offerLock = true) while the uninstall lock is
     // off - but not on thumb-back returns from sub-pages, or it nags on every hop.
-    if (offerLock && !(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
+    //
+    // It also stays quiet until the user is actually SET UP: on a fresh install (mode Off,
+    // no permissions) the uninstall lock is the third thing they need, not the first, and
+    // leading with it just adds a scary popup to a page that isn't monitoring anything yet.
+    if (offerLock && !Mode.isOff(this) && corePermsGranted() &&
+        !(UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))) {
         showUnprotectedPopup()
     }
     onReportScreen = true
@@ -5488,6 +5510,18 @@ private fun startWeekStrict() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         when {
+            // A mode change waiting on the permissions: back CANCELS it. Nothing to undo -
+            // the mode was never committed - so this just drops it and carries on.
+            pendingMode != null -> { pendingMode = null; inPermissionFlow = false; updateScreen() }
+            // The gate is MANDATORY: the mode is above Off and a permission is missing or
+            // has been revoked. Back cannot be the way to keep a mode nothing enforces, so
+            // it falls back to Off. (If strict is LOCKED, setMode refuses and the gate stays
+            // put - which is exactly what a lock is for.)
+            atMandatoryGate() -> {
+                if (Mode.setMode(this, Mode.OFF))
+                    Toast.makeText(this, getString(R.string.mode_reverted_toast), Toast.LENGTH_LONG).show()
+                updateScreen()
+            }
             // Backing out of a VOLUNTARY permission screen is the same as "Not now" -
             // otherwise the flow flag stays armed and the screen reappears on resume.
             inPermissionFlow -> { inPermissionFlow = false; updateScreen() }
@@ -5646,13 +5680,27 @@ private fun startWeekStrict() {
     /** True when the user is walking the permission screens by choice (mode still Off). */
     private var inPermissionFlow = false
 
+    /**
+     * A mode the user picked that is NOT committed yet, because it needs the two core
+     * permissions and they aren't on. It lands in updateScreen the moment both are granted.
+     * Parking it (rather than setting the mode and gating afterwards) is what stops the back
+     * button leaving the app in a mode with nothing behind it.
+     */
+    private var pendingMode: String? = null
+
     private fun corePermsGranted(): Boolean =
         isAccessibilityEnabled() && Settings.canDrawOverlays(this)
 
+    /** True while the setup gate is up because the CURRENT mode demands it - no way past. */
+    private fun atMandatoryGate(): Boolean =
+        (shownStep == Step.MONITORING || shownStep == Step.OVERLAY) &&
+            !Mode.isOff(this) && !corePermsGranted()
+
     private fun currentStep(): Step {
         // Above Off the permissions are mandatory; in Off they're only shown while the
-        // user has voluntarily entered the flow (popup / banner / "Not now" backs out).
-        val needPerms = !Mode.isOff(this) || inPermissionFlow
+        // user has voluntarily entered the flow (popup / banner / "Not now" backs out)
+        // or has a mode change waiting on them (pendingMode).
+        val needPerms = !Mode.isOff(this) || inPermissionFlow || pendingMode != null
         return when {
             needPerms && !isAccessibilityEnabled()       -> Step.MONITORING
             needPerms && !Settings.canDrawOverlays(this) -> Step.OVERLAY
@@ -5662,6 +5710,15 @@ private fun startWeekStrict() {
     }
 
     private fun updateScreen() {
+        // A mode change parked at the gate (see modeSpinner) lands HERE, once both
+        // permissions are genuinely on - never at the moment it was picked.
+        val pending = pendingMode
+        if (pending != null && corePermsGranted()) {
+            pendingMode = null
+            inPermissionFlow = false
+            if (Mode.setMode(this, pending))
+                Toast.makeText(this, getString(R.string.mode_on_toast, modeDisplayName(pending)), Toast.LENGTH_SHORT).show()
+        }
         // Finishing the voluntary flow turns monitoring on at its lowest level. From here
         // the two permissions are mandatory (currentStep) until the mode is set back to Off.
         if (inPermissionFlow && corePermsGranted()) {
@@ -5686,7 +5743,7 @@ private fun startWeekStrict() {
         // "Not now" only exists while the flow is voluntary - above Off there's no way past.
         val voluntary = Mode.isOff(this)
         val notNow: (() -> Unit)? =
-            if (voluntary) { { inPermissionFlow = false; updateScreen() } } else null
+            if (voluntary) { { inPermissionFlow = false; pendingMode = null; updateScreen() } } else null
         when (step) {
             Step.MONITORING -> showPrereq(
                 getString(R.string.step_monitoring_title),
@@ -7020,16 +7077,22 @@ private fun startWeekStrict() {
                     showLockPrompt { }
                     return
                 }
+                // Anything above Off makes the two core permissions MANDATORY. Don't
+                // COMMIT the mode until they're actually on: park it and gate. Setting it
+                // first and gating afterwards meant the back button walked away from the
+                // gate still in the new mode, with nothing enforcing it.
+                if (chosen != Mode.OFF && !corePermsGranted()) {
+                    pendingMode = chosen
+                    sp.setSelection(curIdx())   // shows the real mode until the change lands
+                    updateScreen()
+                    return
+                }
                 if (Mode.setMode(this@MainActivity, chosen)) {
                     if (chosen == Mode.OFF) {
                         Toast.makeText(this@MainActivity,
                             getString(R.string.mode_off_toast), Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(this@MainActivity, getString(R.string.mode_on_toast, modeDisplayName(chosen)), Toast.LENGTH_SHORT).show()
-                        // Anything above Off makes the two core permissions MANDATORY:
-                        // if either is missing, this drops them straight onto the setup
-                        // gate, and the main screen stays out of reach until both are on.
-                        if (!corePermsGranted()) updateScreen()
                     }
                 } else {
                     // Refused: they're locked into strict and just tried to get out of it.
