@@ -1,18 +1,19 @@
 
 
 
-
-
-
-
-
 -------------
 
 - second page unclear
 - light and maybe angle blocking too harsh.
 - --> do we always allow say just a Google search not no websites (regardless of light and angle?)
 
-------------------------------
+
+
+
+=======================================================================
+=======================================================================
+=======================================================================
+=======================================================================
 
 ------------------
 ------------------
@@ -22,7 +23,6 @@ LATER:
 - LINK UP HTE PLUGIN
     - once hte plugin ready..
         - integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
-
 
 
 MANUAL TODO:
@@ -41,7 +41,6 @@ MANUAL TODO:
 
 TODO LATER:
 
-- add ads??
 - FINISH THE PLUGIN + integrate plugin enforcement...
 
 ------------
@@ -102,27 +101,14 @@ Add 'founder mode'
 Perhaps the above could be "down the line" things to add later.... 
 
 
-===============================
-
-Later:
-
-
-
-
 =======================================================================
 
-
--------
-
-
--------
 ????
-
-Then even perhaps a seperate config / file(s) for like preference things like all of the feeling potions and loctions and other things from the reports page (be extra careful with this one as i know htey are linked to specific emojis as well!)
-
+Then even perhaps a seperate config / file(s) for like preference things like all of the 
+    feeling positions and loctions and other things from the reports page (be extra careful with
+    this one as i know htey are linked to specific emojis as well!)
 
 ---------
-
 
 
 
@@ -143,6 +129,11 @@ beacons:
     Even as simple as: "if you're outside of your home, its unlikely you'll be tempted"
     or... If you want to look at stuff... leave your house... simple as that(!)
 - prevent phone from being used in bed?!?!? (or say.. in the toilet etc/!!?!?)
+
+=======================================================================
+=======================================================================
+=======================================================================
+=======================================================================
 
 
 # =============
@@ -219,23 +210,21 @@ beacons:
         - (home wifi ip may change though!)
 
 
+=======================================================================
+=======================================================================
+=======================================================================
+=======================================================================
+
 
 ================
 - maybe the user will want to have their phone on holiday for like google maps and what not..
     - so maybe block web browsing, only allow google maps, waze... maybe spotify? (maybe I let them choose?)
 
 
----------------------
-## general productivity related;
-
-App monitors angle of phone for slouching... Asks you to not slouch... 
-
-App maybe asks you to look outside / take a break for a bit (e.g. in like 10 mins time... (Unless you're working!?!?) Or only block non essential apps?? 
-
-
 ==========
 JUST GENUINE QUESTIONS;
 - (maybe make the temptation log locked behind a passcode?)
+    - or they contact us...
 
 
 =======================================
@@ -407,10 +396,6 @@ Log the thing that leads to the moment.
 ====================================================================================
 ====================================================================================
 ====================================================================================
-
-
-
-
 
 
 let usre pre determine when a block is fine?
