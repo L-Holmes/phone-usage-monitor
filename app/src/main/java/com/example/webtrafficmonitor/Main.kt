@@ -188,7 +188,7 @@ class MainActivity : AppCompatActivity() {
         title: String, base: List<String>, category: String?,
         onBack: (() -> Unit)?, subtitle: String? = null, onPick: (String) -> Unit,
     ) {
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
             layoutParams = ViewGroup.LayoutParams(
@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(titleText(title))
         if (subtitle != null) root.addView(TextView(this).apply {
-            text = subtitle; textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            text = subtitle; textSize = 13f; setTextColor(Palette.labelTertiary)
             setPadding(0, 0, 0, (8 * dp).toInt())
         })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -235,7 +235,7 @@ class MainActivity : AppCompatActivity() {
         onBack: (() -> Unit)?, onPick: (List<String>) -> Unit,
     ) {
         val selected = linkedSetOf<String>()
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
             layoutParams = ViewGroup.LayoutParams(
@@ -243,7 +243,7 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(titleText(title))
         root.addView(TextView(this).apply {
-            text = getString(R.string.picker_select_all); textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            text = getString(R.string.picker_select_all); textSize = 14f; setTextColor(Palette.labelSecondary)
             setPadding(0, 0, 0, (4 * dp).toInt())
         })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -315,7 +315,7 @@ class MainActivity : AppCompatActivity() {
         stopRideTimer()
         tBack = { stopRideTimer(); inTemptationFlow = false; showReportScreen() }
         val dp = resources.displayMetrics.density
-        val pad = (16 * dp).toInt()
+        val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
             layoutParams = ViewGroup.LayoutParams(
@@ -323,7 +323,7 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(titleText(getString(R.string.temp_groups_title)))
         root.addView(TextView(this).apply {
-            text = getString(R.string.temp_groups_sub); textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            text = getString(R.string.temp_groups_sub); textSize = 14f; setTextColor(Palette.labelSecondary)
             setPadding(0, 0, 0, (4 * dp).toInt())
         })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -373,7 +373,7 @@ class MainActivity : AppCompatActivity() {
     private fun showManageRules() {
         inSubPage = true
         val dp = resources.displayMetrics.density
-        val pad = (16 * dp).toInt()
+        val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
             layoutParams = ViewGroup.LayoutParams(
@@ -388,7 +388,7 @@ class MainActivity : AppCompatActivity() {
         setContentWithThumb(root) { setupMainScreen() }
 
         fun header(t: String): TextView = TextView(this).apply {
-            text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
+            text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelSecondary)
             setPadding(0, (16 * dp).toInt(), 0, (4 * dp).toInt())
         }
         fun row(label: String, onRemove: () -> Unit): LinearLayout = LinearLayout(this).apply {
@@ -503,12 +503,12 @@ private fun alwaysOnRules(): List<String> = listOf(
  */
 private fun showLanguagePicker() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.settings_language)))
     root.addView(TextView(this).apply {
         text = getString(R.string.settings_language_subtitle)
-        textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+        textSize = 13f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (10 * dp).toInt())
     })
     LocaleHelper.SUPPORTED.forEach { lang ->
         val name = if (lang.tag.isBlank()) getString(R.string.language_system_default)
@@ -532,12 +532,12 @@ private fun showLanguagePicker() {
  */
 private fun showCurrencyPicker() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.settings_currency)))
     root.addView(TextView(this).apply {
         text = getString(R.string.settings_currency_subtitle)
-        textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+        textSize = 13f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val current = Units.currencyOverride(this)
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -575,7 +575,7 @@ private val HOUR_LABELS = mapOf(0 to "12a", 6 to "6a", 12 to "12p", 18 to "6p", 
 
 private fun showStatsMenu() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.stats_title)))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -597,7 +597,7 @@ private fun showStatsMenu() {
 private fun smallLink(label: String, dp: Float, onClick: () -> Unit): TextView =
     TextView(this).apply {
         text = label; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFF2E9E8F.toInt())
+        setTextColor(Palette.tint)
         isClickable = true; isFocusable = true
         setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
         setOnClickListener { onClick() }
@@ -609,7 +609,7 @@ private var dopamineBack: () -> Unit = { showProductivity() }
 private var lifeInputsBack: () -> Unit = { showProductivity() }
 
 private fun showAboutYou() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.about_you_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -622,17 +622,17 @@ private fun showAboutYou() {
         text = getString(R.string.about_intro,
             Units.money(this@MainActivity, AboutYou.DEFAULT_HOURLY * AboutYou.HOURS_PER_YEAR),
             Units.money(this@MainActivity, AboutYou.DEFAULT_HOURLY))
-        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
+        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (16 * dp).toInt())
     })
 
     fun moneyRow(label: String, sub: String, get: () -> Int, set: (Int) -> Unit) {
         c.addView(TextView(this).apply {
             text = label; textSize = 15f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF1F2933.toInt()); setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
+            setTextColor(Palette.label); setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
         })
         c.addView(TextView(this).apply {
-            text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            text = sub; textSize = 13f; setTextColor(Palette.labelTertiary)
             setPadding(0, 0, 0, (6 * dp).toInt())
         })
         c.addView(EditText(this).apply {
@@ -660,7 +660,7 @@ private fun showAboutYou() {
 
     c.addView(TextView(this).apply {
         text = getString(R.string.about_whyask, Units.money(this@MainActivity, AboutYou.EXAMPLE_WHYASK_ANNUAL))
-        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 13f; setTextColor(Palette.labelTertiary); setLineSpacing(0f, 1.15f)
         setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
     })
 }
@@ -672,7 +672,7 @@ private fun showAboutYou() {
 // ═══════════════════════════════════════════════════════════════════════════
 private fun showDopamine() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val today = DopamineLog.today(this)
     val r = DopamineScore.of(this, today)
     val root = vbox(pad)
@@ -686,7 +686,7 @@ private fun showDopamine() {
     if (!r.hasData) {
         c.addView(TextView(this).apply {
             text = getString(R.string.dop_empty)
-            textSize = 15f; setTextColor(0xFF6B7075.toInt()); setLineSpacing(0f, 1.2f)
+            textSize = 15f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
         })
         return
     }
@@ -713,7 +713,7 @@ private fun showDopamine() {
     })
     numbers.addView(TextView(this).apply {
         text = getString(R.string.dop_out_of_100)
-        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0)
+        textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (6 * dp).toInt(), 0, 0)
     })
     scaleRow.addView(numbers)
     c.addView(scaleRow)
@@ -728,7 +728,7 @@ private fun showDopamine() {
         val avg = scores.filter { it > 0f }.average().toInt()
         c.addView(TextView(this).apply {
             text = getString(R.string.dop_average, avg)
-            textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            textSize = 13f; setTextColor(Palette.labelTertiary)
             setPadding(0, (6 * dp).toInt(), 0, 0)
         })
     }
@@ -737,28 +737,28 @@ private fun showDopamine() {
     if (r.contributors.isNotEmpty()) {
         c.addView(statHeader(getString(R.string.dop_driving), dp))
         r.contributors.forEach { line ->
-            c.addView(scoreLineRow(line.label, line.points, line.detail, 0xFFB3261E.toInt(), dp))
+            c.addView(scoreLineRow(line.label, line.points, line.detail, Palette.dangerText, dp))
         }
     }
     if (r.credits.isNotEmpty()) {
         c.addView(statHeader(getString(R.string.dop_pulling_down), dp))
         r.credits.forEach { line ->
-            c.addView(scoreLineRow(line.label, line.points, line.detail, 0xFF2E7D32.toInt(), dp))
+            c.addView(scoreLineRow(line.label, line.points, line.detail, Palette.successText, dp))
         }
     }
 
     c.addView(statHeader(getString(R.string.dop_more), dp))
     c.addView(captionedButton(getString(R.string.dop_ranks_btn), getString(R.string.dop_ranks_sub),
-        0xFF2E7D32.toInt()) { showDopamineRanks() })
+        Palette.successText) { showDopamineRanks() })
     c.addView(captionedButton(getString(R.string.dop_maths_btn), getString(R.string.dop_maths_sub),
-        0xFF34464E.toInt()) { showDopamineMaths() })
+        Palette.tint) { showDopamineMaths() })
     c.addView(captionedButton(getString(R.string.dop_guidance_btn), getString(R.string.dop_guidance_sub),
-        0xFF3E535C.toInt()) { showDopamineGuidance() })
+        Palette.series[1]) { showDopamineGuidance() })
     c.addView(captionedButton(getString(R.string.dop_habits_btn), getString(R.string.dop_habits_sub),
-        0xFF52796F.toInt()) { lifeInputsBack = { showDopamine() }; showLifeInputs() })
+        Palette.tintDeep) { lifeInputsBack = { showDopamine() }; showLifeInputs() })
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_disclaimer)
-        textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        textSize = 12f; setTextColor(Palette.labelTertiary)
         setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
     })
 }
@@ -768,7 +768,7 @@ private fun showDopamine() {
 // The prestige ladder, best first, with what each level takes. The current rank is
 // highlighted. Generated from DopamineRank.levels() so it can't drift from the rules.
 private fun showDopamineRanks() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.dop_ranks_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -779,7 +779,7 @@ private fun showDopamineRanks() {
 
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_ranks_intro)
-        textSize = 14f; setTextColor(0xFF52606A.toInt()); setLineSpacing(0f, 1.2f)
+        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
     val current = DopamineRank.of(this).longTitle
@@ -788,8 +788,8 @@ private fun showDopamineRanks() {
         c.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp
-                setColor(if (mine) 0xFFEFF7EF.toInt() else 0xFFF4F6F8.toInt())
+                cornerRadius = Radius.control * dp
+                setColor(if (mine) Palette.successSoft else Palette.surface)
                 if (mine) setStroke((2 * dp).toInt(), level.colour)
             }
             val p = (14 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, (10 * dp).toInt())
@@ -801,7 +801,7 @@ private fun showDopamineRanks() {
                 textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(level.colour)
             })
             addView(TextView(this@MainActivity).apply {
-                text = level.requirement; textSize = 13f; setTextColor(0xFF52606A.toInt())
+                text = level.requirement; textSize = 13f; setTextColor(Palette.labelSecondary)
                 setPadding(0, (2 * dp).toInt(), 0, 0)
             })
         })
@@ -813,7 +813,7 @@ private fun showDopamineRanks() {
 // here. Do NOT hard-code a number into this screen; read it from the tuning object, or the
 // page will start lying the first time someone retunes the algorithm.
 private fun showDopamineMaths() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val t = DopamineTuning
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.dop_maths_title)))
@@ -825,7 +825,7 @@ private fun showDopamineMaths() {
 
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_maths_intro)
-        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
+        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
 
@@ -833,7 +833,7 @@ private fun showDopamineMaths() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp; setColor(0xFFF4F6F8.toInt())
+                cornerRadius = Radius.control * dp; setColor(Palette.surface)
             }
             val p = (14 * dp).toInt(); setPadding(p, (12 * dp).toInt(), p, (12 * dp).toInt())
             layoutParams = LinearLayout.LayoutParams(
@@ -845,16 +845,16 @@ private fun showDopamineMaths() {
         }
         head.addView(TextView(this).apply {
             text = title; textSize = 15f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF1F2933.toInt())
+            setTextColor(Palette.label)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
         head.addView(TextView(this).apply {
             text = worth; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFFB3261E.toInt())
+            setTextColor(Palette.dangerText)
         })
         card.addView(head)
         card.addView(TextView(this).apply {
-            text = body; textSize = 13f; setTextColor(0xFF4A4F54.toInt())
+            text = body; textSize = 13f; setTextColor(Palette.labelSecondary)
             setLineSpacing(0f, 1.15f); setPadding(0, (5 * dp).toInt(), 0, 0)
         })
         c.addView(card)
@@ -863,7 +863,7 @@ private fun showDopamineMaths() {
     c.addView(statHeader(getString(R.string.dop_maths_h1), dp))
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_maths_dose, t.DOSE_MAX_HOURS.toInt())
-        textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 13f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
     })
     DopamineCategory.values()
         .filter { it != DopamineCategory.OTHER }
@@ -872,13 +872,13 @@ private fun showDopamineMaths() {
             val pts = Math.round(t.CATEGORY_POINTS[cat] ?: 0f)
             c.addView(TextView(this).apply {
                 text = getString(R.string.dop_maths_cat_line, DopamineScore.catLabel(this@MainActivity, cat), pts)
-                textSize = 14f; setTextColor(0xFF3C4650.toInt())
+                textSize = 14f; setTextColor(Palette.labelSecondary)
                 setPadding(0, (7 * dp).toInt(), 0, 0)
             })
         }
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_maths_example, DopamineScore.catLabel(this@MainActivity, DopamineCategory.FAST_VIDEO).lowercase(), Math.round(t.doseMultiplier(2f) * 100), Math.round(t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f), Math.round(t.doseMultiplier(2f) * (t.CATEGORY_POINTS[DopamineCategory.FAST_VIDEO] ?: 0f)))
-        textSize = 12f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 12f; setTextColor(Palette.labelTertiary); setLineSpacing(0f, 1.15f)
         setPadding(0, (10 * dp).toInt(), 0, 0)
     })
 
@@ -902,7 +902,7 @@ private fun showDopamineMaths() {
     c.addView(statHeader(getString(R.string.dop_maths_h3), dp))
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_maths_screenoff, Math.round(t.SCREEN_OFF_MAX_POINTS), t.SCREEN_OFF_FULL_HOURS.toInt())
-        textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 13f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
     })
 
     c.addView(statHeader(getString(R.string.dop_maths_h4), dp))
@@ -917,7 +917,7 @@ private fun showDopamineMaths() {
     c.addView(statHeader(getString(R.string.dop_maths_h5), dp))
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_maths_cant, t.WAKE_GAP_HOURS.toInt())
-        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 13f; setTextColor(Palette.labelTertiary); setLineSpacing(0f, 1.15f)
         setPadding(0, 0, 0, (24 * dp).toInt())
     })
 }
@@ -933,10 +933,10 @@ private fun scoreLineRow(label: String, points: Int, detail: String, colour: Int
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = label; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = label; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     texts.addView(TextView(this).apply {
-        text = detail; textSize = 13f; setTextColor(0xFF7B848C.toInt())
+        text = detail; textSize = 13f; setTextColor(Palette.labelTertiary)
     })
     row.addView(texts)
     if (points != 0) row.addView(TextView(this).apply {
@@ -948,7 +948,7 @@ private fun scoreLineRow(label: String, points: Int, detail: String, colour: Int
 
 // ── "How do I bring this down?" - generic advice, then advice aimed at THEIR data ──
 private fun showDopamineGuidance() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val today = DopamineLog.today(this)
     val r = DopamineScore.of(this, today)
     val root = vbox(pad)
@@ -965,7 +965,7 @@ private fun showDopamineGuidance() {
         c.addView(statHeader(getString(R.string.dop_guid_biggest), dp))
         c.addView(TextView(this).apply {
             text = getString(R.string.dop_guid_biggest_body, top.label, top.detail, adviceFor(top.key))
-            textSize = 15f; setTextColor(0xFF1F2933.toInt()); setLineSpacing(0f, 1.2f)
+            textSize = 15f; setTextColor(Palette.label); setLineSpacing(0f, 1.2f)
             setPadding(0, 0, 0, (8 * dp).toInt())
         })
     }
@@ -981,16 +981,16 @@ private fun showDopamineGuidance() {
         getString(R.string.dop_guid_h7) to getString(R.string.dop_guid_b7),
     ).forEach { (h, b) ->
         c.addView(TextView(this).apply {
-            text = h; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            text = h; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
             setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
         })
         c.addView(TextView(this).apply {
-            text = b; textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+            text = b; textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
         })
     }
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_guid_honest)
-        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 13f; setTextColor(Palette.labelTertiary); setLineSpacing(0f, 1.15f)
         setPadding(0, (10 * dp).toInt(), 0, (16 * dp).toInt())
     })
 }
@@ -1015,7 +1015,7 @@ private fun adviceFor(key: String): String = getString(when (key) {
 
 // ── The self-reported habits: a SEPARATE estimate, never mixed into the score ──
 private fun showLifeInputs() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.dop_life_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1026,16 +1026,16 @@ private fun showLifeInputs() {
 
     val banner = TextView(this).apply {
         text = getString(R.string.dop_life_banner)
-        textSize = 13f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 13f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 14 * dp; setColor(0xFFF4F6F8.toInt())
+            cornerRadius = Radius.control * dp; setColor(Palette.surface)
         }
         val p = (14 * dp).toInt(); setPadding(p, p, p, p)
     }
     c.addView(banner)
 
     val scoreLabel = TextView(this).apply {
-        textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+        textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.successText)
         setPadding(0, (16 * dp).toInt(), 0, (2 * dp).toInt())
     }
     fun paintScore() {
@@ -1045,7 +1045,7 @@ private fun showLifeInputs() {
     c.addView(scoreLabel)
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_life_typical)
-        textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+        textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (4 * dp).toInt())
     })
 
     // Each habit gets the scale that suits IT: sleep in hours, meditation in minutes,
@@ -1053,10 +1053,10 @@ private fun showLifeInputs() {
     LifeInputs.HABITS.forEach { habit ->
         c.addView(TextView(this).apply {
             text = habitLabel(habit.key); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF1F2933.toInt()); setPadding(0, (18 * dp).toInt(), 0, (1 * dp).toInt())
+            setTextColor(Palette.label); setPadding(0, (18 * dp).toInt(), 0, (1 * dp).toInt())
         })
         c.addView(TextView(this).apply {
-            text = habitHint(habit.key); textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+            text = habitHint(habit.key); textSize = 12f; setTextColor(Palette.labelTertiary)
             setPadding(0, 0, 0, (8 * dp).toInt())
         })
         c.addView(optionChips(habit) { paintScore() })
@@ -1075,12 +1075,12 @@ private fun optionChips(habit: LifeInputs.Habit, onChange: () -> Unit): View {
     fun paint() {
         chips.forEachIndexed { i, chip ->
             val on = i == selected
-            chip.setTextColor(if (on) 0xFFFFFFFF.toInt() else 0xFF5A6068.toInt())
+            chip.setTextColor(if (on) Palette.onFill else Palette.labelSecondary)
             chip.setTypeface(chip.typeface, if (on) Typeface.BOLD else Typeface.NORMAL)
             chip.background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp
-                setColor(if (on) 0xFF52796F.toInt() else 0x00000000)
-                setStroke((1.2f * dp).toInt(), if (on) 0xFF52796F.toInt() else 0xFFCFD5D9.toInt())
+                cornerRadius = Radius.control * dp
+                setColor(if (on) Palette.tintDeep else 0x00000000)
+                setStroke((1.2f * dp).toInt(), if (on) Palette.tintDeep else Palette.divider)
             }
         }
     }
@@ -1116,7 +1116,7 @@ private fun optionChips(habit: LifeInputs.Habit, onChange: () -> Unit): View {
 // The point is a single honest sentence: "this happens to you lying down, in the dark."
 private fun showContextStats() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.stats_context)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1137,7 +1137,7 @@ private fun showContextStats() {
         if (known.isEmpty() && knownLight.isEmpty()) {
             c.addView(TextView(this@MainActivity).apply {
                 text = getString(R.string.stats_ctx_empty)
-                textSize = 15f; setTextColor(0xFF6B7075.toInt()); setLineSpacing(0f, 1.2f)
+                textSize = 15f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
             })
             return@launch
         }
@@ -1159,7 +1159,7 @@ private fun showContextStats() {
                 bits.add(getString(R.string.stats_ctx_light, lightWord(label), pct))
             }
             text = bits.joinToString("\n\n")
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
             setLineSpacing(0f, 1.2f); setPadding(0, 0, 0, (18 * dp).toInt())
         })
 
@@ -1167,7 +1167,7 @@ private fun showContextStats() {
         if (known.isNotEmpty()) {
             c.addView(statHeader(getString(R.string.stats_hdr_posture), dp))
             listOf("lying" to getString(R.string.stats_lying), "upright" to getString(R.string.stats_upright)).forEach { (key, label) ->
-                c.addView(statBar(label, known.count { it == key }, known.size, 0xFF52796F.toInt(), dp))
+                c.addView(statBar(label, known.count { it == key }, known.size, Palette.tintDeep, dp))
             }
         }
         if (knownLight.isNotEmpty()) {
@@ -1176,7 +1176,7 @@ private fun showContextStats() {
                 c.addView(statBar(
                     lightWord(level.name).replaceFirstChar { it.uppercase() },
                     knownLight.count { it == level.name }, knownLight.size,
-                    0xFF3E7C8E.toInt(), dp,
+                    Palette.tintDeep, dp,
                 ))
             }
         }
@@ -1184,7 +1184,7 @@ private fun showContextStats() {
         val unknown = postures.size - known.size
         if (unknown > 0) c.addView(TextView(this@MainActivity).apply {
             text = getString(R.string.stats_ctx_unknown, unknown)
-            textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+            textSize = 12f; setTextColor(Palette.labelTertiary)
             setPadding(0, (16 * dp).toInt(), 0, (16 * dp).toInt())
         })
     }
@@ -1201,7 +1201,7 @@ private fun lightWord(level: String): String = when (level) {
 
 private fun statHeader(text: String, dp: Float): TextView = TextView(this).apply {
     this.text = text; textSize = 11f; setTypeface(typeface, Typeface.BOLD)
-    setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (10 * dp).toInt(), 0, (8 * dp).toInt())
+    setTextColor(Palette.labelTertiary); setPadding(0, (10 * dp).toInt(), 0, (8 * dp).toInt())
 }
 
 /** One labelled proportional bar: "Lying down   12  (67%)". */
@@ -1213,14 +1213,14 @@ private fun statBar(label: String, count: Int, total: Int, colour: Int, dp: Floa
     }
     row.addView(TextView(this).apply {
         text = getString(R.string.stats_bar_row, label, count, pct)
-        textSize = 14f; setTextColor(0xFF3C4650.toInt())
+        textSize = 14f; setTextColor(Palette.labelSecondary)
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
     // The bar: a filled track inside a grey one, width by weight.
     val track = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 6 * dp; setColor(0xFFE8EBED.toInt())
+            cornerRadius = 6 * dp; setColor(Palette.hairline)
         }
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (12 * dp).toInt())
@@ -1242,9 +1242,9 @@ private fun statBar(label: String, count: Int, total: Int, colour: Int, dp: Floa
 // ── Progress & reward: the non-resetting consistency score + real stats ─────
 private fun showProgress() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val s = Progress.snapshot(this)
-    val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
+    val green = Palette.successText; val teal = Palette.tint
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.stats_progress_title)))
     val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1256,7 +1256,7 @@ private fun showProgress() {
     if (!s.hasData) {
         c.addView(TextView(this).apply {
             text = getString(R.string.stats_prog_empty)
-            textSize = 15f; setTextColor(0xFF6B7075.toInt()); setPadding(0, (12 * dp).toInt(), 0, 0)
+            textSize = 15f; setTextColor(Palette.labelSecondary); setPadding(0, (12 * dp).toInt(), 0, 0)
         })
         return
     }
@@ -1266,7 +1266,7 @@ private fun showProgress() {
         getString(R.string.stats_prog_clean, s.cleanDays, s.trackedDays), green))
     c.addView(TextView(this).apply {
         text = getString(R.string.stats_prog_noreset)
-        textSize = 13f; setTextColor(0xFF6B7075.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+        textSize = 13f; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
     if (s.forgivingRun > 0) c.addView(TextView(this).apply {
         text = getString(R.string.stats_prog_run, s.forgivingRun, if (s.forgivingRun == 1) "" else "s")
@@ -1282,7 +1282,7 @@ private fun showProgress() {
         ViewGroup.LayoutParams.MATCH_PARENT, (120 * dp).toInt()))
     c.addView(TextView(this).apply {
         text = getString(R.string.stats_prog_weekly)
-        textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+        textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (4 * dp).toInt(), 0, 0)
     })
 
     c.addView(sectionTitle(getString(R.string.stats_sec_pace)))
@@ -1297,12 +1297,12 @@ private fun showProgress() {
     c.addView(row)
     c.addView(TextView(this).apply {
         text = getString(R.string.stats_prog_projected, Units.money(this@MainActivity, Progress.VALUE_PER_HOUR))
-        textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+        textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (4 * dp).toInt(), 0, 0)
     })
 
     c.addView(sectionTitle(getString(R.string.stats_sec_milestones)))
     if (s.milestones.isEmpty()) c.addView(TextView(this).apply {
-        text = getString(R.string.stats_prog_no_milestones); textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.stats_prog_no_milestones); textSize = 14f; setTextColor(Palette.labelTertiary)
     })
     s.milestones.forEach { m ->
         c.addView(TextView(this).apply {
@@ -1311,7 +1311,7 @@ private fun showProgress() {
     }
     s.nextMilestone?.let { nm ->
         c.addView(TextView(this).apply {
-            text = getString(R.string.stats_prog_next, nm); textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+            text = getString(R.string.stats_prog_next, nm); textSize = 14f; setTextColor(Palette.labelTertiary)
             setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
         })
     }
@@ -1339,27 +1339,24 @@ private fun statValue(value: String, sizeSp: Float, colour: Int): TextView =
 
 private fun statBigCard(value: String, label: String, sub: String?, accent: Int): LinearLayout {
     val dp = resources.displayMetrics.density
-    return LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 14 * dp; setColor(0xFFF3F6F5.toInt())
-        }
-        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
+    return glassCard(Space.md).apply {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (8 * dp).toInt() }
-        addView(statValue(value, 30f, accent))
+        ).apply { topMargin = (Space.xs * dp).toInt(); bottomMargin = (Space.xs * dp).toInt() }
+        addView(statValue(value, 32f, accent))
         addView(TextView(this@MainActivity).apply {
-            text = label; textSize = 14f; setTextColor(0xFF4A4F54.toInt())
+            text = label; textSize = Type.callout; setTextColor(Palette.labelSecondary)
         })
         if (sub != null) addView(TextView(this@MainActivity).apply {
-            text = sub; textSize = 12f; setTextColor(0xFF80868B.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+            text = sub; textSize = Type.caption; setTextColor(Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (Space.xxs * dp).toInt(), 0, 0)
         })
     }
 }
 
 private fun statsPage(title: String, back: () -> Unit, build: (LinearLayout) -> Unit) {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(title))
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1438,7 +1435,7 @@ private fun showLoosenStats() {
 private fun emptyStat(): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = getString(R.string.stats_empty); textSize = 15f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.stats_empty); textSize = 15f; setTextColor(Palette.labelTertiary)
         setPadding(0, (16 * dp).toInt(), 0, 0)
     }
 }
@@ -1452,7 +1449,7 @@ private fun summaryLine(t: String): TextView {
 private fun sectionTitle(t: String): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
-        text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
+        text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelSecondary)
         setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
     }
 }
@@ -1461,7 +1458,7 @@ private fun hBars(pairs: List<Pair<String, Int>>): View {
     val dp = resources.displayMetrics.density
     val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     if (pairs.isEmpty()) {
-        col.addView(TextView(this).apply { text = getString(R.string.misc_no_data); textSize = 13f; setTextColor(0xFF9AA0A6.toInt()) })
+        col.addView(TextView(this).apply { text = getString(R.string.misc_no_data); textSize = 13f; setTextColor(Palette.labelTertiary) })
         return col
     }
     val max = (pairs.maxOfOrNull { it.second } ?: 0).coerceAtLeast(1)
@@ -1480,7 +1477,7 @@ private fun hBars(pairs: List<Pair<String, Int>>): View {
         }
         track.addView(View(this).apply {
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 3 * dp; setColor(0xFF6FA8DC.toInt())
+                cornerRadius = 3 * dp; setColor(Palette.series[1])
             }
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, value.toFloat().coerceAtLeast(0.001f))
         })
@@ -1517,7 +1514,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
         })
         colv.addView(View(this).apply {
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 2 * dp; setColor(if (v > 0) 0xFF6FA8DC.toInt() else 0x22000000)
+                cornerRadius = 2 * dp; setColor(if (v > 0) Palette.series[1] else 0x22000000)
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, v.toFloat().coerceAtLeast(0.04f))
@@ -1530,7 +1527,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
         values.indices.forEach { i ->
             lrow.addView(TextView(this).apply {
                 text = sparseLabels[i] ?: ""; textSize = 9f; gravity = Gravity.CENTER
-                setTextColor(0xFF9AA0A6.toInt())
+                setTextColor(Palette.labelTertiary)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
         }
@@ -1583,7 +1580,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
     /** After the breathing: make a real moment of "you're already past the peak". */
     private fun wavePeakScreen() {
         tBack = { waveStuck() }
-        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
             setPadding(pad, pad, pad, pad)
@@ -1601,10 +1598,10 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
         })
         root.addView(TextView(this).apply {
             text = getString(R.string.ride_peak_body)
-            textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
+            textSize = 16f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
         })
         root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(bigChoice(getString(R.string.temp_ride_done_btn), 0xFF2E7D32.toInt()) { waveSuccess() })
+        root.addView(bigChoice(getString(R.string.temp_ride_done_btn), Palette.successText) { waveSuccess() })
         setContentView(root)
     }
 
@@ -1622,7 +1619,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
         val total = TemptationLog.total(this)
         val week = TemptationLog.dailyCounts(this, 7).sum()
         val dp = resources.displayMetrics.density
-        val pad = (20 * dp).toInt()
+        val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
             gravity = Gravity.CENTER_HORIZONTAL
@@ -1632,7 +1629,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
         root.addView(titleText(getString(R.string.temp_ridedone_title)))
         root.addView(TextView(this).apply {
             text = getString(R.string.temp_ridedone_body)
-            textSize = 16f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (4 * dp).toInt(), 0, 0)
+            textSize = 16f; setTextColor(Palette.labelSecondary); setPadding(0, (4 * dp).toInt(), 0, 0)
         })
         // urge over time: it spikes, then falls - and you're already past the peak.
         root.addView(PeakCurveView(this), LinearLayout.LayoutParams(
@@ -1642,12 +1639,12 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
             textSize = 15f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding(0, 0, 0, (12 * dp).toInt())
         })
-        root.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), 0xFF2E7D32.toInt()) {
+        root.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), Palette.successText) {
             try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
         })
         root.addView(TextView(this).apply {
             text = getString(R.string.ride_lock_apps); textSize = 14f; gravity = Gravity.CENTER
-            setTextColor(0xFF48606A.toInt()); isClickable = true; isFocusable = true
+            setTextColor(Palette.tintDeep); isClickable = true; isFocusable = true
             setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
             setOnClickListener {
                 Lockdown.start(this@MainActivity)
@@ -1661,7 +1658,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
 // ── reusable ride pieces ───────────────────────────────────────────────────
 private fun waveBreatheScreen(title: String, side: String, continueLabel: String, onContinue: () -> Unit) {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val totalBreaths = 3
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
@@ -1671,12 +1668,12 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     }
     root.addView(titleText(title))
     root.addView(TextView(this).apply {
-        text = side; textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        text = side; textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
 
     // Big orb, straight on the page (no dark card), filling the free space.
-    val orb = BreathOrbView(this, 0xFF2E9E8F.toInt())
+    val orb = BreathOrbView(this, Palette.tint)
     val orbBox = FrameLayout(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         addView(orb, FrameLayout.LayoutParams(
@@ -1690,12 +1687,12 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     root.addView(breatheLabel)
     val counter = TextView(this).apply {
         text = getString(R.string.ride_follow_orb, totalBreaths)
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setPadding(0, (6 * dp).toInt(), 0, 0)
     }
     root.addView(counter)
     val milestone = TextView(this).apply {
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(Palette.successText); setPadding(0, (8 * dp).toInt(), 0, 0)
     }
     root.addView(milestone)
 
@@ -1727,7 +1724,7 @@ private fun waveActionScreen(
     tertiaryLabel: String? = null, onTertiary: (() -> Unit)? = null,
 ) {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         gravity = Gravity.CENTER_HORIZONTAL
@@ -1743,17 +1740,17 @@ private fun waveActionScreen(
         setPadding((8 * dp).toInt(), (18 * dp).toInt(), (8 * dp).toInt(), 0)
     })
     val milestone = TextView(this).apply {
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setPadding(0, (10 * dp).toInt(), 0, 0)
     }
     root.addView(milestone)
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(bigChoice(yesLabel, 0xFF2E7D32.toInt()) { onYes() })
+    root.addView(bigChoice(yesLabel, Palette.successText) { onYes() })
     root.addView(Button(this).apply { text = noLabel; setAllCaps(false); setOnClickListener { onNo() } })
     if (tertiaryLabel != null && onTertiary != null) {
         root.addView(TextView(this).apply {
             text = tertiaryLabel; textSize = 14f; gravity = Gravity.CENTER
-            setTextColor(0xFF48606A.toInt())
+            setTextColor(Palette.labelSecondary)
             setPadding(0, (8 * dp).toInt(), 0, (10 * dp).toInt())
             isClickable = true; isFocusable = true
             setOnClickListener { onTertiary() }
@@ -1803,7 +1800,7 @@ private fun progressChart(counts: IntArray): View {
         })
         col.addView(View(this).apply {
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 3 * dp; setColor(if (v > 0) 0xFF2E7D32.toInt() else 0x22000000)
+                cornerRadius = 3 * dp; setColor(if (v > 0) Palette.successText else 0x22000000)
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, v.toFloat().coerceAtLeast(0.04f))
@@ -1831,7 +1828,7 @@ private fun progressChart(counts: IntArray): View {
     private fun appSiteChooseKind() {
         inAppSiteFlow = true
         val dp = resources.displayMetrics.density
-        val pad = (16 * dp).toInt()
+        val pad = (Space.page * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
             layoutParams = ViewGroup.LayoutParams(
@@ -1840,17 +1837,17 @@ private fun progressChart(counts: IntArray): View {
         root.addView(titleText(getString(R.string.appsite_kind_title)))
         root.addView(TextView(this).apply {
             text = getString(R.string.appsite_kind_subtitle)
-            textSize = 14f; setTextColor(0xFF6B7075.toInt())
+            textSize = 14f; setTextColor(Palette.labelSecondary)
             setPadding(0, 0, 0, (16 * dp).toInt())
         })
-        root.addView(bigChoice(getString(R.string.appsite_kind_app), 0xFF3E535C.toInt()) { appSiteChooseApp() })
-        root.addView(bigChoice(getString(R.string.appsite_kind_website), 0xFF3E535C.toInt()) { appSiteChooseSite() })
+        root.addView(bigChoice(getString(R.string.appsite_kind_app), Palette.tint) { appSiteChooseApp() })
+        root.addView(bigChoice(getString(R.string.appsite_kind_website), Palette.tint) { appSiteChooseSite() })
         setContentView(root)
     }
 
 private fun appSiteChooseSite() {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -1865,10 +1862,10 @@ private fun appSiteChooseSite() {
     root.addView(urlInput)
     root.addView(tierNote())
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(bigChoice(getString(R.string.appsite_greylist_it, GreyUsage.LIMIT_MIN), 0xFF3E535C.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_greylist_it, GreyUsage.LIMIT_MIN), Palette.tint) {
         saveSiteRule(urlInput, AppRules.GREY)
     })
-    root.addView(bigChoice(getString(R.string.appsite_blocklist_it), 0xFFB00020.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_blocklist_it), Palette.dangerText) {
         saveSiteRule(urlInput, AppRules.BLOCK)
     })
     setContentView(root)
@@ -1879,7 +1876,7 @@ private data class AppRow(val label: String, val pkg: String, val icon: android.
 
 private fun appSiteChooseApp() {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -1923,7 +1920,7 @@ private fun appRow(a: AppRow, onClick: () -> Unit): LinearLayout {
 
 private fun appSiteAppTier(a: AppRow) {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -1932,10 +1929,10 @@ private fun appSiteAppTier(a: AppRow) {
     root.addView(titleText(getString(R.string.appsite_limit_app, a.label)))
     root.addView(tierNote())
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(bigChoice(getString(R.string.appsite_greylist, GreyUsage.LIMIT_MIN), 0xFF3E535C.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_greylist, GreyUsage.LIMIT_MIN), Palette.tint) {
         AppRules.setApp(this, a.pkg, AppRules.GREY); appSiteSaved(a.label, AppRules.GREY)
     })
-    root.addView(bigChoice(getString(R.string.appsite_blocklist), 0xFFB00020.toInt()) {
+    root.addView(bigChoice(getString(R.string.appsite_blocklist), Palette.dangerText) {
         AppRules.setApp(this, a.pkg, AppRules.BLOCK); appSiteSaved(a.label, AppRules.BLOCK)
     })
     setContentView(root)
@@ -1962,7 +1959,7 @@ private fun loadLaunchableApps(): List<AppRow> {
 private fun showBlockApps() {
     inSubPage = true
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -1973,7 +1970,7 @@ private fun showBlockApps() {
         text = getString(R.string.blockapps_subtitle_prefix) +
             (if (Mode.isRelaxed(this@MainActivity)) getString(R.string.blockapps_subtitle_relaxed)
              else getString(R.string.blockapps_subtitle_strict))
-        textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        textSize = 13f; setTextColor(Palette.labelSecondary)
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val loading = TextView(this).apply { text = getString(R.string.appsite_loading); textSize = 14f }
@@ -2026,14 +2023,14 @@ private fun blockAppRow(a: AppRow): LinearLayout {
     val defaultColors = name.textColors    // restore this when un-blocking (theme-safe)
     val status = TextView(this).apply {
         text = getString(R.string.blockapps_blocked_tag); textSize = 13f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFFB00020.toInt())
+        setTextColor(Palette.dangerText)
     }
     row.addView(icon); row.addView(name); row.addView(status)
 
     fun render() {
         if (AppRules.appTier(this, a.pkg) == AppRules.BLOCK) {
             name.paintFlags = name.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
-            name.setTextColor(0xFF9AA0A6.toInt())
+            name.setTextColor(Palette.labelTertiary)
             icon.alpha = 0.4f
             status.visibility = View.VISIBLE
         } else {
@@ -2085,7 +2082,7 @@ private fun ruleFromInput(input: String): String? {
 
 private fun appSiteSaved(target: String, tier: String) {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -2110,7 +2107,7 @@ private fun tierNote(): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
         text = getString(R.string.appsite_tier_note, GreyUsage.LIMIT_MIN)
-        textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        textSize = 13f; setTextColor(Palette.labelSecondary)
         setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
     }
 }
@@ -2188,20 +2185,26 @@ private fun showRecentBlocks() {
 // ── Bottom navigation (strava-style): icon + label, subtle pill on the selected tab.
 //    Lives on the three top-level pages; replaces the old big Productivity/Temptations
 //    buttons that sat on the landing page.
+/**
+ * The tab bar. Glass, hairline top edge, tint for the selected tab in a soft pill.
+ *
+ * The selected pill is Palette.tintSoft rather than a 8%-alpha teal: a solid soft colour
+ * stays the same over any content, where an alpha wash shifted with whatever scrolled
+ * underneath it.
+ */
 private fun withBottomBar(content: View, selected: Int): View {
-    val dp = resources.displayMetrics.density
     val wrap = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
+        setBackgroundColor(Palette.bg)
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     wrap.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-    wrap.addView(View(this).apply { setBackgroundColor(0x14000000) },
-        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt().coerceAtLeast(1)))
-    val teal = 0xFF2E9E8F.toInt(); val grey = 0xFF9AA0A6.toInt()
+    wrap.addView(View(this).apply { setBackgroundColor(Palette.hairline) },
+        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, maxOf(1, dp(1))))
     val bar = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setBackgroundColor(0xFFFFFFFF.toInt())
-        setPadding((8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
+        setBackgroundColor(Palette.glass)
+        setPadding(dp(Space.xs), dp(Space.xs), dp(Space.xs), dp(Space.sm))
     }
     val tabs = listOf(
         Triple(R.drawable.ic_nav_overview, getString(R.string.nav_overview)) { setupHomeScreen() },
@@ -2210,28 +2213,29 @@ private fun withBottomBar(content: View, selected: Int): View {
     )
     tabs.forEachIndexed { i, (icon, label, go) ->
         val sel = i == selected
-        val colour = if (sel) teal else grey
+        val colour = if (sel) Palette.tint else Palette.labelTertiary
         bar.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = (10 * dp).toInt(); marginEnd = (10 * dp).toInt()
+                marginStart = dp(Space.xs); marginEnd = dp(Space.xs)
             }
-            if (sel) background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp; setColor(0x142E9E8F)
-            }
-            val pv = (6 * dp).toInt(); setPadding(0, pv, 0, pv)
+            background =
+                if (sel) surfaceBg(Palette.tintSoft, Radius.control, stroke = null)
+                else tappableBg(0x00000000, Radius.control, stroke = null)
+            setPadding(0, dp(Space.xs), 0, dp(Space.xs))
             isClickable = true; isFocusable = true
             setOnClickListener { if (!sel) go() }
+            if (!sel) pressable()
             addView(ImageView(this@MainActivity).apply {
                 setImageResource(icon); setColorFilter(colour)
-            }, LinearLayout.LayoutParams((24 * dp).toInt(), (24 * dp).toInt()).apply {
+            }, LinearLayout.LayoutParams(dp(22), dp(22)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             })
             addView(TextView(this@MainActivity).apply {
                 text = label; textSize = 11f; setTextColor(colour); gravity = Gravity.CENTER
                 if (sel) setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER_HORIZONTAL; topMargin = (2 * dp).toInt()
+                gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(Space.xxs) / 2
             })
         })
     }
@@ -2248,13 +2252,13 @@ private fun withBottomBar(content: View, selected: Int): View {
 private fun setupHomeScreen() {
     onHomeScreen = true; onTemptationsTab = false; onReportScreen = false; onDevScreen = false
     subBack = null
-    inSubPage = false; inRelapseFlow = false; inTemptationFlow = false
+    inSubPage = false; inTemptationFlow = false
     inLoosenFlow = false; inAppSiteFlow = false
     stopRideTimer(); stopLoosenTimer(); entriesJob?.cancel()
     markTabSeen("overview")
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-    val teal = 0xFF2E9E8F.toInt()
+    val teal = Palette.tint
 
     // Quiet amber nudge: the permissions are optional in Off mode, but they're the point.
     homeBuiltWithNudge = shouldNudgePermissions()
@@ -2273,7 +2277,7 @@ private fun setupHomeScreen() {
     content.addView(homeHeading(getString(R.string.home_productivity_title), getString(R.string.home_productivity_sub)))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         isClickable = true; isFocusable = true
@@ -2289,7 +2293,7 @@ private fun setupHomeScreen() {
             addView(TextView(this@MainActivity).apply {
                 text = if (today.hasData) "${today.score}" else "–"
                 textSize = 44f; setTypeface(typeface, Typeface.BOLD); includeFontPadding = false
-                setTextColor(if (today.hasData) today.colour else 0xFF9AA0A6.toInt())
+                setTextColor(if (today.hasData) today.colour else Palette.labelTertiary)
             })
             addView(TextView(this@MainActivity).apply {
                 text = rank.longTitle; textSize = 17f
@@ -2314,7 +2318,7 @@ private fun setupHomeScreen() {
         } else ""
     }
     val trendColours = IntArray(trendScores.size) { i ->
-        if (trendScores[i].isNaN()) 0xFF9AA0A6.toInt()
+        if (trendScores[i].isNaN()) Palette.labelTertiary
         else DopamineTuning.bandColour(Math.round(trendScores[i]))
     }
     val trendChart = StatLineChartView(this, trendScores, trendLabels, hoursUnit = false,
@@ -2328,7 +2332,7 @@ private fun setupHomeScreen() {
             else -> {
                 val r = DopamineScore.of(this@MainActivity, d)
                 if (r.hasData) readoutText("${niceDate(d.date)} · ", "${r.score} (${r.band})", "", r.colour)
-                else readoutText("${niceDate(d.date)} · ", "no data that day", "", 0xFF9AA0A6.toInt())
+                else readoutText("${niceDate(d.date)} · ", "no data that day", "", Palette.labelTertiary)
             }
         }
     }
@@ -2374,7 +2378,7 @@ private fun setupHomeScreen() {
                 d == null -> ""
                 !weekIsReal -> readoutText("${niceDate(d.date)} · ",
                     hoursAndMoney(v, rate), "\n[Example data]", teal)
-                v.isNaN() -> readoutText("${niceDate(d.date)} · ", "no data", "", 0xFF9AA0A6.toInt())
+                v.isNaN() -> readoutText("${niceDate(d.date)} · ", "no data", "", Palette.labelTertiary)
                 else -> readoutText("${niceDate(d.date)} · ",
                     hoursAndMoney(v, rate), "", teal)
             }
@@ -2463,7 +2467,7 @@ private fun setupHomeScreen() {
             readoutText(getString(R.string.home_readout_by, date),
                 hoursAndMoney(v, rate, whole = true),
                 (if (projected) getString(R.string.home_projected) else "") + (if (yearIsReal) "" else getString(R.string.home_example_data)),
-                if (projected) 0xFF9AA0A6.toInt() else teal)
+                if (projected) Palette.labelTertiary else teal)
         },
     ))
 
@@ -2472,16 +2476,16 @@ private fun setupHomeScreen() {
         content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 14 * dp; setStroke((1 * dp).toInt(), 0xFFB0B6BB.toInt()); setColor(0x00000000)
+                cornerRadius = Radius.control * dp; setStroke((1 * dp).toInt(), Palette.labelQuaternary); setColor(0x00000000)
             }
             val p = (14 * dp).toInt(); setPadding(p, (12 * dp).toInt(), p, (12 * dp).toInt())
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (12 * dp).toInt() }
             isClickable = true; isFocusable = true; setOnClickListener { setupMainScreen() }
             addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.home_dev_tools); textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF5A6068.toInt())
+                text = getString(R.string.home_dev_tools); textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelSecondary)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
-            addView(TextView(this@MainActivity).apply { text = "›"; textSize = 20f; setTextColor(0xFF9AA0A6.toInt()) })
+            addView(TextView(this@MainActivity).apply { text = "›"; textSize = 20f; setTextColor(Palette.labelTertiary) })
         })
     }
 
@@ -2489,7 +2493,7 @@ private fun setupHomeScreen() {
     content.addView(sensorsConsole())
     content.addView(permissionConsole())
     content.addView(TextView(this).apply {
-        text = getString(R.string.home_about_privacy); textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.home_about_privacy); textSize = 12f; setTextColor(Palette.labelTertiary)
         gravity = Gravity.CENTER; isClickable = true; isFocusable = true
         setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -2517,7 +2521,7 @@ private fun hoursAndMoney(hours: Float, rate: Int, whole: Boolean = false): Stri
 /** The amber "this is fake data" tag under example charts. */
 private fun exampleTag(msg: String? = null) =
     TextView(this).apply {
-        text = msg ?: getString(R.string.home_example); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB07800.toInt())
+        text = msg ?: getString(R.string.home_example); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
         setPadding(0, (2 * resources.displayMetrics.density).toInt(), 0, 0)
     }
 
@@ -2534,7 +2538,7 @@ private fun statRow(stats: List<Pair<String, String>>, colour: Int, onClick: (()
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             addView(statValue(value, 20f, colour))
             addView(TextView(this@MainActivity).apply {
-                text = label; textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+                text = label; textSize = 12f; setTextColor(Palette.labelTertiary)
             })
         })
     }
@@ -2544,9 +2548,9 @@ private fun statRow(stats: List<Pair<String, String>>, colour: Int, onClick: (()
 private fun homeHeading(primary: String, secondary: String): TextView {
     val dp = resources.displayMetrics.density
     val s = android.text.SpannableString("$primary · $secondary")
-    s.setSpan(android.text.style.ForegroundColorSpan(0xFF9AA0A6.toInt()), primary.length, s.length, 0)
+    s.setSpan(android.text.style.ForegroundColorSpan(Palette.labelTertiary), primary.length, s.length, 0)
     return TextView(this).apply {
-        text = s; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = s; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
         setPadding(0, (20 * dp).toInt(), 0, (8 * dp).toInt())
     }
 }
@@ -2556,7 +2560,7 @@ private fun scrubLabel(): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
         text = getString(R.string.misc_drag_graph)
-        textSize = 13f; setTextColor(0xFF9AA0A6.toInt())
+        textSize = 13f; setTextColor(Palette.labelTertiary)
         setPadding(0, (4 * dp).toInt(), 0, 0)
     }
 }
@@ -2566,11 +2570,11 @@ private fun scrubLabel(): TextView {
 private fun readoutText(pre: String, strong: String, post: String, colour: Int): CharSequence {
     val s = android.text.SpannableString(pre + strong + post)
     val st = pre.length; val en = pre.length + strong.length
-    if (st > 0) s.setSpan(android.text.style.ForegroundColorSpan(0xFF7B848C.toInt()), 0, st, 0)
+    if (st > 0) s.setSpan(android.text.style.ForegroundColorSpan(Palette.labelTertiary), 0, st, 0)
     s.setSpan(android.text.style.StyleSpan(Typeface.BOLD), st, en, 0)
     s.setSpan(android.text.style.RelativeSizeSpan(1.2f), st, en, 0)
     s.setSpan(android.text.style.ForegroundColorSpan(colour), st, en, 0)
-    if (post.isNotEmpty()) s.setSpan(android.text.style.ForegroundColorSpan(0xFF9AA0A6.toInt()), en, s.length, 0)
+    if (post.isNotEmpty()) s.setSpan(android.text.style.ForegroundColorSpan(Palette.labelTertiary), en, s.length, 0)
     return s
 }
 
@@ -2584,7 +2588,7 @@ private fun readoutText(pre: String, strong: String, post: String, colour: Int):
 private fun chartStatCard(
     values: FloatArray, labels: List<String>,
     stats: List<Pair<String, String>>,
-    accent: Int = 0xFF2E9E8F.toInt(),
+    accent: Int = Palette.tint,
     dotted: FloatArray = FloatArray(0),
     goal: Float? = null, goalPerSlot: Float? = null,
     gridStep: Float? = null, minorStep: Float? = null,
@@ -2597,12 +2601,12 @@ private fun chartStatCard(
     val dp = resources.displayMetrics.density
     val card = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
     val chart = StatLineChartView(this, values, labels,
-        goal = goal, dotted = dotted, dottedColour = 0xFF9AA0A6.toInt(),
+        goal = goal, dotted = dotted, dottedColour = Palette.labelTertiary,
         goalPerSlot = goalPerSlot, accent = accent, gridStep = gridStep, minorStep = minorStep)
     card.addView(chart, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
 
@@ -2614,8 +2618,8 @@ private fun chartStatCard(
             text = t; textSize = 11f; setTextColor(colour); setPadding(0, 0, (14 * dp).toInt(), 0)
         })
         key(legendMain ?: getString(R.string.chart_so_far), accent)
-        if (dotted.isNotEmpty()) key(getString(R.string.chart_projected), 0xFF9AA0A6.toInt())
-        if (goal != null || goalPerSlot != null) key(getString(R.string.chart_goal_legend), 0xFF2E7D32.toInt())
+        if (dotted.isNotEmpty()) key(getString(R.string.chart_projected), Palette.labelTertiary)
+        if (goal != null || goalPerSlot != null) key(getString(R.string.chart_goal_legend), Palette.successText)
     })
 
     if (pointInfo != null) {
@@ -2628,7 +2632,7 @@ private fun chartStatCard(
         }
     }
     if (worth != null) card.addView(TextView(this).apply {
-        text = worth; textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+        text = worth; textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
     if (stats.isNotEmpty()) card.addView(statRow(stats, accent, onStatsClick))
     if (exampleMsg != null) card.addView(exampleTag(exampleMsg))
@@ -2638,16 +2642,16 @@ private fun chartStatCard(
 // ── Usage goal: pick a daily phone-time target; the home graphs draw it. ──────
 private fun showUsageGoal() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.usage_goal_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.usage_goal_intro)
-        textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, 0, 0, (14 * dp).toInt())
+        textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (14 * dp).toInt())
     })
     val current = UsageGoal.minutesPerDay(this)
     val label = TextView(this).apply {
-        textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFF1F2933.toInt())
+        textSize = 30f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(Palette.label)
         setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
     }
     // 15-minute steps from 15 min to 8 h.
@@ -2664,7 +2668,7 @@ private fun showUsageGoal() {
     })
     root.addView(label); root.addView(seek)
     refreshLabel()
-    root.addView(bigChoice(getString(R.string.usage_goal_set), 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(getString(R.string.usage_goal_set), Palette.successText) {
         UsageGoal.setMinutesPerDay(this, minutesOf(seek.progress))
         Toast.makeText(this, getString(R.string.usage_goal_set_toast, fmtHours(minutesOf(seek.progress) / 60f)), Toast.LENGTH_SHORT).show()
         showProductivity()
@@ -2679,11 +2683,11 @@ private fun showUsageGoal() {
 // ── What the scroll costs: the projector + reclaimed stats (moved off the home page). ──
 private fun showScrollCost() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
     content.addView(titleText(getString(R.string.scroll_title)))
 
-    val green = 0xFF2E7D32.toInt(); val teal = 0xFF2E9E8F.toInt()
+    val green = Palette.successText; val teal = Palette.tint
     val s = Progress.snapshot(this)
     if (s.hasData) {
         content.addView(statBigCard(Units.hours(this, s.reclaimedHours), getString(R.string.stats_prog_reclaimed_label),
@@ -2698,7 +2702,7 @@ private fun showScrollCost() {
     content.addView(sectionTitle(getString(R.string.scroll_projector)))
     val hero = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18 * dp; setColor(0xFFF4F6F8.toInt()) }
+        background = glassBg(); elevation = 1f * dp
         val p = (18 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
@@ -2706,18 +2710,18 @@ private fun showScrollCost() {
     hero.addView(donut, LinearLayout.LayoutParams((168 * dp).toInt(), (168 * dp).toInt()).apply {
         gravity = Gravity.CENTER_HORIZONTAL; topMargin = (4 * dp).toInt(); bottomMargin = (6 * dp).toInt()
     })
-    val bigStat = TextView(this).apply { textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(0xFFE4673B.toInt()) }
-    val subStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
-    val lifeStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt()) }
+    val bigStat = TextView(this).apply { textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(Palette.danger) }
+    val subStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary); setPadding(0, (2 * dp).toInt(), 0, 0) }
+    val lifeStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt()) }
     // The same lost time, said in ways that aren't hours - money, health, people. Filled in
     // by refresh(), and it uses THEIR numbers once they've given us any (see AboutYou).
     val otherStat = TextView(this).apply {
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF52606A.toInt())
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
         setLineSpacing(0f, 1.25f)
         setPadding(0, 0, 0, (10 * dp).toInt())
     }
     val aboutYouLink = TextView(this).apply {
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF2E9E8F.toInt())
+        textSize = 13f; gravity = Gravity.CENTER; setTextColor(Palette.tint)
         setTypeface(typeface, Typeface.BOLD)
         isClickable = true; isFocusable = true
         setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
@@ -2725,11 +2729,11 @@ private fun showScrollCost() {
     }
     hero.addView(bigStat); hero.addView(subStat); hero.addView(lifeStat)
     hero.addView(otherStat); hero.addView(aboutYouLink)
-    val minLabel = TextView(this).apply { textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) }
+    val minLabel = TextView(this).apply { textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label) }
     hero.addView(minLabel)
     val minSeek = android.widget.SeekBar(this).apply { max = 300; progress = Usage.minutes(this@MainActivity).coerceIn(0, 300) }
     hero.addView(minSeek)
-    val yearLabel = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0) }
+    val yearLabel = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (8 * dp).toInt(), 0, 0) }
     hero.addView(yearLabel)
     val yearSeek = android.widget.SeekBar(this).apply { max = 49; progress = (Usage.years(this@MainActivity) - 1).coerceIn(0, 49) }
     hero.addView(yearSeek)
@@ -2789,15 +2793,15 @@ private fun showScrollCost() {
 private fun showProductivity() {
     inSubPage = true
     markTabSeen("productivity")
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
     // Short-form blocking toggle
-    val sfSub = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
+    val sfSub = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0) }
     val sfSwitch = android.widget.Switch(this).apply { isChecked = ShortForm.enabled() }
     val sfCard = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt()) }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (4 * dp).toInt() }
     }
@@ -2805,7 +2809,7 @@ private fun showProductivity() {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
-    sfText.addView(TextView(this).apply { text = getString(R.string.prod_block_sf); textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()) })
+    sfText.addView(TextView(this).apply { text = getString(R.string.prod_block_sf); textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label) })
     sfText.addView(sfSub)
     sfCard.addView(sfText); sfCard.addView(sfSwitch)
     fun refreshSf() { sfSub.text = if (ShortForm.enabled()) getString(R.string.prod_sf_on) else getString(R.string.prod_sf_off) }
@@ -2849,7 +2853,7 @@ private fun showProductivity() {
                 Units.money(this, Math.round(soFar.last() * rate)) to getString(R.string.prod_value_reclaimed),
                 fmtHours(weekProj) to getString(R.string.prod_by_sunday),
             ),
-            accent = 0xFF2E7D32.toInt(),
+            accent = Palette.successText,
             dotted = toCome,
             worth = getString(R.string.prod_worth),
             exampleMsg = if (hasWins) null else getString(R.string.prod_week_example),
@@ -2857,7 +2861,7 @@ private fun showProductivity() {
                 readoutText("${weekDays.getOrNull(i) ?: ""} · ",
                     hoursAndMoney(v, rate),
                     (if (projected) getString(R.string.home_projected) else "") + (if (hasWins) "" else getString(R.string.home_example_data)),
-                    if (projected) 0xFF9AA0A6.toInt() else 0xFF2E7D32.toInt())
+                    if (projected) Palette.labelTertiary else Palette.successText)
             },
         ))
     }
@@ -2872,9 +2876,7 @@ private fun showProductivity() {
     content.addView(sectionTitle(getString(R.string.prod_dopamine_title)))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
-        }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -2884,7 +2886,7 @@ private fun showProductivity() {
     dopCard.addView(TextView(this).apply {
         text = if (todayScore.hasData) "${todayScore.score}" else "–"
         textSize = 34f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(if (todayScore.hasData) todayScore.colour else 0xFF9AA0A6.toInt())
+        setTextColor(if (todayScore.hasData) todayScore.colour else Palette.labelTertiary)
         includeFontPadding = false
     })
     dopCard.addView(LinearLayout(this).apply {
@@ -2893,15 +2895,15 @@ private fun showProductivity() {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         addView(TextView(this@MainActivity).apply {
             text = if (todayScore.hasData) todayScore.band else getString(R.string.prod_still_measuring)
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
         })
         addView(TextView(this@MainActivity).apply {
             text = getString(R.string.prod_out_of_100)
-            textSize = 12f; setTextColor(0xFF7B848C.toInt())
+            textSize = 12f; setTextColor(Palette.labelTertiary)
         })
     })
     dopCard.addView(TextView(this).apply {
-        text = "›"; textSize = 22f; setTextColor(0xFFB0B5BA.toInt())
+        text = "›"; textSize = 22f; setTextColor(Palette.labelQuaternary)
     })
     content.addView(dopCard)
 
@@ -2916,7 +2918,7 @@ private fun showProductivity() {
     content.addView(sectionTitle(getString(R.string.prod_next_year)))
     val grid = TimeGridView(this)
     content.addView(grid, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-    val gridCaption = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0) }
+    val gridCaption = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (8 * dp).toInt(), 0, 0) }
     content.addView(gridCaption)
 
     // Opportunity cost
@@ -2936,7 +2938,7 @@ private fun showProductivity() {
         getString(R.string.prod_opp_b4, Math.round(perYearHours / 8.0).toInt()),
     ).forEach { line ->
         oppBox.addView(TextView(this).apply {
-            text = getString(R.string.proto_bullet, line); textSize = 15f; setTextColor(0xFF3A434B.toInt())
+            text = getString(R.string.proto_bullet, line); textSize = 15f; setTextColor(Palette.labelSecondary)
             setLineSpacing((3 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
         })
     }
@@ -2952,10 +2954,10 @@ private fun showProductivity() {
 private fun showTemptationsTab() {
     onTemptationsTab = true; onHomeScreen = false; onReportScreen = false; inSubPage = false; subBack = null
     markTabSeen("temptations")
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(TextView(this).apply {
-        text = getString(R.string.temp_managing); textSize = 15f; setTextColor(0xFF7B848C.toInt())
+        text = getString(R.string.temp_managing); textSize = 15f; setTextColor(Palette.labelTertiary)
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -2990,11 +2992,11 @@ private var habitOrb: BreathOrbAnimator? = null
 
 private fun showTemptation(spec: AppConfig.TemptationSpec) {
     habitOrb?.stop(); habitOrb = null
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(temptTitle(spec)))
     root.addView(TextView(this).apply {
-        text = temptSubtitle(spec); textSize = 15f; setTextColor(0xFF7B848C.toInt())
+        text = temptSubtitle(spec); textSize = 15f; setTextColor(Palette.labelTertiary)
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
 
@@ -3003,9 +3005,7 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
     // "Is this me?" - the bit that makes someone stop and recognise themselves.
     val card = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
-        }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3013,11 +3013,11 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
     }
     card.addView(TextView(this).apply {
         text = getString(R.string.temp_sound_like); textSize = 15f
-        setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     temptCovers(spec).forEach { line ->
         card.addView(TextView(this).apply {
-            text = "\u2022  $line"; textSize = 14f; setTextColor(0xFF3C4650.toInt())
+            text = "\u2022  $line"; textSize = 14f; setTextColor(Palette.labelSecondary)
             setLineSpacing(0f, 1.15f); setPadding(0, (8 * dp).toInt(), 0, 0)
         })
     }
@@ -3027,28 +3027,28 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
     val slips = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
     list.addView(TextView(this).apply {
         text = getString(R.string.temp_stats, rides, slips)
-        textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+        textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.successText)
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
 
-    list.addView(captionedButton(getString(R.string.temp_pull_title), getString(R.string.temp_pull_sub), 0xFF3E535C.toInt()) {
+    list.addView(captionedButton(getString(R.string.temp_pull_title), getString(R.string.temp_pull_sub), Palette.tint) {
         habitRide(spec)
     })
 
     if (TemptationBlocks.hasBlocks(spec)) list.addView(blockSwitch(spec))
 
-    list.addView(captionedButton(getString(R.string.temp_slipped_title), getString(R.string.temp_slipped_sub), 0xFF526D78.toInt()) {
+    list.addView(captionedButton(getString(R.string.temp_slipped_title), getString(R.string.temp_slipped_sub), Palette.labelSecondary) {
         habitSlip(spec)
     })
 
     list.addView(TextView(this).apply {
         text = getString(R.string.temp_try_instead, temptInsteadOf(spec))
-        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
         setPadding(0, (16 * dp).toInt(), 0, (6 * dp).toInt())
     })
     list.addView(TextView(this).apply {
         text = getString(R.string.temp_lockdown)
-        textSize = 14f; setTextColor(0xFF48606A.toInt())
+        textSize = 14f; setTextColor(Palette.labelSecondary)
         isClickable = true; isFocusable = true
         setPadding(0, (8 * dp).toInt(), 0, (16 * dp).toInt())
         setOnClickListener {
@@ -3083,10 +3083,10 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
         isClickable = true; isFocusable = true
     }
     val title = TextView(this).apply {
-        textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+        textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.onFill)
     }
     val sub = TextView(this).apply {
-        textSize = 13f; setTextColor(0xFFCBD3D8.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+        textSize = 13f; setTextColor(Palette.divider); setPadding(0, (3 * dp).toInt(), 0, 0)
     }
     fun paint() {
         title.text = if (on) getString(R.string.temp_block_on) else getString(R.string.temp_block_off)
@@ -3096,8 +3096,8 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
         sub.text = if (on) getString(R.string.temp_block_sub_on, sites, appBit)
                    else getString(R.string.temp_block_sub_off, sites, appBit)
         row.background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp
-            setColor(if (on) 0xFF2E7D32.toInt() else 0xFF34464E.toInt())
+            cornerRadius = Radius.card * dp
+            setColor(if (on) Palette.success else Palette.labelQuaternary)
         }
     }
     row.addView(title); row.addView(sub)
@@ -3112,16 +3112,16 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
 
 /** Ride the urge out: a few slow breaths, then the button that says you beat it. */
 private fun habitRide(spec: AppConfig.TemptationSpec) {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val totalBreaths = 3
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
     root.addView(titleText(getString(R.string.temp_ride_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.temp_ride_body, totalBreaths)
-        textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        textSize = 15f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
     })
 
-    val orb = BreathOrbView(this, 0xFF2E9E8F.toInt())     // INSCRIBE: it sits in a box here
+    val orb = BreathOrbView(this, Palette.tint)     // INSCRIBE: it sits in a box here
     root.addView(FrameLayout(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         addView(orb, FrameLayout.LayoutParams(
@@ -3133,13 +3133,13 @@ private fun habitRide(spec: AppConfig.TemptationSpec) {
     }
     root.addView(label)
     val counter = TextView(this).apply {
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
     }
     root.addView(counter)
 
     // Only unlocks once the breaths are actually done - otherwise it's just a tap-through.
-    val done = bigChoice(getString(R.string.temp_ride_done_btn), 0xFF2E7D32.toInt()) { habitRideDone(spec) }
+    val done = bigChoice(getString(R.string.temp_ride_done_btn), Palette.successText) { habitRideDone(spec) }
     done.isEnabled = false
     done.alpha = 0.5f
     root.addView(done)
@@ -3158,12 +3158,12 @@ private fun habitRide(spec: AppConfig.TemptationSpec) {
 private fun habitRideDone(spec: AppConfig.TemptationSpec) {
     habitOrb?.stop(); habitOrb = null
     HabitLog.record(this, spec.id, HabitLog.RIDE)
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
     root.addView(titleText(getString(R.string.temp_ridedone_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.temp_ridedone_body)
-        textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
+        textSize = 16f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
         setPadding(0, (4 * dp).toInt(), 0, 0)
     })
     root.addView(PeakCurveView(this), LinearLayout.LayoutParams(
@@ -3175,7 +3175,7 @@ private fun habitRideDone(spec: AppConfig.TemptationSpec) {
         textSize = 15f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
-    root.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), 0xFF2E7D32.toInt()) {
+    root.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), Palette.successText) {
         try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
     })
     setContentWithThumb(root) { showTemptation(spec) }
@@ -3184,19 +3184,19 @@ private fun habitRideDone(spec: AppConfig.TemptationSpec) {
 /** Owning a slip. One tap, no interrogation - staying easy to be honest IS the point. */
 private fun habitSlip(spec: AppConfig.TemptationSpec) {
     HabitLog.record(this, spec.id, HabitLog.SLIP)
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val week = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
     root.addView(titleText(getString(R.string.temp_slip_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.temp_slip_body, week)
-        textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF4A4F54.toInt())
+        textSize = 16f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
         setLineSpacing(0f, 1.15f); setPadding(0, (10 * dp).toInt(), 0, 0)
     })
     root.addView(grow())
     root.addView(TextView(this).apply {
         text = getString(R.string.temp_slip_next, temptInsteadOf(spec))
-        textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        textSize = 15f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setLineSpacing(0f, 1.15f); setPadding(0, 0, 0, (14 * dp).toInt())
     })
     setContentWithThumb(root) { showTemptation(spec) }
@@ -3204,31 +3204,36 @@ private fun habitSlip(spec: AppConfig.TemptationSpec) {
 
 /** A clean tappable card for the home/tab screens (chevron shown when clickable). */
 private fun homeCard(title: String, sub: String?, onClick: (() -> Unit)? = null): View {
-    val dp = resources.displayMetrics.density
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
-        }
-        val p = (18 * dp).toInt(); setPadding(p, (16 * dp).toInt(), p, (16 * dp).toInt())
+        background = if (onClick != null) tappableBg(Palette.glass) else glassBg()
+        elevation = dpf(1f)
+        setPadding(dp(Space.md), dp(Space.md), dp(Space.md), dp(Space.md))
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = (10 * dp).toInt() }
-        if (onClick != null) { isClickable = true; isFocusable = true; setOnClickListener { onClick() } }
+        ).apply { bottomMargin = dp(Space.sm) }
+        if (onClick != null) {
+            isClickable = true; isFocusable = true; setOnClickListener { onClick() }
+            pressable()
+        }
     }
     val texts = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = title; textSize = Type.headline
+        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     if (sub != null) texts.addView(TextView(this).apply {
-        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+        text = sub; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+        setLineSpacing(0f, Type.lineSpacing)
+        setPadding(0, dp(Space.xxs) / 2, 0, 0)
     })
     row.addView(texts)
     if (onClick != null) row.addView(TextView(this).apply {
-        text = "\u203A"; textSize = 24f; setTextColor(0xFFB0B5BA.toInt())
+        text = "\u203A"; textSize = 22f; setTextColor(Palette.labelQuaternary)
+        setPadding(dp(Space.xs), 0, 0, 0)
     })
     return row
 }
@@ -3236,7 +3241,7 @@ private fun homeCard(title: String, sub: String?, onClick: (() -> Unit)? = null)
 // ── Break the addiction protocol: gamified, sequential big moves ────────────
 private fun showProtocol() {
     inSubPage = true; onHomeScreen = false; onTemptationsTab = false
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val appsDone = Protocol.appsDone(this)
     val holidayDone = Protocol.holidayDone(this)
     val strictActive = Mode.isLocked(this)
@@ -3245,13 +3250,13 @@ private fun showProtocol() {
     root.addView(titleText(getString(R.string.report_protocol)))
     root.addView(TextView(this).apply {
         text = getString(R.string.proto_intro)
-        textSize = 15f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+        textSize = 15f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
     list.addView(TextView(this).apply {
         text = getString(R.string.proto_hdr_walls); textSize = 12f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFF9AA0A6.toInt()); setPadding((2 * dp).toInt(), 0, 0, (8 * dp).toInt())
+        setTextColor(Palette.labelTertiary); setPadding((2 * dp).toInt(), 0, 0, (8 * dp).toInt())
     })
     // Look like the rest: a tickbox + tap to open the guide.
     list.addView(protocolLinkCheckRow(getString(R.string.proto_apps_title),
@@ -3300,9 +3305,7 @@ private fun protocolLinkCheckRow(title: String, sub: String, done: Boolean, onCl
     val dp = resources.displayMetrics.density
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFFFFFFF.toInt()); setStroke((1.5f * dp).toInt(), 0xFFD7DCE0.toInt())
-        }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3311,7 +3314,7 @@ private fun protocolLinkCheckRow(title: String, sub: String, done: Boolean, onCl
     }
     row.addView(checkboxMarker(done, false))
     row.addView(rowTexts(title, sub))
-    row.addView(TextView(this).apply { text = "\u203A"; textSize = 22f; setTextColor(0xFFAEB6BB.toInt()) })
+    row.addView(TextView(this).apply { text = "\u203A"; textSize = 22f; setTextColor(Palette.labelQuaternary) })
     return row
 }
 
@@ -3321,9 +3324,9 @@ private fun protocolGoldRow(title: String, sub: String, done: Boolean, onClick: 
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp
-            setColor(if (done) 0xFFFCE9A6.toInt() else 0xFFFFFFFF.toInt())     // brighter gold when done
-            setStroke((2f * dp).toInt(), 0xFFD9B65A.toInt())                   // slight gold outline
+            cornerRadius = Radius.card * dp
+            setColor(if (done) Palette.warningSoft else Palette.surface)     // brighter gold when done
+            setStroke((2f * dp).toInt(), Palette.warning)                   // slight gold outline
         }
         val p = (16 * dp).toInt(); setPadding(p, (15 * dp).toInt(), p, (15 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
@@ -3341,13 +3344,13 @@ private fun checkboxMarker(done: Boolean, gold: Boolean): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
         text = if (done) "\u2713" else ""; textSize = 18f; gravity = Gravity.CENTER
-        includeFontPadding = false; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+        includeFontPadding = false; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.onFill)
         background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 7 * dp
             when {
-                done && gold -> setColor(0xFFC8932B.toInt())
-                done -> setColor(0xFF2E7D32.toInt())
-                else -> { setColor(0xFFFFFFFF.toInt()); setStroke((2 * dp).toInt(), if (gold) 0xFFD9B65A.toInt() else 0xFFB9C0C6.toInt()) }
+                done && gold -> setColor(Palette.warning)
+                done -> setColor(Palette.successText)
+                else -> { setColor(Palette.surface); setStroke((2 * dp).toInt(), if (gold) Palette.warning else Palette.labelQuaternary) }
             }
         }
         val s = (28 * dp).toInt()
@@ -3362,10 +3365,10 @@ private fun rowTexts(title: String, sub: String): View {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         addView(TextView(this@MainActivity).apply {
-            text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
         })
         addView(TextView(this@MainActivity).apply {
-            text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+            text = sub; textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0)
         })
     }
 }
@@ -3373,12 +3376,12 @@ private fun rowTexts(title: String, sub: String): View {
 // A focused mini-page on replacing the phone's role (esp. at the bedside).
 private fun showProtocolReplace() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.proto_replace_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.proto_replace_intro)
-        textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+        textSize = 15f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (10 * dp).toInt())
     })
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     list.addView(protocolCheckRow("buy_alarm", getString(R.string.proto_alarm_title),
@@ -3396,7 +3399,7 @@ private fun showProtocolReplace() {
 // Read-through guidance, grouped on its own page.
 private fun showProtocolTips() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.proto_tips_title)))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3417,9 +3420,7 @@ private fun protocolCheckRow(key: String, title: String, sub: String): View {
     lateinit var marker: TextView
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFFFFFFF.toInt()); setStroke((1.5f * dp).toInt(), 0xFFD7DCE0.toInt())
-        }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3434,11 +3435,11 @@ private fun protocolCheckRow(key: String, title: String, sub: String): View {
     }
     fun paint() {
         marker.text = if (checked) "\u2713" else ""
-        marker.setTextColor(0xFFFFFFFF.toInt())
+        marker.setTextColor(Palette.onFill)
         marker.background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 7 * dp                                  // rounded checkbox, clearly tappable
-            if (checked) setColor(0xFF2E7D32.toInt())
-            else { setColor(0xFFFFFFFF.toInt()); setStroke((2 * dp).toInt(), 0xFFB9C0C6.toInt()) }
+            if (checked) setColor(Palette.successText)
+            else { setColor(Palette.surface); setStroke((2 * dp).toInt(), Palette.labelQuaternary) }
         }
     }
     paint()
@@ -3451,10 +3452,10 @@ private fun protocolCheckRow(key: String, title: String, sub: String): View {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     texts.addView(TextView(this).apply {
-        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+        text = sub; textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0)
     })
     row.addView(texts)
     return row
@@ -3466,7 +3467,7 @@ private fun protocolGuidanceCard(title: String, sub: String): View {
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFFCFAF3.toInt()); setStroke((1 * dp).toInt(), 0xFFEAE0C8.toInt())
+            cornerRadius = Radius.card * dp; setColor(Palette.warningSoft); setStroke((1 * dp).toInt(), Palette.warningSoft)
         }
         val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
@@ -3481,10 +3482,10 @@ private fun protocolGuidanceCard(title: String, sub: String): View {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = title; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B5B14.toInt())
+        text = title; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
     })
     texts.addView(TextView(this).apply {
-        text = sub; textSize = 13f; setTextColor(0xFF7A6F4A.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+        text = sub; textSize = 13f; setTextColor(Palette.warningText); setPadding(0, (3 * dp).toInt(), 0, 0)
         setLineSpacing((2 * dp), 1f)
     })
     row.addView(texts)
@@ -3496,9 +3497,7 @@ private fun protocolNavRow(title: String, sub: String, onClick: () -> Unit): Vie
     val dp = resources.displayMetrics.density
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFFFFFFFF.toInt()); setStroke((1.5f * dp).toInt(), 0xFFD7DCE0.toInt())
-        }
+        background = glassBg(); elevation = 1f * dp
         val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3510,13 +3509,13 @@ private fun protocolNavRow(title: String, sub: String, onClick: () -> Unit): Vie
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = title; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     texts.addView(TextView(this).apply {
-        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+        text = sub; textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0)
     })
     row.addView(texts)
-    row.addView(TextView(this).apply { text = "\u203A"; textSize = 22f; setTextColor(0xFFAEB6BB.toInt()) })
+    row.addView(TextView(this).apply { text = "\u203A"; textSize = 22f; setTextColor(Palette.labelQuaternary) })
     return row
 }
 
@@ -3526,9 +3525,9 @@ private fun protocolKeyStep(title: String, sub: String, done: Boolean, locked: B
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 18 * dp
-            setColor(if (done) 0xFFEAF5EC.toInt() else if (locked) 0xFFF2EFE6.toInt() else 0xFFFFF8E6.toInt())
-            setStroke((if (done) 2 else 2 * 1).times(dp).toInt(), if (done) 0xFF2E7D32.toInt() else 0xFFD9B65A.toInt())
+            cornerRadius = Radius.card * dp
+            setColor(if (done) Palette.successSoft else if (locked) Palette.warningSoft else Palette.warningSoft)
+            setStroke((if (done) 2 else 2 * 1).times(dp).toInt(), if (done) Palette.successText else Palette.warning)
         }
         val p = (18 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(
@@ -3540,9 +3539,9 @@ private fun protocolKeyStep(title: String, sub: String, done: Boolean, locked: B
     val marker = TextView(this).apply {
         text = when { done -> "\u2713"; locked -> "\uD83D\uDD12"; else -> "\u2B50" }
         textSize = 20f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(if (done) 0xFFFFFFFF.toInt() else 0xFF8A6D1B.toInt())
+        setTextColor(if (done) Palette.onFill else Palette.warningText)
         if (done) background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0xFF2E7D32.toInt())
+            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(Palette.successText)
         }
         val s = (38 * dp).toInt()
         layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
@@ -3553,10 +3552,10 @@ private fun protocolKeyStep(title: String, sub: String, done: Boolean, locked: B
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = title; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = title; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     texts.addView(TextView(this).apply {
-        text = sub; textSize = 13f; setTextColor(0xFF6B6448.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+        text = sub; textSize = 13f; setTextColor(Palette.warningText); setPadding(0, (3 * dp).toInt(), 0, 0)
         setLineSpacing((2 * dp), 1f)
     })
     row.addView(texts)
@@ -3570,7 +3569,7 @@ private fun protocolStep(num: Int, title: String, sub: String, done: Boolean, lo
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(if (locked) 0xFFEDEFF1.toInt() else 0xFFF4F6F8.toInt())
+            cornerRadius = Radius.card * dp; setColor(if (locked) Palette.hairline else Palette.surface)
         }
         val p = (16 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(
@@ -3584,11 +3583,11 @@ private fun protocolStep(num: Int, title: String, sub: String, done: Boolean, lo
         text = when { done -> "\u2713"; locked -> "\uD83D\uDD12"; else -> num.toString() }
         textSize = if (done || locked) 18f else 16f; gravity = Gravity.CENTER
         setTypeface(typeface, Typeface.BOLD)
-        setTextColor(if (done) 0xFFFFFFFF.toInt() else 0xFF52606A.toInt())
+        setTextColor(if (done) Palette.onFill else Palette.labelSecondary)
         if (done) background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0xFF2E7D32.toInt())
+            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(Palette.successText)
         } else if (!locked) background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0xFFE2E6E9.toInt())
+            shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(Palette.hairline)
         }
         val s = (34 * dp).toInt()
         layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
@@ -3599,20 +3598,20 @@ private fun protocolStep(num: Int, title: String, sub: String, done: Boolean, lo
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     texts.addView(TextView(this).apply {
-        text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+        text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
     })
     texts.addView(TextView(this).apply {
-        text = sub; textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+        text = sub; textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0)
     })
     row.addView(texts)
     if (badge == "active") row.addView(TextView(this).apply {
-        text = "\u25CF"; textSize = 14f; setTextColor(0xFF2E7D32.toInt())
+        text = "\u25CF"; textSize = 14f; setTextColor(Palette.successText)
     })
     return row
 }
 
 private fun showProtocolApps() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.proto_apps_title)))
     root.addView(body(getString(R.string.proto_apps_intro)))
@@ -3627,7 +3626,7 @@ private fun showProtocolApps() {
         })
     }
     root.addView(grow())
-    root.addView(bigChoice(if (Protocol.appsDone(this)) getString(R.string.proto_done) else getString(R.string.proto_apps_btn), 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(if (Protocol.appsDone(this)) getString(R.string.proto_done) else getString(R.string.proto_apps_btn), Palette.successText) {
         Protocol.setApps(this, true); showProtocol()
     })
     setContentWithThumb(root) { showProtocol() }
@@ -3635,7 +3634,7 @@ private fun showProtocolApps() {
 
 private fun showProtocolHoliday() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.proto_holiday_page_title)))
     root.addView(body(getString(R.string.proto_holiday_intro)))
@@ -3650,7 +3649,7 @@ private fun showProtocolHoliday() {
         })
     }
     root.addView(grow())
-    root.addView(bigChoice(if (Protocol.holidayDone(this)) getString(R.string.proto_done) else getString(R.string.proto_holiday_btn), 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(if (Protocol.holidayDone(this)) getString(R.string.proto_done) else getString(R.string.proto_holiday_btn), Palette.successText) {
         Protocol.setHoliday(this, true); showProtocol()
     })
     setContentWithThumb(root) { showProtocol() }
@@ -3658,20 +3657,20 @@ private fun showProtocolHoliday() {
 
 private fun showProtocol7Day() {
     inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.proto_7day_title)))
     root.addView(body(getString(R.string.proto_7day_intro)))
     if (Mode.isLocked(this)) {
         root.addView(TextView(this).apply {
             text = getString(R.string.proto_seven_active, Mode.timeLeft(this@MainActivity))
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E7D32.toInt())
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.successText)
             setPadding(0, (12 * dp).toInt(), 0, 0)
         })
         root.addView(grow())
     } else {
         root.addView(grow())
-        root.addView(bigChoice(getString(R.string.proto_7day_btn), 0xFF2E7D32.toInt()) {
+        root.addView(bigChoice(getString(R.string.proto_7day_btn), Palette.successText) {
             Protocol.setSevenStarted(this)
             Mode.startWeekStrict(this)
             Toast.makeText(this, getString(R.string.proto_7day_toast), Toast.LENGTH_SHORT).show()
@@ -3697,75 +3696,94 @@ private fun showReportScreen(offerLock: Boolean = false) {
     subBack = null
     onHomeScreen = false
     onTemptationsTab = false
-    inRelapseFlow = false
     inSubPage = false
     inTemptationFlow = false
     inLoosenFlow = false
     inAppSiteFlow = false
     stopLoosenTimer()
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
-    val root = LinearLayout(this).apply {
+
+    // ── LAYOUT ──────────────────────────────────────────────────────────────────────
+    // This page used to be full-bleed dark slabs stacked to fill the screen, each a
+    // different shade of slate, with the mode dropdown floating above them. It read as a
+    // control panel: heavy, unlabelled, and tonally nothing like the rest of the app.
+    //
+    // It is now an ordinary scrolling page, like every other page: title, a card for the
+    // protection level, the protocol as the one accented card (it IS the main action),
+    // then the two things you might have come here to do, then statistics, then a quiet
+    // link to settings. Same content, same order of importance - stated in words rather
+    // than colour-coded in slabs.
+    val pad = dp(Space.page)
+    val content = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
+        setPadding(pad, pad, pad, dp(Space.huge))
+    }
+    val root = ScrollView(this).apply {
+        isFillViewport = true
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        addView(content)
     }
-    // ── top controls: mode dropdown (right) ─────────────────────────────────
-    val top = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, (8 * dp).toInt())
-    }
-    val modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-    modeRow.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
-    modeRow.addView(modeSpinner())
-    // The rules live behind an (i) right next to the mode, so "what does Strict actually do?"
-    // is answered where the question gets asked - not on a separate link somewhere else.
-    modeRow.addView(TextView(this).apply {
-        text = "ⓘ"
-        textSize = 20f; setTextColor(0xFF2E9E8F.toInt())
-        isClickable = true; isFocusable = true
-        val p = (8 * dp).toInt(); setPadding(p, p, 0, p)
-        setOnClickListener { showModeRules() }
-    })
-    top.addView(modeRow)
-    top.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 14 * dp; setColor(0xFF2E3F47.toInt()) }
-        val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (10 * dp).toInt() }
-        isClickable = true; isFocusable = true; setOnClickListener { showProtocol() }
+    content.addView(titleText(getString(R.string.report_title)))
+
+    // ── Protection level: the mode picker, labelled, with the rules an (i) away ──────
+    // The rules live behind the (i) right next to the mode, so "what does Strict actually
+    // do?" is answered where the question gets asked - not on a separate link elsewhere.
+    content.addView(glassCard(Space.md).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
         addView(TextView(this@MainActivity).apply {
-            text = getString(R.string.report_protocol); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFFFFFFFF.toInt())
+            text = getString(R.string.report_mode_label)
+            textSize = Type.callout; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Palette.labelSecondary)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
-        addView(TextView(this@MainActivity).apply { text = "\u203A"; textSize = 22f; setTextColor(0xFFAEB6BB.toInt()) })
+        addView(modeSpinner())
+        addView(TextView(this@MainActivity).apply {
+            text = "\u24D8"
+            textSize = 20f; setTextColor(Palette.tint)
+            isClickable = true; isFocusable = true
+            setPadding(dp(Space.xs), dp(Space.xs), 0, dp(Space.xs))
+            setOnClickListener { showModeRules() }
+        })
     })
-    root.addView(top)
-    // The main panes (weighted) + a thinner Statistics pane at the bottom.
-    //
-    // "I'm going to look anyway" is DELIBERATELY NOT HERE. A permanent button turns the wall
-    // into a door with a handle, and every urge eventually tries the handle. It now appears
-    // ONLY when the user has already started trying to tear the guard down (uninstall,
-    // device admin, switching monitoring off, escaping a locked strict mode) - see the big
-    // comment on BypassWatch, and the offer pane a few lines below. Do not put it back.
-    root.addView(reportPane(getString(R.string.report_pane_appsite), 0xFF34464E.toInt()) { onReportAppSite() })
-    root.addView(reportPane(getString(R.string.report_pane_temptation), 0xFF3E535C.toInt()) { onFeelTemptation() })
-    root.addView(reportPane(getString(R.string.report_pane_relapse), 0xFF526D78.toInt()) { onReportRelapse() })
 
-    // THE HONEST EXIT deliberately does NOT live on this page any more. It appears as
-    // its own full screen (showBypassOffer) at the moment of a bypass attempt - see
+    // The protocol is the one thing on this page that gets the accent, because it is the
+    // one thing here that fixes the problem rather than reacting to it.
+    content.addView(reportPane(
+        getString(R.string.report_protocol),
+        getString(R.string.report_protocol_sub),
+        accent = true,
+    ) { showProtocol() })
+
+    content.addView(sectionHeader(getString(R.string.nav_temptations)))
+    // "I'm going to look anyway" is DELIBERATELY NOT HERE. A permanent button turns the
+    // wall into a door with a handle, and every urge eventually tries the handle. It
+    // appears ONLY when the user has already started trying to tear the guard down
+    // (uninstall, device admin, switching monitoring off, escaping a locked strict mode) -
+    // see the big comment on BypassWatch, and showBypassOffer. Do not put it back.
+    content.addView(reportPane(
+        getString(R.string.report_pane_temptation),
+        getString(R.string.report_pane_temptation_sub),
+    ) { onFeelTemptation() })
+    content.addView(reportPane(
+        getString(R.string.report_pane_appsite),
+        getString(R.string.report_pane_appsite_sub),
+    ) { onReportAppSite() })
+
+    // THE HONEST EXIT deliberately does NOT live on this page. It appears as its own full
+    // screen (showBypassOffer) at the moment of a bypass attempt - see
     // maybeShowBypassOffer(). A card sitting here read as a permanent door handle.
-    root.addView(reportPane(getString(R.string.report_pane_stats), 0xFF5E7A86.toInt()) { showStatsMenu() }.apply {
-        textSize = 16f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt())
-    })
+    content.addView(reportPane(
+        getString(R.string.report_pane_stats),
+        getString(R.string.report_pane_stats_sub),
+    ) { showStatsMenu() })
+
     // Quiet on purpose: almost nobody needs these, and the ones who do will look for them.
-    root.addView(TextView(this).apply {
+    content.addView(TextView(this).apply {
         text = getString(R.string.report_settings)
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF8A9299.toInt())
+        textSize = Type.footnote; gravity = Gravity.CENTER; setTextColor(Palette.labelTertiary)
         isClickable = true; isFocusable = true
-        setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
+        setPadding(0, dp(Space.lg), 0, dp(Space.sm))
         setOnClickListener { showAdultSettings() }
     })
     setContentWithThumb(root) { reportBackTarget() }
@@ -3799,18 +3817,18 @@ private fun maybeShowBypassOffer(): Boolean {
  * get there anyway, so take the door that leaves the guard standing behind you.
  */
 private fun showBypassOffer() {
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val reason = BypassWatch.lastReason(this)
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.bypass_title)))
     root.addView(TextView(this).apply {
         text = (if (reason != null) getString(R.string.bypass_moment, reason) else "") +
             getString(R.string.bypass_body, LoosenLimit.LIFETIME_MAX)
-        textSize = 15f; setTextColor(0xFF3A434B.toInt()); setLineSpacing(0f, 1.25f)
+        textSize = 15f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.25f)
         setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
     })
     root.addView(grow())
-    root.addView(bigChoice(getString(R.string.bypass_look_anyway), 0xFFB1541F.toInt()) { onLookAnyway() })
+    root.addView(bigChoice(getString(R.string.bypass_look_anyway), Palette.warningText) { onLookAnyway() })
     root.addView(Button(this).apply {
         text = getString(R.string.common_not_now); setAllCaps(false)
         setOnClickListener { setupHomeScreen() }
@@ -3830,7 +3848,7 @@ private fun showBypassOffer() {
  * thing a bad night flipped.
  */
 private fun showAdultSettings() {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val canEdit = AttractionFilter.canEdit(this)
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.report_settings)))
@@ -3842,22 +3860,22 @@ private fun showAdultSettings() {
 
     c.addView(TextView(this).apply {
         text = getString(R.string.adult_section_looks)
-        textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+        textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
         setPadding(0, 0, 0, (8 * dp).toInt())
     })
     c.addView(TextView(this).apply {
         text = getString(R.string.adult_intro)
-        textSize = 14f; setTextColor(0xFF4A4F54.toInt()); setLineSpacing(0f, 1.2f)
+        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
         setPadding(0, 0, 0, (14 * dp).toInt())
     })
 
     if (!canEdit) {
         c.addView(TextView(this).apply {
             text = getString(R.string.adult_locked, modeDisplayName(Mode.current(this@MainActivity)))
-            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFB1541F.toInt())
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
             setLineSpacing(0f, 1.15f)
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 12 * dp; setColor(0xFFFBF0E7.toInt())
+                cornerRadius = Radius.control * dp; setColor(Palette.warningSoft)
             }
             val p = (12 * dp).toInt(); setPadding(p, p, p, p)
         })
@@ -3866,9 +3884,7 @@ private fun showAdultSettings() {
     fun switchRow(label: String, sub: String, get: () -> Boolean, set: (Boolean) -> Unit) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 16 * dp; setColor(0xFFF4F6F8.toInt())
-            }
+            background = glassBg(); elevation = 1f * dp
             val p = (16 * dp).toInt(); setPadding(p, p, p, p)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3880,10 +3896,10 @@ private fun showAdultSettings() {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             addView(TextView(this@MainActivity).apply {
                 text = label; textSize = 16f; setTypeface(typeface, Typeface.BOLD)
-                setTextColor(0xFF1F2933.toInt())
+                setTextColor(Palette.label)
             })
             addView(TextView(this@MainActivity).apply {
-                text = sub; textSize = 12f; setTextColor(0xFF7B848C.toInt())
+                text = sub; textSize = 12f; setTextColor(Palette.labelTertiary)
                 setPadding(0, (2 * dp).toInt(), 0, 0)
             })
         })
@@ -3904,7 +3920,7 @@ private fun showAdultSettings() {
 
     c.addView(TextView(this).apply {
         text = getString(R.string.adult_medical_note)
-        textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setLineSpacing(0f, 1.15f)
+        textSize = 12f; setTextColor(Palette.labelTertiary); setLineSpacing(0f, 1.15f)
         setPadding(0, (18 * dp).toInt(), 0, (20 * dp).toInt())
     })
 }
@@ -3927,13 +3943,13 @@ private fun showAdultSettings() {
  */
 private fun showModeRules() {
     inSubPage = true; onReportScreen = false
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val current = Mode.current(this)
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.moderules_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.moderules_subtitle)
-        textSize = 14f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (12 * dp).toInt())
+        textSize = 14f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (12 * dp).toInt())
     })
 
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -3947,10 +3963,10 @@ private fun showModeRules() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 16 * dp
-                setColor(0xFFFFFFFF.toInt())
+                cornerRadius = Radius.card * dp
+                setColor(Palette.surface)
                 setStroke(((if (highlight) 2.5f else 1.5f) * dp).toInt(),
-                    if (highlight) accent else 0xFFD7DCE0.toInt())
+                    if (highlight) accent else Palette.hairline)
             }
             val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
             layoutParams = LinearLayout.LayoutParams(
@@ -3959,7 +3975,7 @@ private fun showModeRules() {
         }
         card.addView(TextView(this).apply {
             text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF1F2933.toInt())
+            setTextColor(Palette.label)
         })
         if (sub != null) card.addView(TextView(this).apply {
             text = sub; textSize = 13f; setTextColor(accent)
@@ -3969,7 +3985,7 @@ private fun showModeRules() {
         rules.forEach { rule ->
             card.addView(TextView(this).apply {
                 text = "•  $rule"
-                textSize = 14f; setTextColor(0xFF3C4650.toInt())
+                textSize = 14f; setTextColor(Palette.labelSecondary)
                 setLineSpacing(0f, 1.15f)
                 setPadding(0, (9 * dp).toInt(), 0, 0)
             })
@@ -3977,18 +3993,18 @@ private fun showModeRules() {
         list.addView(card)
     }
 
-    sectionHeader(getString(R.string.moderules_section_always), 0xFF9AA0A6.toInt())
+    sectionHeader(getString(R.string.moderules_section_always), Palette.labelTertiary)
     rulesCard(getString(R.string.moderules_always_title), getString(R.string.moderules_always_sub),
-        alwaysOnRules(), 0xFF2E7D32.toInt(), highlight = false)
+        alwaysOnRules(), Palette.successText, highlight = false)
 
-    sectionHeader(getString(R.string.moderules_section_modes), 0xFF9AA0A6.toInt())
+    sectionHeader(getString(R.string.moderules_section_modes), Palette.labelTertiary)
     AppConfig.MODES.forEach { spec ->
         val isCurrent = spec.id == current
         rulesCard(
             title = modeDisplayName(spec.id),
             sub = if (isCurrent) getString(R.string.moderules_current) else null,
             rules = modeRules(spec.id),
-            accent = 0xFF2E9E8F.toInt(),
+            accent = Palette.tint,
             highlight = isCurrent,
         )
     }
@@ -3996,7 +4012,7 @@ private fun showModeRules() {
     if (Mode.isLocked(this)) {
         list.addView(TextView(this).apply {
             text = getString(R.string.moderules_lock, Mode.timeLeft(this@MainActivity))
-            textSize = 13f; setTextColor(0xFFB1541F.toInt()); setTypeface(typeface, Typeface.BOLD)
+            textSize = 13f; setTextColor(Palette.warningText); setTypeface(typeface, Typeface.BOLD)
             setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
         })
     }
@@ -4004,7 +4020,7 @@ private fun showModeRules() {
     list.addView(TextView(this).apply {
         text = getString(R.string.moderules_watched,
             AppConfig.BREATHING_APPS.joinToString(", ") { appLabelOrPackage(it) })
-        textSize = 13f; setTextColor(0xFF7B848C.toInt())
+        textSize = 13f; setTextColor(Palette.labelTertiary)
         setPadding(0, (6 * dp).toInt(), 0, (16 * dp).toInt())
     })
 
@@ -4026,7 +4042,7 @@ private fun appLabelOrPackage(pkg: String): String =
 private fun showLogPage() {
     inSubPage = true
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -4035,8 +4051,7 @@ private fun showLogPage() {
     val header = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
     }
-    header.addView(TextView(this).apply {
-        text = getString(R.string.log_title); textSize = 21f; setTypeface(typeface, Typeface.BOLD)
+    header.addView(titleText(getString(R.string.log_title)).apply {
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     })
     header.addView(Button(this).apply {
@@ -4046,12 +4061,22 @@ private fun showLogPage() {
     root.addView(header)
 
     val empty = TextView(this).apply {
-        text = getString(R.string.log_empty); setPadding(0, (24 * dp).toInt(), 0, 0); visibility = View.GONE
+        text = getString(R.string.log_empty); textSize = Type.callout
+        setTextColor(Palette.labelTertiary)
+        setPadding(0, (Space.xl * dp).toInt(), 0, 0); visibility = View.GONE
     }
     root.addView(empty)
+    // The rows live on one card rather than floating on the page, so a long log reads as a
+    // single list instead of a stack of loose lines.
     val rv = RecyclerView(this).apply {
         layoutManager = LinearLayoutManager(this@MainActivity)
         adapter = this@MainActivity.adapter
+        background = glassBg()
+        clipToOutline = true
+        outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+        val h = (Space.sm * dp).toInt()
+        setPadding(h, (Space.xs * dp).toInt(), h, (Space.xs * dp).toInt())
+        clipToPadding = false
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
     }
     root.addView(rv)
@@ -4064,7 +4089,7 @@ private fun showLogPage() {
 private fun showAboutPage() {
     inSubPage = true
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -4082,20 +4107,53 @@ private fun showAboutPage() {
     setContentWithThumb(root) { setupHomeScreen() }
 }
 
-/** One full-width quarter-height clickable pane. */
-private fun reportPane(label: String, bg: Int, onClick: () -> Unit): TextView =
-    TextView(this).apply {
-        text = label
-        gravity = Gravity.CENTER
-        textSize = 22f
-        setTextColor(0xFFFFFFFF.toInt())
-        setBackgroundColor(bg)
-        isClickable = true
-        isFocusable = true
+/**
+ * One action on the adult-content page: title, a line of explanation, chevron.
+ *
+ * [accent] marks the single most important action on the page - it gets the tint fill and
+ * white text. Exactly one pane per page should set it; if two do, neither is the primary.
+ * Everything else is a glass card, so the page has one focal point instead of four
+ * competing slabs of colour.
+ */
+private fun reportPane(title: String, sub: String, accent: Boolean = false, onClick: () -> Unit): View {
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background =
+            if (accent) tappableBg(Palette.tint, Radius.card, stroke = null, ripple = 0x33FFFFFF)
+            else tappableBg(Palette.glass, Radius.card)
+        elevation = dpf(if (accent) 2f else 1f)
+        setPadding(dp(Space.md), dp(Space.md), dp(Space.md), dp(Space.md))
         layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)   // weight 1 -> equal quarters
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(Space.sm) }
+        isClickable = true; isFocusable = true
         setOnClickListener { onClick() }
+        pressable()
     }
+    row.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        addView(TextView(this@MainActivity).apply {
+            text = title
+            textSize = Type.headline; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(if (accent) Palette.onFill else Palette.label)
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = sub
+            textSize = Type.footnote
+            setTextColor(if (accent) 0xCCFFFFFF.toInt() else Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xxs), 0, 0)
+        })
+    })
+    row.addView(TextView(this).apply {
+        text = "›"; textSize = 22f
+        setTextColor(if (accent) 0xCCFFFFFF.toInt() else Palette.labelQuaternary)
+        setPadding(dp(Space.xs), 0, 0, 0)
+    })
+    return row
+}
 
 // ── Pane actions (stubs - fill these in later) ─────────────────────────────
 private fun onReportAppSite() {
@@ -4148,7 +4206,7 @@ private fun loosenBack() {
 private fun loosenStop(message: String) {
     stopLoosenTimer(); LoosenWait.end(this)
     inLoosenFlow = false; onReportScreen = true; loosenBackAction = null
-    val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_stop_good)))
     root.addView(body(message))
@@ -4163,7 +4221,7 @@ private fun loosenBlockedScreen() {
         getString(R.string.loosen_blocked_today)
     else
         getString(R.string.loosen_blocked_lifetime, LoosenLimit.LIFETIME_MAX)
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(bigPanic())
     root.addView(titleText(getString(R.string.loosen_blocked_title)))
@@ -4175,21 +4233,21 @@ private fun loosenBlockedScreen() {
 // ── intro, one idea per screen, panic taking the top third ──────────────────
 private fun loosenIntro1() {
     loosenBackAction = { stopLoosenTimer(); inLoosenFlow = false; showReportScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(boldWordTitle(getString(R.string.loosen_intro_title), getString(R.string.loosen_intro_boldword)))
     root.addView(TextView(this).apply {
         text = getString(R.string.loosen_unlocks_avail, LoosenLimit.remaining(this@MainActivity), LoosenLimit.LIFETIME_MAX)
-        textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+        textSize = 15f; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
     root.addView(TextView(this).apply {
         text = getString(R.string.loosen_intro_urge)
-        textSize = 15f; setTextColor(0xFF4A4F54.toInt()); setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
+        textSize = 15f; setTextColor(Palette.labelSecondary); setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
     })
     root.addView(PeakCurveView(this, showMarker = false, labelTop = getString(R.string.loosen_curve_top), labelBot = getString(R.string.loosen_curve_bot)),
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(captionedButton(getString(R.string.loosen_stop_instead), getString(R.string.loosen_stop_strong), 0xFF2E7D32.toInt()) { openPanic() })
-    root.addView(captionedButton(getString(R.string.loosen_understand), getString(R.string.loosen_understand_sub), 0xFF3E535C.toInt()) { loosenFaceActScreen() })
+    root.addView(captionedButton(getString(R.string.loosen_stop_instead), getString(R.string.loosen_stop_strong), Palette.successText) { openPanic() })
+    root.addView(captionedButton(getString(R.string.loosen_understand), getString(R.string.loosen_understand_sub), Palette.tint) { loosenFaceActScreen() })
     setContentView(root)
 }
 
@@ -4199,14 +4257,14 @@ private val POS_FEELINGS = listOf("Proud", "Relieved", "Clear", "In control")
 // ── Screen A: how will you feel after you unlock? (drag into the venn) ───────
 private fun loosenFaceActScreen() {
     loosenBackAction = { loosenIntro1() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_feel_after_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.loosen_drag_after)
-        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+        textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (4 * dp).toInt())
     })
-    val face = FeelingFaceView(this, NEG_FEELINGS, resources.getStringArray(R.array.feel_neg).toList(), 0xFFB0453B.toInt(), positiveInside = false,
+    val face = FeelingFaceView(this, NEG_FEELINGS, resources.getStringArray(R.array.feel_neg).toList(), Palette.danger, positiveInside = false,
         startZoneLabel = getString(R.string.loosen_startzone))
     root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     val cont = continueLink(getString(R.string.common_continue)) { loosenRegret = face.nearestLabel() ?: loosenRegret; loosenFaceRideScreen() }
@@ -4219,19 +4277,19 @@ private fun loosenFaceActScreen() {
 // ── Screen B: how will you feel if you wait it out? (all happy / neutral) ────
 private fun loosenFaceRideScreen() {
     loosenBackAction = { stopLoosenTimer(); loosenFaceActScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_wait_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.loosen_drag_30)
-        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (2 * dp).toInt())
+        textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (2 * dp).toInt())
     })
     val timer = TextView(this).apply {
         textSize = 28f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-        setTextColor(0xFF2E7D32.toInt())
+        setTextColor(Palette.successText)
     }
     root.addView(timer)
-    val face = FeelingFaceView(this, POS_FEELINGS, resources.getStringArray(R.array.feel_pos).toList(), 0xFF2E7D32.toInt(), positiveInside = true)
+    val face = FeelingFaceView(this, POS_FEELINGS, resources.getStringArray(R.array.feel_pos).toList(), Palette.successText, positiveInside = true)
     root.addView(face, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     val cont = continueLink(getString(R.string.common_continue)) { stopLoosenTimer(); loosenDelayChanceScreen() }
     face.onMoodChange = { enableLink(cont) }
@@ -4244,7 +4302,7 @@ private fun loosenFaceRideScreen() {
 // ── Screen C: how likely can you DELAY 30 mins? (slider, mirrors urge bands) ─
 private fun loosenDelayChanceScreen() {
     loosenBackAction = { loosenFaceRideScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_challenge_title)))
     root.addView(body(getString(R.string.loosen_challenge_body)))
@@ -4254,18 +4312,18 @@ private fun loosenDelayChanceScreen() {
     })
     val label = TextView(this).apply {
         textSize = 19f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-        setTextColor(0xFF2E7D32.toInt()); setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+        setTextColor(Palette.successText); setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
     }
     root.addView(label)
     val seek = android.widget.SeekBar(this).apply { max = 100; progress = 50 }
     root.addView(seek)
     val ends = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     ends.addView(TextView(this).apply {
-        text = getString(R.string.loosen_nochance); textSize = 12f; setTextColor(0xFF9AA0A6.toInt())
+        text = getString(R.string.loosen_nochance); textSize = 12f; setTextColor(Palette.labelTertiary)
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     })
     ends.addView(TextView(this).apply {
-        text = getString(R.string.loosen_gotthis); textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); gravity = Gravity.END
+        text = getString(R.string.loosen_gotthis); textSize = 12f; setTextColor(Palette.labelTertiary); gravity = Gravity.END
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     })
     root.addView(ends)
@@ -4296,7 +4354,7 @@ private fun delayBand(p: Int): String = when {
 // ── Screen D: is this a one-off? how it shapes the future ───────────────────
 private fun loosenOneOffScreen() {
     loosenBackAction = { loosenDelayChanceScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_oneoff_title)))
     root.addView(body(getString(R.string.loosen_oneoff_body)))
@@ -4313,7 +4371,7 @@ private fun loosenOneOffScreen() {
 
 private fun loosenOneOffFollow(oneOff: Boolean) {
     loosenBackAction = { loosenOneOffScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(if (oneOff) getString(R.string.loosen_follow_title_yes) else getString(R.string.loosen_follow_title_no)))
     root.addView(body(if (oneOff)
@@ -4321,7 +4379,7 @@ private fun loosenOneOffFollow(oneOff: Boolean) {
     else
         getString(R.string.loosen_follow_body_no)))
     root.addView(grow())
-    root.addView(bigChoice(getString(R.string.loosen_wait_it_out), 0xFF2E7D32.toInt()) {
+    root.addView(bigChoice(getString(R.string.loosen_wait_it_out), Palette.successText) {
         LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
         loosenStop(getString(R.string.loosen_stop_msg_hard))
     })
@@ -4349,15 +4407,15 @@ private fun loosenPlaceScreen() {
 // ── the urge curve: they tap where they think they are on the wave ──────────
 private fun loosenUrgeGraphScreen() {
     loosenBackAction = { loosenPlaceScreen() }
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_wave_title)))
     root.addView(TextView(this).apply {
         text = getString(R.string.loosen_wave_body)
-        textSize = 14f; setTextColor(0xFF6B7075.toInt()); setPadding(0, 0, 0, (4 * dp).toInt())
+        textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (4 * dp).toInt())
     })
     val resp = TextView(this).apply {
-        textSize = 16f; gravity = Gravity.CENTER; setTextColor(0xFF2E7D32.toInt())
+        textSize = 16f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
     }
     val cont = continueLink(getString(R.string.loosen_continue_anyway)) { loosenWaitScreen() }
@@ -4382,7 +4440,7 @@ private fun loosenWaitScreen() {
     loosenBackAction = { loosenStop(getString(R.string.loosen_stop_msg_stepback)) }
     if (!LoosenWait.isActive(this)) LoosenWait.start(this, 5L * 60 * 1000)
     val endAt = System.currentTimeMillis() + LoosenWait.remaining(this)
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val content = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
     }
@@ -4393,11 +4451,11 @@ private fun loosenWaitScreen() {
     // the only time readout - updates each minute, no ticking seconds
     val sub = TextView(this).apply {
         text = getString(R.string.loosen_wait_sub); textSize = 16f; gravity = Gravity.CENTER
-        setTextColor(0xFF4A4F54.toInt()); setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
+        setTextColor(Palette.labelSecondary); setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
     }
     content.addView(sub)
     // big orb on the page (no dark card), matching the temptation breathing
-    val orb = BreathOrbView(this, 0xFF2E9E8F.toInt())
+    val orb = BreathOrbView(this, Palette.tint)
     val orbBox = FrameLayout(this).apply {
         layoutParams = LinearLayout.LayoutParams((230 * dp).toInt(), (230 * dp).toInt()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
@@ -4418,7 +4476,7 @@ private fun loosenWaitScreen() {
         ).apply { bottomMargin = (8 * dp).toInt() }
     })
     // the temptation-style exit, caption now inside the button
-    content.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), 0xFF2E7D32.toInt()) {
+    content.addView(captionedButton(getString(R.string.temp_put_down), getString(R.string.temp_put_down_sub), Palette.successText) {
         LoosenLog.record(this, "stopped", loosenRegret, loosenFix, 0)
         try { finishAffinity() } catch (_: Throwable) { setupMainScreen() }
     })
@@ -4434,7 +4492,7 @@ private fun loosenWaitScreen() {
     }
     setContentView(root)
     runLoosenMinuteCountdown(sub, endAt) {
-        enableLink(doneContinue); sub.setTextColor(0xFF2E7D32.toInt()); sub.setTypeface(sub.typeface, Typeface.BOLD)
+        enableLink(doneContinue); sub.setTextColor(Palette.successText); sub.setTypeface(sub.typeface, Typeface.BOLD)
     }
     loosenOrb = BreathOrbAnimator(orb, breatheLabel).also { it.start(cycles = null) }
 }
@@ -4451,7 +4509,7 @@ private fun showLoosenLongerDialog() {
         .setNegativeButton(getString(R.string.loosen_keep5), null)
         .create()
     fun option(label: String, ms: Long) {
-        box.addView(bigChoice(label, 0xFF2E7D32.toInt()) {
+        box.addView(bigChoice(label, Palette.successText) {
             LoosenWait.start(this, ms); dialog.dismiss(); loosenWaitScreen()
         })
     }
@@ -4481,7 +4539,7 @@ private fun renderCommitStep() {
 
 private fun commitConfirmScreen(step: String, heading: String, statement: String,
     get: () -> Boolean, set: (Boolean) -> Unit, continueLabel: String) {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(stepText(step))
     root.addView(titleText(heading))
@@ -4498,12 +4556,12 @@ private fun commitConfirmScreen(step: String, heading: String, statement: String
 }
 
 private fun commitNoteScreen(step: String) {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(stepText(step))
     root.addView(titleText(getString(R.string.loosen_note_title)))
     root.addView(TextView(this).apply {
-        text = getString(R.string.loosen_note_private); textSize = 13f; setTextColor(0xFF6B7075.toInt())
+        text = getString(R.string.loosen_note_private); textSize = 13f; setTextColor(Palette.labelSecondary)
         setPadding(0, 0, 0, (8 * dp).toInt())
     })
     val note = EditText(this).apply {
@@ -4524,7 +4582,7 @@ private fun commitNoteScreen(step: String) {
 }
 
 private fun commitDurationScreen(step: String) {
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(stepText(step))
     root.addView(titleText(getString(R.string.loosen_duration_title)))
@@ -4563,7 +4621,7 @@ private fun loosenUnlock() {
 
 private fun loosenUnlockedScreen() {
     inLoosenFlow = false; onReportScreen = true; loosenBackAction = null
-    val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(getString(R.string.loosen_unlocked_title, loosenDuration)))
     val countdown = TextView(this).apply {
@@ -4573,7 +4631,7 @@ private fun loosenUnlockedScreen() {
     root.addView(countdown)
     root.addView(body(getString(R.string.loosen_unlocked_body)))
     root.addView(grow())
-    root.addView(bigChoice(getString(R.string.loosen_go), 0xFF3E535C.toInt()) { moveTaskToBack(true) })
+    root.addView(bigChoice(getString(R.string.loosen_go), Palette.tint) { moveTaskToBack(true) })
     root.addView(Button(this).apply { text = getString(R.string.common_done); setOnClickListener { showReportScreen() } })
     setContentView(root)
     runLoosenCountdown(countdown, System.currentTimeMillis() + LoosenWindow.remaining(this)) {
@@ -4595,19 +4653,19 @@ private fun body(t: String) = TextView(this).apply {
     setPadding(0, (resources.displayMetrics.density * 8).toInt(), 0, 0)
 }
 private fun stepText(s: String) = TextView(this).apply {
-    text = s; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF6B7075.toInt())
+    text = s; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelSecondary)
     setPadding(0, 0, 0, (resources.displayMetrics.density * 4).toInt())
 }
-private fun panicBar(): Button = bigChoice(getString(R.string.loosen_stop_instead), 0xFF2E7D32.toInt()) { openPanic() }
+private fun panicBar(): Button = bigChoice(getString(R.string.loosen_stop_instead), Palette.successText) { openPanic() }
 
 private fun bigPanic(): Button {
     val dp = resources.displayMetrics.density
     val third = resources.displayMetrics.heightPixels / 3
     return Button(this).apply {
         text = getString(R.string.loosen_stop_instead); setAllCaps(false)
-        setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, Typeface.BOLD); textSize = 20f
+        setTextColor(Palette.onFill); setTypeface(typeface, Typeface.BOLD); textSize = 20f
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 16 * dp; setColor(0xFF2E7D32.toInt())
+            cornerRadius = Radius.card * dp; setColor(Palette.successText)
         }
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, third)
             .apply { bottomMargin = (12 * dp).toInt() }
@@ -4618,8 +4676,8 @@ private fun bigPanic(): Button {
 private fun urgeGraphView(): View {
     val dp = resources.displayMetrics.density
     val v = object : View(this) {
-        val act = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC0392B.toInt(); style = Paint.Style.STROKE; strokeWidth = 3 * dp }
-        val wait = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E7D32.toInt(); style = Paint.Style.STROKE; strokeWidth = 3 * dp }
+        val act = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.danger; style = Paint.Style.STROKE; strokeWidth = 3 * dp }
+        val wait = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.successText; style = Paint.Style.STROKE; strokeWidth = 3 * dp }
         val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33000000; strokeWidth = 1 * dp }
         override fun onDraw(canvas: Canvas) {
             val w = width.toFloat(); val h = height.toFloat()
@@ -4650,7 +4708,7 @@ private fun urgeGraphView(): View {
 private fun openPanic() {
     stopLoosenTimer()
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -4664,7 +4722,7 @@ private fun openPanic() {
     root.addView(pacer)
     root.addView(TextView(this).apply {
         text = getString(R.string.panic_body)
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(0xFF6B7075.toInt())
+        textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
         setPadding(0, 0, 0, (12 * dp).toInt())
     })
     val grounding = listOf(
@@ -4684,13 +4742,13 @@ private fun openPanic() {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         addView(list)
     })
-    val lockApps = bigChoice(getString(R.string.panic_lock_apps), 0xFF2E7D32.toInt()) {}
+    val lockApps = bigChoice(getString(R.string.panic_lock_apps), Palette.successText) {}
     lockApps.setOnClickListener {
         Lockdown.start(this); lockApps.text = getString(R.string.panic_apps_locked); lockApps.isEnabled = false
         Toast.makeText(this, getString(R.string.panic_lockdown_toast), Toast.LENGTH_LONG).show()
     }
     root.addView(lockApps)
-    root.addView(bigChoice(getString(R.string.panic_lock_screen), 0xFF3E535C.toInt()) { lockPhoneNow() })
+    root.addView(bigChoice(getString(R.string.panic_lock_screen), Palette.tint) { lockPhoneNow() })
     root.addView(Button(this).apply {
         text = getString(R.string.panic_okay)
         setOnClickListener {
@@ -4715,21 +4773,23 @@ private fun lockPhoneNow() {
 }
 
 // ── shared bits for this flow ──────────────────────────────────────────────
-private fun panicButton(): Button = bigChoice(getString(R.string.panic_button), 0xFFB00020.toInt()) { openPanic() }
+private fun panicButton(): Button = bigChoice(getString(R.string.panic_button), Palette.dangerText) { openPanic() }
 
+/** The full-width filled action. Design-system button: tint fill, ripple, press-scale. */
 private fun bigChoice(label: String, color: Int, onClick: () -> Unit): Button {
-    val dp = resources.displayMetrics.density
     return Button(this).apply {
         text = label; setAllCaps(false)
-        setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, Typeface.BOLD)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 12 * dp; setColor(color)
-        }
-        val p = (14 * dp).toInt(); setPadding(p, p, p, p)
+        textSize = Type.headline
+        setTextColor(Palette.onFill); setTypeface(typeface, Typeface.BOLD)
+        stateListAnimator = null                 // kill the Material lift; ours is flatter
+        background = tappableBg(color, Radius.control, stroke = null, ripple = 0x33FFFFFF)
+        elevation = dpf(1.5f)
+        val p = dp(Space.md); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = (8 * dp).toInt() }
+        ).apply { bottomMargin = dp(Space.xs) }
         setOnClickListener { onClick() }
+        pressable()
     }
 }
 
@@ -4837,23 +4897,39 @@ private fun setContentNoThumb(content: View) {
 }
 
 override fun setContentView(view: View) {
-    if (noThumb) { super.setContentView(view); return }
-    val dp = resources.displayMetrics.density
+    // The page background lives here, not on 60 individual screens. Anything that wants
+    // to sit ON the page (a card, a row) gets Palette.surface / glass; the page itself is
+    // always Palette.bg, which is what stops screens drifting apart tonally.
+    if (view.background == null) view.setBackgroundColor(Palette.bg)
+    if (noThumb) {
+        view.enterFromBelow()
+        super.setContentView(view)
+        return
+    }
     val frame = android.widget.FrameLayout(this).apply {
+        setBackgroundColor(Palette.bg)
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     frame.addView(view, android.widget.FrameLayout.LayoutParams(
         android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
         android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
-    val size = (54 * dp).toInt()
+    val size = dp(56)
+    val thumb = thumbBack { onBackPressed() }
     frame.addView(
-        thumbBack { onBackPressed() },
+        thumb,
         android.widget.FrameLayout.LayoutParams(size, size, Gravity.BOTTOM or Gravity.END).apply {
             bottomMargin = (resources.displayMetrics.heightPixels * 0.20f).toInt()
-            marginEnd = (16 * dp).toInt()
+            marginEnd = dp(Space.md)
         },
     )
+    // EVERY page gets the same entrance, for free, because it happens here. The content
+    // fades up; the back button just fades, so it doesn't appear to slide around the
+    // screen between pages (it is the one element that never moves).
+    view.enterFromBelow()
+    thumb.alpha = 0f
+    thumb.animate().alpha(1f).setStartDelay(Motion.fast / 2)
+        .setDuration(Motion.base).setInterpolator(Motion.easeOut).start()
     super.setContentView(frame)
 }
 
@@ -4861,19 +4937,14 @@ override fun setContentView(view: View) {
 // added by the setContentView override above - this no longer adds one itself.
 private fun setContentWithThumb(content: View, onBack: () -> Unit) {
     onReportScreen = false; onTemptationsTab = false; onDevScreen = false
-    inRelapseFlow = false; inTemptationFlow = false; inLoosenFlow = false; inAppSiteFlow = false
+    inTemptationFlow = false; inLoosenFlow = false; inAppSiteFlow = false
     inSubPage = true
     subBack = onBack
     setContentView(content)
 }
 
-private fun titleText(t: String): TextView {
-    val dp = resources.displayMetrics.density
-    return TextView(this).apply {
-        text = t; textSize = 21f; setTypeface(typeface, Typeface.BOLD)
-        setPadding(0, 0, 0, (8 * dp).toInt())
-    }
-}
+/** Every screen's title, one place. See Design.kt's pageTitle for the type decisions. */
+private fun titleText(t: String): TextView = pageTitle(t)
 
 // ── ride-it-out countdown ──────────────────────────────────────────────────
 private fun stopRideTimer() {
@@ -4888,60 +4959,9 @@ private fun stopRideTimer() {
 private fun onLookAnyway() {
     startLoosenFlow()
 }
-private fun onReportRelapse() {
-    startRelapseFlow()
-}
-
-// ── Relapse report flow ────────────────────────────────────────────────────
-private enum class RStep { DEVICE, HOME, ROOM, ACTIVITY, FEELING, URGE, NOTE }
-
-private fun activeSteps(): List<RStep> {
-    val s = mutableListOf(RStep.DEVICE, RStep.HOME)
-    if (draft.atHome == true) s.add(RStep.ROOM)
-    s.add(RStep.ACTIVITY); s.add(RStep.FEELING); s.add(RStep.URGE); s.add(RStep.NOTE)
-    return s
-}
-
-private fun renderRelapseStep() {
-    val steps = activeSteps()
-    relapseStep = relapseStep.coerceIn(0, steps.lastIndex)
-    when (steps[relapseStep]) {
-        RStep.DEVICE -> reportChoiceScreen(
-            getString(R.string.relapse_device_q), listOf(getString(R.string.relapse_device_yes), getString(R.string.relapse_device_no)),
-            onBack = ::relapseBack) { draft.onThisDevice = it == getString(R.string.relapse_device_yes); relapseAdvance() }
-
-        RStep.HOME -> reportChoiceScreen(
-            getString(R.string.relapse_home_q), listOf(getString(R.string.relapse_home_yes), getString(R.string.relapse_home_no)), onBack = ::relapseBack) {
-            draft.atHome = (it == getString(R.string.relapse_home_yes)); if (draft.atHome != true) draft.room = null; relapseAdvance()
-        }
-
-        RStep.ROOM -> pickWithCustomScreen(
-            getString(R.string.relapse_room_q), Opts.LOCATIONS, "location", onBack = ::relapseBack) {
-            draft.room = it; relapseAdvance()
-        }
-
-        RStep.ACTIVITY -> pickMultiWithCustomScreen(
-            getString(R.string.relapse_activity_q), ACTIVITIES, "activity", onBack = ::relapseBack) {
-            draft.activity = it.joinToString(", "); relapseAdvance()
-        }
-
-        RStep.FEELING -> pickMultiWithCustomScreen(
-            getString(R.string.relapse_feeling_q), Opts.FEELINGS, "feeling", onBack = ::relapseBack) {
-            draft.feeling = it.joinToString(", "); relapseAdvance()
-        }
-
-        RStep.URGE -> urgeScaleScreen(
-            getString(R.string.relapse_urge_q), onBack = ::relapseBack) {
-            draft.urge = it; relapseAdvance()
-        }
-
-        RStep.NOTE -> noteStep()
-    }
-}
-
-private var inRelapseFlow = false
-private var relapseStep = 0
-private var draft = RelapseDraft()
+// The "Report relapse" pane and its whole step-by-step flow have been REMOVED. The
+// options lists below outlived it: they are shared with the temptation and loosen
+// flows (see optCodeList / baseFor), so they stay.
 
 private val ACTIVITIES = listOf(
     "In bed / trying to sleep",
@@ -4955,191 +4975,23 @@ private val ACTIVITIES = listOf(
     "After something stressful",
     "Winding down at night",
 )
-private val FEELINGS = listOf(
-    "Bored", "Anxious / on edge", "Stressed", "Low / down",
-    "Lonely", "Tired", "Frustrated / angry", "Happy / excited", "Neutral",
-)
-
-private fun startRelapseFlow() {
-    onReportScreen = true
-    inRelapseFlow = true
-    draft = RelapseDraft()
-    relapseStep = 0
-    renderRelapseStep()
-}
-
-private fun relapseAdvance() { relapseStep++; renderRelapseStep() }
-
-private fun relapseBack() {
-    if (relapseStep <= 0) { inRelapseFlow = false; showReportScreen(); return }
-    relapseStep--
-    renderRelapseStep()
-}
-
-
-private fun noteStep() {
-    val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
-    val root = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(pad, pad, pad, pad)
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    }
-    root.addView(TextView(this).apply {
-        text = getString(R.string.relapse_note_title)
-        textSize = 21f; setTypeface(typeface, Typeface.BOLD)
-        setPadding(0, 0, 0, (4 * dp).toInt())
-    })
-    root.addView(TextView(this).apply {
-        text = getString(R.string.relapse_note_private)
-        textSize = 13f; setTextColor(0xFF6B7075.toInt())
-        setPadding(0, 0, 0, (10 * dp).toInt())
-    })
-    val input = EditText(this).apply {
-        hint = getString(R.string.relapse_note_hint)
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        gravity = Gravity.TOP or Gravity.START
-        minLines = 4
-        setText(draft.note ?: "")
-    }
-    root.addView(input, LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    val btns = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END
-        setPadding(0, (8 * dp).toInt(), 0, 0)
-    }
-    btns.addView(Button(this).apply {
-        text = getString(R.string.relapse_skip)
-        setOnClickListener { draft.note = null; saveRelapse() }
-    })
-    btns.addView(Button(this).apply {
-        text = getString(R.string.relapse_save)
-        setOnClickListener {
-            draft.note = input.text.toString().trim().ifBlank { null }
-            saveRelapse()
-        }
-    })
-    root.addView(btns)
-    setContentView(root)
-}
-
-private fun saveRelapse() {
-    Progress.recordSlip(this)
-    lifecycleScope.launch {
-        val priors = RelapseLog.all(this@MainActivity)   // their earlier reports (excludes this one)
-        val report = draft.toReport()
-        RelapseLog.record(this@MainActivity, report)
-        val feedback = RelapseLog.analyze(this@MainActivity, report, priors)
-        renderRelapseFeedback(feedback)
-    }
-}
-
-private fun renderRelapseFeedback(fb: RelapseFeedback) {
-    inRelapseFlow = false
-    onReportScreen = true
-    val dp = resources.displayMetrics.density
-    val pad = (20 * dp).toInt()
-    val root = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(pad, pad, pad, pad)
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    }
-    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    content.addView(TextView(this).apply {
-        text = getString(R.string.relapse_saved)
-        textSize = 24f; setTypeface(typeface, Typeface.BOLD)
-    })
-    content.addView(TextView(this).apply {
-        text = fb.encouragement
-        textSize = 16f
-        setPadding(0, (12 * dp).toInt(), 0, (8 * dp).toInt())
-    })
-    if (fb.lines.isNotEmpty()) {
-        content.addView(TextView(this).apply {
-            text = getString(R.string.relapse_noticed)
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
-        })
-        fb.lines.forEach { line ->
-            content.addView(TextView(this).apply {
-                text = getString(R.string.proto_bullet, line)
-                textSize = 15f
-                setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
-            })
-        }
-    }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        addView(content)
-    })
-    root.addView(Button(this).apply {
-        text = getString(R.string.common_done)
-        setOnClickListener { showReportScreen() }
-    })
-    setContentView(root)
-}
-
-/** A title + a scroll list of big tappable "panels", optional Back / Skip. */
-private fun reportChoiceScreen(
-    title: String,
-    options: List<String>,
-    allowSkip: Boolean = false,
-    skipLabel: String = "Skip",
-    onSkip: (() -> Unit)? = null,
-    onBack: (() -> Unit)? = null,
-    onPick: (String) -> Unit,
-) {
-    val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
-    val root = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(pad, pad, pad, pad)
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    }
-    root.addView(TextView(this).apply {
-        text = title
-        textSize = 21f; setTypeface(typeface, Typeface.BOLD)
-        setPadding(0, 0, 0, (4 * dp).toInt())
-    })
-    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    options.forEach { opt -> list.addView(pickCard(opt) { onPick(opt) }) }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        addView(list)
-    })
-    if (allowSkip && onSkip != null) {
-        root.addView(Button(this).apply {
-            text = skipLabel
-            setOnClickListener { onSkip() }
-        })
-    }
-    setContentView(root)
-}
 
 /** One rounded, full-width tappable option card. */
 private fun pickCard(label: String, onClick: () -> Unit): TextView {
-    val dp = resources.displayMetrics.density
     return TextView(this).apply {
         text = label
-        textSize = 17f
-        setTextColor(0xFF1A1A1A.toInt())
+        textSize = Type.headline
+        setTextColor(Palette.label)
         gravity = Gravity.CENTER_VERTICAL
-        val p = (18 * dp).toInt()
-        setPadding(p, p, p, p)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 12 * dp
-            setColor(0xFFF1F3F4.toInt())
-        }
+        setPadding(dp(Space.md), dp(Space.md), dp(Space.md), dp(Space.md))
+        background = tappableBg(Palette.glass, Radius.control)
+        elevation = dpf(1f)
         isClickable = true; isFocusable = true
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (8 * dp).toInt() }
+        ).apply { topMargin = dp(Space.xs) }
         setOnClickListener { onClick() }
+        pressable()
     }
 }
 
@@ -5148,7 +5000,7 @@ private data class Choice(
     val value: String,               // STABLE key: stored + compared + icon-keyed (English)
     val icon: String? = null,
     val sub: String? = null,
-    val tint: Int = 0xFFF1F3F4.toInt(),
+    val tint: Int = Palette.surfaceSunken,
     val group: String? = null,
     val label: String = value,       // localized DISPLAY text (defaults to value / custom entries)
 )
@@ -5207,15 +5059,15 @@ private fun activityIcon(v: String) = when (v) {
 }
 // feelings carry a group + a subtle tint so the screen reads as grouped bands
 private fun feelingMeta(v: String): Choice = when (v) {
-    "Anxious / on edge" -> Choice(v, "\uD83D\uDE30", null, 0xFFFFF3E0.toInt(), "On edge")
-    "Stressed" -> Choice(v, "\uD83D\uDE23", null, 0xFFFFF3E0.toInt(), "On edge")
-    "Frustrated / angry" -> Choice(v, "\uD83D\uDE20", null, 0xFFFCE9E6.toInt(), "Wound up")
-    "Low / down" -> Choice(v, "\uD83D\uDE1E", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
-    "Lonely" -> Choice(v, "\uD83D\uDE41", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
-    "Tired" -> Choice(v, "\uD83D\uDE34", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
-    "Neutral" -> Choice(v, "\uD83D\uDE10", null, 0xFFEAEFF4.toInt(), "Shut down / flat")
-    "Bored" -> Choice(v, "\uD83E\uDD71", null, 0xFFEEF1EB.toInt(), "Bored")
-    "Happy / excited" -> Choice(v, "\uD83D\uDE04", null, 0xFFE7F4E8.toInt(), "Feeling good")
+    "Anxious / on edge" -> Choice(v, "\uD83D\uDE30", null, Palette.warningSoft, "On edge")
+    "Stressed" -> Choice(v, "\uD83D\uDE23", null, Palette.warningSoft, "On edge")
+    "Frustrated / angry" -> Choice(v, "\uD83D\uDE20", null, Palette.dangerSoft, "Wound up")
+    "Low / down" -> Choice(v, "\uD83D\uDE1E", null, Palette.surfaceSunken, "Shut down / flat")
+    "Lonely" -> Choice(v, "\uD83D\uDE41", null, Palette.surfaceSunken, "Shut down / flat")
+    "Tired" -> Choice(v, "\uD83D\uDE34", null, Palette.surfaceSunken, "Shut down / flat")
+    "Neutral" -> Choice(v, "\uD83D\uDE10", null, Palette.surfaceSunken, "Shut down / flat")
+    "Bored" -> Choice(v, "\uD83E\uDD71", null, Palette.surfaceSunken, "Bored")
+    "Happy / excited" -> Choice(v, "\uD83D\uDE04", null, Palette.successSoft, "Feeling good")
     else -> Choice(v, "\uD83D\uDE36")
 }
 private val FEELING_GROUP_ORDER = listOf("On edge", "Shut down / flat", "Bored", "Feeling good", "Wound up")
@@ -5228,8 +5080,8 @@ private fun rowCard(tint: Int, selected: Boolean): LinearLayout {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         val px = (16 * dp).toInt(); val py = (15 * dp).toInt(); setPadding(px, py, px, py)
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 14 * dp; setColor(tint)
-            if (selected) setStroke((2 * dp).toInt(), 0xFF2E7D32.toInt())
+            cornerRadius = Radius.control * dp; setColor(tint)
+            if (selected) setStroke((2 * dp).toInt(), Palette.successText)
         }
         isClickable = true; isFocusable = true
         layoutParams = LinearLayout.LayoutParams(
@@ -5244,7 +5096,7 @@ private fun emojiView(icon: String?): View? {
         text = icon; textSize = 21f; gravity = Gravity.CENTER
         background = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(0xFFFFFFFF.toInt())
+            setColor(Palette.surface)
         }
         val s = (40 * dp).toInt()
         layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
@@ -5256,10 +5108,10 @@ private fun textCol(label: String, sub: String?): LinearLayout {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         addView(TextView(this@MainActivity).apply {
-            text = label; textSize = 17f; setTextColor(0xFF1A1A1A.toInt())
+            text = label; textSize = 17f; setTextColor(Palette.label)
         })
         if (!sub.isNullOrEmpty()) addView(TextView(this@MainActivity).apply {
-            text = sub; textSize = 13f; setTextColor(0xFF80868B.toInt()); setPadding(0, (3 * dp).toInt(), 0, 0)
+            text = sub; textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (3 * dp).toInt(), 0, 0)
         })
     }
 }
@@ -5268,7 +5120,7 @@ private fun checkRow(choice: Choice, checked: Boolean, onToggle: () -> Unit): Vi
     val card = rowCard(choice.tint, checked)
     card.addView(TextView(this).apply {
         text = if (checked) "\u2611" else "\u2610"; textSize = 22f
-        setTextColor(if (checked) 0xFF2E7D32.toInt() else 0xFF9AA0A6.toInt())
+        setTextColor(if (checked) Palette.successText else Palette.labelTertiary)
         setPadding(0, 0, (12 * dp).toInt(), 0)
     })
     emojiView(choice.icon)?.let { card.addView(it) }
@@ -5289,10 +5141,10 @@ private fun addOwnRow(onClick: () -> Unit): View = optionRow(Choice(getString(R.
 private fun bigContinue(label: String, onClick: () -> Unit): Button {
     val dp = resources.displayMetrics.density
     return Button(this).apply {
-        text = label; setAllCaps(false); setTextColor(0xFFFFFFFF.toInt())
+        text = label; setAllCaps(false); setTextColor(Palette.onFill)
         setTypeface(typeface, Typeface.BOLD); textSize = 16f
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 14 * dp; setColor(0xFFB7C2BC.toInt())
+            cornerRadius = Radius.control * dp; setColor(Palette.divider)
         }
         val p = (16 * dp).toInt(); setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(
@@ -5305,7 +5157,7 @@ private fun bigContinue(label: String, onClick: () -> Unit): Button {
 private fun tuneContinue(btn: Button, active: Boolean) {
     btn.isEnabled = active
     (btn.background as? android.graphics.drawable.GradientDrawable)?.setColor(
-        if (active) 0xFF2E7D32.toInt() else 0xFFB7C2BC.toInt())
+        if (active) Palette.successText else Palette.divider)
     btn.textSize = if (active) 18f else 16f
     btn.animate().scaleX(if (active) 1.03f else 1f).scaleY(if (active) 1.03f else 1f).setDuration(140).start()
 }
@@ -5314,7 +5166,7 @@ private fun tuneContinue(btn: Button, active: Boolean) {
 private fun continueLink(label: String, onClick: () -> Unit): Button {
     val dp = resources.displayMetrics.density
     return Button(this).apply {
-        text = label; setAllCaps(false); setTextColor(0xFF48606A.toInt()); textSize = 15f
+        text = label; setAllCaps(false); setTextColor(Palette.tintDeep); textSize = 15f
         background = null; isEnabled = false; alpha = 0.4f
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -5338,10 +5190,10 @@ private fun captionedButton(label: String, caption: String, color: Int, onClick:
     }
     return Button(this).apply {
         text = sp; setAllCaps(false); gravity = Gravity.CENTER
-        setTextColor(0xFFFFFFFF.toInt()); setTypeface(typeface, Typeface.BOLD)
+        setTextColor(Palette.onFill); setTypeface(typeface, Typeface.BOLD)
         setLineSpacing((2 * dp), 1f)
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 12 * dp; setColor(color)
+            cornerRadius = Radius.control * dp; setColor(color)
         }
         val px = (16 * dp).toInt(); setPadding(px, (16 * dp).toInt(), px, (16 * dp).toInt())
         layoutParams = LinearLayout.LayoutParams(
@@ -5369,7 +5221,7 @@ private fun boldWordTitle(full: String, word: String): TextView {
 // Returns the chosen Opts.URGE_LEVELS string, so callers are unchanged.
 private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (String) -> Unit) {
     val dp = resources.displayMetrics.density
-    val pad = (16 * dp).toInt()
+    val pad = (Space.page * dp).toInt()
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         layoutParams = ViewGroup.LayoutParams(
@@ -5388,8 +5240,8 @@ private fun urgeScaleScreen(title: String, onBack: (() -> Unit)?, onPick: (Strin
 text = getString(R.string.urge_high); textSize = 12f; gravity = Gravity.CENTER
         setTextColor(0x33000000); setPadding(0, 0, 0, (6 * dp).toInt())
     })
-    val red = 0xFFC0392B.toInt()
-    val blue = 0xFF3E78C9.toInt()
+    val red = Palette.danger
+    val blue = Palette.series[1]
     val ordered = Opts.URGE_LEVELS.reversed()   // Overwhelming (top) -> Barely there (bottom)
     ordered.forEachIndexed { i, level ->
         val f = if (ordered.size > 1) i.toFloat() / (ordered.size - 1) else 0f
@@ -5412,7 +5264,7 @@ private fun urgeCard(level: String, example: String, color: Int, onPick: () -> U
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
         background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 14 * dp; setColor(color)
+            cornerRadius = Radius.control * dp; setColor(color)
         }
         val px = (16 * dp).toInt(); val py = (13 * dp).toInt(); setPadding(px, py, px, py)
         layoutParams = LinearLayout.LayoutParams(
@@ -5423,7 +5275,7 @@ private fun urgeCard(level: String, example: String, color: Int, onPick: () -> U
     }
     row.addView(TextView(this).apply {
         text = level; textSize = 19f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(0xFFFFFFFF.toInt())
+        setTextColor(Palette.onFill)
     })
     if (example.isNotEmpty()) row.addView(TextView(this).apply {
         text = example; textSize = 13f; setTextColor(0xCCFFFFFF.toInt())
@@ -5479,6 +5331,57 @@ private fun startWeekStrict() {
     // which is the extension's job. LOCK is the one-time uninstall-lock offer.
     private enum class Step { MONITORING, OVERLAY, FIREFOX, EXTENSION, LOCK, READY }
 
+    /**
+     * The steps the "Step N of M" counter covers. LOCK is deliberately absent: it is an OFFER,
+     * not a requirement, and dev builds skip it entirely (AppConfig.DEV_MODE) - which is what
+     * made the flow announce "4 of 5" and then simply stop.
+     */
+    private val GATE_STEPS = listOf(Step.MONITORING, Step.OVERLAY, Step.FIREFOX, Step.EXTENSION)
+
+    /**
+     * The steps that were outstanding when this run of the gate started, held for the run.
+     *
+     * Numbering against the fixed list of four would show gaps ("1, 2, 4" when Firefox is
+     * already installed); recomputing what's left on every screen would renumber under the
+     * user ("2 of 3", then "1 of 2" once they finish one). Planning once does neither.
+     *
+     * PERSISTED, not just remembered: every step sends the user out to another app (Settings,
+     * the Play Store, Firefox) and enabling the accessibility service restarts us outright, so
+     * an in-memory plan is lost precisely when it is being used - which reads as the counter
+     * renumbering itself mid-flow. Cleared when the gate is finished or abandoned.
+     */
+    private fun gatePlan(): List<Step>? =
+        setupPrefs().getString("gate_plan", null)
+            ?.split(',')
+            ?.mapNotNull { n -> runCatching { Step.valueOf(n) }.getOrNull() }
+            ?.takeIf { it.isNotEmpty() }
+
+    private fun saveGatePlan(plan: List<Step>) =
+        setupPrefs().edit().putString("gate_plan", plan.joinToString(",") { it.name }).apply()
+
+    /** Finished or walked away from: the next run gets a plan built from fresh facts. */
+    private fun clearGatePlan() = setupPrefs().edit().remove("gate_plan").apply()
+
+    /** "Step 2 of 3\n<name>" for the screen being shown, planning the run if needed. */
+    private fun stepTitle(step: Step, name: String): String {
+        // Rebuild when there is no plan, or when reality moved outside it (they uninstalled
+        // Firefox halfway through, say) - a stale plan must never mis-number a real step.
+        var plan = gatePlan()
+        if (plan == null || step !in plan) {
+            plan = GATE_STEPS.filter { it == step || !stepSatisfied(it) }
+            saveGatePlan(plan)
+        }
+        return getString(R.string.step_counter, plan.indexOf(step) + 1, plan.size) + "\n" + name
+    }
+
+    private fun stepSatisfied(step: Step): Boolean = when (step) {
+        Step.MONITORING -> isAccessibilityEnabled()
+        Step.OVERLAY    -> Settings.canDrawOverlays(this)
+        Step.FIREFOX    -> BrowserSetup.firefoxInstalled(this)
+        Step.EXTENSION  -> BrowserSetup.extensionConfirmed(this)
+        else            -> true
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Installs that predate the Off mode never stored a choice but were forced through
@@ -5515,12 +5418,13 @@ private fun startWeekStrict() {
         when {
             // A mode change waiting on the permissions: back CANCELS it. Nothing to undo -
             // the mode was never committed - so this just drops it and carries on.
-            pendingMode != null -> { pendingMode = null; inPermissionFlow = false; updateScreen() }
+            pendingMode != null -> { pendingMode = null; inPermissionFlow = false; clearGatePlan(); updateScreen() }
             // The gate is MANDATORY: the mode is above Off and a permission is missing or
             // has been revoked. Back cannot be the way to keep a mode nothing enforces, so
             // it falls back to Off. (If strict is LOCKED, setMode refuses and the gate stays
             // put - which is exactly what a lock is for.)
             atMandatoryGate() -> {
+                clearGatePlan()
                 if (Mode.setMode(this, Mode.OFF))
                     Toast.makeText(this, getString(R.string.mode_reverted_toast), Toast.LENGTH_LONG).show()
                 updateScreen()
@@ -5528,7 +5432,6 @@ private fun startWeekStrict() {
             // Backing out of a VOLUNTARY permission screen is the same as "Not now" -
             // otherwise the flow flag stays armed and the screen reappears on resume.
             inPermissionFlow -> { inPermissionFlow = false; updateScreen() }
-            inRelapseFlow -> relapseBack()
             inTemptationFlow -> temptationBack()
             inLoosenFlow -> loosenBack()
             inAppSiteFlow -> appSiteBack()
@@ -5613,11 +5516,11 @@ private fun startWeekStrict() {
         val dp = resources.displayMetrics.density
         return TextView(this).apply {
             text = getString(R.string.home_banner_blocking_off)
-            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
             setLineSpacing(0f, 1.15f)
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 12 * dp; setColor(0xFFFFF8EC.toInt())
-                setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+                cornerRadius = Radius.control * dp; setColor(Palette.warningSoft)
+                setStroke((1.5f * dp).toInt(), Palette.warning)
             }
             val p = (12 * dp).toInt(); setPadding(p, p, p, p)
             isClickable = true; isFocusable = true
@@ -5636,12 +5539,12 @@ private fun startWeekStrict() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 18 * dp; setColor(0xFFFFF8EC.toInt()); setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+                cornerRadius = Radius.card * dp; setColor(Palette.warningSoft); setStroke((1.5f * dp).toInt(), Palette.warning)
             }
             val p = (18 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, p)
         }
         card.addView(TextView(this).apply {
-            text = "✕"; textSize = 18f; setTextColor(0xFF8A6D3B.toInt())
+            text = "✕"; textSize = 18f; setTextColor(Palette.warningText)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { gravity = Gravity.END }
@@ -5651,13 +5554,13 @@ private fun startWeekStrict() {
         })
         card.addView(TextView(this).apply {
             text = getString(R.string.perm_ready_title); textSize = 17f
-            setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
         })
         card.addView(TextView(this).apply {
             text = getString(R.string.perm_ready_body)
-            textSize = 13f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
+            textSize = 13f; setTextColor(Palette.warningText); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
         })
-        card.addView(bigChoice(getString(R.string.common_continue), 0xFF2E7D32.toInt()) {
+        card.addView(bigChoice(getString(R.string.common_continue), Palette.successText) {
             dialog.dismiss()
             inPermissionFlow = true
             updateScreen()
@@ -5760,10 +5663,10 @@ private fun startWeekStrict() {
         // "Not now" only exists while the flow is voluntary - above Off there's no way past.
         val voluntary = Mode.isOff(this)
         val notNow: (() -> Unit)? =
-            if (voluntary) { { inPermissionFlow = false; pendingMode = null; updateScreen() } } else null
+            if (voluntary) { { inPermissionFlow = false; pendingMode = null; clearGatePlan(); updateScreen() } } else null
         when (step) {
             Step.MONITORING -> showPrereq(
-                getString(R.string.step_monitoring_title),
+                stepTitle(Step.MONITORING, getString(R.string.step_monitoring_title)),
                 getString(R.string.step_monitoring_body),
                 getString(R.string.step_monitoring_button),
                 { openAccessibilitySettings() },
@@ -5771,7 +5674,7 @@ private fun startWeekStrict() {
                 notNow,
             )
             Step.OVERLAY -> showPrereq(
-                getString(R.string.step_overlay_title),
+                stepTitle(Step.OVERLAY, getString(R.string.step_overlay_title)),
                 getString(R.string.step_overlay_body),
                 getString(R.string.step_overlay_button),
                 { requestOverlayPermission() },
@@ -5779,26 +5682,40 @@ private fun startWeekStrict() {
                 notNow,
             )
             Step.FIREFOX -> showPrereq(
-                getString(R.string.step_firefox_title),
+                stepTitle(Step.FIREFOX, getString(R.string.step_firefox_title)),
                 getString(R.string.step_firefox_body),
                 getString(R.string.step_firefox_button),
                 { openFirefoxInStore() },
                 if (voluntary) getString(R.string.common_not_now) else null,
                 notNow,
             )
-            Step.EXTENSION -> showPrereq(
-                getString(R.string.step_extension_title),
-                getString(R.string.step_extension_body, BrowserSetup.EXTENSION_URL),
-                getString(R.string.step_extension_button),
-                { openExtensionPage() },
-                // We cannot see inside Firefox, so the step closes on their say-so.
-                getString(R.string.step_extension_done),
-                { BrowserSetup.confirmExtension(this); updateScreen() },
-                if (voluntary) getString(R.string.common_not_now) else null,
-                notNow,
-            )
+            Step.EXTENSION -> {
+                // We cannot see inside Firefox, so this step closes on the user's say-so -
+                // which makes WHERE that button sits matter. Before they have been to the
+                // page, opening it is the real action. Once they have been (and Firefox may
+                // well have killed us in the meantime, hence the persisted flag), confirming
+                // is, so the two swap places and "I've added it" becomes the primary button.
+                val been = BrowserSetup.extensionPageVisited(this)
+                val confirm = { BrowserSetup.setExtensionConfirmed(this, true); updateScreen() }
+                showPrereq(
+                    stepTitle(Step.EXTENSION, getString(R.string.step_extension_title)),
+                    getString(R.string.step_extension_body, BrowserSetup.EXTENSION_URL),
+                    if (been) getString(R.string.step_extension_done)
+                    else getString(R.string.step_extension_button),
+                    if (been) confirm else ({ openExtensionPage() }),
+                    if (been) getString(R.string.step_extension_reopen)
+                    else getString(R.string.step_extension_done),
+                    if (been) ({ openExtensionPage() }) else confirm,
+                    if (voluntary) getString(R.string.common_not_now) else null,
+                    notNow,
+                    // Before the swap the confirm is still the one that ends the flow, so it
+                    // must not read as quietly as the "Not now" beside it.
+                    emphasiseSecondary = !been,
+                )
+            }
             Step.LOCK -> showLockPrompt { markLockPromptSeen(); updateScreen() }
-            Step.READY -> setupHomeScreen()
+            // Through the gate: the next run gets a fresh plan.
+            Step.READY -> { clearGatePlan(); setupHomeScreen() }
         }
     }
 
@@ -5810,12 +5727,12 @@ private fun startWeekStrict() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 18 * dp; setColor(0xFFFFF8EC.toInt()); setStroke((1.5f * dp).toInt(), 0xFFE0A63C.toInt())
+                cornerRadius = Radius.card * dp; setColor(Palette.warningSoft); setStroke((1.5f * dp).toInt(), Palette.warning)
             }
             val p = (18 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, p)
         }
         card.addView(TextView(this).apply {
-            text = "\u2715"; textSize = 18f; setTextColor(0xFF8A6D3B.toInt())
+            text = "\u2715"; textSize = 18f; setTextColor(Palette.warningText)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { gravity = Gravity.END }
@@ -5825,13 +5742,13 @@ private fun startWeekStrict() {
         })
         card.addView(TextView(this).apply {
             text = getString(R.string.unprotected_title); textSize = 17f
-            setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF7A4F00.toInt())
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
         })
         card.addView(TextView(this).apply {
             text = getString(R.string.unprotected_body)
-            textSize = 13f; setTextColor(0xFF8A6D3B.toInt()); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
+            textSize = 13f; setTextColor(Palette.warningText); setPadding(0, (6 * dp).toInt(), 0, (12 * dp).toInt())
         })
-        card.addView(bigChoice(getString(R.string.unprotected_enable), 0xFF2E7D32.toInt()) {
+        card.addView(bigChoice(getString(R.string.unprotected_enable), Palette.successText) {
             dialog.dismiss()
             UninstallGuard.setEnabled(this, true)
             startActivity(UninstallGuard.activationIntent(this))
@@ -5876,6 +5793,7 @@ private fun startWeekStrict() {
         onSecondary: (() -> Unit)? = null,
         tertiaryText: String? = null,
         onTertiary: (() -> Unit)? = null,
+        emphasiseSecondary: Boolean = false,
     ) {
         entriesJob?.cancel()
         onReportScreen = false
@@ -5892,6 +5810,8 @@ private fun startWeekStrict() {
             } else {
                 visibility = View.VISIBLE
                 text = secondaryText
+                setTypeface(typeface, if (emphasiseSecondary) Typeface.BOLD else Typeface.NORMAL)
+                setTextColor(if (emphasiseSecondary) Palette.successText else currentTextColor)
                 setOnClickListener { onSecondary?.invoke() }
             }
         }
@@ -5926,6 +5846,7 @@ private fun startWeekStrict() {
      * a link rather than dropping the user on a dead button.
      */
     private fun openExtensionPage() {
+        BrowserSetup.markExtensionPageVisited(this)
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(BrowserSetup.EXTENSION_URL))
         BrowserSetup.firefoxPackage(this)?.let { intent.setPackage(it) }
         try {
@@ -5942,18 +5863,20 @@ private fun startWeekStrict() {
     private fun setupMainScreen() {
         onReportScreen = false; onHomeScreen = false; onTemptationsTab = false
         onDevScreen = true
-        inRelapseFlow = false; inTemptationFlow = false; inLoosenFlow = false
+        inTemptationFlow = false; inLoosenFlow = false
         inAppSiteFlow = false; inSubPage = false
         stopRideTimer(); stopLoosenTimer()
         entriesJob?.cancel()
 
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         content.addView(titleText("Developer tools"))
         content.addView(TextView(this).apply {
             text = "Diagnostics and block-rule management. Not shown to end users when dev mode is off."
-            textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (10 * dp).toInt())
+            textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (10 * dp).toInt())
         })
+        // The log is the thing you actually come here for while tuning, so it sits first.
+        content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         content.addView(homeCard(getString(R.string.settings_language), getString(R.string.settings_language_subtitle)) { showLanguagePicker() })
         content.addView(homeCard(getString(R.string.settings_currency), getString(R.string.settings_currency_subtitle)) { showCurrencyPicker() })
@@ -5963,7 +5886,6 @@ private fun startWeekStrict() {
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
         content.addView(homeCard("Manage block rules", "Add or remove blocked sites and apps.") { showManageRules() })
         content.addView(homeCard("Whitelisted apps", "The always-allowed apps - block one with a tap.") { showBlockApps() })
-        content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
         // The supervised loosen flow is no longer reachable from the adult-content page (see
         // BypassWatch). It lives here so it can still be tested without staging a fake
         // uninstall attempt.
@@ -5994,7 +5916,7 @@ private fun startWeekStrict() {
 
     // In-app flow to get the user to turn grayscale on (the app can't do it itself).
     private fun showGreyscaleSetup() {
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText("Grayscale in strict mode"))
         root.addView(TextView(this).apply {
@@ -6002,7 +5924,7 @@ private fun startWeekStrict() {
                 "screen grayscale strips that out - simple, and surprisingly powerful.\n\n" +
                 "Android won't let an app switch grayscale on for you (it's a protected system " +
                 "setting), so you turn it on once yourself. In strict mode, keep it on."
-            textSize = 14f; setTextColor(0xFF52606A.toInt()); setPadding(0, 0, 0, (14 * dp).toInt())
+            textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, 0, 0, (14 * dp).toInt())
         })
         val status = TextView(this).apply {
             textSize = 17f; setTypeface(typeface, Typeface.BOLD); setPadding(0, 0, 0, (14 * dp).toInt())
@@ -6010,23 +5932,23 @@ private fun startWeekStrict() {
         root.addView(status)
         val on = Greyscale.isOn(this)
         status.text = if (on) "Grayscale is ON \u2713" else "Grayscale is OFF"
-        status.setTextColor(if (on) 0xFF2E7D32.toInt() else 0xFFB00020.toInt())
+        status.setTextColor(if (on) Palette.successText else Palette.dangerText)
 
-        root.addView(bigChoice("Open display settings", 0xFF2E9E8F.toInt()) { Greyscale.openGrayscaleSetting(this) })
+        root.addView(bigChoice("Open display settings", Palette.tint) { Greyscale.openGrayscaleSetting(this) })
         root.addView(TextView(this).apply {
             text = "How to turn it on:\n" +
                 "1. Open Settings \u2192 Accessibility.\n" +
                 "2. Go to Vision enhancements (called Colour and motion on some phones).\n" +
                 "3. Tap Colour correction and toggle the slider On.\n" +
                 "4. Scroll to the bottom and choose Greyscale."
-            textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (12 * dp).toInt(), 0, (16 * dp).toInt())
+            textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (12 * dp).toInt(), 0, (16 * dp).toInt())
         })
 
         // Optional lock: block the Colour-correction page so greyscale can't be turned off.
         val lockRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 16 * dp; setColor(0xFFFFFFFF.toInt()); setStroke((1.5f * dp).toInt(), 0xFFD7DCE0.toInt())
+                cornerRadius = Radius.card * dp; setColor(Palette.surface); setStroke((1.5f * dp).toInt(), Palette.hairline)
             }
             val p = (14 * dp).toInt(); setPadding(p, p, p, p)
         }
@@ -6034,11 +5956,11 @@ private fun startWeekStrict() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             addView(TextView(this@MainActivity).apply {
-                text = "Lock the Colour correction page"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+                text = "Lock the Colour correction page"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
             })
             addView(TextView(this@MainActivity).apply {
                 text = "Once greyscale is on, block that Settings page so it can't be turned back off. Turn this off here first if you need to change it."
-                textSize = 12f; setTextColor(0xFF7B848C.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0)
+                textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0)
             })
         })
         lockRow.addView(android.widget.Switch(this).apply {
@@ -6051,27 +5973,27 @@ private fun startWeekStrict() {
 
     // Live sensor readout for tuning the lying-down + light heuristics.
     private fun showSensorDebug() {
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText("Sensor debug"))
         root.addView(TextView(this).apply {
             text = "Live readings. Tilt/lying-down come from the accelerometer; light from the ambient light sensor."
-            textSize = 13f; setTextColor(0xFF7B848C.toInt()); setPadding(0, 0, 0, (12 * dp).toInt())
+            textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (12 * dp).toInt())
         })
 
-        fun bigLine() = TextView(this).apply { textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0) }
-        fun subLine() = TextView(this).apply { textSize = 14f; setTextColor(0xFF52606A.toInt()) }
+        fun bigLine() = TextView(this).apply { textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label); setPadding(0, (6 * dp).toInt(), 0, 0) }
+        fun subLine() = TextView(this).apply { textSize = 14f; setTextColor(Palette.labelSecondary) }
 
         fun badge() = TextView(this).apply {
             textSize = 14f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-            setTextColor(0xFFFFFFFF.toInt())
+            setTextColor(Palette.onFill)
             val p = (8 * dp).toInt(); setPadding(p * 2, p, p * 2, p)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (5 * dp).toInt(); bottomMargin = (5 * dp).toInt() }
         }
         root.addView(sectionTitle("Posture"))
         val lyingBadge = TextView(this).apply {
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-            setTextColor(0xFFFFFFFF.toInt())
+            setTextColor(Palette.onFill)
             val p = (10 * dp).toInt(); setPadding(p * 2, p, p * 2, p)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * dp).toInt(); bottomMargin = (6 * dp).toInt() }
         }
@@ -6085,11 +6007,11 @@ private fun startWeekStrict() {
         val luxLine = bigLine(); val levelLine = subLine()
         root.addView(luxLine); root.addView(levelLine)
 
-        val note = TextView(this).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (16 * dp).toInt(), 0, 0) }
+        val note = TextView(this).apply { textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (16 * dp).toInt(), 0, 0) }
         root.addView(note)
 
         root.addView(sectionTitle("Greyscale"))
-        val greyLine = subLine(); val greyHint = TextView(this).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()); setPadding(0, (2 * dp).toInt(), 0, 0) }
+        val greyLine = subLine(); val greyHint = TextView(this).apply { textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0) }
         root.addView(greyLine); root.addView(greyHint)
 
         sensorMonitor?.stop()
@@ -6100,12 +6022,12 @@ private fun startWeekStrict() {
             val lying = monitor.lyingDown
             lyingBadge.text = if (lying) "  Lying down  " else "  Upright  "
             lyingBadge.background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 20 * dp; setColor(if (lying) 0xFF2E9E44.toInt() else 0xFFB9C0C6.toInt())
+                cornerRadius = Radius.card * dp; setColor(if (lying) Palette.success else Palette.labelQuaternary)
             }
             fun paint(tv: TextView, on: Boolean, label: String) {
                 tv.text = if (on) "  $label  \u2713  " else "  $label  "
                 tv.background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = 18 * dp; setColor(if (on) 0xFF2E9E44.toInt() else 0xFFCBD1D6.toInt())
+                    cornerRadius = Radius.card * dp; setColor(if (on) Palette.success else Palette.divider)
                 }
             }
             paint(leftBadge, monitor.onLeftSide, "Lying on left side")
@@ -6180,11 +6102,11 @@ private fun startWeekStrict() {
         // No rooms yet: name the first one before anything else.
         if (RoomBeacons.rooms(this).isEmpty()) { showAddRoomChooser(); return }
 
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         fun warnLine(msg: String, onClick: () -> Unit) = TextView(this).apply {
             text = msg; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFFB00020.toInt()); setPadding(0, 0, 0, (8 * dp).toInt())
+            setTextColor(Palette.dangerText); setPadding(0, 0, 0, (8 * dp).toInt())
             visibility = View.GONE; isClickable = true; isFocusable = true
             setOnClickListener { onClick() }
         }
@@ -6211,22 +6133,22 @@ private fun startWeekStrict() {
         class RoomCard(val room: String) {
             val pill = TextView(this@MainActivity).apply {
                 textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-                setTextColor(0xFFFFFFFF.toInt())
+                setTextColor(Palette.onFill)
                 val p = (8 * dp).toInt(); setPadding(p * 2, p / 2, p * 2, p / 2)
             }
             val big = TextView(this@MainActivity).apply {
-                textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+                textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(Palette.label)
             }
             val note = TextView(this@MainActivity).apply {
                 text = "⚠ maybe, probs am - treating as true"
-                textSize = 12f; setTextColor(0xFFB07800.toInt()); visibility = View.GONE
+                textSize = 12f; setTextColor(Palette.warningText); visibility = View.GONE
             }
-            val sub = TextView(this@MainActivity).apply { textSize = 12f; setTextColor(0xFF9AA0A6.toInt()) }
+            val sub = TextView(this@MainActivity).apply { textSize = 12f; setTextColor(Palette.labelTertiary) }
             val metersBox = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
             val meterRows = mutableListOf<Pair<TextView, SignalMeterView>>()
             val checksBox = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
             val checkRows = mutableListOf<Triple<LinearLayout, TextView, TextView>>()
-            val summary = TextView(this@MainActivity).apply { textSize = 13f; setTextColor(0xFF52606A.toInt()); setPadding(0, (6 * dp).toInt(), 0, 0) }
+            val summary = TextView(this@MainActivity).apply { textSize = 13f; setTextColor(Palette.labelSecondary); setPadding(0, (6 * dp).toInt(), 0, 0) }
             val setupBtn = Button(this@MainActivity).apply { setAllCaps(false) }
         }
         val cards = RoomBeacons.rooms(this).map { RoomCard(it) }
@@ -6255,8 +6177,8 @@ private fun startWeekStrict() {
                 label.text = "${m.label}:  ${m.current?.let { "$it dBm" } ?: "not heard"}" +
                     (avg6?.let { "  ·  6s avg $it" } ?: "")
                 label.setTextColor(when (m.state) {
-                    2 -> 0xFF1B5E20.toInt(); 1 -> 0xFF2E7D32.toInt()
-                    -1 -> 0xFFC0392B.toInt(); else -> 0xFF9A7B00.toInt()
+                    2 -> Palette.successText; 1 -> Palette.successText
+                    -1 -> Palette.danger; else -> Palette.warningText
                 })
                 meter.update(m.current, m.zone, m.openTop)
             }
@@ -6267,10 +6189,10 @@ private fun startWeekStrict() {
                 card.checksBox.removeAllViews(); card.checkRows.clear()
                 repeat(checks.size) {
                     val label = TextView(this).apply {
-                        textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+                        textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.onFill)
                         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                     }
-                    val value = TextView(this).apply { textSize = 11f; setTextColor(0xFFFFFFFF.toInt()) }
+                    val value = TextView(this).apply { textSize = 11f; setTextColor(Palette.onFill) }
                     val bar = LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                         val p = (7 * dp).toInt(); setPadding((10 * dp).toInt(), p, (10 * dp).toInt(), p)
@@ -6288,8 +6210,8 @@ private fun startWeekStrict() {
                 label.text = c.label
                 value.text = c.value
                 bar.background = GradientDrawable().apply {
-                    cornerRadius = 10 * dp
-                    setColor(when (c.state) { 1 -> 0xFF2E9E44.toInt(); -1 -> 0xFFC0392B.toInt(); else -> 0xFFE0A800.toInt() })
+                    cornerRadius = Radius.chip * dp
+                    setColor(when (c.state) { 1 -> Palette.success; -1 -> Palette.danger; else -> Palette.warning })
                 }
             }
         }
@@ -6298,7 +6220,7 @@ private fun startWeekStrict() {
             val box = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 background = GradientDrawable().apply {
-                    cornerRadius = 16 * dp; setColor(0xFFFFFFFF.toInt()); setStroke((1.5f * dp).toInt(), 0xFFD7DCE0.toInt())
+                    cornerRadius = Radius.card * dp; setColor(Palette.surface); setStroke((1.5f * dp).toInt(), Palette.hairline)
                 }
                 val p = (14 * dp).toInt(); setPadding(p, p, p, p)
                 layoutParams = LinearLayout.LayoutParams(
@@ -6307,12 +6229,12 @@ private fun startWeekStrict() {
             }
             val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             header.addView(TextView(this).apply {
-                text = roomTitle(card.room); textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+                text = roomTitle(card.room); textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             header.addView(card.pill)
             header.addView(TextView(this).apply {
-                text = "✕"; textSize = 18f; setTextColor(0xFF9AA0A6.toInt())
+                text = "✕"; textSize = 18f; setTextColor(Palette.labelTertiary)
                 val p = (8 * dp).toInt(); setPadding(p, (2 * dp).toInt(), (2 * dp).toInt(), (2 * dp).toInt())
                 isClickable = true; isFocusable = true
                 setOnClickListener {
@@ -6362,10 +6284,10 @@ private fun startWeekStrict() {
                 // The upgrade path, made unmissable.
                 box.addView(TextView(this).apply {
                     text = "＋  Add a second sensor (recommended - much more accurate)"
-                    textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF2E9E8F.toInt())
+                    textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.tint)
                     gravity = Gravity.CENTER
                     background = GradientDrawable().apply {
-                        cornerRadius = 12 * dp; setStroke((1.5f * dp).toInt(), 0xFF2E9E8F.toInt())
+                        cornerRadius = Radius.control * dp; setStroke((1.5f * dp).toInt(), Palette.tint)
                     }
                     val p = (10 * dp).toInt(); setPadding(p, p, p, p)
                     layoutParams = LinearLayout.LayoutParams(
@@ -6379,14 +6301,14 @@ private fun startWeekStrict() {
                     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                     setPadding(0, (4 * dp).toInt(), 0, 0)
                     addView(TextView(this@MainActivity).apply {
-                        text = "Sensors in this room"; textSize = 13f; setTextColor(0xFF52606A.toInt())
+                        text = "Sensors in this room"; textSize = 13f; setTextColor(Palette.labelSecondary)
                         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                     })
                     fun stepBtn(label: String, onClick: () -> Unit) = addView(TextView(this@MainActivity).apply {
                         text = label; textSize = 20f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-                        setTextColor(0xFF2E9E8F.toInt())
+                        setTextColor(Palette.tint)
                         background = GradientDrawable().apply {
-                            cornerRadius = 10 * dp; setStroke((1.5f * dp).toInt(), 0xFF2E9E8F.toInt())
+                            cornerRadius = Radius.chip * dp; setStroke((1.5f * dp).toInt(), Palette.tint)
                         }
                         layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (36 * dp).toInt())
                         isClickable = true; isFocusable = true; setOnClickListener { onClick() }
@@ -6394,7 +6316,7 @@ private fun startWeekStrict() {
                     stepBtn("−") { changeCount(count - 1) }
                     addView(TextView(this@MainActivity).apply {
                         text = "$count"; textSize = 18f; setTypeface(typeface, Typeface.BOLD)
-                        setTextColor(0xFF1F2933.toInt()); gravity = Gravity.CENTER
+                        setTextColor(Palette.label); gravity = Gravity.CENTER
                         layoutParams = LinearLayout.LayoutParams((34 * dp).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
                     })
                     stepBtn("+") { if (count < RoomBeacons.MAX_SENSORS) changeCount(count + 1) }
@@ -6445,7 +6367,7 @@ private fun startWeekStrict() {
             setPadding(0, (8 * dp).toInt(), 0, (4 * dp).toInt())
             addView(TextView(this@MainActivity).apply {
                 text = "Block non-whitelisted apps while in any of these rooms (debug - any mode)"
-                textSize = 13f; setTextColor(0xFF52606A.toInt())
+                textSize = 13f; setTextColor(Palette.labelSecondary)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             addView(android.widget.Switch(this@MainActivity).apply {
@@ -6456,7 +6378,7 @@ private fun startWeekStrict() {
 
         // Raw feed of every advertiser - developer diagnostics only, hidden until asked.
         val feed = TextView(this).apply {
-            textSize = 11f; setTextColor(0xFF52606A.toInt()); typeface = Typeface.MONOSPACE
+            textSize = 11f; setTextColor(Palette.labelSecondary); typeface = Typeface.MONOSPACE
             setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt()); visibility = View.GONE
         }
         val feedToggle = Button(this).apply {
@@ -6500,12 +6422,12 @@ private fun startWeekStrict() {
                     RoomPresence.Verdict.OUT -> "  false  "
                 }
                 card.pill.background = GradientDrawable().apply {
-                    cornerRadius = 20 * dp
+                    cornerRadius = Radius.card * dp
                     setColor(when (st.verdict) {
-                        RoomPresence.Verdict.IN, RoomPresence.Verdict.MAYBE_IN_TRUE -> 0xFF2E9E44.toInt()
-                        RoomPresence.Verdict.MAYBE_IN -> 0xFFE0A800.toInt()
-                        RoomPresence.Verdict.MAYBE_OUT -> 0xFF8A6D3B.toInt()
-                        RoomPresence.Verdict.OUT -> 0xFF9AA0A6.toInt()
+                        RoomPresence.Verdict.IN, RoomPresence.Verdict.MAYBE_IN_TRUE -> Palette.success
+                        RoomPresence.Verdict.MAYBE_IN -> Palette.warning
+                        RoomPresence.Verdict.MAYBE_OUT -> Palette.warningText
+                        RoomPresence.Verdict.OUT -> Palette.labelTertiary
                     })
                 }
                 card.note.visibility =
@@ -6555,15 +6477,15 @@ private fun startWeekStrict() {
 
     // Plain-language explanation page. Deliberately basic - simple bullets, no styling.
     private fun showRoomHowItWorks() {
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText("How we determine what room you're in"))
         fun section(t: String) = root.addView(TextView(this).apply {
-            text = t; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+            text = t; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
             setPadding(0, (14 * dp).toInt(), 0, (4 * dp).toInt())
         })
         fun bullets(t: String) = root.addView(TextView(this).apply {
-            text = t; textSize = 14f; setTextColor(0xFF3A434B.toInt())
+            text = t; textSize = 14f; setTextColor(Palette.labelSecondary)
         })
         section("Primary checks")
         bullets(
@@ -6631,7 +6553,7 @@ private fun startWeekStrict() {
     private fun showRoomSetup(room: String) {
         val roomName = room.replaceFirstChar { it.uppercase() }
         val roomsNow = RoomBeacons.rooms(this)
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val scanner = beaconScanner ?: BeaconScanner(this).also { beaconScanner = it }
         val press = pressureMon ?: PressureMonitor(this).also { pressureMon = it }
         press.start()
@@ -6640,12 +6562,12 @@ private fun startWeekStrict() {
         val collected = mutableListOf<RoomBeacons.Sample>()
 
         fun bigBody(t: String) = TextView(this).apply {
-            text = t; textSize = 17f; setTextColor(0xFF3A434B.toInt())
+            text = t; textSize = 17f; setTextColor(Palette.labelSecondary)
             setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt())
         }
         fun bigCountdown() = TextView(this).apply {
             textSize = 64f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
-            setTextColor(0xFF2E7D32.toInt())
+            setTextColor(Palette.successText)
         }
         fun liveLine() = TextView(this).apply {
             textSize = 16f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); gravity = Gravity.CENTER
@@ -6658,11 +6580,11 @@ private fun startWeekStrict() {
             // The room, unmissable, on every wizard page.
             root.addView(TextView(this).apply {
                 text = roomName.uppercase(); textSize = 22f; setTypeface(typeface, Typeface.BOLD)
-                setTextColor(0xFF2E9E8F.toInt()); letterSpacing = 0.08f
+                setTextColor(Palette.tint); letterSpacing = 0.08f
             })
             root.addView(stepText(step.uppercase()))
             root.addView(TextView(this).apply {
-                text = title; textSize = 26f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF1F2933.toInt())
+                text = title; textSize = 26f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
             })
             views.forEach { root.addView(it) }
             val scroll = ScrollView(this).apply {
@@ -6697,7 +6619,7 @@ private fun startWeekStrict() {
                     label.padEnd(13) + (v?.let { "$it dBm" } ?: "not heard")
                 }
             val ownHeard = ownMac()?.let { scanner.kalmanRssi(it) } != null
-            live.setTextColor(if (ownHeard) 0xFF1F2933.toInt() else 0xFFB00020.toInt())
+            live.setTextColor(if (ownHeard) Palette.label else Palette.dangerText)
         }
 
         fun finishPage() {
@@ -6717,7 +6639,7 @@ private fun startWeekStrict() {
             }
             show("Set-up complete · $roomName", "$roomName is ready",
                 bigBody(summary),
-                bigChoice("Finish", 0xFF2E7D32.toInt()) { showRoomBeaconDebug() })
+                bigChoice("Finish", Palette.successText) { showRoomBeaconDebug() })
         }
 
         // ── Phase: free-roam around the house, tagging false readings ─────────────
@@ -6728,7 +6650,7 @@ private fun startWeekStrict() {
             fun tagPage() {
             val indicator = TextView(this).apply { gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, (10 * dp).toInt()) }
             var tagging = false
-            val tagBtn = bigChoice("TAG FALSE READING HERE", 0xFFB00020.toInt()) {}
+            val tagBtn = bigChoice("TAG FALSE READING HERE", Palette.dangerText) {}
             val doneBtn = Button(this).apply { text = "Done tagging false readings"; setAllCaps(false) }
             tagBtn.setOnClickListener {
                 if (tagging) return@setOnClickListener
@@ -6771,18 +6693,18 @@ private fun startWeekStrict() {
                     RoomPresence.Verdict.IN, RoomPresence.Verdict.MAYBE_IN_TRUE -> {
                         indicator.text = "IT THINKS YOU'RE IN THE ${roomName.uppercase()}!\nThat's wrong - press the red button."
                         indicator.textSize = 22f; indicator.setTypeface(indicator.typeface, Typeface.BOLD)
-                        indicator.setTextColor(0xFFB00020.toInt())
+                        indicator.setTextColor(Palette.dangerText)
                     }
                     RoomPresence.Verdict.MAYBE_IN, RoomPresence.Verdict.MAYBE_OUT -> {
                         val which = if (st.verdict == RoomPresence.Verdict.MAYBE_IN) "probs is" else "probs not"
                         indicator.text = "MAYBE ($which)\nBorderline here - press the red button to teach it."
                         indicator.textSize = 18f; indicator.setTypeface(indicator.typeface, Typeface.BOLD)
-                        indicator.setTextColor(0xFFB07800.toInt())
+                        indicator.setTextColor(Palette.warningText)
                     }
                     else -> {
                         indicator.text = "false ✓  (correct)"
                         indicator.textSize = 13f; indicator.setTypeface(null, Typeface.NORMAL)
-                        indicator.setTextColor(0xFF9AA0A6.toInt())
+                        indicator.setTextColor(Palette.labelTertiary)
                     }
                 }
             }
@@ -6796,7 +6718,7 @@ private fun startWeekStrict() {
                         "Once you're outside, confirm below - then walk around the REST of the " +
                         "house and fix any incorrect readings.",
                 ),
-                bigChoice("I've stepped outside the room", 0xFF2E9E8F.toInt()) { tagPage() })
+                bigChoice("I've stepped outside the room", Palette.tint) { tagPage() })
         }
 
         // ── Phase: 15 s walk around the room (outliers get trimmed later) ─────────
@@ -6804,10 +6726,10 @@ private fun startWeekStrict() {
             val mac = ownMac() ?: run { showRoomBeaconDebug(); return }
             val live = liveLine()
             val countdown = bigCountdown()
-            val prog = TextView(this).apply { textSize = 13f; setTextColor(0xFF7B848C.toInt()); gravity = Gravity.CENTER }
+            val prog = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); gravity = Gravity.CENTER }
             var wandering = false
             var got = 0
-            val startBtn = bigChoice("Start - walk around the room", 0xFF2E9E8F.toInt()) {}
+            val startBtn = bigChoice("Start - walk around the room", Palette.tint) {}
             val end = longArrayOf(0)
             startBtn.setOnClickListener {
                 if (wandering) return@setOnClickListener
@@ -6850,7 +6772,7 @@ private fun startWeekStrict() {
             val mac = ownMac() ?: run { showRoomBeaconDebug(); return }
             val live = liveLine()
             val countdown = bigCountdown()
-            val sampleBtn = bigChoice("Sample this spot (hold still 3 s)", 0xFF2E9E8F.toInt()) {}
+            val sampleBtn = bigChoice("Sample this spot (hold still 3 s)", Palette.tint) {}
             var sampling = false
             sampleBtn.setOnClickListener {
                 if (sampling) return@setOnClickListener
@@ -6914,7 +6836,7 @@ private fun startWeekStrict() {
                         "They must never move once calibrated - if you move one later, redo the " +
                         "set-up.\n\nCome back here with your phone once they're all in place.",
                 ),
-                bigChoice("All in place - start calibrating", 0xFF2E9E8F.toInt()) { collected.clear(); goSpot(0) })
+                bigChoice("All in place - start calibrating", Palette.tint) { collected.clear(); goSpot(0) })
         }
 
         // Finds one sensor (hold-against-phone → strongest → confirm), for slot A-D.
@@ -6927,7 +6849,7 @@ private fun startWeekStrict() {
                     "Strongest signal right now:\n\n${candidate.name ?: "unnamed beacon"}\n${candidate.mac}\n" +
                         "${Math.round(candidate.smoothedRssi)} dBm\n\nIs that the sensor in your hand?",
                 ),
-                bigChoice("Yes - this is $targetName sensor $letter", 0xFF2E7D32.toInt()) {
+                bigChoice("Yes - this is $targetName sensor $letter", Palette.successText) {
                     RoomBeacons.setBeaconMacAt(this, target, slot, candidate.mac)
                     scanner.expectedMacs = RoomBeacons.allAssignedMacs(this).toSet()
                     onDone()
@@ -6939,11 +6861,11 @@ private fun startWeekStrict() {
             val letter = RoomBeacons.sensorLetter(slot)
             val countdown = bigCountdown()
             val live = TextView(this).apply {
-                textSize = 15f; setTextColor(0xFF7B848C.toInt()); gravity = Gravity.CENTER
+                textSize = 15f; setTextColor(Palette.labelTertiary); gravity = Gravity.CENTER
                 setPadding(0, (6 * dp).toInt(), 0, 0)
             }
             var finding = false
-            val startBtn = bigChoice("Start the 3-second scan", 0xFF2E9E8F.toInt()) {}
+            val startBtn = bigChoice("Start the 3-second scan", Palette.tint) {}
             startBtn.setOnClickListener {
                 if (finding) return@setOnClickListener
                 if (!scanner.isBluetoothOn) {
@@ -7025,7 +6947,7 @@ private fun startWeekStrict() {
                     "This room is already set up. Keep the same sensor(s) and redo the " +
                         "calibration walk, or start from scratch?",
                 ),
-                bigChoice("Keep sensor(s) - recalibrate", 0xFF2E9E8F.toInt()) { assignSlots(0) },
+                bigChoice("Keep sensor(s) - recalibrate", Palette.tint) { assignSlots(0) },
                 Button(this).apply {
                     text = "Start over - pick the sensors again"; setAllCaps(false)
                     setOnClickListener {
@@ -7045,7 +6967,7 @@ private fun startWeekStrict() {
     // Read-only snapshot of everything the app is currently doing.
     private fun showDevConsole() {
         inSubPage = true
-        val dp = resources.displayMetrics.density; val pad = (16 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText(getString(R.string.dev_console_title)))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -7055,13 +6977,13 @@ private fun startWeekStrict() {
         setContentWithThumb(root) { setupMainScreen() }
 
         fun header(t: String) = list.addView(TextView(this).apply {
-            text = t.uppercase(); textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            text = t.uppercase(); textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
             setPadding((2 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
         })
         fun row(label: String, value: String, on: Boolean? = null) = list.addView(TextView(this).apply {
             val dot = when (on) { true -> "\u25CF  "; false -> "\u25CB  "; null -> "" }
             text = "$dot$label:  $value"; textSize = 14f
-            setTextColor(when (on) { true -> 0xFF2E9E44.toInt(); false -> 0xFF9AA0A6.toInt(); null -> 0xFF3A434B.toInt() })
+            setTextColor(when (on) { true -> Palette.success; false -> Palette.labelTertiary; null -> Palette.labelSecondary })
             setPadding(0, (5 * dp).toInt(), 0, (5 * dp).toInt())
         })
 
@@ -7121,7 +7043,7 @@ private fun startWeekStrict() {
 
     private fun setDot(view: TextView, label: String, on: Boolean) {
         view.text = "${if (on) "\u25CF" else "\u25CB"}  $label - ${if (on) "On" else "Off"}"
-        view.setTextColor(if (on) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
+        view.setTextColor(if (on) Palette.success else Palette.labelTertiary)
     }
 
     /** A self-contained mode dropdown (used on the sexual-urge page). Drives Mode
@@ -7132,9 +7054,9 @@ private fun startWeekStrict() {
         // Looked like inert text before, so nobody realised the mode was theirs to change.
         // An outlined pill reads as a control.
         sp.background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 20 * dp
-            setColor(0xFFFFFFFF.toInt())
-            setStroke((1.5f * dp).toInt(), 0xFF2E9E8F.toInt())
+            cornerRadius = Radius.card * dp
+            setColor(Palette.surface)
+            setStroke((1.5f * dp).toInt(), Palette.tint)
         }
         val px = (14 * dp).toInt(); val py = (6 * dp).toInt()
         sp.setPadding(px, py, px, py)
@@ -7204,13 +7126,13 @@ private fun startWeekStrict() {
             ).apply { topMargin = (24 * dp).toInt() }
         }
         box.addView(TextView(this).apply {
-            text = getString(R.string.sensors_console_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            text = getString(R.string.sensors_console_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
             setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
         })
         if (!RoomBeacons.ownsSensors(this)) {
             box.addView(TextView(this).apply {
                 text = getString(R.string.sensors_none)
-                textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+                textSize = 14f; setTextColor(Palette.labelTertiary)
                 isClickable = true; isFocusable = true
                 setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
                 setOnClickListener { showSensorGate() }
@@ -7223,7 +7145,7 @@ private fun startWeekStrict() {
         if (RoomBeacons.rooms(this).isEmpty()) {
             box.addView(TextView(this).apply {
                 text = getString(R.string.sensors_no_rooms)
-                textSize = 14f; setTextColor(0xFF9AA0A6.toInt())
+                textSize = 14f; setTextColor(Palette.labelTertiary)
                 isClickable = true; isFocusable = true
                 setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
                 setOnClickListener { showRoomBeaconDebug() }
@@ -7234,9 +7156,9 @@ private fun startWeekStrict() {
             val calibrated = RoomBeacons.isCalibrated(this, room)
             val colour: Int; val label: String
             when {
-                !calibrated -> { colour = 0xFF9AA0A6.toInt(); label = getString(R.string.sensors_status_notsetup) }
-                !canReceive -> { colour = 0xFFE0A800.toInt(); label = getString(R.string.sensors_status_nodata) }
-                else -> { colour = 0xFF2E9E44.toInt(); label = getString(R.string.sensors_status_on) }
+                !calibrated -> { colour = Palette.labelTertiary; label = getString(R.string.sensors_status_notsetup) }
+                !canReceive -> { colour = Palette.warning; label = getString(R.string.sensors_status_nodata) }
+                else -> { colour = Palette.success; label = getString(R.string.sensors_status_on) }
             }
             box.addView(TextView(this).apply {
                 text = getString(R.string.sensors_room_row, room.replaceFirstChar { it.uppercase() }, label)
@@ -7252,18 +7174,18 @@ private fun startWeekStrict() {
     // The gate in front of the room-detection set-up: do they actually have beacons yet?
     private fun showSensorGate() {
         inSubPage = true
-        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText(getString(R.string.sensors_gate_title)))
         root.addView(TextView(this).apply {
             text = getString(R.string.sensors_gate_body)
-            textSize = 15f; setTextColor(0xFF52606A.toInt()); setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
+            textSize = 15f; setTextColor(Palette.labelSecondary); setPadding(0, (4 * dp).toInt(), 0, (16 * dp).toInt())
         })
-        root.addView(bigChoice(getString(R.string.sensors_gate_yes), 0xFF7C8B88.toInt()) {
+        root.addView(bigChoice(getString(R.string.sensors_gate_yes), Palette.labelTertiary) {
             RoomBeacons.setOwnsSensors(this, true)
             showRoomBeaconDebug()
         })
-        root.addView(bigChoice(getString(R.string.sensors_gate_no), 0xFF9AA0A6.toInt()) {
+        root.addView(bigChoice(getString(R.string.sensors_gate_no), Palette.labelTertiary) {
             showSensorPitch()
         })
         setContentWithThumb(root) { setupHomeScreen() }
@@ -7272,26 +7194,26 @@ private fun startWeekStrict() {
     // The two-minute pitch for someone without beacons, then the (future) shop door.
     private fun showSensorPitch() {
         inSubPage = true
-        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText(getString(R.string.sensors_gate_title)))
         root.addView(TextView(this).apply {
             text = getString(R.string.sensors_pitch_body)
-            textSize = 15f; setTextColor(0xFF3A434B.toInt()); setLineSpacing(0f, 1.35f)
+            textSize = 15f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.35f)
             setPadding(0, (4 * dp).toInt(), 0, (18 * dp).toInt())
         })
-        root.addView(bigChoice(getString(R.string.sensors_pitch_order), 0xFF2E9E8F.toInt()) { showSensorOrderPage() })
+        root.addView(bigChoice(getString(R.string.sensors_pitch_order), Palette.tint) { showSensorOrderPage() })
         setContentWithThumb(root) { showSensorGate() }
     }
 
     private fun showSensorOrderPage() {
         inSubPage = true
-        val dp = resources.displayMetrics.density; val pad = (20 * dp).toInt()
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText(getString(R.string.sensors_order_title)))
         root.addView(TextView(this).apply {
             text = getString(R.string.sensors_order_body)
-            textSize = 16f; setTextColor(0xFF52606A.toInt()); setPadding(0, (8 * dp).toInt(), 0, 0)
+            textSize = 16f; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, 0)
         })
         setContentWithThumb(root) { showSensorPitch() }
     }
@@ -7306,12 +7228,12 @@ private fun startWeekStrict() {
             ).apply { topMargin = (24 * dp).toInt() }
         }
         box.addView(TextView(this).apply {
-            text = getString(R.string.status_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF9AA0A6.toInt())
+            text = getString(R.string.status_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
             setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
         })
         fun row(label: String, on: Boolean, onClick: () -> Unit) = box.addView(TextView(this).apply {
             text = getString(R.string.status_row, if (on) "\u25CF" else "\u25CB", label, getString(if (on) R.string.status_on_label else R.string.status_off_label))
-            textSize = 14f; setTextColor(if (on) 0xFF2E9E44.toInt() else 0xFF9AA0A6.toInt())
+            textSize = 14f; setTextColor(if (on) Palette.success else Palette.labelTertiary)
             isClickable = true; isFocusable = true; setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
             setOnClickListener { onClick() }
         })
@@ -7320,13 +7242,26 @@ private fun startWeekStrict() {
         }
         row(getString(R.string.status_block_overlay), Settings.canDrawOverlays(this)) { requestOverlayPermission() }
         row(getString(R.string.status_uninstall_lock), UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)) { toggleUninstallGuard() }
+        // The add-on is the one thing here we cannot actually read the state of, so this row
+        // shows what the user TOLD us in setup - and stays theirs to correct. Switching it off
+        // is honest, not a loophole: it puts them straight back on the gate.
+        row(getString(R.string.status_image_addon), BrowserSetup.extensionConfirmed(this)) {
+            if (BrowserSetup.extensionConfirmed(this)) {
+                BrowserSetup.setExtensionConfirmed(this, false)
+                Toast.makeText(this, getString(R.string.status_addon_off_toast), Toast.LENGTH_LONG).show()
+                updateScreen()
+            } else {
+                inPermissionFlow = true
+                updateScreen()
+            }
+        }
         val timers = mutableListOf<String>()
         if (Lockdown.isActive(this)) timers.add(getString(R.string.status_lockdown, minLeft(Lockdown.remaining(this))))
         if (LoosenWindow.isActive(this)) timers.add(getString(R.string.status_unlock_window, minLeft(LoosenWindow.remaining(this))))
         if (LoosenWait.isActive(this)) timers.add(getString(R.string.status_unlock_wait, minLeft(LoosenWait.remaining(this))))
         if (Mode.isLocked(this)) timers.add(getString(R.string.status_week_strict, Mode.timeLeft(this)))
         if (timers.isNotEmpty()) box.addView(TextView(this).apply {
-            text = timers.joinToString("\n"); textSize = 13f; setTextColor(0xFF7B848C.toInt())
+            text = timers.joinToString("\n"); textSize = 13f; setTextColor(Palette.labelTertiary)
             setPadding(0, (8 * dp).toInt(), 0, 0)
         })
         return box

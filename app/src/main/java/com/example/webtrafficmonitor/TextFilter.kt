@@ -78,6 +78,21 @@ object FilterTuning {
     const val DEFINITE_THRESHOLD = 30    // score at/above this → "definite nsfw" band
     const val TITLE_URL_MULTIPLIER = 2   // hits in the title or URL count double
 
+    // ── IN-APP SCREENS ARE HELD TO A TIGHTER BAR THAN WEB PAGES ──────────────────────
+    // An app feed (Instagram, Reddit, TikTok, X) is the harder problem, not the easier one:
+    // there is no address bar to read, no domain to blocklist, no extension to lean on, and
+    // the content arrives already personalised to whatever you last lingered on. So an app
+    // screen blocks at APP_THRESHOLD, below the web THRESHOLD.
+    //
+    // The single-word guarantee still holds, but it has to be enforced DIFFERENTLY here.
+    // On the web it comes free: SINGLE_WORD_MAX (14) sits just under THRESHOLD (15), so one
+    // word family can never reach the bar alone. A lower app bar breaks that arithmetic - 14
+    // clears 11 easily - so below the web threshold we require APP_MIN_FAMILIES distinct
+    // families to have scored. "Blocking takes at least two different signals" is the rule
+    // that keeps "nude lipstick" out of the block list, and it survives the tighter bar.
+    const val APP_THRESHOLD = 11
+    const val APP_MIN_FAMILIES = 2
+
     // How much a SOFT gendered word is still worth when that side of the filter is switched
     // off. Not zero — "bikini" on an actual porn page should still nudge the needle, it just
     // shouldn't block a swimwear shop on its own. See GenderedTerms.
@@ -280,16 +295,35 @@ object BorderlineScorer {
         if (relaxed) (relaxedSets ?: ActiveSets(true).also { relaxedSets = it })
         else (strictSets ?: ActiveSets(false).also { strictSets = it })
 
+    /** What one scoring pass produced: the score, and how many distinct families fed it. */
+    private data class Tally(val score: Int, val families: Int)
+
     /** Raw score for logging/flagging; null when nothing sexual was found. */
     fun score(title: String?, url: String?, text: String?, s: Settings = Settings.ALL_ON): Result? {
-        val v = compute(title, url, text, s)
+        val v = compute(title, url, text, s).score
         return if (v <= 0) null else Result(v, reasonFor(v))
     }
 
     /** Non-null (with a block reason) only when the score reaches the block THRESHOLD. */
     fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
-        val v = compute(title, url, content, s)
+        val v = compute(title, url, content, s).score
         return if (v >= FilterTuning.THRESHOLD) Result(v, reasonFor(v)) else null
+    }
+
+    /**
+     * The same judgement for a NON-WEB app screen, at the tighter APP_THRESHOLD - see the
+     * note on that constant. Anything at or above the ordinary web THRESHOLD blocks exactly
+     * as it would in a browser; between APP_THRESHOLD and THRESHOLD it blocks only when at
+     * least APP_MIN_FAMILIES distinct word families contributed, so one word still can't do
+     * it alone.
+     */
+    fun evaluateInApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
+        val t = compute(title, url, content, s)
+        if (t.score >= FilterTuning.THRESHOLD) return Result(t.score, reasonFor(t.score))
+        if (t.score >= FilterTuning.APP_THRESHOLD && t.families >= FilterTuning.APP_MIN_FAMILIES) {
+            return Result(t.score, reasonFor(t.score))
+        }
+        return null
     }
 
     private fun reasonFor(score: Int): String = "Sexual / adult content (score $score)"
@@ -298,7 +332,7 @@ object BorderlineScorer {
     // (for the gender multiplier). base == 0 means "recognised but scores nothing here".
     private data class Hit(val fam: String, val tier: String, val base: Int, val word: String)
 
-    private fun compute(title: String?, url: String?, body: String?, set: Settings): Int {
+    private fun compute(title: String?, url: String?, body: String?, set: Settings): Tally {
         val a = active(set.relaxed)
         val counted = HashMap<String, Int>()   // family -> capped occurrences, shared across fields
         val points = HashMap<String, Float>()   // family -> points so far (for SINGLE_WORD_MAX)
@@ -341,7 +375,10 @@ object BorderlineScorer {
         // Looking up a symptom is not looking at porn. Damp the SOFT signals hard when the
         // page reads medical; CORE/LOUD are never damped, so real porn still blocks.
         if (hasMedicalContext(title, body)) otherTotal *= FilterTuning.MEDICAL_DAMPEN
-        return Math.round(explicitTotal + otherTotal)
+        // `points` holds one entry per family (words AND phrases) that actually scored, so
+        // its size is the number of DISTINCT signals behind this score - what the in-app
+        // threshold needs in order to stay safe below the web bar.
+        return Tally(Math.round(explicitTotal + otherTotal), points.count { it.value > 0f })
     }
 
     /**

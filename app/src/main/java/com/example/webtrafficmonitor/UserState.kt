@@ -773,6 +773,7 @@ object UsageGoal {
 object BrowserSetup {
     private const val PREFS = "browser_setup"
     private const val KEY_EXT = "extension_confirmed"
+    private const val KEY_VISITED = "extension_page_visited"
 
     /** Where the user installs the add-on from (opened IN Firefox, so "Add" is available). */
     const val EXTENSION_URL = "https://addons.mozilla.org/android/addon/distracting-image-monitor/"
@@ -787,16 +788,38 @@ object BrowserSetup {
     const val STORE_URI = "market://details?id=org.mozilla.firefox"
     const val STORE_URL = "https://play.google.com/store/apps/details?id=org.mozilla.firefox"
 
-    /** The Firefox build actually on this device, or null. Needs the manifest <queries>. */
-    fun firefoxPackage(c: Context): String? =
-        AppConfig.FIREFOX_PACKAGES.firstOrNull { pkg ->
-            runCatching { c.packageManager.getPackageInfo(pkg, 0) }.isSuccess
-        }
+    /**
+     * The build the gate REQUIRES: Firefox proper, and only that.
+     *
+     * NOT AppConfig.FIREFOX_PACKAGES, which is deliberately broad - those guards should cover
+     * every flavour that happens to be installed. Here the breadth was a bug: org.mozilla.fenix
+     * is Firefox NIGHTLY, a developer build, so having Nightly waved the step through on a
+     * phone with no Firefox on it at all.
+     */
+    const val REQUIRED_PACKAGE = "org.mozilla.firefox"
+
+    /** The Firefox the gate wants, or null. Needs the manifest <queries> to be visible. */
+    fun firefoxPackage(c: Context): String? = REQUIRED_PACKAGE.takeIf {
+        runCatching { c.packageManager.getPackageInfo(it, 0) }.isSuccess
+    }
 
     fun firefoxInstalled(c: Context): Boolean = firefoxPackage(c) != null
 
     fun extensionConfirmed(c: Context): Boolean = prefs(c).getBoolean(KEY_EXT, false)
-    fun confirmExtension(c: Context) = prefs(c).edit().putBoolean(KEY_EXT, true).apply()
+    fun setExtensionConfirmed(c: Context, on: Boolean) {
+        prefs(c).edit().putBoolean(KEY_EXT, on).apply()
+        // Starting over means the "have they been sent to the page yet" hint starts over too.
+        if (!on) prefs(c).edit().putBoolean(KEY_VISITED, false).apply()
+    }
+
+    /**
+     * Whether the user has actually been sent to the add-on page yet. We cannot see INTO
+     * Firefox, but we do know we opened it for them - so on their way back the "I've added it"
+     * button becomes the main action instead of a quiet afterthought.
+     */
+    fun extensionPageVisited(c: Context): Boolean = prefs(c).getBoolean(KEY_VISITED, false)
+    fun markExtensionPageVisited(c: Context) =
+        prefs(c).edit().putBoolean(KEY_VISITED, true).apply()
 
     private fun prefs(c: Context) =
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

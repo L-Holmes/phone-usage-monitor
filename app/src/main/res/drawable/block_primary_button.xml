@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The primary "Go to home screen" button on the block cover. -->
+<!--
+  The primary "Go to home screen" button on the block cover.
+
+  The one loud control in the app: it is the way OUT of a block, so it has to be the
+  brightest thing on a deliberately dark screen and impossible to mistake for anything
+  else. Radius matches Radius.card in Design.kt.
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#FF2E9E8F" />
-    <corners android:radius="18dp" />
+    <solid android:color="@color/ds_tint" />
+    <corners android:radius="20dp" />
 </shape>

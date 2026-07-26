@@ -118,31 +118,38 @@
     <string name="lock_protect_body">Attiva il blocco della disinstallazione così non puoi eliminare l\'app in un momento di debolezza. Mentre è attivo, l\'app non può essere disinstallata e le pagine delle impostazioni che la disattiverebbero sono bloccate.</string>
     <string name="lock_enable">Attiva il blocco disinstallazione</string>
     <string name="lock_skip">Salta per ora</string>
-    <string name="step_monitoring_title">Passo 1 di 5\nAttiva il monitoraggio delle pagine</string>
+    <string name="step_counter">Passo %1$d di %2$d</string>
+    <string name="step_monitoring_title">Attiva il monitoraggio delle pagine</string>
     <string name="step_monitoring_body">Questo consente all\'app di vedere quale sito o app è sullo schermo, così può bloccare ciò che deve.\n\nQuando tocchi Continua arriverai nelle impostazioni di Accessibilità:\n\n1.  Tocca “App installate” (su alcuni telefoni “App scaricate”).\n2.  Tocca “Web Traffic Monitor”.\n3.  Attiva l\'interruttore e accetta.\n\nPoi torna a questa app.</string>
     <string name="step_monitoring_button">Continua verso Accessibilità</string>
-    <string name="step_overlay_title">Passo 2 di 5\nConsenti la schermata di blocco</string>
+    <string name="step_overlay_title">Consenti la schermata di blocco</string>
     <string name="step_overlay_body">Questo consente all\'app di disegnare la schermata di blocco sopra le altre app.\n\nQuando tocchi Continua, trova “Web Traffic Monitor” nell\'elenco e attiva il suo interruttore.\n\nPoi torna a questa app.</string>
     <string name="step_overlay_button">Continua verso “Mostra sopra le altre app”</string>
 
-    <string name="step_firefox_title">Passo 3 di 5\nInstalla Firefox</string>
-    <string name="step_firefox_body">Questa app controlla bene un solo browser invece di controllarne male tanti, e quel browser è Firefox.\n\nQuando tocchi Continua arriverai sulla pagina dello store:\n\n1.  Tocca “Installa”.\n2.  Aspetta che finisca.\n\nPoi torna a questa app: questo passo si completa da solo.</string>
+    <string name="step_firefox_title">Installa Firefox</string>
+    <string name="step_firefox_body">Questa app controlla bene un solo browser invece di controllarne male tanti, e quel browser è Firefox.\n\nQuando tocchi Continua arriverai sulla pagina dello store:\n\n1.  Tocca “Installa”.\n2.  Aspetta che finisca.\n\nDeve essere proprio Firefox: Firefox Nightly e le altre versioni per sviluppatori non valgono.\n\nPoi torna a questa app: questo passo si completa da solo.</string>
     <string name="step_firefox_button">Ottieni Firefox</string>
     <string name="step_firefox_nostore">Nessuno store trovato. Installa Firefox, poi torna qui.</string>
 
-    <string name="step_extension_title">Passo 4 di 5\nAggiungi il monitor delle immagini a Firefox</string>
+    <string name="step_extension_title">Aggiungi il monitor delle immagini a Firefox</string>
     <string name="step_extension_body">L\'ultimo pezzo. Questa app può leggere l\'indirizzo di una pagina e il suo testo, ma non può vederne le IMMAGINI: di quello si occupa l\'estensione di Firefox.\n\nQuando tocchi Continua, Firefox si apre su:\n\n%1$s\n\n1.  Tocca “Aggiungi a Firefox”.\n2.  Spunta “Consenti l\'esecuzione dell\'estensione in navigazione anonima”.\n3.  Tocca “Aggiungi”.\n\nPoi torna qui e conferma. Da quel momento quella pagina è bloccata, così l\'estensione resta attiva.</string>
     <string name="step_extension_button">Apri la pagina dell\'estensione</string>
     <string name="step_extension_done">L\'ho aggiunta</string>
+    <string name="step_extension_reopen">Apri di nuovo la pagina</string>
     <string name="step_extension_nobrowser">Nessun browser trovato per aprire la pagina dell\'estensione.</string>
 
     <string name="report_protocol">Protocollo per spezzare la dipendenza</string>
     <string name="proto_break_locked">Protocollo per spezzare la dipendenza  \u00b7  rigida, ancora %1$s</string>
     <string name="report_pane_appsite">Segnala un\'app/un sito</string>
     <string name="report_pane_temptation">Sento una tentazione</string>
-    <string name="report_pane_relapse">Segnala una ricaduta</string>
     <string name="report_pane_stats">Statistiche</string>
     <string name="report_settings">Impostazioni</string>
+    <string name="report_title">Contenuti per adulti</string>
+    <string name="report_mode_label">Livello di protezione</string>
+    <string name="report_protocol_sub">Le mosse importanti, in ordine. Falle una volta e quasi tutto il resto si sistema da sé.</string>
+    <string name="report_pane_appsite_sub">Qualcosa è passato, o non doveva proprio esserci. Segnalacelo e viene bloccato.</string>
+    <string name="report_pane_temptation_sub">Adesso, prima di agire. Di solito bastano un paio di minuti qui.</string>
+    <string name="report_pane_stats_sub">Quando succede, dove, e che cosa ci porta.</string>
 
     <string name="mode_off_name">Spenta</string>
     <string name="chart_so_far">— finora</string>
@@ -305,38 +312,6 @@
     <string name="about_side_label">Reddito extra all\'anno (facoltativo)</string>
     <string name="about_side_sub">Un\'attività che stai costruendo, lavoro freelance. Non lo sai? LASCIALO VUOTO - un\'ipotesi qui altera solo i tuoi numeri. Se è più alto del tuo stipendio, usiamo quello.</string>
     <string name="about_whyask">\nPerché lo chiediamo: \"3 ore al giorno\" è astratto e facile da ignorare. \"%1$s all\'anno\" no.</string>
-
-    <string name="relapse_device_q">Dove è successo?</string>
-    <string name="relapse_device_yes">Sì, su questo dispositivo</string>
-    <string name="relapse_device_no">No, un altro dispositivo</string>
-    <string name="relapse_home_q">Eri a casa?</string>
-    <string name="relapse_home_yes">A casa</string>
-    <string name="relapse_home_no">Fuori / da un\'altra parte</string>
-    <string name="relapse_room_q">Dove eri?</string>
-    <string name="relapse_activity_q">Cosa stavi facendo poco prima?</string>
-    <string name="relapse_feeling_q">Come ti sentivi?</string>
-    <string name="relapse_urge_q">Quanto era forte l\'impulso?</string>
-    <string name="relapse_note_title">Vuoi annotare qualcosa?</string>
-    <string name="relapse_note_private">Privato. Resta su questo dispositivo e non ti viene mai rimostrato come giudizio.</string>
-    <string name="relapse_note_hint">Cosa è successo, cosa l\'ha scatenato… (facoltativo)</string>
-    <string name="relapse_skip">Salta</string>
-    <string name="relapse_save">Salva segnalazione</string>
-    <string name="relapse_saved">Segnalazione salvata ✓</string>
-    <string name="relapse_noticed">Cosa abbiamo notato</string>
-    <string name="relapse_fb_first">Questa è la tua prima segnalazione, quindi non c\'è ancora nulla con cui confrontarla. D\'ora in poi, ognuna aiuta a mettere a fuoco uno schema.</string>
-    <string name="relapse_fb_time">È successo intorno alle %1$s — la stessa ora del giorno del %2$s delle tue segnalazioni passate.</string>
-    <string name="relapse_fb_day">È capitato di %1$s, come il %2$s delle tue segnalazioni passate.</string>
-    <string name="relapse_fb_feeling">Ti sentivi %1$s — come il %2$s delle tue segnalazioni passate.</string>
-    <string name="relapse_fb_where">Eri %1$s, come il %2$s delle tue segnalazioni passate.</string>
-    <string name="relapse_fb_where_home">a casa</string>
-    <string name="relapse_fb_where_away">fuori casa</string>
-    <string name="relapse_fb_alone">Eri da solo — vero per il %1$s delle tue segnalazioni passate.</string>
-    <string name="relapse_fb_activity">Poco prima, stavi \"%1$s\" — la stessa premessa del %2$s delle tue segnalazioni passate.</string>
-    <string name="relapse_fb_few">(Ancora poche segnalazioni, quindi questi numeri si affineranno man mano che ne registri.)</string>
-    <string name="relapse_day_fallback">quel giorno</string>
-    <string name="relapse_enc_first">Hai fatto la cosa giusta a registrarlo — onestamente, è la parte più difficile. Sii gentile con te stesso: questo è l\'inizio della comprensione, non una pagella.</string>
-    <string name="relapse_enc_early">Hai fatto la cosa giusta a registrarlo. Ogni segnalazione è un pezzo del puzzle, e ne stai già iniziando a vedere la forma. Non si tratta di senso di colpa — si tratta di capire.</string>
-    <string name="relapse_enc_many">Hai fatto la cosa giusta a registrarlo. Con %1$d segnalazioni, gli schemi si fanno più chiari — e uno schema che vedi è uno schema attorno a cui puoi organizzarti. Sei più vicino a sconfiggerlo di prima.</string>
 
     <string name="loosen_intro_title">Questo è uno sblocco supervisionato, solo per i momenti di disperazione.</string>
     <string name="loosen_intro_boldword">disperazione</string>
@@ -794,6 +769,8 @@
     <string name="status_row">%1$s  %2$s - %3$s</string>
     <string name="status_page_monitoring">Monitoraggio delle pagine</string>
     <string name="status_block_overlay">Autorizzazione schermata di blocco</string>
+    <string name="status_image_addon">Estensione monitor immagini</string>
+    <string name="status_addon_off_toast">Segnata come non installata. Il monitoraggio ne ha bisogno, quindi ti verrà chiesto di aggiungerla di nuovo.</string>
     <string name="status_uninstall_lock">Blocco disinstallazione</string>
     <string name="status_lockdown">Isolamento app - %1$s rimasti</string>
     <string name="status_unlock_window">Finestra di sblocco - %1$s rimasti</string>
@@ -846,6 +823,7 @@
     <string name="br_night_lying">Non mentre sei sdraiato.\nMettiti seduto e si riaprirà.</string>
     <string name="br_night_dark">Non al buio.\nAccendi una luce e si riaprirà.</string>
     <string name="br_room">Stanza protetta: sei in %1$s.\nIn modalità rigida qui si aprono solo chiamate, messaggi e altri elementi essenziali.\nEsci da %1$s e tutto si sblocca.</string>
+    <string name="br_bluetooth_off">Il Bluetooth è spento.\nI tuoi sensori di stanza ne hanno bisogno per funzionare, quindi questa app resta chiusa finché non lo riattivi.\nAccendi il Bluetooth e l\'app si riaprirà.</string>
     <string name="br_adult_site">Sito per adulti (lista di blocco): %1$s</string>
     <string name="br_search_engine">Motore di ricerca bloccato: %1$s</string>
     <string name="br_blocked_site">Sito bloccato: %1$s</string>
@@ -902,9 +880,6 @@
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato, come in Rigida.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
         <item>Questa è Rigida senza il pass giornaliero.</item>
-    </string-array>
-    <string-array name="relapse_days">
-        <item>Domenica</item><item>Lunedì</item><item>Martedì</item><item>Mercoledì</item><item>Giovedì</item><item>Venerdì</item><item>Sabato</item>
     </string-array>
     <string-array name="feel_neg"><item>Rimpianto</item><item>Intorpidito</item><item>Vuoto</item><item>In colpa</item></string-array>
     <string-array name="feel_pos"><item>Fiero</item><item>Sollevato</item><item>Lucido</item><item>In controllo</item></string-array>

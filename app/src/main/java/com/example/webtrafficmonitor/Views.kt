@@ -344,19 +344,19 @@ class FeelingFaceView(
         style = Paint.Style.STROKE; strokeWidth = 2f; color = circleColor
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF40464B.toInt(); textAlign = Paint.Align.CENTER
+        color = Palette.labelSecondary; textAlign = Paint.Align.CENTER
     }
-    private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE7F4E8.toInt() }
-    private val zoneText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E7D32.toInt(); textAlign = Paint.Align.LEFT }
+    private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.successSoft }
+    private val zoneText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.successText; textAlign = Paint.Align.LEFT }
     private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x33000000; style = Paint.Style.STROKE; strokeWidth = 2f
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
     }
-    private val faceFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFC857.toInt() }
+    private val faceFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.warning }
     private val faceLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF222222.toInt(); style = Paint.Style.STROKE; strokeWidth = 5f; strokeCap = Paint.Cap.ROUND
+        color = Palette.label; style = Paint.Style.STROKE; strokeWidth = 5f; strokeCap = Paint.Cap.ROUND
     }
-    private val faceDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF222222.toInt() }
+    private val faceDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.label }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         if (w == 0 || h == 0) return
@@ -471,7 +471,7 @@ class PeakCurveView(
     private val labelBot: String? = null,
 ) : View(context) {
     private var anim = 0f
-    private val accent = 0xFF2E9E8F.toInt()
+    private val accent = Palette.tint
     private val curve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND
     }
@@ -479,10 +479,10 @@ class PeakCurveView(
     private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
     private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
     private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF5F6368.toInt(); textAlign = Paint.Align.RIGHT }
-    private val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E9E8F.toInt(); textAlign = Paint.Align.CENTER }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.labelSecondary; textAlign = Paint.Align.RIGHT }
+    private val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.tint; textAlign = Paint.Align.CENTER }
     private val arrow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF8A9095.toInt(); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+        color = Palette.labelTertiary; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
     }
 
     override fun onAttachedToWindow() {
@@ -571,9 +571,9 @@ class PeakTapView(
     private val threshold: Float,
     private val onPick: (Float, Boolean) -> Unit,
 ) : View(context) {
-    private val accent = 0xFF2E9E8F.toInt()
-    private val gold = 0xFFD4A017.toInt()
-    private val dull = 0xFFB9C4C2.toInt()
+    private val accent = Palette.tint
+    private val gold = Palette.warning
+    private val dull = Palette.divider
     private var tappedX: Float? = null
     private var correct = false
     private val curve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -581,7 +581,7 @@ class PeakTapView(
     }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22000000 }
-    private val hint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF9AA0A6.toInt(); textAlign = Paint.Align.CENTER }
+    private val hint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.labelTertiary; textAlign = Paint.Align.CENTER }
     private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
     private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
 
@@ -671,7 +671,7 @@ class PeakTapView(
 class GlowButton(context: Context, private val label: String, onClick: () -> Unit) : View(context) {
     private var phase = 0f
     private var anim: android.animation.ValueAnimator? = null
-    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC8932B.toInt() }
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.warning }
     private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER; isFakeBoldText = true
     }
@@ -702,7 +702,7 @@ class GlowButton(context: Context, private val label: String, onClick: () -> Uni
         edge.strokeWidth = 4f * dp
         val sweep = android.graphics.SweepGradient(
             w / 2f, h / 2f,
-            intArrayOf(0x00FFF6D8, 0x00FFF6D8, 0xFFFFF6D8.toInt(), 0x00FFF6D8, 0x00FFF6D8),
+            intArrayOf(0x00FFF6D8, 0x00FFF6D8, Palette.warningSoft, 0x00FFF6D8, 0x00FFF6D8),
             floatArrayOf(0f, 0.38f, 0.5f, 0.62f, 1f))
         sweep.setLocalMatrix(android.graphics.Matrix().apply { postRotate(phase * 360f, w / 2f, h / 2f) })
         edge.shader = sweep
@@ -716,10 +716,10 @@ class GlowButton(context: Context, private val label: String, onClick: () -> Uni
 // =====================================================================================
 class RecoveryBrainView(context: Context) : View(context) {
     private var anim = 0f
-    private val amber = 0xFFC9772B.toInt()
-    private val green = 0xFF2E7D32.toInt()
+    private val amber = Palette.warning
+    private val green = Palette.successText
     private val past = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; color = 0xFF9AA0A6.toInt(); strokeCap = Paint.Cap.ROUND
+        style = Paint.Style.STROKE; color = Palette.labelTertiary; strokeCap = Paint.Cap.ROUND
     }
     private val up = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = amber; strokeCap = Paint.Cap.ROUND
@@ -732,7 +732,7 @@ class RecoveryBrainView(context: Context) : View(context) {
     private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
     private val lab = Paint(Paint.ANTI_ALIAS_FLAG)
     private val emoji = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
-    private val axisLab = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0B5BA.toInt() }
+    private val axisLab = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.labelQuaternary }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -795,24 +795,41 @@ class RecoveryBrainView(context: Context) : View(context) {
 }
 
 
-// A circular, see-through back control with a geometrically-centred left arrow.
+/**
+ * The one back control, on every page (see the big comment in Main.kt's setContentView).
+ *
+ * Glass: near-white translucent fill, a hairline rim, a soft shadow, and the arrow in the
+ * app's tint rather than grey. It floats over the content, so it has to read on both a
+ * white card and a chart - which is exactly what a light fill plus a defined edge does,
+ * and a flat grey circle did not.
+ */
 class ThumbBackView(context: Context) : View(context) {
     private val dp = context.resources.displayMetrics.density
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1F000000; style = Paint.Style.FILL }
+    // Translucent, NOT opaque. This button floats over the page at a fixed spot, so it
+    // will sometimes land on top of a line of text - it has to be readable itself without
+    // hiding what is underneath it. 85% white is the point where it still reads as a solid
+    // control on a white card but you can see a word passing behind it.
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xD9FFFFFF.toInt(); style = Paint.Style.FILL
+    }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x22000000; style = Paint.Style.STROKE; strokeWidth = 1f * dp
+        color = 0x1A000000; style = Paint.Style.STROKE; strokeWidth = 1f * dp
+    }
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x14000000; style = Paint.Style.FILL
     }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xB32B333B.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f * dp
+        color = Palette.tintDeep; style = Paint.Style.STROKE; strokeWidth = 2f * dp
         strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     }
     override fun onDraw(canvas: Canvas) {
         val cx = width / 2f; val cy = height / 2f
-        val r = Math.min(width, height) / 2f - strokePaint.strokeWidth
+        val r = Math.min(width, height) / 2f - strokePaint.strokeWidth - 1.5f * dp
+        canvas.drawCircle(cx, cy + 1.5f * dp, r, shadowPaint)   // the lift, not a drop shadow
         canvas.drawCircle(cx, cy, r, fillPaint)
         canvas.drawCircle(cx, cy, r, strokePaint)
-        val a = r * 0.21f      // shaft half-length (about half the previous size)
-        val h = r * 0.15f      // arrowhead size
+        val a = r * 0.24f      // shaft half-length
+        val h = r * 0.17f      // arrowhead size
         canvas.drawLine(cx - a, cy, cx + a, cy, arrowPaint)
         val head = Path().apply {
             moveTo(cx - a + h, cy - h); lineTo(cx - a, cy); lineTo(cx - a + h, cy + h)
@@ -825,10 +842,10 @@ class ThumbBackView(context: Context) : View(context) {
 class WastedDonutView(context: Context) : View(context) {
     private var frac = 0f                 // 0..1 share of waking hours
     private var anim = 0f
-    private val ringBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFE6EAED.toInt(); strokeCap = Paint.Cap.ROUND }
-    private val ringFg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFE4673B.toInt(); strokeCap = Paint.Cap.ROUND }
-    private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1F2933.toInt(); textAlign = Paint.Align.CENTER; isFakeBoldText = true }
-    private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF7B848C.toInt(); textAlign = Paint.Align.CENTER }
+    private val ringBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Palette.hairline; strokeCap = Paint.Cap.ROUND }
+    private val ringFg = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Palette.danger; strokeCap = Paint.Cap.ROUND }
+    private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.label; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.labelTertiary; textAlign = Paint.Align.CENTER }
 
     fun setFraction(f: Float) {
         val target = f.coerceIn(0f, 1f)
@@ -865,8 +882,8 @@ class TimeGridView(context: Context) : View(context) {
     private var filled = 0
     private val total = 365
     private val cols = 21
-    private val on = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE4673B.toInt() }
-    private val off = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE6EAED.toInt() }
+    private val on = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.danger }
+    private val off = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.hairline }
 
     fun setFilledDays(d: Int) { filled = d.coerceIn(0, total); invalidate() }
 
@@ -899,7 +916,7 @@ class TimeGridView(context: Context) : View(context) {
 // TrendView  (a small line chart for "urges ridden out per week" - shows direction)
 // =====================================================================================
 class TrendView(context: Context, private val values: FloatArray) : View(context) {
-    private val accent = 0xFF2E7D32.toInt()
+    private val accent = Palette.successText
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     }
@@ -948,7 +965,7 @@ class TrendView(context: Context, private val values: FloatArray) : View(context
 class DopamineScaleView(context: Context, private val score: Int) : View(context) {
 
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1F2933.toInt() }
+    private val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.label }
     private val markerRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt()
     }
@@ -966,8 +983,8 @@ class DopamineScaleView(context: Context, private val score: Int) : View(context
         bar.shader = android.graphics.LinearGradient(
             0f, top, 0f, bottom,
             intArrayOf(
-                0xFFB3261E.toInt(), 0xFFD1462F.toInt(), 0xFFE08A26.toInt(),
-                0xFFCBA92B.toInt(), 0xFF5C9E31.toInt(), 0xFF2E7D32.toInt(),
+                Palette.dangerText, Palette.danger, Palette.warning,
+                Palette.warning, Palette.success, Palette.successText,
             ),
             floatArrayOf(0f, 0.2f, 0.4f, 0.55f, 0.75f, 1f),
             Shader.TileMode.CLAMP,
@@ -1012,7 +1029,7 @@ class StatLineChartView(
     private val goal: Float? = null,
     private val dotted: FloatArray = FloatArray(0),
     private val goalPerSlot: Float? = null,
-    private val accent: Int = 0xFF2E9E8F.toInt(),   // the app's primary teal
+    private val accent: Int = Palette.tint,   // the app's primary teal
     private val dottedColour: Int? = null,          // projection colour (grey for "estimated")
     private val gridStep: Float? = null,            // labelled y gridline every this many units
     private val minorStep: Float? = null,           // unlabelled y gridline (e.g. half-hours)
@@ -1053,7 +1070,7 @@ class StatLineChartView(
         style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
     }
     private val goalP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; color = 0xFF2E7D32.toInt()
+        style = Paint.Style.STROKE; color = Palette.successText
     }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
@@ -1105,7 +1122,7 @@ class StatLineChartView(
         // optional unlabelled minors between); otherwise a round step is auto-picked -
         // so an hours chart counts up in real hours whatever data is passed in.
         canvas.drawLine(xL, yB, xR, yB, axis)
-        text.textSize = 10f * dp; text.color = 0xFF9AA0A6.toInt(); text.textAlign = Paint.Align.RIGHT
+        text.textSize = 10f * dp; text.color = Palette.labelTertiary; text.textAlign = Paint.Align.RIGHT
         canvas.drawText(Units.number(context, 0), xL - 4f * dp, yB + 3.5f * dp, text)
         val stepMain = gridStep ?: niceStep(mx)
         val stepDraw = minorStep ?: stepMain
@@ -1122,11 +1139,11 @@ class StatLineChartView(
         text.textSize = 9f * dp
         if (goalPerSlot != null) {
             canvas.drawLine(px(0), py(0f), px(n - 1), py(goalPerSlot * n), goalP)
-            text.textAlign = Paint.Align.RIGHT; text.color = 0xFF2E7D32.toInt()
+            text.textAlign = Paint.Align.RIGHT; text.color = Palette.successText
             canvas.drawText(context.getString(R.string.chart_goal), xR, py(goalPerSlot * n) - 3f * dp, text)
         } else if (goal != null) {
             canvas.drawLine(xL, py(goal), xR, py(goal), goalP)
-            text.textAlign = Paint.Align.RIGHT; text.color = 0xFF2E7D32.toInt()
+            text.textAlign = Paint.Align.RIGHT; text.color = Palette.successText
             canvas.drawText(context.getString(R.string.chart_goal_val, fmtVal(goal)), xR, py(goal) - 3f * dp, text)
         }
 
@@ -1205,7 +1222,7 @@ class StatLineChartView(
         }
 
         // x labels (weekdays / months) - sparse, under the axis
-        text.textSize = 10f * dp; text.textAlign = Paint.Align.CENTER; text.color = 0xFF9AA0A6.toInt()
+        text.textSize = 10f * dp; text.textAlign = Paint.Align.CENTER; text.color = Palette.labelTertiary
         for (i in 0 until minOf(n, labels.size)) {
             val l = labels[i]
             if (l.isNotEmpty()) canvas.drawText(l, px(i), height - 4f * dp, text)

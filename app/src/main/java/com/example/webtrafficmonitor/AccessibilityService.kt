@@ -339,6 +339,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         DomainBlocklist.warmUp(this)
         startGreyscaleWatch()
         startScreenWatch()
+        startBluetoothWatch()
         // Beacon room guard: arms itself only while strict + a room is calibrated +
         // scan permissions granted, and idles otherwise. Entering/leaving a protected
         // room fires no accessibility event, so it re-evaluates the foreground app
@@ -737,12 +738,19 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (signature == lastLogSignature) return
         lastLogSignature = signature
 
-        // Log the content score on every web page so we can see what each one scored
-        // while tuning - shows as a prefix on the log row, e.g. "[score 18] cute puppies".
-        val pageScore = if (host != null && !Whitelist.isSafeDomain(this, host))
-            BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text, filterSettings())?.score else null
-        val loggedTitle = if (pageScore != null) "[score $pageScore]  ${title.orEmpty()}".trim()
-                          else title
+        // EVERY entry gets a score, app screens included - not just web pages, and no longer
+        // jammed into the title as a "[score 18] " prefix. It is a real column now, rendered
+        // as a badge by MonitorAdapter (see MonitorEntry.score).
+        //
+        // Scoring an app screen here is the same read the block path just did, so this costs
+        // nothing extra in practice and is exactly what makes the in-app threshold tunable:
+        // you can watch what ordinary use of a messaging app scores before deciding whether
+        // APP_THRESHOLD is in the right place. A trusted domain still scores null - we
+        // deliberately never read it, so we have nothing to report.
+        val scoreThis = !(host != null && Whitelist.isSafeDomain(this, host))
+        val pageScore = if (scoreThis)
+            BorderlineScorer.score(rawTitle, lastFullUrl ?: lastUrl, text, filterSettings())?.score ?: 0
+        else null
 
         MonitorStore.record(
             this,
@@ -750,10 +758,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 timestamp = now,
                 kind = MonitorEntry.KIND_PAGE,
                 packageName = packageName,
-                title = loggedTitle,
+                title = title,
                 domain = lastHost,
                 url = lastFullUrl ?: lastUrl,
                 text = text,
+                score = pageScore,
             ),
         )
     }
@@ -802,6 +811,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
         nightGuardReason(pkg)?.let { return it }
         roomGuardReason(pkg)?.let { return it }
+        bluetoothGuardReason(pkg)?.let { return it }
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
             return getString(R.string.br_lockdown)
         }
@@ -926,6 +936,56 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val pkg = currentForegroundPackage() ?: return
         val reason = appBlockReason(pkg) ?: return
         showAppBlock(reason, pkg)
+    }
+
+    /**
+     * THE BLUETOOTH GUARD - see BluetoothGuard in RoomBeacons.kt for the reasoning.
+     *
+     * Someone who has configured beacons and then switches Bluetooth off has blinded the
+     * room guard, so every non-whitelisted app stays covered until it goes back on.
+     *
+     * "Whitelisted" here is the app's real whitelist (Whitelist.isSafeApp - the always-
+     * allowed list you can see under Developer tools, plus anything the user added),
+     * UNION the night/room guard essentials. The union matters: the guard essentials are
+     * matched as package SUBSTRINGS, so an odd-branded dialer or clock still gets through
+     * even if it never made the curated list. Whatever else this does, it must never stop
+     * someone making a phone call.
+     */
+    private fun bluetoothGuardReason(pkg: String?): String? {
+        if (pkg == null || pkg == packageName) return null       // never cover ourselves
+        if (!BluetoothGuard.isBlocking(this)) return null
+        if (Whitelist.isSafeApp(this, pkg) || isNightGuardAllowed(pkg)) return null
+        return getString(R.string.br_bluetooth_off)
+    }
+
+    /**
+     * Re-check when the RADIO moves, not just when the screen does. Toggling Bluetooth off
+     * from the shade fires no accessibility event at all, so without this the cover would
+     * only appear on the next app switch - and turning it back on would leave the cover
+     * sitting there. Mirror of updateNightGuard / updateRoomGuard, in both directions:
+     * the recheck loop drops the cover once appBlockReason stops returning a reason.
+     */
+    private val bluetoothReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED) return
+            if (appBlockActive) {
+                // A cover is up. If Bluetooth just came back on, the recheck loop clears it
+                // within RECHECK_MS via appBlockReason returning null - but nudge it so the
+                // phone comes back immediately rather than a beat later.
+                mainHandler.removeCallbacks(recheck)
+                mainHandler.post(recheck)
+                return
+            }
+            if (leaving) return
+            val pkg = currentForegroundPackage() ?: return
+            val reason = appBlockReason(pkg) ?: return
+            showAppBlock(reason, pkg)
+        }
+    }
+
+    private fun startBluetoothWatch() {
+        val filter = android.content.IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
+        runCatching { registerReceiver(bluetoothReceiver, filter) }
     }
 
     /** The gender switches, read fresh each pass so a change takes effect on the next page. */
@@ -1162,16 +1222,28 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                        getString(R.string.br_grey_limit_host, GreyUsage.LIMIT_MIN, host)
                host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
                // The heuristic - and ONLY the heuristic - waits for real page text.
-               contentReady && (host != null || AppBlocklist.isBrowser(packageName)) ->
+               !contentReady -> null
+               host != null || AppBlocklist.isBrowser(packageName) ->
                    BorderlineScorer.evaluate(title, url, content, filterSettings())?.reason
+               // NON-BROWSER APPS. This used to be the hole in the whole design: the
+               // heuristic ran on web pages and inside browsers, and nowhere else - so an
+               // app feed got nothing but a keyword match against its screen TITLE, which
+               // for Instagram or TikTok is a title like "Instagram". The app feed is the
+               // harder problem, not the easier one, and it was the one we weren't reading.
+               //
+               // Now the same scorer runs on the sampled screen text, at the tighter
+               // in-app bar (see FilterTuning.APP_THRESHOLD).
+               isScannableApp(packageName) ->
+                   BorderlineScorer.evaluateInApp(title, url, content, filterSettings())?.reason
                else -> null
            }
 
         if (baseReason != null) {
             val freshShow = !controller.isShowing
             if (freshShow) {
-                val blockScore = if (host != null)
-                    BorderlineScorer.score(title, url, content, filterSettings())?.score else null
+                // Scored for app screens too, not just web pages - an in-app block is now a
+                // thing that can happen, and a block event with no score is not reviewable.
+                val blockScore = BorderlineScorer.score(title, url, content, filterSettings())?.score
                 BlockEventLog.recordWeb(this, packageName, host, url, baseReason, blockScore)
             }
 
@@ -1249,6 +1321,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         }
     }
+
+    /**
+     * Is this a non-web app screen whose text we should judge for adult content?
+     *
+     * Almost everything is: known-safe apps never reach here (handleEvent returns early on
+     * Whitelist.isSafeApp), nor do keyboards, our own UI, or IGNORED_PACKAGES. What is left
+     * to exclude is the LAUNCHER - the home screen carries every app name and widget on the
+     * device, which is somebody else's text, not a thing the user chose to look at.
+     */
+    private fun isScannableApp(packageName: String): Boolean =
+        packageName !in NOT_LOGGED_PACKAGES
 
     /** Turn a raw block rule into readable wording: a dot means a site, otherwise a keyword. */
     private fun describeRule(rule: String): String =
@@ -1517,6 +1600,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         overlay?.hide()
         closeUsageSegment()                                    // bank the time we were mid-way through
         runCatching { unregisterReceiver(screenReceiver) }
+        runCatching { unregisterReceiver(bluetoothReceiver) }
         super.onDestroy()
     }
 

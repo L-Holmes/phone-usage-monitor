@@ -1,4 +1,24 @@
 
+Create an svg logo.
+aims:
+- look professional 
+- look serious
+- look logical
+- reflect that it helps with productivity, keeping you on track, removing bad habits etc.
+
+
+create me 4 logos to pick from.
+
+-------
+
+redesign the productivity page...
+
+---------
+
+❯ redesign the app, particularly the 'adult content' page, in a modern style.
+Be inspired by apple's design principles.
+make it look like designed by professional apple team, with choesiveness in all parts of the app.
+
 
 -------------
 
@@ -16,9 +36,7 @@
 ------------------
 
 LATER:
-- LINK UP HTE PLUGIN
-    - once hte plugin ready..
-        - integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
+- plugin: integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
 
 
 MANUAL TODO:
@@ -31,6 +49,7 @@ MANUAL TODO:
 - add N slip to list of rules...
     - + no cloth..
     - + downblou
+    - + pokie
 
 
 ------------------------------
@@ -77,6 +96,13 @@ Add 'founder mode'
     - remove search history... anonymously (without going through us..)?
     - ????
     - have priority when unblockng a part of the phone?
+
+
+======
+
+Emergency apps
+Whitelist (don't even get monitored) 
+Grey list apps (like web browsers)
 
 
 ======================

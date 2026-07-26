@@ -2,6 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/ds_bg"
     android:fillViewport="true">
 
     <LinearLayout
@@ -9,14 +10,16 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_vertical"
-        android:padding="28dp">
+        android:padding="24dp">
 
         <TextView
             android:id="@+id/prereq_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="24sp"
+            android:textSize="25sp"
             android:textStyle="bold"
+            android:letterSpacing="-0.02"
+            android:textColor="@color/ds_label"
             android:lineSpacingExtra="2dp" />
 
         <TextView
@@ -26,12 +29,20 @@
             android:paddingTop="18dp"
             android:paddingBottom="28dp"
             android:textSize="16sp"
+            android:textColor="@color/ds_label_secondary"
             android:lineSpacingExtra="4dp" />
 
+        <!-- The one filled action on the screen: it overrides the borderless default
+             button style from themes.xml, because this IS the primary action. -->
         <Button
             android:id="@+id/prereq_primary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/block_primary_button"
+            android:minHeight="52dp"
+            android:textAllCaps="false"
+            android:textColor="@color/ds_on_fill"
+            android:textSize="17sp"
             android:textStyle="bold" />
 
         <Button

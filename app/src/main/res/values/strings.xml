@@ -173,24 +173,27 @@
     <string name="lock_enable">Enable uninstall lock</string>
     <string name="lock_skip">Skip for now</string>
 
-    <string name="step_monitoring_title">Step 1 of 5\nTurn on page monitoring</string>
+    <!-- "%1$d" is the step being shown, "%2$d" how many this run needs in total. -->
+    <string name="step_counter">Step %1$d of %2$d</string>
+    <string name="step_monitoring_title">Turn on page monitoring</string>
     <string name="step_monitoring_body">This lets the app see which website or app is on screen, so it can block what it should.\n\nWhen you tap Continue you\'ll land in Accessibility settings:\n\n1.  Tap “Installed apps” (some phones say “Downloaded apps”).\n2.  Tap “Web Traffic Monitor”.\n3.  Turn the toggle ON and accept.\n\nThen come back to this app.</string>
     <string name="step_monitoring_button">Continue to Accessibility</string>
-    <string name="step_overlay_title">Step 2 of 5\nAllow the block screen</string>
+    <string name="step_overlay_title">Allow the block screen</string>
     <string name="step_overlay_body">This lets the app draw the blocking screen on top of other apps.\n\nWhen you tap Continue, find “Web Traffic Monitor” in the list and turn its toggle ON.\n\nThen come back to this app.</string>
     <string name="step_overlay_button">Continue to “Appear on top”</string>
 
     <!-- Step 3: Firefox itself. Verifiable, so the step ticks itself off on return. -->
-    <string name="step_firefox_title">Step 3 of 5\nInstall Firefox</string>
-    <string name="step_firefox_body">This app watches one browser properly rather than all of them badly, and that browser is Firefox.\n\nWhen you tap Continue you\'ll land on the store page:\n\n1.  Tap “Install”.\n2.  Wait for it to finish.\n\nThen come back to this app - this step ticks itself off.</string>
+    <string name="step_firefox_title">Install Firefox</string>
+    <string name="step_firefox_body">This app watches one browser properly rather than all of them badly, and that browser is Firefox.\n\nWhen you tap Continue you\'ll land on the store page:\n\n1.  Tap “Install”.\n2.  Wait for it to finish.\n\nIt has to be Firefox itself - Firefox Nightly and the other developer builds do not count.\n\nThen come back to this app - this step ticks itself off.</string>
     <string name="step_firefox_button">Get Firefox</string>
     <string name="step_firefox_nostore">No app store found. Install Firefox, then come back.</string>
 
     <!-- Step 4: the add-on. NOT verifiable from outside Firefox, so it ends on the user's word. -->
-    <string name="step_extension_title">Step 4 of 5\nAdd the image monitor to Firefox</string>
+    <string name="step_extension_title">Add the image monitor to Firefox</string>
     <string name="step_extension_body">The last piece. This app can read a page\'s address and its text, but it cannot see the IMAGES on it - the Firefox add-on does that part.\n\nWhen you tap Continue, Firefox opens at:\n\n%1$s\n\n1.  Tap “Add to Firefox”.\n2.  Tick “Allow extension to run in private browsing”.\n3.  Tap “Add”.\n\nThen come back here and confirm. From then on that page is blocked, so the add-on stays on.</string>
     <string name="step_extension_button">Open the add-on page</string>
     <string name="step_extension_done">I\'ve added it</string>
+    <string name="step_extension_reopen">Open the page again</string>
     <string name="step_extension_nobrowser">No browser found to open the add-on page.</string>
 
     <!-- ── Report screen (Main.kt) ───────────────────────────────────────────────────── -->
@@ -198,9 +201,14 @@
     <string name="proto_break_locked">Break the addiction protocol  \u00b7  strict %1$s left</string>
     <string name="report_pane_appsite">Report an app/site</string>
     <string name="report_pane_temptation">I feel temptation</string>
-    <string name="report_pane_relapse">Report relapse</string>
     <string name="report_pane_stats">Statistics</string>
     <string name="report_settings">Settings</string>
+    <string name="report_title">Adult content</string>
+    <string name="report_mode_label">Protection level</string>
+    <string name="report_protocol_sub">The big moves, in order. Work through them once and most of this looks after itself.</string>
+    <string name="report_pane_appsite_sub">Something got through, or something should never have been there. Tell us and it\'s blocked.</string>
+    <string name="report_pane_temptation_sub">Right now, before you act on it. A couple of minutes here is usually all it takes.</string>
+    <string name="report_pane_stats_sub">When it happens, where, and what leads into it.</string>
 
     <!-- ── Mode names (Main.kt / used app-wide) ──────────────────────────────────────── -->
     <string name="mode_off_name">Off</string>
@@ -393,49 +401,6 @@
     <string name="about_side_label">Side income a year (optional)</string>
     <string name="about_side_sub">A business you\'re building, freelance work. Don\'t know? LEAVE IT BLANK - a guess here just skews your numbers. If it\'s higher than your wage, we use it.</string>
     <string name="about_whyask">\nWhy we ask: \"3 hours a day\" is abstract and easy to shrug off. \"%1$s a year\" is not.</string>
-
-    <!-- ── Relapse report flow (Main.kt) ─────────────────────────────────────────────── -->
-    <string name="relapse_device_q">Where did it happen?</string>
-    <string name="relapse_device_yes">Yes, on this device</string>
-    <string name="relapse_device_no">No, a different device</string>
-    <string name="relapse_home_q">Were you at home?</string>
-    <string name="relapse_home_yes">At home</string>
-    <string name="relapse_home_no">Out / somewhere else</string>
-    <string name="relapse_room_q">Where were you?</string>
-    <string name="relapse_activity_q">What were you doing just before?</string>
-    <string name="relapse_feeling_q">How were you feeling?</string>
-    <string name="relapse_urge_q">How strong was the urge?</string>
-    <string name="relapse_note_title">Anything you want to note?</string>
-    <string name="relapse_note_private">Private. It stays on this device and is never shown back to you as judgement.</string>
-    <string name="relapse_note_hint">What happened, what set it off… (optional)</string>
-    <string name="relapse_skip">Skip</string>
-    <string name="relapse_save">Save report</string>
-    <string name="relapse_saved">Report saved ✓</string>
-    <string name="relapse_noticed">What we noticed</string>
-    <!-- generated feedback (RelapseLog.analyze) -->
-    <string name="relapse_fb_first">This is your first report, so there\'s nothing to compare it against yet. From here on, every one helps a pattern come into focus.</string>
-    <string name="relapse_fb_time">It happened around %1$s — the same time of day as %2$s of your past reports.</string>
-    <string name="relapse_fb_day">It fell on a %1$s, like %2$s of your past reports.</string>
-    <string name="relapse_fb_feeling">You felt %1$s — so did %2$s of your past reports.</string>
-    <string name="relapse_fb_where">You were %1$s, like %2$s of your past reports.</string>
-    <string name="relapse_fb_where_home">at home</string>
-    <string name="relapse_fb_where_away">away from home</string>
-    <string name="relapse_fb_alone">You were on your own — true for %1$s of your past reports.</string>
-    <string name="relapse_fb_activity">Just before, you were \"%1$s\" — the same lead-in as %2$s of your past reports.</string>
-    <string name="relapse_fb_few">(Only a few reports so far, so these numbers will sharpen as you log more.)</string>
-    <string name="relapse_day_fallback">that day</string>
-    <string name="relapse_enc_first">You did the right thing by logging this — honestly, that\'s the hardest part. Be kind to yourself: this is the start of understanding it, not a scorecard.</string>
-    <string name="relapse_enc_early">You did the right thing by logging this. Each report is a piece of the puzzle, and you\'re already starting to see its shape. This isn\'t about guilt — it\'s about understanding.</string>
-    <string name="relapse_enc_many">You did the right thing by logging this. %1$d reports in, the patterns are getting clearer — and a pattern you can see is one you can plan around. You\'re closer to beating this than you were before.</string>
-    <string-array name="relapse_days">
-        <item>Sunday</item>
-        <item>Monday</item>
-        <item>Tuesday</item>
-        <item>Wednesday</item>
-        <item>Thursday</item>
-        <item>Friday</item>
-        <item>Saturday</item>
-    </string-array>
 
     <!-- ── Supervised unlock ("loosen") flow (Main.kt) ───────────────────────────────── -->
     <!-- feeling-face labels: DISPLAY only; the English value (NEG/POS_FEELINGS) stays the stored key. -->
@@ -980,6 +945,8 @@
     <string name="status_row">%1$s  %2$s - %3$s</string>
     <string name="status_page_monitoring">Page monitoring</string>
     <string name="status_block_overlay">Block overlay permission</string>
+    <string name="status_image_addon">Image monitor add-on</string>
+    <string name="status_addon_off_toast">Marked as not installed. Monitoring needs it, so you\'ll be asked to add it again.</string>
     <string name="status_uninstall_lock">Uninstall lock</string>
     <string name="status_lockdown">App lockdown - %1$s left</string>
     <string name="status_unlock_window">Unlock window - %1$s left</string>
@@ -1034,6 +1001,7 @@
     <string name="br_night_lying">Not while you\'re lying down.\nSit up and this opens again.</string>
     <string name="br_night_dark">Not in the dark.\nTurn a light on and this opens again.</string>
     <string name="br_room">Protected room: you\'re in the %1$s.\nIn strict mode only calls, texts and other essentials open here.\nStep out of the %1$s and everything unlocks.</string>
+    <string name="br_bluetooth_off">Bluetooth is off.\nYour room sensors need it to work, so this stays shut until it\'s back on.\nSwitch Bluetooth on and this app opens again.</string>
     <string name="br_adult_site">Adult site (blocklist): %1$s</string>
     <string name="br_search_engine">Search engine blocked: %1$s</string>
     <string name="br_blocked_site">Blocked site: %1$s</string>

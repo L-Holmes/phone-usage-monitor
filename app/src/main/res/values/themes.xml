@@ -1,3 +1,44 @@
-<resources>
-    <style name="Theme.WebTrafficMonitor" parent="Theme.AppCompat.Light.NoActionBar" />
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      The app theme. Light, on purpose and permanently - see the note at the top of
+      Design.kt. The window background is the page background, so a screen that hasn't
+      painted yet still looks like this app rather than flashing white or black.
+
+      colorAccent drives the framework widgets we don't build ourselves: the Spinner
+      arrow, the Switch thumb, text selection handles, the EditText underline. Setting it
+      here is what stops those looking like a different app from everything around them.
+    -->
+    <style name="Theme.WebTrafficMonitor" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ds_bg</item>
+        <item name="android:colorBackground">@color/ds_bg</item>
+        <item name="colorPrimary">@color/ds_tint</item>
+        <item name="colorPrimaryDark">@color/ds_tint_deep</item>
+        <item name="colorAccent">@color/ds_tint</item>
+        <item name="android:textColorPrimary">@color/ds_label</item>
+        <item name="android:textColorSecondary">@color/ds_label_secondary</item>
+        <item name="android:textColorHint">@color/ds_label_tertiary</item>
+        <item name="android:statusBarColor">@color/ds_bg</item>
+        <item name="android:navigationBarColor">@color/ds_bg</item>
+        <!-- Dark icons in both bars: they sit on our near-white background. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="android:buttonStyle">@style/Widget.WTM.Button</item>
+    </style>
+
+    <!--
+      The default Button. Plenty of screens still use a bare Button for secondary actions;
+      styling it here means they inherit the design system instead of Material's stock
+      grey-on-grey capsule. The PRIMARY actions don't come through here - they are built
+      by bigChoice() / primaryButton() in code.
+    -->
+    <style name="Widget.WTM.Button" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:textColor">@color/ds_tint_deep</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:minHeight">48dp</item>
+    </style>
+
 </resources>

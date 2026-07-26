@@ -146,4 +146,71 @@ class BorderlineScorerTest {
                 ) != null)
         }
     }
+
+    // ── In-app screens: a tighter bar, same safety property ──────────────────────────
+
+    private fun blocksInApp(s: String) = BorderlineScorer.evaluateInApp(null, null, s) != null
+    private fun scoreInBody(s: String) = BorderlineScorer.score(null, null, s)?.score ?: 0
+
+    @Test
+    fun `the in-app bar is genuinely tighter than the web bar`() {
+        // Body text (no title multiplier) that lands in the 11..14 band: it is not enough
+        // for a web page, and IS enough inside an app. This is the whole point of the
+        // separate threshold - if these two ever agree, APP_THRESHOLD has stopped doing
+        // anything and the change has been silently undone.
+        assertTrue(
+            "APP_THRESHOLD must sit below THRESHOLD",
+            FilterTuning.APP_THRESHOLD < FilterTuning.THRESHOLD,
+        )
+        val band = "nude sexy babe"
+        val score = scoreInBody(band)
+        assertTrue(
+            "'$band' should land in the in-app band, scored $score",
+            score in FilterTuning.APP_THRESHOLD until FilterTuning.THRESHOLD,
+        )
+        assertTrue("'$band' must not block as a web page", BorderlineScorer.evaluate(null, null, band) == null)
+        assertTrue("'$band' must block inside an app", blocksInApp(band))
+    }
+
+    @Test
+    fun `one word still cannot block an app screen on its own`() {
+        // The single-word guarantee is what keeps "nude lipstick" and "naked eye" out of
+        // the block list. On the web it falls out of the arithmetic (SINGLE_WORD_MAX is
+        // THRESHOLD-1); at the lower in-app bar it has to be enforced by the distinct-family
+        // rule instead, so it needs its own test.
+        listOf("nude", "nude nude nude nude nude", "sexy", "sexy sexy sexy sexy sexy").forEach {
+            assertTrue(
+                "one word ('$it', scored ${scoreInBody(it)}) must not block an app screen",
+                !blocksInApp(it),
+            )
+        }
+    }
+
+    @Test
+    fun `ordinary app screens are not blocked`() {
+        listOf(
+            "Messages  Mum  see you at 6  Dad  ok  Sam  running late",
+            "Maps  turn left onto High Street in 200 metres",
+            "Settings  Battery  Display  Sound  Notifications  Storage",
+            "Calendar  Tuesday  dentist 9:00  standup 10:00  gym 18:00",
+            "Photos  Camera Roll  Screenshots  Favourites  Recently deleted",
+            "chicken breast recipe  preheat the oven  season the breast  rest for 5 minutes",
+        ).forEach {
+            assertTrue(
+                "app screen '$it' must NOT block (scored ${scoreInBody(it)})",
+                !blocksInApp(it),
+            )
+        }
+    }
+
+    @Test
+    fun `anything that blocks on the web still blocks in an app`() {
+        // The in-app bar is strictly tighter, so this must hold for every case above.
+        listOf(
+            "free porn videos", "blowjob compilation", "hardcore anal xxx",
+            "leaked nudes", "try on haul", "p0rn",
+        ).forEach {
+            assertTrue("'$it' blocks on the web, so it must block in an app", blocksInApp(it))
+        }
+    }
 }

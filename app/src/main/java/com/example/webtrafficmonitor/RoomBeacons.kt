@@ -235,6 +235,14 @@ object RoomBeacons {
             (0 until sensorCount(context, r)).mapNotNull { slot -> beaconMacAt(context, r, slot) }
         }.distinct()
 
+    /**
+     * Has the user actually SET SENSORS UP? True as soon as one beacon MAC is assigned to
+     * one room - deliberately NOT "is a room calibrated". Assigning a beacon is the point
+     * where the user has bought the hardware and told us about it; from then on, switching
+     * Bluetooth off is a way to blind the room guard, and [BluetoothGuard] treats it as one.
+     */
+    fun beaconsConfigured(context: Context): Boolean = allAssignedMacs(context).isNotEmpty()
+
     // ── Debug: enforce the room guard in ANY mode (normally strict-only). ──
     fun debugGuard(context: Context): Boolean = prefs(context).getBoolean("debug_guard", false)
     fun setDebugGuard(context: Context, on: Boolean) =
@@ -707,6 +715,46 @@ object RoomGuard {
 }
 
 
+/**
+ * THE BLUETOOTH GUARD.
+ *
+ * The room guard fails OPEN by design: no Bluetooth, no readings, no cover. That is the
+ * right call for someone who never owned a beacon - but for someone who HAS set sensors
+ * up, it hands them a one-swipe off switch. Pull down the shade, tap Bluetooth, and every
+ * protected room in the house is unprotected, silently.
+ *
+ * So: once beacons are configured, Bluetooth off is itself the block. Non-whitelisted apps
+ * stay covered until it goes back on, and the cover says exactly that - this is not a
+ * punishment, it is "the thing you set up can't see, please switch it on".
+ *
+ * Deliberately NOT gated on calibration or scan permissions: a half-finished setup would
+ * otherwise be the loophole. It IS gated on the mode (appBlockReason returns early in Off),
+ * so someone who switches monitoring off entirely is not locked out of their phone.
+ *
+ * Note this is the one guard that does NOT fail open, and that is the whole point. The way
+ * out is one tap in the shade, it is stated on the cover, and it needs no permission from
+ * us - which is what makes it a fair thing to hold the line on.
+ */
+object BluetoothGuard {
+
+    private fun adapter(context: Context): BluetoothAdapter? =
+        (context.applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+
+    /** isEnabled() needs no permission on any API level we run on. */
+    fun isBluetoothOn(context: Context): Boolean = adapter(context)?.isEnabled == true
+
+    /**
+     * Should non-whitelisted apps be covered right now? Beacons configured, a Bluetooth
+     * radio that exists, and it is switched off. A device with no Bluetooth at all can
+     * never be blocked by this.
+     */
+    fun isBlocking(context: Context): Boolean =
+        RoomBeacons.beaconsConfigured(context) &&
+            adapter(context) != null &&
+            !isBluetoothOn(context)
+}
+
+
 // =====================================================================================
 //  BeaconScanner  -  BLE listener with per-beacon history and a self-healing watchdog.
 // =====================================================================================
@@ -1023,18 +1071,18 @@ class SignalMeterView(context: Context) : View(context) {
             canvas.drawRect(x(z.greenLo.toFloat()), barTop, greenHiX, barBot, paint)
             paint.color = 0xF21B5E20.toInt()   // SUPER green (dark): the usage-spot readings
             canvas.drawRect(x(z.superLo.toFloat()), barTop, superHiX, barBot, paint)
-            text.textSize = 9 * dp; text.textAlign = Paint.Align.CENTER; text.color = 0xFF52606A.toInt()
+            text.textSize = 9 * dp; text.textAlign = Paint.Align.CENTER; text.color = Palette.labelSecondary
             canvas.drawText("${z.superLo}", x(z.superLo.toFloat()), barBot + 12 * dp, text)
             if (!openTop) canvas.drawText("${z.superHi}", x(z.superHi.toFloat()), barBot + 12 * dp, text)
         }
 
         current?.let {
-            paint.color = 0xFF1F2933.toInt()
+            paint.color = Palette.label
             val cx = x(it.toFloat())
             canvas.drawRoundRect(cx - 1.5f * dp, barTop - 3 * dp, cx + 1.5f * dp, barBot + 3 * dp, 2 * dp, 2 * dp, paint)
         }
 
-        text.textSize = 8 * dp; text.color = 0xFF9AA0A6.toInt()
+        text.textSize = 8 * dp; text.color = Palette.labelTertiary
         text.textAlign = Paint.Align.LEFT; canvas.drawText("-100", x0, barBot + 12 * dp, text)
         text.textAlign = Paint.Align.RIGHT; canvas.drawText("-35", x1, barBot + 12 * dp, text)
     }

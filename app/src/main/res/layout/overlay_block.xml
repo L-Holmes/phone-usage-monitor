@@ -18,17 +18,18 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF202124"
+    android:background="@color/ds_cover"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="32dp">
+    android:padding="28dp">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/block_title"
-        android:textColor="#FFFFFF"
-        android:textSize="26sp"
+        android:textColor="@color/ds_cover_text"
+        android:letterSpacing="-0.02"
+        android:textSize="28sp"
         android:textStyle="bold" />
 
     <TextView
@@ -37,7 +38,7 @@
         android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="@string/block_explanation"
-        android:textColor="#CCCCCC"
+        android:textColor="@color/ds_cover_text_dim"
         android:textSize="14sp" />
 
     <TextView
@@ -46,7 +47,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:gravity="center"
-        android:textColor="#FFD54F"
+        android:textColor="@color/ds_cover_reason"
         android:textSize="18sp" />
 
     <!-- Only ever set after the user taps "Go back". Empty otherwise. -->
@@ -57,7 +58,7 @@
         android:layout_marginTop="12dp"
         android:alpha="0"
         android:gravity="center"
-        android:textColor="#FF8FC2BA"
+        android:textColor="@color/ds_tint"
         android:textSize="14sp" />
 
     <!-- PRIMARY: the way out. -->
@@ -72,7 +73,7 @@
         android:paddingRight="20dp"
         android:text="@string/leave"
         android:textAllCaps="false"
-        android:textColor="#FF06201B"
+        android:textColor="@color/ds_on_fill"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -86,7 +87,7 @@
         android:focusable="true"
         android:padding="12dp"
         android:text="@string/go_back"
-        android:textColor="#FF9AA0A6"
+        android:textColor="@color/ds_cover_text_dim"
         android:textSize="14sp" />
 
     <TextView
@@ -98,7 +99,7 @@
         android:focusable="true"
         android:padding="10dp"
         android:text="@string/report_block"
-        android:textColor="#FF6B7075"
+        android:textColor="@color/ds_label_tertiary"
         android:textSize="13sp" />
 
 </LinearLayout>

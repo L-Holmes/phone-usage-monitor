@@ -243,10 +243,13 @@ class BreathingOverlay(private val context: Context) {
 
     val isShowing: Boolean get() = view != null
 
-    private val accent = 0xFF3E9C8E.toInt()
-    private val accentMuted = 0xFF2A5E55.toInt()
-    private val bg = 0xFF0A0B0D.toInt()
-    private val softText = 0xFFCFEDE7.toInt()
+    // The breathing gate is a full-screen cover, so it uses the cover palette rather than
+    // the page palette - the same dark surface as a block, for the same reason: it has to
+    // read as "stop", and it has to work over whatever app is underneath it.
+    private val accent = Palette.tint
+    private val accentMuted = Palette.tintDeep
+    private val bg = Palette.cover
+    private val softText = Palette.tintSoft
 
     fun show(appLabel: String, onContinue: () -> Unit, onDontWant: () -> Unit) {
         if (view != null) return
@@ -290,7 +293,7 @@ class BreathingOverlay(private val context: Context) {
             isAllCaps = false
             textSize = 19f
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF06201B.toInt())
+            setTextColor(Palette.cover)
             background = GradientDrawable().apply {
                 cornerRadius = dp(34).toFloat()
                 setColor(accentMuted)
@@ -305,7 +308,7 @@ class BreathingOverlay(private val context: Context) {
             text = context.getString(R.string.overlay_continue_open, appLabel)
             isAllCaps = false
             textSize = 14f
-            setTextColor(0xFF8FC2BA.toInt())
+            setTextColor(Palette.tint)
             gravity = Gravity.CENTER
             // More gap above the "continue" line so it sits a bit lower.
             setPadding(dp(16), dp(28), dp(16), dp(4))

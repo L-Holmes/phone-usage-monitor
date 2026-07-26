@@ -140,12 +140,12 @@ object DopamineTuning {
     }
 
     fun bandColour(score: Int): Int = when {
-        score >= 80 -> 0xFFB3261E.toInt()
-        score >= 60 -> 0xFFD1462F.toInt()
-        score >= 45 -> 0xFFE08A26.toInt()
-        score >= 30 -> 0xFFCBA92B.toInt()
-        score >= 15 -> 0xFF5C9E31.toInt()
-        else -> 0xFF2E7D32.toInt()
+        score >= 80 -> Palette.dangerText
+        score >= 60 -> Palette.danger
+        score >= 45 -> Palette.warning
+        score >= 30 -> Palette.warning
+        score >= 15 -> Palette.success
+        else -> Palette.successText
     }
 
     const val WAKING_HOURS = 16f
@@ -738,10 +738,10 @@ object DopamineRank {
 
     // Earned belts, best first. Colours darken as you climb.
     private val BELTS = listOf(
-        Belt("Monk", "Melatonin Monk", 60, 25, 0xFF1B5E20.toInt()),
-        Belt("Guru", "Grounded Guru", 30, 30, 0xFF2E7D32.toInt()),
-        Belt("Sensei", "Serotonin Sensei", 14, 35, 0xFF2E9E8F.toInt()),
-        Belt("Disciple", "Dopamine Disciple", 7, 40, 0xFF3E7CB1.toInt()),
+        Belt("Monk", "Melatonin Monk", 60, 25, Palette.successText),
+        Belt("Guru", "Grounded Guru", 30, 30, Palette.successText),
+        Belt("Sensei", "Serotonin Sensei", 14, 35, Palette.tint),
+        Belt("Disciple", "Dopamine Disciple", 7, 40, Palette.series[1]),
     )
 
     /** One row of the prestige ladder, for the "all the ranks" page. */
@@ -784,19 +784,19 @@ object DopamineRank {
         RankLevel(longRes(context, b.longTitle), b.colour,
             context.getString(R.string.rank_req, b.streakDays, b.maxScore, flavour))
     } + listOf(
-        RankLevel(longRes(context, "Adenosine Apprentice"), 0xFF52796F.toInt(), context.getString(R.string.rank_req_apprentice)),
-        RankLevel(longRes(context, "Dopamine Drifter"), 0xFF9A7B00.toInt(), context.getString(R.string.rank_req_drifter)),
-        RankLevel(longRes(context, "The Twitchy Thumb"), 0xFFB07800.toInt(), context.getString(R.string.rank_req_twitchy)),
-        RankLevel(longRes(context, "Certified Doomscroller"), 0xFFC0392B.toInt(), context.getString(R.string.rank_req_doomscroller)),
-        RankLevel(longRes(context, "Fully Fried"), 0xFF8E1600.toInt(), context.getString(R.string.rank_req_fried)),
-        RankLevel(longRes(context, "The Journey Begins"), 0xFF2E9E8F.toInt(), context.getString(R.string.rank_req_journey)),
+        RankLevel(longRes(context, "Adenosine Apprentice"), Palette.tintDeep, context.getString(R.string.rank_req_apprentice)),
+        RankLevel(longRes(context, "Dopamine Drifter"), Palette.warningText, context.getString(R.string.rank_req_drifter)),
+        RankLevel(longRes(context, "The Twitchy Thumb"), Palette.warningText, context.getString(R.string.rank_req_twitchy)),
+        RankLevel(longRes(context, "Certified Doomscroller"), Palette.danger, context.getString(R.string.rank_req_doomscroller)),
+        RankLevel(longRes(context, "Fully Fried"), Palette.dangerText, context.getString(R.string.rank_req_fried)),
+        RankLevel(longRes(context, "The Journey Begins"), Palette.tint, context.getString(R.string.rank_req_journey)),
     )
 
     fun of(context: Context): DopamineRankResult {
         val history = DopamineLog.history(context, 90)
         val scored = history.map { d -> DopamineScore.of(context, d).let { if (it.hasData) it.score else -1 } }
         if (scored.none { it >= 0 }) return DopamineRankResult(
-            context.getString(R.string.rank_initiate), longRes(context, "The Journey Begins"), 0xFF2E9E8F.toInt(),
+            context.getString(R.string.rank_initiate), longRes(context, "The Journey Begins"), Palette.tint,
             context.getString(R.string.rank_initiate_detail), false)
 
         fun streak(maxScore: Int): Int {
@@ -824,11 +824,11 @@ object DopamineRank {
         val entry = BELTS.last()
         val path = context.getString(R.string.rank_path, shortRes(context, entry.title), entry.streakDays, entry.maxScore, streak(entry.maxScore))
         return when {
-            avg < 40 -> DopamineRankResult(shortRes(context, "Apprentice"), longRes(context, "Adenosine Apprentice"), 0xFF52796F.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
-            avg < 50 -> DopamineRankResult(shortRes(context, "Drifter"), longRes(context, "Dopamine Drifter"), 0xFF9A7B00.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
-            avg < 60 -> DopamineRankResult(shortRes(context, "Twitchy"), longRes(context, "The Twitchy Thumb"), 0xFFB07800.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
-            avg < 75 -> DopamineRankResult(shortRes(context, "Doomscroller"), longRes(context, "Certified Doomscroller"), 0xFFC0392B.toInt(), context.getString(R.string.rank_detail_avg, avg, path), true)
-            else -> DopamineRankResult(shortRes(context, "Fried"), longRes(context, "Fully Fried"), 0xFF8E1600.toInt(), context.getString(R.string.rank_detail_fried, avg, path), true)
+            avg < 40 -> DopamineRankResult(shortRes(context, "Apprentice"), longRes(context, "Adenosine Apprentice"), Palette.tintDeep, context.getString(R.string.rank_detail_avg, avg, path), true)
+            avg < 50 -> DopamineRankResult(shortRes(context, "Drifter"), longRes(context, "Dopamine Drifter"), Palette.warningText, context.getString(R.string.rank_detail_avg, avg, path), true)
+            avg < 60 -> DopamineRankResult(shortRes(context, "Twitchy"), longRes(context, "The Twitchy Thumb"), Palette.warningText, context.getString(R.string.rank_detail_avg, avg, path), true)
+            avg < 75 -> DopamineRankResult(shortRes(context, "Doomscroller"), longRes(context, "Certified Doomscroller"), Palette.danger, context.getString(R.string.rank_detail_avg, avg, path), true)
+            else -> DopamineRankResult(shortRes(context, "Fried"), longRes(context, "Fully Fried"), Palette.dangerText, context.getString(R.string.rank_detail_fried, avg, path), true)
         }
     }
 }

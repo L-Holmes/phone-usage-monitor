@@ -117,7 +117,7 @@ interface MonitorDao {
 // --------------------------------------------------------------
 
 
-@Database(entities = [MonitorEntry::class], version = 4, exportSchema = false)
+@Database(entities = [MonitorEntry::class], version = 5, exportSchema = false)
 abstract class MonitorDatabase : RoomDatabase() {
 
     abstract fun dao(): MonitorDao
@@ -162,6 +162,16 @@ data class MonitorEntry(
     val domain: String? = null,
     val url: String? = null,
     val text: String? = null,
+    /**
+     * The adult-content heuristic's score for what was on screen - EVERY entry carries one,
+     * app screens included, not just web pages. 0 means "read, found nothing"; it is not the
+     * same as null, which means "not scored". Being able to see what an ordinary screen
+     * scores is the only honest way to tune the thresholds: a tier bump that quietly starts
+     * scoring a messaging app 12 is visible here long before it starts blocking one.
+     *
+     * See FilterTuning.THRESHOLD (web) and APP_THRESHOLD (in-app) for where the bars sit.
+     */
+    val score: Int? = null,
 ) {
     companion object {
         const val KIND_PAGE = "page"
@@ -230,6 +240,7 @@ class MonitorAdapter(
         val primary: TextView = view.findViewById(R.id.primary)
         val secondary: TextView = view.findViewById(R.id.secondary)
         val meta: TextView = view.findViewById(R.id.meta)
+        val score: TextView = view.findViewById(R.id.score)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -250,6 +261,29 @@ class MonitorAdapter(
         holder.secondary.text = entry.url ?: entry.domain ?: entry.packageName.orEmpty()
         val snippet = entry.text?.replace('\n', ' ')?.trim()?.take(40).orEmpty()
         holder.meta.text = snippet.ifBlank { "(none)" } + "   ·   $time"
+        bindScore(holder.score, entry.score)
+    }
+
+    /**
+     * The score badge. Banded against the real bars so the log reads at a glance:
+     * clear (under the in-app threshold), warm (would block in an app, not on the web),
+     * hot (over the web threshold). A row with no score at all shows nothing.
+     */
+    private fun bindScore(view: TextView, score: Int?) {
+        if (score == null) { view.visibility = View.GONE; return }
+        view.visibility = View.VISIBLE
+        view.text = score.toString()
+        val (fg, bg) = when {
+            score >= FilterTuning.THRESHOLD -> Palette.dangerText to Palette.dangerSoft
+            score >= FilterTuning.APP_THRESHOLD -> Palette.warningText to Palette.warningSoft
+            score > 0 -> Palette.labelSecondary to Palette.surfaceSunken
+            else -> Palette.labelQuaternary to 0x00000000
+        }
+        view.setTextColor(fg)
+        view.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = Radius.chip * view.resources.displayMetrics.density
+            setColor(bg)
+        }
     }
 
     companion object {

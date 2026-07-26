@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE PALETTE, for the handful of things that are still built in XML (the theme, the
+  block cover, the log row, the first-run screen).
+
+  These MUST stay in step with Palette in Design.kt, which is the source of truth for
+  everything built in code - i.e. almost the whole app. If you change a value here,
+  change it there too, and vice versa. There is no way to share constants across the
+  Kotlin/XML boundary without generating one from the other, and that is not worth the
+  build complexity for a dozen values.
+-->
+<resources>
+
+    <!-- Backgrounds -->
+    <color name="ds_bg">#FFF7F8FA</color>
+    <color name="ds_surface">#FFFFFFFF</color>
+    <color name="ds_surface_sunken">#FFF1F3F6</color>
+    <color name="ds_hairline">#FFE4E7EC</color>
+
+    <!-- Text -->
+    <color name="ds_label">#FF12171D</color>
+    <color name="ds_label_secondary">#FF636C76</color>
+    <color name="ds_label_tertiary">#FF929AA3</color>
+    <color name="ds_on_fill">#FFFFFFFF</color>
+
+    <!-- Brand -->
+    <color name="ds_tint">#FF14A08F</color>
+    <color name="ds_tint_deep">#FF0E8375</color>
+    <color name="ds_tint_soft">#FFE4F4F1</color>
+
+    <!-- Semantics -->
+    <color name="ds_success">#FF30B85B</color>
+    <color name="ds_warning">#FFF5A524</color>
+    <color name="ds_danger">#FFE5484D</color>
+
+    <!-- The block cover. Deliberately the one dark surface in the app: a block has to
+         read as a wall, not as a tasteful suggestion. -->
+    <color name="ds_cover">#FF171C22</color>
+    <color name="ds_cover_text">#FFF4F6F8</color>
+    <color name="ds_cover_text_dim">#FFA8B0B8</color>
+    <color name="ds_cover_reason">#FFFFC857</color>
+
+</resources>
