@@ -1,0 +1,14 @@
+<!--
+  LAUNCHER ICON — API 24-25 fallback.
+
+  Adaptive icons only exist from API 26, and mipmap-anydpi-v26 shadows this file from
+  there on. On 24 and 25 the launcher gets this instead: the full mark with our own
+  corner radius already applied, because nothing is going to mask it for us.
+
+  It is a vector, not a set of PNGs. VectorDrawable has been in the framework since
+  API 21, so every device that can reach this file can render it, and we avoid
+  checking five bitmap densities into the repo for two OS versions.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_logo"
+    android:inset="0dp"/>

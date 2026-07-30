@@ -454,6 +454,17 @@ private fun temptResId(id: String, suffix: String): Int =
 private fun temptTitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "title"))
 private fun temptSubtitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "subtitle"))
 private fun temptInsteadOf(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "insteadof"))
+/**
+ * What this category's block switch kills, in the user's words ("reels, shorts & endless
+ * feeds") - or null, and the switch falls back to the generic "block what feeds this".
+ *
+ * Optional per category on purpose: most of them have nothing better to say than the
+ * generic line, but scrolling owns the reels/shorts/feeds switch that used to sit on the
+ * Productivity page, and that switch has to keep naming what it does.
+ */
+private fun temptBlocksLabel(spec: AppConfig.TemptationSpec): String? =
+    temptResId(spec.id, "blocks").takeIf { it != 0 }?.let { getString(it) }
+
 private fun temptCovers(spec: AppConfig.TemptationSpec): List<String> =
     resources.getStringArray(temptResId(spec.id, "covers")).toList()
 
@@ -2183,10 +2194,14 @@ private fun showRecentBlocks() {
 
 // ── Report screen: 4 equal full-width panes ────────────────────────────────
 // ── Bottom navigation (strava-style): icon + label, subtle pill on the selected tab.
-//    Lives on the three top-level pages; replaces the old big Productivity/Temptations
-//    buttons that sat on the landing page.
 /**
  * The tab bar. Glass, hairline top edge, tint for the selected tab in a soft pill.
+ *
+ * TWO TABS, and it stays two. Productivity used to be a third one, but it is a page you
+ * open when you want to look at your numbers, not somewhere you live - so it costs a
+ * permanent third of the bar and earns a visit a week. It is now a section on Overview
+ * (see setupHomeScreen) and reached like any other sub-page. Overview is where you land;
+ * Temptations is what you reach for in the moment. Anything else is a sub-page.
  *
  * The selected pill is Palette.tintSoft rather than a 8%-alpha teal: a solid soft colour
  * stays the same over any content, where an alpha wash shifted with whatever scrolled
@@ -2208,7 +2223,6 @@ private fun withBottomBar(content: View, selected: Int): View {
     }
     val tabs = listOf(
         Triple(R.drawable.ic_nav_overview, getString(R.string.nav_overview)) { setupHomeScreen() },
-        Triple(R.drawable.ic_nav_productivity, getString(R.string.nav_productivity)) { showProductivity() },
         Triple(R.drawable.ic_nav_temptations, getString(R.string.nav_temptations)) { showTemptationsTab() },
     )
     tabs.forEachIndexed { i, (icon, label, go) ->
@@ -2245,10 +2259,10 @@ private fun withBottomBar(content: View, selected: Int): View {
 
 // ── Disguised home: a productivity face; the addiction tools live behind a tab ─
 // Order, deliberately: the dopamine baseline + rank first (the thing to care about),
-// then the usage graphs (what it costs), then the two big doors (Productivity,
-// Temptations), dev tools, the status console, and a tiny about link. The old
-// "what you've reclaimed" stats and the cost projector live in showScrollCost()
-// inside Productivity now.
+// then the usage graphs (what it costs), then the Productivity door, dev tools, the
+// status console, and a tiny about link. Temptations is the other bottom-bar tab, so
+// it needs no door here. The old "what you've reclaimed" stats and the cost projector
+// live in showScrollCost() inside Productivity now.
 private fun setupHomeScreen() {
     onHomeScreen = true; onTemptationsTab = false; onReportScreen = false; onDevScreen = false
     subBack = null
@@ -2470,6 +2484,65 @@ private fun setupHomeScreen() {
                 if (projected) Palette.labelTertiary else teal)
         },
     ))
+
+    // ── 3. Productivity: the door to their own numbers ───────────────────────
+    //    Sits directly under the usage overview, because that is the graph that raises the
+    //    question this page answers. It replaced a bottom-bar tab, so it has to do the tab
+    //    label's job AND the job the label never did: say what is behind it, and say that
+    //    the app wants three figures FROM the user. The live "n of 3 added" line is the
+    //    only place on Overview that admits any of this takes input at all - which is why
+    //    it is bold and tinted when the count is zero.
+    val numbersAdded = listOf(
+        AboutYou.hasData(this),
+        LifeInputs.anySet(this),
+        UsageGoal.minutesPerDay(this) > 0,
+    ).count { it }
+    content.addView(homeHeading(getString(R.string.home_prod_title), getString(R.string.home_prod_sub)))
+    content.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = tappableBg(Palette.glass); elevation = dpf(1f)
+        clipToOutline = true                       // or the ripple squares off the corners
+        val p = dp(Space.md); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        isClickable = true; isFocusable = true
+        setOnClickListener { showProductivity() }
+        pressable()
+
+        addView(LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.home_prod_card_title); textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "›"; textSize = 22f; setTextColor(Palette.labelQuaternary)
+            })
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = getString(R.string.home_prod_card_sub)
+            textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xxs), 0, 0)
+        })
+        addView(separator())
+        listOf(R.string.home_prod_b1, R.string.home_prod_b2, R.string.home_prod_b3).forEach { line ->
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.proto_bullet, getString(line))
+                textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+                setLineSpacing(0f, Type.lineSpacing)
+                setPadding(0, dp(Space.xxs), 0, 0)
+            })
+        }
+        addView(TextView(this@MainActivity).apply {
+            text = if (numbersAdded == 0) getString(R.string.home_prod_none)
+                   else getString(R.string.home_prod_added, numbersAdded)
+            textSize = Type.footnote; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(if (numbersAdded == 0) Palette.tint else Palette.successText)
+            setPadding(0, dp(Space.sm), 0, 0)
+        })
+    })
 
     // ── 4. Dev tools (only when dev mode is on) ─────────────────────────────
     if (AppConfig.DEV_MODE) {
@@ -2789,42 +2862,90 @@ private fun showScrollCost() {
     refresh()
 }
 
-// Everything that used to sit under the home graphic now lives here.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//  PRODUCTIVITY
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//  Reached from the "Productivity" section on Overview - it is NOT a bottom-bar tab any
+//  more. The bar is Overview + Temptations, full stop; a third tab for a page you visit
+//  once a week was buying permanent chrome with occasional value.
+//
+//  FOUR GROUPS, in the order a person actually asks the questions:
+//    TODAY          - where am I right now?         → the dopamine baseline
+//    YOUR PROGRESS  - what have I won back?         → this week, reclaimed
+//    WHAT IT COSTS  - what is the rest costing me?  → the projector, and what you'd get back
+//    YOUR NUMBERS   - the three optional figures we want from THEM
+//
+//  YOUR NUMBERS is last and deliberately loud about being an input. It used to be three
+//  identical grey text links buried between graphs, which gave no hint that anything was
+//  editable or what it would change. It is now a grouped list that names what each figure
+//  is FOR and shows what you currently have set, or a tinted "Add" if you have nothing.
+//
+//  TWO THINGS THAT USED TO BE HERE AND AREN'T:
+//    • the reels/shorts/feeds switch → Temptations ▸ Endless Scrolling / Brain Rot, which
+//      already owned exactly those block patterns (AppConfig.SHORT_FORM_PATTERNS). Do not
+//      add a second copy here: two switches over one rule set is a bug waiting to happen.
+//    • the "your next year" 365-square grid → gone. It said the same thing as the
+//      projector's donut above it and the opportunity-cost list below it, a third time.
+// ═══════════════════════════════════════════════════════════════════════════════════════
 private fun showProductivity() {
     inSubPage = true
-    markTabSeen("productivity")
+    // Not a tab any more: leaving onHomeScreen set would let a resume past the nudge
+    // threshold rebuild Overview underneath the user (see updateScreen).
+    onHomeScreen = false; onTemptationsTab = false
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
-    // Short-form blocking toggle
-    val sfSub = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, 0) }
-    val sfSwitch = android.widget.Switch(this).apply { isChecked = ShortForm.enabled() }
-    val sfCard = LinearLayout(this).apply {
+    content.addView(titleText(getString(R.string.prod_title)))
+    content.addView(bodyText(getString(R.string.prod_intro)))
+
+    // ── TODAY ───────────────────────────────────────────────────────────────────────
+    //    The dopamine baseline. A whole-phone measure, which is why it lives here and not
+    //    in the adult-content statistics.
+    content.addView(sectionHeader(getString(R.string.prod_sec_today)))
+    val todayScore = DopamineScore.of(this, DopamineLog.today(this))
+    val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = glassBg(); elevation = 1f * dp
-        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = (4 * dp).toInt() }
+        background = tappableBg(Palette.glass); elevation = dpf(1f)
+        clipToOutline = true
+        val p = dp(Space.md); setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        isClickable = true; isFocusable = true
+        setOnClickListener { dopamineBack = { showProductivity() }; showDopamine() }
     }
-    val sfText = LinearLayout(this).apply {
+    dopCard.addView(TextView(this).apply {
+        text = if (todayScore.hasData) "${todayScore.score}" else "–"
+        textSize = 34f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (todayScore.hasData) todayScore.colour else Palette.labelTertiary)
+        includeFontPadding = false
+    })
+    dopCard.addView(LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
+        setPadding(dp(Space.sm) + dp(Space.xxs) / 2, 0, 0, 0)
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-    }
-    sfText.addView(TextView(this).apply { text = getString(R.string.prod_block_sf); textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label) })
-    sfText.addView(sfSub)
-    sfCard.addView(sfText); sfCard.addView(sfSwitch)
-    fun refreshSf() { sfSub.text = if (ShortForm.enabled()) getString(R.string.prod_sf_on) else getString(R.string.prod_sf_off) }
-    sfSwitch.setOnCheckedChangeListener { _, checked -> ShortForm.setEnabled(this, checked); refreshSf() }
-    refreshSf()
-    content.addView(sfCard)
+        addView(TextView(this@MainActivity).apply {
+            text = if (todayScore.hasData) todayScore.band else getString(R.string.prod_still_measuring)
+            textSize = Type.body; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = getString(R.string.prod_out_of_100)
+            textSize = Type.caption; setTextColor(Palette.labelTertiary)
+        })
+    })
+    dopCard.addView(TextView(this).apply {
+        text = "›"; textSize = 22f; setTextColor(Palette.labelQuaternary)
+    })
+    content.addView(dopCard)
 
-    // The cost projector + reclaimed stats used to live on the landing page; they moved
-    // here so the landing page can stay graphs-only.
-    content.addView(homeCard(getString(R.string.prod_scroll_cost_title), getString(R.string.prod_scroll_cost_sub, Units.symbol(this))) { showScrollCost() })
-
-    // ── This week, reclaimed: the same cumulative card as the home page's year chart,
-    //    but green and pointing the right way - solid line Mon→today, grey dotted
-    //    projection to Sunday at the current pace.
-    content.addView(sectionTitle(getString(R.string.prod_week_reclaimed)))
+    // ── YOUR PROGRESS ───────────────────────────────────────────────────────────────
+    //    The same cumulative card as Overview's year chart, but green and pointing the
+    //    right way: solid line Mon→today, grey dotted projection to Sunday at this pace.
+    content.addView(sectionHeader(getString(R.string.prod_sec_progress)))
+    content.addView(TextView(this).apply {
+        text = getString(R.string.prod_week_reclaimed)
+        textSize = Type.headline; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+        setPadding(0, 0, 0, dp(Space.xs))
+    })
     run {
         val dayMs = 24L * 60 * 60 * 1000
         val winTs = TemptationLog.timestamps(this) +
@@ -2865,90 +2986,135 @@ private fun showProductivity() {
             },
         ))
     }
-    val goalNow = UsageGoal.hoursPerDay(this)
-    content.addView(smallLink(if (goalNow == null) getString(R.string.prod_set_goal) else getString(R.string.prod_goal_change, fmtHours(goalNow)), dp) {
-        showUsageGoal()
-    })
 
-    // ── Dopamine baseline: a whole-phone measure, so it belongs here and not buried in
-    //    the adult-content statistics.
-    val todayScore = DopamineScore.of(this, DopamineLog.today(this))
-    content.addView(sectionTitle(getString(R.string.prod_dopamine_title)))
-    val dopCard = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = glassBg(); elevation = 1f * dp
-        val p = (16 * dp).toInt(); setPadding(p, p, p, p)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        isClickable = true; isFocusable = true
-        setOnClickListener { dopamineBack = { showProductivity() }; showDopamine() }
-    }
-    dopCard.addView(TextView(this).apply {
-        text = if (todayScore.hasData) "${todayScore.score}" else "–"
-        textSize = 34f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(if (todayScore.hasData) todayScore.colour else Palette.labelTertiary)
-        includeFontPadding = false
-    })
-    dopCard.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding((14 * dp).toInt(), 0, 0, 0)
-        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    // ── WHAT IT COSTS ───────────────────────────────────────────────────────────────
+    //    The projector lives on its own page (showScrollCost); what sits here is the door
+    //    to it plus the version of the same number that isn't hours - books, workouts,
+    //    sleep. Hours are abstract; these aren't.
+    content.addView(sectionHeader(getString(R.string.prod_sec_cost)))
+    content.addView(homeCard(
+        getString(R.string.prod_scroll_cost_title),
+        getString(R.string.prod_scroll_cost_sub, Units.symbol(this))) { showScrollCost() })
+
+    val perYearHours = Usage.minutes(this) * 365.0 / 60.0
+    content.addView(glassCard(Space.md).apply {
         addView(TextView(this@MainActivity).apply {
-            text = if (todayScore.hasData) todayScore.band else getString(R.string.prod_still_measuring)
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+            text = getString(R.string.prod_reclaim_could)
+            textSize = Type.headline; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
         })
-        addView(TextView(this@MainActivity).apply {
-            text = getString(R.string.prod_out_of_100)
-            textSize = 12f; setTextColor(Palette.labelTertiary)
-        })
-    })
-    dopCard.addView(TextView(this).apply {
-        text = "›"; textSize = 22f; setTextColor(Palette.labelQuaternary)
-    })
-    content.addView(dopCard)
-
-    content.addView(smallLink(getString(R.string.prod_habits_estimate), dp) {
-        lifeInputsBack = { showProductivity() }; showLifeInputs()
-    })
-    content.addView(smallLink(getString(R.string.prod_about_you), dp) {
-        aboutYouBack = { showProductivity() }; showAboutYou()
+        listOf(
+            getString(R.string.prod_opp_b1, Math.round(perYearHours / 6.0).toInt()),
+            getString(R.string.prod_opp_b2, Math.round(perYearHours / 0.75).toInt()),
+            getString(R.string.prod_opp_b3, Math.round(perYearHours / 480.0 * 100).toInt()),
+            getString(R.string.prod_opp_b4, Math.round(perYearHours / 8.0).toInt()),
+        ).forEach { line ->
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.proto_bullet, line)
+                textSize = Type.callout; setTextColor(Palette.labelSecondary)
+                setLineSpacing(0f, Type.lineSpacing)
+                setPadding(0, dp(Space.xs), 0, 0)
+            })
+        }
     })
 
-    // Your next year as days
-    content.addView(sectionTitle(getString(R.string.prod_next_year)))
-    val grid = TimeGridView(this)
-    content.addView(grid, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-    val gridCaption = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (8 * dp).toInt(), 0, 0) }
-    content.addView(gridCaption)
-
-    // Opportunity cost
-    content.addView(sectionTitle(getString(R.string.prod_reclaim_could)))
-    val oppBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    content.addView(oppBox)
-
-    val min = Usage.minutes(this)
-    val perYearHours = min * 365.0 / 60.0
-    val wakingDaysYr = Math.round(perYearHours / Usage.WAKING_HOURS).toInt()
-    grid.setFilledDays(wakingDaysYr)
-    gridCaption.text = getString(R.string.prod_grid_caption, wakingDaysYr)
-    listOf(
-        getString(R.string.prod_opp_b1, Math.round(perYearHours / 6.0).toInt()),
-        getString(R.string.prod_opp_b2, Math.round(perYearHours / 0.75).toInt()),
-        getString(R.string.prod_opp_b3, Math.round(perYearHours / 480.0 * 100).toInt()),
-        getString(R.string.prod_opp_b4, Math.round(perYearHours / 8.0).toInt()),
-    ).forEach { line ->
-        oppBox.addView(TextView(this).apply {
-            text = getString(R.string.proto_bullet, line); textSize = 15f; setTextColor(Palette.labelSecondary)
-            setLineSpacing((3 * dp), 1f); setPadding(0, (6 * dp).toInt(), 0, 0)
-        })
-    }
+    // ── YOUR NUMBERS ────────────────────────────────────────────────────────────────
+    //    The only group you can put something INTO, so it says so, and each row shows
+    //    what you've got set rather than making you open it to find out.
+    content.addView(sectionHeader(getString(R.string.prod_sec_inputs)))
+    content.addView(bodyText(getString(R.string.prod_inputs_hint)).apply {
+        setPadding(dp(Space.xxs), 0, dp(Space.xxs), dp(Space.sm))
+    })
+    val goalMins = UsageGoal.minutesPerDay(this)
+    content.addView(groupCard(
+        groupRow(getString(R.string.prod_row_income), getString(R.string.prod_row_income_sub),
+            if (AboutYou.hasData(this)) Units.money(this, AboutYou.effectiveAnnual(this)) else null) {
+            aboutYouBack = { showProductivity() }; showAboutYou()
+        },
+        groupRow(getString(R.string.prod_row_habits), getString(R.string.prod_row_habits_sub),
+            if (LifeInputs.anySet(this)) getString(R.string.prod_habits_value, LifeInputs.estimate(this)) else null) {
+            lifeInputsBack = { showProductivity() }; showLifeInputs()
+        },
+        groupRow(getString(R.string.prod_row_goal), getString(R.string.prod_row_goal_sub),
+            if (goalMins > 0) getString(R.string.prod_row_perday, fmtHours(goalMins / 60f)) else null) {
+            showUsageGoal()
+        },
+    ))
 
     val root = ScrollView(this).apply {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         isFillViewport = true; addView(content)
     }
-    subBack = { setupHomeScreen() }
-    setContentNoThumb(withBottomBar(root, 1))
+    setContentWithThumb(root) { setupHomeScreen() }
+}
+
+/**
+ * An inset grouped list, the way iOS Settings does it: ONE card, hairline-separated rows,
+ * indented so the hairline starts where the text does.
+ *
+ * clipToOutline is not optional. Without it a ripple on the first or last row paints
+ * square right through the card's rounded corners.
+ */
+private fun groupCard(vararg rows: View): View =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = glassBg(); elevation = dpf(1f)
+        clipToOutline = true
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(Space.sm) }
+        rows.forEachIndexed { i, row ->
+            if (i > 0) addView(View(this@MainActivity).apply {
+                setBackgroundColor(Palette.hairline)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, maxOf(1, dp(1) / 2),
+                ).apply { marginStart = dp(Space.md) }
+            })
+            addView(row)
+        }
+    }
+
+/**
+ * A row inside [groupCard]: what it is, what it's for, and what you currently have set.
+ *
+ * [value] == null means "nothing entered yet", and the row shows a tinted "Add" instead.
+ * That swap is the entire reason this row type exists rather than a plain text link - a
+ * row that shows its own state tells you whether it is worth opening.
+ */
+private fun groupRow(title: String, sub: String?, value: String?, onClick: () -> Unit): View {
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        // No pressable() here: a row that scales inside a fixed card looks broken. The
+        // ripple is the whole feedback, so it has to be a real one.
+        background = tappableBg(0x00000000, radius = 0f, stroke = null)
+        setPadding(dp(Space.md), dp(Space.sm), dp(Space.md), dp(Space.sm))
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
+    }
+    val texts = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    texts.addView(TextView(this).apply {
+        text = title; textSize = Type.body
+        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+    })
+    if (sub != null) texts.addView(TextView(this).apply {
+        text = sub; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+        setLineSpacing(0f, Type.lineSpacing); setPadding(0, dp(Space.xxs) / 2, 0, 0)
+    })
+    row.addView(texts)
+    row.addView(TextView(this).apply {
+        text = value ?: getString(R.string.prod_row_add)
+        textSize = Type.callout; maxLines = 1
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (value == null) Palette.tint else Palette.labelSecondary)
+        setPadding(dp(Space.xs), 0, dp(Space.xs), 0)
+    })
+    row.addView(TextView(this).apply {
+        text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
+    })
+    return row
 }
 
 private fun showTemptationsTab() {
@@ -2974,7 +3140,7 @@ private fun showTemptationsTab() {
         isFillViewport = true
         addView(list)
     })
-    setContentNoThumb(withBottomBar(root, 2))
+    setContentNoThumb(withBottomBar(root, 1))
 }
 
 // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -3088,8 +3254,16 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
     val sub = TextView(this).apply {
         textSize = 13f; setTextColor(Palette.divider); setPadding(0, (3 * dp).toInt(), 0, 0)
     }
+    // Name the thing where the category has words for it ("Block reels, shorts & endless
+    // feeds"), so a switch that used to have its own page keeps its own label.
+    val named = temptBlocksLabel(spec)
     fun paint() {
-        title.text = if (on) getString(R.string.temp_block_on) else getString(R.string.temp_block_off)
+        title.text = when {
+            named != null && on -> getString(R.string.temp_block_named_on, named)
+            named != null -> getString(R.string.temp_block_named_off, named)
+            on -> getString(R.string.temp_block_on)
+            else -> getString(R.string.temp_block_off)
+        }
         val sites = spec.blockPatterns.size
         val apps = spec.greyApps.size
         val appBit = if (apps > 0) getString(R.string.temp_block_applimit, apps, GreyUsage.LIMIT_MIN) else ""
@@ -5489,11 +5663,14 @@ private fun startWeekStrict() {
             setupPrefs().edit().putBoolean("seen_$tab", true).apply()
         maybeSchedulePermPopup()
     }
+    // Overview + Temptations. Productivity used to be the third, but it is a sub-page now
+    // (see withBottomBar) and gating the permissions offer on a page nobody has to visit
+    // would leave the offer permanently un-armed for most people.
     private fun allTabsSeen(): Boolean =
-        listOf("overview", "productivity", "temptations")
+        listOf("overview", "temptations")
             .all { setupPrefs().getBoolean("seen_$it", false) }
 
-    /** 3 seconds after the last of the three tabs is first seen, offer the flow - once ever. */
+    /** 3 seconds after the last of the tabs is first seen, offer the flow - once ever. */
     private fun maybeSchedulePermPopup() {
         if (permPopupScheduled || permPopupDone()) return
         if (!Mode.isOff(this) || corePermsGranted() || !allTabsSeen()) return

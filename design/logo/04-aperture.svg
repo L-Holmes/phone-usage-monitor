@@ -1,0 +1,27 @@
+<!--
+  CONCEPT 4 — "APERTURE"
+
+  Three concentric squircles closing onto a solid centre: attention narrowing to
+  one thing. The most abstract and the most systematic-looking — this is the mark
+  that would sit most comfortably on an enterprise slide.
+
+  Against it: it reads as a target or a camera before it reads as focus, and it
+  carries no sense of change over time — which is what this app measures.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="Aperture">
+  <defs>
+    <linearGradient id="ap-tile" x1="0" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#18B7A2"/>
+      <stop offset="1" stop-color="#0C8073"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#ap-tile)"/>
+
+  <rect x="104" y="104" width="304" height="304" rx="82"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.30" stroke-width="22"/>
+  <rect x="166" y="166" width="180" height="180" rx="54"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.62" stroke-width="22"/>
+  <rect x="220" y="220" width="72" height="72" rx="24" fill="#FFFFFF"/>
+</svg>

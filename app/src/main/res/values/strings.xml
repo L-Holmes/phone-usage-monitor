@@ -84,7 +84,6 @@
 
     <!-- ── Bottom navigation (Main.kt) ───────────────────────────────────────────────── -->
     <string name="nav_overview">Overview</string>
-    <string name="nav_productivity">Productivity</string>
     <string name="nav_temptations">Temptations</string>
 
     <!-- ── Option labels (display only; the ENGLISH value stays the stored key). Arrays are
@@ -750,9 +749,13 @@
     <string name="scroll_that_year">That same year is also:\n%1$d hours of training  ·  %2$d evenings with people  ·  about %3$d books</string>
     <string name="scroll_valued">Valued at %1$s/yr, from your numbers  ·  change</string>
     <string name="scroll_add_rate">Add your hourly rate to see what it\'s really costing you  ›</string>
-    <string name="prod_block_sf">Block reels, shorts &amp; feeds</string>
-    <string name="prod_sf_on">On - the endless feeds are blocked.</string>
-    <string name="prod_sf_off">Off - tap to cut the doomscroll.</string>
+    <string name="prod_title">Productivity</string>
+    <string name="prod_intro">Where you stand today, what you\'ve won back, and what the rest is costing you.</string>
+    <string name="prod_sec_today">TODAY</string>
+    <string name="prod_sec_progress">YOUR PROGRESS</string>
+    <string name="prod_sec_cost">WHAT IT COSTS</string>
+    <string name="prod_sec_inputs">YOUR NUMBERS</string>
+    <string name="prod_inputs_hint">Three optional figures. Give us any of them and every graph in the app starts talking in your money and your habits instead of averages.</string>
     <string name="prod_scroll_cost_title">What the scroll costs</string>
     <string name="prod_scroll_cost_sub">The projector: minutes per day → years and %1$s - plus what you\'ve reclaimed.</string>
     <string name="prod_week_reclaimed">This week - reclaimed</string>
@@ -760,15 +763,18 @@
     <string name="prod_by_sunday">by Sunday</string>
     <string name="prod_worth">Your reclaimed time is worth…</string>
     <string name="prod_week_example">EXAMPLE - ride out urges and your real reclaimed time shows here</string>
-    <string name="prod_set_goal">Set a usage goal  ›</string>
-    <string name="prod_goal_change">Your goal: %1$s a day - change  ›</string>
     <string name="prod_dopamine_title">Your dopamine baseline</string>
     <string name="prod_still_measuring">Still measuring</string>
     <string name="prod_out_of_100">out of 100 today · higher is more fried</string>
-    <string name="prod_habits_estimate">Your habits estimate  ›</string>
-    <string name="prod_about_you">About you — hourly rate, what your time is worth  ›</string>
-    <string name="prod_next_year">Your next year</string>
-    <string name="prod_grid_caption">%1$d of the next 365 days, gone to the feed</string>
+    <string name="prod_row_income">Your income</string>
+    <string name="prod_row_income_sub">Turns every wasted hour into real money</string>
+    <string name="prod_row_habits">Your habits</string>
+    <string name="prod_row_habits_sub">Sleep, training, focus - sharpens your score</string>
+    <string name="prod_row_goal">Daily usage goal</string>
+    <string name="prod_row_goal_sub">Draws the target line on every usage graph</string>
+    <string name="prod_row_add">Add</string>
+    <string name="prod_habits_value">%1$d / 100</string>
+    <string name="prod_row_perday">%1$s a day</string>
     <string name="prod_reclaim_could">Reclaim it and you could</string>
     <string name="prod_opp_b1">%1$d books read - about 6 hours each</string>
     <string name="prod_opp_b2">%1$d proper workouts, 45 minutes apiece</string>
@@ -836,6 +842,9 @@
     <!-- ── Temptation categories (AppConfig.TEMPTATIONS content, keyed by id) ────────── -->
     <string name="temptspec_scrolling_title">Endless Scrolling / Brain Rot  🤳</string>
     <string name="temptspec_scrolling_subtitle">Break the infinite feed loop.</string>
+    <!-- Names what the block switch kills. This category owns the reels/shorts/feeds switch
+         that used to sit on the Productivity page - same patterns, said out loud. -->
+    <string name="temptspec_scrolling_blocks">reels, shorts &amp; endless feeds</string>
     <string name="temptspec_scrolling_insteadof">Put the phone in another room and do the one thing you were avoiding for ten minutes.</string>
     <string-array name="temptspec_scrolling_covers">
         <item>TikTok, Reels, Shorts, Reddit feeds - anything that never ends</item>
@@ -920,6 +929,10 @@
     <string name="temp_lockdown_toast">Locked down for 30 min. Essentials still work.</string>
     <string name="temp_block_on">●  Blocking what feeds this</string>
     <string name="temp_block_off">○  Block what feeds this</string>
+    <!-- Used instead of the two above when a category declares temptspec_<id>_blocks, so the
+         switch can name the thing it kills rather than saying "what feeds this". -->
+    <string name="temp_block_named_on">●  Blocking %1$s</string>
+    <string name="temp_block_named_off">○  Block %1$s</string>
     <string name="temp_block_applimit"> and limits %1$d app(s) to %2$d min/hour</string>
     <string name="temp_block_sub_on">Blocking %1$d site(s)%2$s.  Tap to turn off.</string>
     <string name="temp_block_sub_off">Blocks %1$d site(s)%2$s.  Tap to turn on.</string>
@@ -987,6 +1000,18 @@
     <string name="home_example_data">\n[Example data]</string>
     <string name="home_projected"> · projected</string>
     <string name="home_readout_by">By %1$s · </string>
+    <!-- The Productivity door. This section replaced the old bottom-bar tab, so it has to do
+         the job the tab label used to: say what is behind it AND that the user's own figures
+         go in there. Keep the three bullets concrete - they are the whole pitch. -->
+    <string name="home_prod_title">Productivity</string>
+    <string name="home_prod_sub">your numbers &amp; tools</string>
+    <string name="home_prod_card_title">Open Productivity</string>
+    <string name="home_prod_card_sub">Your dopamine baseline, the hours you\'ve won back this week, and what the scroll is really costing you.</string>
+    <string name="home_prod_b1">Your income - so every wasted hour shows in real money</string>
+    <string name="home_prod_b2">Your habits - sleep, training, focus - for a sharper score</string>
+    <string name="home_prod_b3">A daily usage goal - the target line on these graphs</string>
+    <string name="home_prod_added">%1$d of 3 of your numbers added</string>
+    <string name="home_prod_none">Add your own numbers in here</string>
     <string name="home_dev_tools">🔧  Dev tools</string>
     <string name="home_about_privacy">About &amp; privacy</string>
 

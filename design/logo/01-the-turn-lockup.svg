@@ -1,0 +1,32 @@
+<!--
+  "THE TURN" — horizontal lockup (mark + wordmark).
+
+  Clear space: never less than the tile's corner radius (26 units here) on any side.
+  The wordmark is set in the platform UI face so it matches the app's own type; do
+  not substitute a display face, and do not letterspace it further.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 176" width="720" height="176"
+     role="img" aria-label="Web Traffic Monitor">
+  <defs>
+    <linearGradient id="lk-tile" x1="0" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#18B7A2"/>
+      <stop offset="1" stop-color="#0C8073"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0 12) scale(0.296875)">
+    <rect width="512" height="512" rx="116" fill="url(#lk-tile)"/>
+    <path d="M92 132 C 132 264, 166 344, 244 358"
+          fill="none" stroke="#FFFFFF" stroke-opacity="0.42"
+          stroke-width="36" stroke-linecap="round"/>
+    <path d="M244 358 C 320 358, 356 250, 414 122"
+          fill="none" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round"/>
+    <circle cx="244" cy="358" r="34" fill="#0E8375"/>
+    <circle cx="244" cy="358" r="17" fill="#FFFFFF"/>
+  </g>
+
+  <text x="196" y="80" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif"
+        font-size="46" font-weight="700" letter-spacing="-1.1" fill="#12171D">Web Traffic Monitor</text>
+  <text x="198" y="120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif"
+        font-size="24" font-weight="600" letter-spacing="0.6" fill="#929AA3">STAY ON TRACK</text>
+</svg>

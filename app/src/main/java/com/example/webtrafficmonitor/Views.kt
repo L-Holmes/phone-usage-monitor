@@ -875,42 +875,6 @@ class WastedDonutView(context: Context) : View(context) {
 }
 
 
-// =====================================================================================
-// TimeGridView  (your next year as 365 squares; the ones lost to the scroll filled in)
-// =====================================================================================
-class TimeGridView(context: Context) : View(context) {
-    private var filled = 0
-    private val total = 365
-    private val cols = 21
-    private val on = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.danger }
-    private val off = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Palette.hairline }
-
-    fun setFilledDays(d: Int) { filled = d.coerceIn(0, total); invalidate() }
-
-    override fun onDraw(canvas: Canvas) {
-        if (width == 0) return
-        val dp = resources.displayMetrics.density
-        val gap = 3f * dp
-        val cell = (width - gap * (cols - 1)) / cols
-        val rad = 2f * dp
-        for (i in 0 until total) {
-            val rIdx = i / cols; val cIdx = i % cols
-            val x = cIdx * (cell + gap); val y = rIdx * (cell + gap)
-            canvas.drawRoundRect(x, y, x + cell, y + cell, rad, rad, if (i < filled) on else off)
-        }
-    }
-
-    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
-        val w = MeasureSpec.getSize(widthSpec)
-        val dp = resources.displayMetrics.density
-        val gap = 3f * dp
-        val rows = Math.ceil(total / cols.toDouble()).toInt()
-        val cell = if (w > 0) (w - gap * (cols - 1)) / cols else 10f * dp
-        val h = (rows * cell + (rows - 1) * gap).toInt()
-        setMeasuredDimension(w, h)
-    }
-}
-
 
 // =====================================================================================
 // TrendView  (a small line chart for "urges ridden out per week" - shows direction)

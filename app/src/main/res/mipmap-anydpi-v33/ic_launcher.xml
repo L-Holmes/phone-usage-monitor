@@ -1,0 +1,15 @@
+<!--
+  LAUNCHER ICON — adaptive + themed, API 33+.
+
+  Identical to the v26 file plus the monochrome layer, which is what Android 13's
+  "themed icons" setting re-inks from the wallpaper palette. Kept as a separate
+  qualified file rather than one <monochrome> tag in the v26 copy: the tag is inert
+  below 33, and splitting them makes it obvious which OS versions see what.
+
+  If you change a layer, change it in mipmap-anydpi-v26/ic_launcher.xml too.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_logo_background"/>
+    <foreground android:drawable="@drawable/ic_logo_foreground"/>
+    <monochrome android:drawable="@drawable/ic_logo_mono"/>
+</adaptive-icon>

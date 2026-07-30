@@ -1,0 +1,42 @@
+<!--
+  THE APP MARK — single-ink layer, for Android 13+ themed icons.
+
+  The OS ignores our colours here and re-inks the whole thing from the user's
+  wallpaper palette, so the two halves have to separate by ALPHA rather than by hue -
+  hence strokeAlpha on the descent and a translucent ring around the pivot. Black is
+  just the carrier; nobody ever sees it.
+
+  Same geometry and same safe-square transform as ic_logo_foreground.xml. If you edit
+  one, edit both.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="0.140625"
+        android:scaleY="0.140625">
+
+        <path
+            android:pathData="M92,132 C132,264 166,344 244,358"
+            android:strokeColor="#FF000000"
+            android:strokeAlpha="0.42"
+            android:strokeWidth="36"
+            android:strokeLineCap="round"/>
+        <path
+            android:pathData="M244,358 C320,358 356,250 414,122"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="36"
+            android:strokeLineCap="round"/>
+        <path
+            android:pathData="M244,358m-34,0a34,34 0,1 0,68 0a34,34 0,1 0,-68 0"
+            android:fillColor="#FF000000"
+            android:fillAlpha="0.25"/>
+        <path
+            android:pathData="M244,358m-17,0a17,17 0,1 0,34 0a17,17 0,1 0,-34 0"
+            android:fillColor="#FF000000"/>
+    </group>
+</vector>

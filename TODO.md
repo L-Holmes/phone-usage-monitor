@@ -1,18 +1,4 @@
 
-Create an svg logo.
-aims:
-- look professional 
-- look serious
-- look logical
-- reflect that it helps with productivity, keeping you on track, removing bad habits etc.
-
-
-create me 4 logos to pick from.
-
--------
-
-redesign the productivity page...
-
 ---------
 
 ❯ redesign the app, particularly the 'adult content' page, in a modern style.

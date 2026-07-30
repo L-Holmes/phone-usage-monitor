@@ -46,7 +46,6 @@
     <string name="report_block">Segnala blocco errato</string>
 
     <string name="nav_overview">Panoramica</string>
-    <string name="nav_productivity">Produttività</string>
     <string name="nav_temptations">Tentazioni</string>
 
     <string name="picker_select_all">Seleziona tutte quelle pertinenti.</string>
@@ -627,9 +626,13 @@
     <string name="scroll_that_year">Quello stesso anno è anche:\n%1$d ore di allenamento  ·  %2$d serate con le persone  ·  circa %3$d libri</string>
     <string name="scroll_valued">Valutato a %1$s/anno, dai tuoi numeri  ·  modifica</string>
     <string name="scroll_add_rate">Aggiungi la tua tariffa oraria per vedere quanto ti costa davvero  ›</string>
-    <string name="prod_block_sf">Blocca reels, shorts e feed</string>
-    <string name="prod_sf_on">Attivo - i feed infiniti sono bloccati.</string>
-    <string name="prod_sf_off">Disattivo - tocca per tagliare il doomscroll.</string>
+    <string name="prod_title">Produttività</string>
+    <string name="prod_intro">Dove sei oggi, quanto hai recuperato, e quanto ti costa il resto.</string>
+    <string name="prod_sec_today">OGGI</string>
+    <string name="prod_sec_progress">I TUOI PROGRESSI</string>
+    <string name="prod_sec_cost">QUANTO COSTA</string>
+    <string name="prod_sec_inputs">I TUOI NUMERI</string>
+    <string name="prod_inputs_hint">Tre dati opzionali. Inseriscine anche solo uno e ogni grafico dell\'app inizia a parlare nella tua valuta e con le tue abitudini, invece che con le medie.</string>
     <string name="prod_scroll_cost_title">Quanto costa lo scroll</string>
     <string name="prod_scroll_cost_sub">Il proiettore: minuti al giorno → anni e %1$s - più ciò che hai recuperato.</string>
     <string name="prod_week_reclaimed">Questa settimana - recuperato</string>
@@ -637,15 +640,18 @@
     <string name="prod_by_sunday">entro domenica</string>
     <string name="prod_worth">Il tuo tempo recuperato vale…</string>
     <string name="prod_week_example">ESEMPIO - resisti agli impulsi e il tuo tempo recuperato reale compare qui</string>
-    <string name="prod_set_goal">Imposta un obiettivo di utilizzo  ›</string>
-    <string name="prod_goal_change">Il tuo obiettivo: %1$s al giorno - modifica  ›</string>
     <string name="prod_dopamine_title">Il tuo livello di base della dopamina</string>
     <string name="prod_still_measuring">Ancora in misurazione</string>
     <string name="prod_out_of_100">su 100 oggi · più alto è più fritto</string>
-    <string name="prod_habits_estimate">La tua stima delle abitudini  ›</string>
-    <string name="prod_about_you">Su di te — tariffa oraria, quanto vale il tuo tempo  ›</string>
-    <string name="prod_next_year">Il tuo prossimo anno</string>
-    <string name="prod_grid_caption">%1$d dei prossimi 365 giorni, andati al feed</string>
+    <string name="prod_row_income">Il tuo reddito</string>
+    <string name="prod_row_income_sub">Trasforma ogni ora sprecata in denaro reale</string>
+    <string name="prod_row_habits">Le tue abitudini</string>
+    <string name="prod_row_habits_sub">Sonno, allenamento, concentrazione - affina il tuo punteggio</string>
+    <string name="prod_row_goal">Obiettivo di utilizzo giornaliero</string>
+    <string name="prod_row_goal_sub">Disegna la linea obiettivo su ogni grafico di utilizzo</string>
+    <string name="prod_row_add">Aggiungi</string>
+    <string name="prod_habits_value">%1$d / 100</string>
+    <string name="prod_row_perday">%1$s al giorno</string>
     <string name="prod_reclaim_could">Recuperandolo potresti</string>
     <string name="prod_opp_b1">%1$d libri letti - circa 6 ore ciascuno</string>
     <string name="prod_opp_b2">%1$d allenamenti veri, 45 minuti l\'uno</string>
@@ -712,6 +718,7 @@
     <string name="temptspec_scrolling_title">Scrolling infinito / Brain rot  🤳</string>
     <string name="temptspec_scrolling_subtitle">Spezza il ciclo del feed infinito.</string>
     <string name="temptspec_scrolling_insteadof">Metti il telefono in un\'altra stanza e fai per dieci minuti l\'unica cosa che stavi evitando.</string>
+    <string name="temptspec_scrolling_blocks">reels, shorts e feed infiniti</string>
     <string name="temptspec_binge_title">Binge watching  📺</string>
     <string name="temptspec_binge_subtitle">Sfuggi ai loop di evasione con la visione infinita.</string>
     <string name="temptspec_binge_insteadof">Decidi l\'UNICO episodio prima di iniziare, e imposta un timer per quando finisce.</string>
@@ -745,6 +752,8 @@
     <string name="temp_lockdown_toast">In isolamento per 30 min. L\'essenziale funziona ancora.</string>
     <string name="temp_block_on">●  Sta bloccando ciò che lo alimenta</string>
     <string name="temp_block_off">○  Blocca ciò che lo alimenta</string>
+    <string name="temp_block_named_on">●  Sta bloccando %1$s</string>
+    <string name="temp_block_named_off">○  Blocca %1$s</string>
     <string name="temp_block_applimit"> e limita %1$d app a %2$d min/ora</string>
     <string name="temp_block_sub_on">Sta bloccando %1$d sit(o/i)%2$s.  Tocca per disattivare.</string>
     <string name="temp_block_sub_off">Blocca %1$d sit(o/i)%2$s.  Tocca per attivare.</string>
@@ -810,6 +819,15 @@
     <string name="home_example_data">\n[Dati di esempio]</string>
     <string name="home_projected"> · proiettato</string>
     <string name="home_readout_by">Al %1$s · </string>
+    <string name="home_prod_title">Produttività</string>
+    <string name="home_prod_sub">i tuoi numeri e strumenti</string>
+    <string name="home_prod_card_title">Apri Produttività</string>
+    <string name="home_prod_card_sub">Il tuo livello di base della dopamina, le ore recuperate questa settimana, e quanto ti costa davvero lo scroll.</string>
+    <string name="home_prod_b1">Il tuo reddito - così ogni ora sprecata appare in denaro reale</string>
+    <string name="home_prod_b2">Le tue abitudini - sonno, allenamento, concentrazione - per un punteggio più preciso</string>
+    <string name="home_prod_b3">Un obiettivo di utilizzo giornaliero - la linea obiettivo su questi grafici</string>
+    <string name="home_prod_added">%1$d dei tuoi 3 numeri inseriti</string>
+    <string name="home_prod_none">Inserisci qui i tuoi numeri</string>
     <string name="home_dev_tools">🔧  Strumenti sviluppatore</string>
     <string name="home_about_privacy">Info e privacy</string>
 

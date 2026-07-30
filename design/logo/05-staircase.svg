@@ -1,0 +1,25 @@
+<!--
+  CONCEPT 5 — "STAIRCASE"
+
+  One unbroken stroke stepping up: hold, rise, hold, rise, and end still climbing.
+  Progress as a series of decisions rather than a smooth curve — which is closer
+  to how any of this actually goes.
+
+  Against it: at small sizes the treads and risers blur into a diagonal smudge,
+  and a single-weight stroke has less presence on a home screen than solid form.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="Staircase">
+  <defs>
+    <linearGradient id="st-tile" x1="0" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#18B7A2"/>
+      <stop offset="1" stop-color="#0C8073"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#st-tile)"/>
+
+  <path d="M112 400 H200 V312 H288 V224 H376 V132"
+        fill="none" stroke="#FFFFFF" stroke-width="34"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

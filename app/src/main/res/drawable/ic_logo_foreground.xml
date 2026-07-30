@@ -1,0 +1,51 @@
+<!--
+  THE APP MARK — foreground layer ("The Turn", see design/logo/01-the-turn.svg).
+
+  A line that falls, bottoms out at a marked node, then climbs away steeply. The dim
+  stroke is the habit; the solid one is after it; the dot is the decision.
+
+  GEOMETRY. The master art is a 512x512 square. An adaptive icon's foreground is a
+  108x108 canvas of which only the centre 72x72 is guaranteed visible - everything
+  outside that can be masked off by the launcher. So the 512 art is scaled by 72/512
+  (0.140625) and translated by 18 on both axes, i.e. dropped whole into the safe
+  square. That is what the group transform below does, and it is why every coordinate
+  in the paths is still in master units: edit the SVG, paste the numbers, done.
+
+  Do NOT nudge the scale up to fill more of the tile. The pivot dot sits low and left
+  of centre, and it is the first thing a circular mask eats.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="0.140625"
+        android:scaleY="0.140625">
+
+        <!-- the habit: falling, losing conviction as it goes -->
+        <path
+            android:pathData="M92,132 C132,264 166,344 244,358"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeAlpha="0.42"
+            android:strokeWidth="36"
+            android:strokeLineCap="round"/>
+
+        <!-- after: shorter, steeper, decisive -->
+        <path
+            android:pathData="M244,358 C320,358 356,250 414,122"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="36"
+            android:strokeLineCap="round"/>
+
+        <!-- the decision: a hole punched in both strokes, then the pivot itself -->
+        <path
+            android:pathData="M244,358m-34,0a34,34 0,1 0,68 0a34,34 0,1 0,-68 0"
+            android:fillColor="#FF0E8375"/>
+        <path
+            android:pathData="M244,358m-17,0a17,17 0,1 0,34 0a17,17 0,1 0,-34 0"
+            android:fillColor="#FFFFFFFF"/>
+    </group>
+</vector>

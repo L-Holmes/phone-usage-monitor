@@ -382,6 +382,15 @@ object BlockRules {
 // These are ordinary BlockRules patterns - page rules where only the feed should go
 // (so the rest of the app/site still works), host rules where the whole thing is the
 // feed. Toggling the category just adds or removes this curated set.
+//
+// WHO OWNS THE SWITCH: Temptations ▸ Endless Scrolling / Brain Rot, via TemptationBlocks
+// and the "scrolling" spec - whose blockPatterns ARE AppConfig.SHORT_FORM_PATTERNS. The
+// Productivity page used to carry a second switch over the same set; it was removed
+// rather than kept in sync, because two controls over one rule set is a bug with a
+// waiting period. setEnabled() therefore has no caller in the UI any more and enabled()
+// is a READ used by the dev console status row - which still reports correctly, because
+// the brain-rot switch writes exactly these patterns. If you add a UI switch back, make
+// it the only one.
 object ShortForm {
     val PATTERNS = AppConfig.SHORT_FORM_PATTERNS
     fun enabled(): Boolean = PATTERNS.all { it in BlockRules.all() }

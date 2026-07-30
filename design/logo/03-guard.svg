@@ -1,0 +1,30 @@
+<!--
+  CONCEPT 3 — "GUARD"
+
+  A shield with rising bars inside it. Two ideas in one mark: something is being
+  kept out, and something is growing because of it. The most literal fit for an
+  app whose core mechanic is blocking.
+
+  Against it: shields are the visual cliché of security software, and at 24px the
+  bars inside collapse into mush.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="Guard">
+  <defs>
+    <linearGradient id="grd-tile" x1="0" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#18B7A2"/>
+      <stop offset="1" stop-color="#0C8073"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#grd-tile)"/>
+
+  <path d="M256 88 L392 140 V262 C392 332 332 388 256 424 C180 388 120 332 120 262 V140 Z"
+        fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linejoin="round"/>
+
+  <g fill="#FFFFFF">
+    <rect x="196" y="272" width="34" height="52"  rx="11"/>
+    <rect x="239" y="240" width="34" height="84"  rx="11"/>
+    <rect x="282" y="204" width="34" height="120" rx="11"/>
+  </g>
+</svg>

@@ -1,0 +1,14 @@
+<!--
+  LAUNCHER ICON — adaptive, API 26+.
+
+  Two layers on a 108x108 canvas: the teal tile edge to edge, and the mark inside the
+  72x72 safe square. The launcher supplies the mask and the parallax, which is exactly
+  why neither layer carries a corner radius of its own.
+
+  The themed (monochrome) layer lives in mipmap-anydpi-v33, so this file stays valid
+  for 26-32 where that tag means nothing.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_logo_background"/>
+    <foreground android:drawable="@drawable/ic_logo_foreground"/>
+</adaptive-icon>

@@ -1,0 +1,18 @@
+<!--
+  "THE TURN" — single-colour version.
+
+  For the Android 13+ themed-icon layer, favicons, print, and anywhere the mark has
+  to survive without the tile. `currentColor` means it inherits whatever colour it
+  is dropped into; the two halves are separated by opacity, not by hue, so the
+  story still reads in one ink.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="The Turn">
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="36">
+    <path d="M92 132 C 132 264, 166 344, 244 358" stroke-opacity="0.42"/>
+    <path d="M244 358 C 320 358, 356 250, 414 122"/>
+  </g>
+  <circle cx="244" cy="358" r="34" fill="#FFFFFF"/>
+  <circle cx="244" cy="358" r="34" fill="currentColor" fill-opacity="0.18"/>
+  <circle cx="244" cy="358" r="17" fill="currentColor"/>
+</svg>

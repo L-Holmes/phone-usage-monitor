@@ -1,0 +1,29 @@
+<!--
+  THE APP MARK — background layer ("The Turn", see design/logo/01-the-turn.svg).
+
+  The teal tile, drawn edge to edge on the 108x108 adaptive-icon canvas. No corner
+  radius here on purpose: the launcher applies its own mask (circle, squircle,
+  teardrop, whatever the OEM ships), and a radius of ours would show as a dark
+  crescent inside theirs.
+
+  The gradient runs top-left to bottom-right, same angle and same two stops as the
+  master SVG. Keep it in step with Palette.tint / tintDeep in Design.kt.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="48.6" android:endY="108">
+                <item android:offset="0" android:color="#FF18B7A2"/>
+                <item android:offset="1" android:color="#FF0C8073"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

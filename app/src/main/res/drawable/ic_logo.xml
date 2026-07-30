@@ -1,0 +1,48 @@
+<!--
+  THE APP MARK — the whole thing, tile included, in one drawable.
+
+  Use this anywhere INSIDE the app (an about screen, a splash, a header). The launcher
+  does not use it: an adaptive icon needs its background and foreground as separate
+  layers, which is what ic_logo_background.xml + ic_logo_foreground.xml are for. This
+  is the same art with the two layers pre-composited and our own 22.6% corner radius
+  applied (116/512 in the master, matching Radius on a tile this size).
+
+  Geometry is the master's own 512 grid - see design/logo/01-the-turn.svg.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <path android:pathData="M116,0 L396,0 A116,116 0,0 1,512 116 L512,396 A116,116 0,0 1,396 512 L116,512 A116,116 0,0 1,0 396 L0,116 A116,116 0,0 1,116 0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="230.4" android:endY="512">
+                <item android:offset="0" android:color="#FF18B7A2"/>
+                <item android:offset="1" android:color="#FF0C8073"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M92,132 C132,264 166,344 244,358"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeAlpha="0.42"
+        android:strokeWidth="36"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M244,358 C320,358 356,250 414,122"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="36"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M244,358m-34,0a34,34 0,1 0,68 0a34,34 0,1 0,-68 0"
+        android:fillColor="#FF0E8375"/>
+    <path
+        android:pathData="M244,358m-17,0a17,17 0,1 0,34 0a17,17 0,1 0,-34 0"
+        android:fillColor="#FFFFFFFF"/>
+</vector>
