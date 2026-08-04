@@ -1,0 +1,254 @@
+# TRUSTED DOMAINS - never blocked, by anything, in any mode.
+#
+# This list OUTRANKS every block we have, including the ~550k downloaded adult blocklist.
+# That is deliberate and it is the point of the file: those community lists are built by
+# automated categorisation, and automated categorisation is measurably bad at telling a
+# sexual-health charity apart from a porn site.
+#
+# The research is not ambiguous. Filtering studies have found roughly 9% of sexual-health
+# sites, 20% of safe-sex sites and 27% of sites about condoms blocked at the LEAST
+# aggressive settings. When the UK rolled out ISP-level adult filters, the casualties
+# included rape and sexual abuse help centres, domestic violence services, sex education
+# charities and - with some irony for us - PORN ADDICTION RECOVERY SITES.
+#
+# Blocking someone from a rape crisis line, a suicide helpline or an LGBT+ support service
+# is not an acceptable cost of blocking pornography. It is a worse outcome than the thing
+# we are trying to prevent. So those categories are enumerated here explicitly rather than
+# left to chance.
+#
+# A bare domain also covers its subdomains. One host per line, "#" = comment.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> AppConfig.SAFE_DOMAINS.
+#
+# ADDING TO THIS FILE IS A SERIOUS ACT: an entry here can never be blocked by anything.
+# Add organisations, not platforms. A charity's own site, yes. A site that merely HOSTS
+# helpful material alongside everything else, no.
+
+# ── Crisis, abuse and violence support ───────────────────────────────────────────────
+# These must never be unreachable. Not for a bad word on the page, not for a mis-
+# categorised domain, not in super hardcore at 3am.
+rainn.org
+rapecrisis.org.uk
+rapecrisisscotland.org.uk
+thesurvivorstrust.org
+victimsupport.org.uk
+nsvrc.org
+refuge.org.uk
+womensaid.org.uk
+nationaldahelpline.org.uk
+thehotline.org
+mensadviceline.org.uk
+galop.org.uk
+nspcc.org.uk
+childline.org.uk
+ceop.police.uk
+iwf.org.uk
+missingkids.org
+stopitnow.org.uk
+lucyfaithfull.org.uk
+saferinternet.org.uk
+thinkuknow.co.uk
+
+# ── Suicide prevention and mental health ─────────────────────────────────────────────
+samaritans.org
+988lifeline.org
+suicidepreventionlifeline.org
+crisistextline.org
+giveusashout.org
+mind.org.uk
+rethink.org
+youngminds.org.uk
+papyrus-uk.org
+thecalmzone.net
+sane.org.uk
+nami.org
+mentalhealth.org.uk
+mhanational.org
+befrienders.org
+
+# ── Sexual health and sex education ──────────────────────────────────────────────────
+# The most over-blocked category there is. Also the one where being wrong is worst:
+# somebody looking up contraception or an STI must not be met with a block screen.
+sexwise.org.uk
+brook.org.uk
+fpa.org.uk
+tht.org.uk
+sexualhealthsheffield.nhs.uk
+plannedparenthood.org
+scarleteen.com
+amaze.org
+sexetc.org
+bishuk.com
+itsaboutfreedom.org.uk
+ashasexualhealth.org
+bashh.org
+fsrh.org
+guttmacher.org
+avert.org
+hiv.gov
+aidsmap.org
+tht.org.uk
+
+# ── LGBT+ support ────────────────────────────────────────────────────────────────────
+# Routinely swept up by "adult" categorisation. It is support, not pornography.
+stonewall.org.uk
+thetrevorproject.org
+switchboard.lgbt
+mermaidsuk.org.uk
+lgbt.foundation
+glaad.org
+pflag.org
+itgetsbetter.org
+gendertrust.org.uk
+akt.org.uk
+
+# ── Cancer and body-health charities ─────────────────────────────────────────────────
+# "breast", "testicular", "cervical", "prostate" are unavoidable here.
+breastcancernow.org
+breastcancer.org
+komen.org
+macmillan.org.uk
+cancerresearchuk.org
+cancer.org
+cancer.gov
+prostatecanceruk.org
+orchid-cancer.org.uk
+jostrust.org.uk
+eveappeal.org.uk
+ovarian.org.uk
+teenagecancertrust.org
+maggies.org
+
+# ── Addiction and recovery, including OUR OWN problem space ──────────────────────────
+# The UK filter rollout blocked porn-addiction recovery sites. Someone reaching for help
+# with exactly the thing this app exists for must never be stopped by this app.
+fightthenewdrug.org
+nofap.com
+rebootnation.org
+yourbrainonporn.com
+sexhelp.com
+saa-recovery.org
+slaafws.org
+naadac.org
+smartrecovery.org.uk
+alcoholics-anonymous.org.uk
+na.org
+talktofrank.com
+drinkaware.co.uk
+withyou.org.uk
+turning-point.co.uk
+
+# ── Art, museums and cultural collections ────────────────────────────────────────────
+# Nudes in a national collection are not pornography, and every keyword filter disagrees.
+tate.org.uk
+britishmuseum.org
+nationalgallery.org.uk
+npg.org.uk
+vam.ac.uk
+royalacademy.org.uk
+metmuseum.org
+moma.org
+whitney.org
+guggenheim.org
+artic.edu
+si.edu
+louvre.fr
+musee-orsay.fr
+rijksmuseum.nl
+vangoghmuseum.nl
+uffizi.it
+museodelprado.es
+hermitagemuseum.org
+nationalgalleries.org
+artuk.org
+googleartsandculture.com
+
+# ── Reference, education and government ──────────────────────────────────────────────
+wikipedia.org
+wikimedia.org
+wiktionary.org
+britannica.com
+khanacademy.org
+coursera.org
+edx.org
+openlearn.open.ac.uk
+bbc.co.uk/bitesize
+gov.uk
+nhs.uk
+nhsinform.scot
+who.int
+cdc.gov
+nih.gov
+nasa.gov
+europa.eu
+usa.gov
+parliament.uk
+ons.gov.uk
+
+# ── Medical reference ────────────────────────────────────────────────────────────────
+mayoclinic.org
+healthline.com
+webmd.com
+patient.info
+medlineplus.gov
+hopkinsmedicine.org
+clevelandclinic.org
+bupa.co.uk
+netdoctor.co.uk
+pubmed.ncbi.nlm.nih.gov
+ncbi.nlm.nih.gov
+bmj.com
+thelancet.com
+cochrane.org
+
+# ── Developer / work / utility ───────────────────────────────────────────────────────
+# Not a safety matter - these are here because being blocked mid-task is what makes
+# somebody rip the whole app out.
+stackoverflow.com
+stackexchange.com
+superuser.com
+serverfault.com
+github.com
+gitlab.com
+bitbucket.org
+developer.android.com
+developer.mozilla.org
+developer.apple.com
+kotlinlang.org
+python.org
+npmjs.com
+pypi.org
+rust-lang.org
+go.dev
+w3.org
+w3schools.com
+geeksforgeeks.org
+arxiv.org
+maps.google.com
+docs.google.com
+drive.google.com
+calendar.google.com
+mail.google.com
+# translate.google.com is NOT here on purpose - it is the classic filter bypass
+# (paste a blocked URL, read it through Google's domain). See domains_bypass.txt.
+scholar.google.com
+openstreetmap.org
+notion.so
+todoist.com
+trello.com
+asana.com
+slack.com
+figma.com
+linear.app
+outlook.com
+outlook.office.com
+office.com
+microsoft.com
+apple.com
+icloud.com
+metoffice.gov.uk
+accuweather.com
+paypal.com
+wise.com
+revolut.com
+duolingo.com
+mit.edu

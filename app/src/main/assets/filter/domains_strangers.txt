@@ -1,0 +1,66 @@
+# LIVESTREAM / FORUM / IMAGE BOARD / DATING SITES  -  blocked in every mode above Off.
+#
+# The web half of apps_strangers.txt. A bare domain also covers its subdomains.
+# One host per line, "#" = comment.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+
+# ── Livestreaming ────────────────────────────────────────────────────────────────────
+twitch.tv
+kick.com
+bigo.tv
+tango.me
+yubo.live
+younow.com
+superlive.io
+uplive.com
+liveme.com
+azar.com
+
+# ── Random-stranger video chat ───────────────────────────────────────────────────────
+ome.tv
+emeraldchat.com
+monkey.cool
+flingster.com
+
+# ── Forums / image boards / group chat ───────────────────────────────────────────────
+reddit.com
+4chan.org
+4channel.org
+8kun.top
+5ch.net
+kiwifarms.st
+endchan.net
+band.us
+discord.com
+telegram.org
+t.me
+
+# ── Dating / hookup ──────────────────────────────────────────────────────────────────
+tinder.com
+bumble.com
+hinge.co
+pure.app
+feeld.co
+grindr.com
+badoo.com
+ashleymadison.com
+seeking.com
+adultfriendfinder.com
+zoosk.com
+flirt.com
+alt.com
+hudapp.com
+downapp.com
+scruff.com
+jackd.com
+growlrapp.com
+her.is
+3fun.app
+cougarlife.com
+secretbenefits.com
+benaughty.com
+fetlife.com
+pof.com
+okcupid.com
+meetme.com
+skout.com

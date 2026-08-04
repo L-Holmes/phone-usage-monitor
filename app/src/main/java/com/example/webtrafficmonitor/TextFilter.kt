@@ -95,6 +95,44 @@ object FilterTuning {
     const val APP_THRESHOLD = 11
     const val APP_MIN_FAMILIES = 2
 
+    // ── HOW MUCH TEXT IS ON THE SCREEN CHANGES WHAT ONE BAD WORD MEANS ──────────────
+    // "porn" on a screen with eight words on it is the screen. The same word once inside a
+    // wall of text is a mention - a news article, a forum thread, a comment someone quoted.
+    // So an app screen carrying more than APP_LONG_TEXT_WORDS words has to corroborate even
+    // a CORE word (APP_MIN_FAMILIES distinct signals), while a short screen still blocks on
+    // the one word, immediately.
+    //
+    // Web pages are NOT treated this way: there a CORE word always blocks. A page is
+    // something you chose to open at an address we can see and ban; an app screen is a feed
+    // you scrolled past, and it is far likelier to be quoting than showing.
+    // THE DIAL: the screen sample is capped at ~1000 characters, so roughly 180 words is as
+    // long as a screen can look from here. 100 puts the line past the middle of that range -
+    // a search box, a chat header, a title card or a card feed still count as SHORT and
+    // block on the one word, while a dense article or comment thread has to corroborate.
+    // Raise it to make one word block more often; lower it to demand corroboration sooner.
+    const val APP_LONG_TEXT_WORDS = 100
+
+    // ── EVASION ────────────────────────────────────────────────────────────────────────
+    // A near-miss of a banned word: the word with ONE extra character wedged into it
+    // ("pornn", "poarn", "sexxy"). Deliberately NOT a block on its own - it is evidence
+    // that somebody is trying spellings, which is what BorderlineWatch is there to notice.
+    const val SUSPICIOUS_WEIGHT = 3
+
+    // A screen at or above this is "borderline": not enough to block, too much to call clean.
+    // One of these is nothing. A stream of them, in one app, for minutes, is a pattern - see
+    // BorderlineWatch. Sits deliberately below APP_THRESHOLD.
+    const val BORDERLINE_FLOOR = 6
+
+    // Splitting a word across spaces ("p o r n", "pr o n") is the other half of the same
+    // trick. Runs of up to JOIN_MAX_TOKENS tokens, each at most JOIN_MAX_LEN characters,
+    // are glued back together and re-checked. Both limits are tight on purpose: ordinary
+    // English is full of short words, and the joined result must match a banned word
+    // EXACTLY, so "I am up to no good" produces nothing.
+    // JOIN_MAX_TOKENS has to reach the length of the longest word worth hiding, because the
+    // hider spells it out one letter at a time: "c u m s h o t" is seven tokens.
+    const val JOIN_MAX_TOKENS = 10
+    const val JOIN_MAX_LEN = 3
+
     // How much a SOFT gendered word is still worth when that side of the filter is switched
     // off. Not zero — "bikini" on an actual porn page should still nudge the needle, it just
     // shouldn't block a swimwear shop on its own. See GenderedTerms.
@@ -105,18 +143,17 @@ object FilterTuning {
     // exemption: a porn page that says "doctor" once still needs only a little more evidence.
     const val MEDICAL_DAMPEN = 0.35f
 
-    // ── FIREFOX IS THE ONE PLACE WE ARE NOT THE ONLY GUARD ───────────────────────────
-    // Everywhere else this scorer is all there is. Inside Firefox, with our image add-on
-    // installed and confirmed, a second filter is reading the page from the INSIDE - it
-    // sees the actual images, which is the thing accessibility text can never see. Two
-    // filters stacked at the same bar means twice the false positives on the one surface
-    // where a false positive is most annoying (ordinary browsing).
+    // ── A WEB PAGE IS HELD TO A HIGHER BAR THAN AN APP SCREEN ────────────────────────
+    // Firefox is the only browser this app allows, and the image add-on is mandatory in
+    // setup - so on the web there is always a second filter reading the same page from the
+    // INSIDE, seeing the actual images, which accessibility text can never do. Two filters
+    // at the same bar just doubles the false positives on the one surface where they are
+    // most annoying. Hence a flat 21, with no "is the add-on on today" branch: if it is
+    // ever off, the setup gate is what fixes that, not a quietly different threshold.
     //
-    // So the web threshold is multiplied by this for pages in Firefox when the add-on is
-    // confirmed: 15 -> 21. Nothing else changes - the domain blocklist, the ban list and
-    // the search-engine rule are all still absolute, because those are judgements the
-    // add-on does not duplicate. Only the HEURISTIC gets the wider berth.
-    const val PLUGIN_COVERED_MULTIPLIER = 1.4f
+    // The domain blocklist, the ban list and the search-engine rule are untouched by this -
+    // those are judgements the add-on does not duplicate. Only the HEURISTIC gets the berth.
+    const val WEB_THRESHOLD = 21
 }
 
 
@@ -357,6 +394,10 @@ object FilterCatalogue {
         val what: String,
         /** Examples, in the user's language. Kept to three or four. */
         val examples: String = "",
+        /** A worked example that DOES score, in full. Shown in green. */
+        val scores: String = "",
+        /** The near-identical one that does NOT, so the rule is unmistakable. Shown grey. */
+        val passes: String = "",
         /** The caveat worth knowing, shown on the drill-in page. */
         val note: String = "",
         /** Is this group live for the given mode? */
@@ -383,6 +424,7 @@ object FilterCatalogue {
             behaviour = Behaviour.BLOCKS_ALONE,
             what = "Sexual in essentially every context.",
             examples = "porn · blowjob · milf · hentai",
+            scores = "\"porn\"  -  on its own, anywhere, in any mode",
             note = "The only tier nothing softens. The medical damper skips it, the gender " +
                 "switches skip it, and the one-word ceiling does not apply to it. One hit " +
                 "anywhere and the page is blocked.",
@@ -420,6 +462,8 @@ object FilterCatalogue {
             behaviour = Behaviour.NEEDS_A_SECOND,
             what = "Strongly sexual, but with real innocent uses.",
             examples = "nude · naked · topless · xxx",
+            scores = "\"naked girls\"  -  8 pts, plus whatever \"girls\" adds",
+            passes = "\"naked\" on its own  -  8 pts, and the bar is 15",
             note = "Art history, lab mice, \"naked options\" in finance, phone cases. Far too " +
                 "useful a word to block a page on its own, so it never does.",
             activeIn = ALWAYS,
@@ -450,7 +494,9 @@ object FilterCatalogue {
             behaviour = Behaviour.ONLY_IN_CONTEXT,
             gate = NEAR_PERSON,
             what = "\"hot\" and \"sexy\", but only when they are about a PERSON.",
-            examples = "\"hot women\" scores · \"hot chocolate\" scores nothing",
+            examples = "hot · sexy · hottie",
+            scores = "\"hot women\"  -  \"hot\" is right beside a person word",
+            passes = "\"hot chocolate\"  -  no person word, so \"hot\" is worth 0",
             note = "RELAXED ONLY. In Strict these same words are already covered by the " +
                 "Subtle and Dual groups, so keeping Combo on as well would double-count them.",
             activeIn = RELAXED_ONLY,
@@ -463,6 +509,8 @@ object FilterCatalogue {
             gate = NEAR_SEXUAL,
             what = "Sexual in some contexts, completely innocent in others.",
             examples = "hot · wet · girls · tight",
+            scores = "\"tight dress nude photos\"  -  \"nude\" is nearby, so \"tight\" counts",
+            passes = "\"tight deadline at work\"  -  nothing sexual nearby, so \"tight\" is worth 0",
             note = "On their own these are ordinary English and score ZERO. They only start " +
                 "counting once the page has already said something sexual nearby.",
             activeIn = STRICT_UP,
@@ -474,7 +522,9 @@ object FilterCatalogue {
             behaviour = Behaviour.ONLY_IN_CONTEXT,
             gate = NEAR_SEXUAL,
             what = "Community slang that also has an innocent life.",
-            examples = "\"garden hoe\" scores nothing · \"the goon squad\" scores nothing",
+            examples = "goon · thicc · hoe · smash",
+            scores = "\"thicc naked girls\"  -  \"naked\" is nearby, so \"thicc\" counts",
+            passes = "\"garden hoe\" · \"the goon squad\"  -  both worth 0",
             activeIn = STRICT_UP,
         ) { BannedWords.VARIANT_DUAL.sorted() },
 
@@ -484,6 +534,8 @@ object FilterCatalogue {
             behaviour = Behaviour.NEEDS_A_SECOND,
             what = "Suggestive, with plenty of innocent uses.",
             examples = "bikini · lingerie · cleavage · underwear",
+            scores = "\"bikini lingerie cleavage\"  -  three of them add up",
+            passes = "\"bikini\" ten times over  -  still one word, still capped",
             note = "Worth very little each, which is the point: it takes a pile of them to " +
                 "matter. That is what makes \"bikini ×10\" different from \"bikini ×2\".",
             activeIn = STRICT_UP,
@@ -496,6 +548,8 @@ object FilterCatalogue {
             gate = NEAR_EITHER,
             what = "Usually not about people at all.",
             examples = "sheer · webcam · cosplay · transparent",
+            scores = "\"sheer top model\"  -  \"model\" is a person word, so \"sheer\" counts",
+            passes = "\"sheer drop\" · \"webcam driver\"  -  no person, nothing sexual, worth 0",
             note = "\"sheer drop\" and \"webcam driver\" score nothing. These need either a " +
                 "sexual word or a person word beside them before they count.",
             activeIn = STRICT_UP,
@@ -611,13 +665,57 @@ object FilterCatalogue {
             "Softens the suggestive words about men's bodies.",
             "Same rule: Core words are never affected.",
         ) { (GenderedTerms.SOFT_MALE + GenderedTerms.PHRASES_MALE).sorted() },
+    )
+
+    /**
+     * HOW SPELLING IT DIFFERENTLY IS HANDLED. Four mechanisms, all running before any list
+     * is consulted, so none of them needs a word to be added to a list first. This is the
+     * answer to "won't they just try another combination" - they will, and these are what
+     * meets them when they do.
+     */
+    val EVASION: List<Scaler> = listOf(
         Scaler(
-            "Firefox, with the image add-on",
-            "bar ×${FilterTuning.PLUGIN_COVERED_MULTIPLIER}",
-            "Raises the score a page needs, rather than lowering what words are worth.",
-            "The add-on is reading the same page from the inside and can see the IMAGES, " +
-                "which text can never do. Two filters at the same bar just doubles the false " +
-                "positives on the one surface where they are most annoying.",
+            "Numbers and symbols for letters",
+            "normalised",
+            "p0rn, s3x, b00bs, pr0n, @nal.",
+            "Rewritten to letters before anything is looked up, so no list ever has to carry " +
+                "the leetspeak version of a word.",
+        ),
+        Scaler(
+            "Stretched letters",
+            "normalised",
+            "pooorn, seeexy, nuuude.",
+            "Runs of the same letter collapse to one. It does mangle honest doubles " +
+                "(\"boobs\" becomes \"bobs\"), which is why the word is ALSO checked exactly " +
+                "as typed - both spellings get a look.",
+        ),
+        Scaler(
+            "Letters from other alphabets",
+            "folded",
+            "A Cyrillic \"о\" renders exactly like a Latin \"o\".",
+            "Without folding, one foreign letter in the middle of a word splits it into two " +
+                "fragments that match nothing at all. There is no innocent reason for a " +
+                "single Cyrillic letter inside an otherwise Latin word.",
+        ),
+        Scaler(
+            "Words split across spaces",
+            "re-joined",
+            "\"p o r n\", \"pr o n\", \"c u m s h o t\" are glued back together and re-checked.",
+            "Only runs of short tokens (${FilterTuning.JOIN_MAX_LEN} characters or fewer, up " +
+                "to ${FilterTuning.JOIN_MAX_TOKENS} of them) are joined, and the result has " +
+                "to match a banned word EXACTLY - so ordinary English, which is full of short " +
+                "words, produces nothing. \"i am up to no good\" scores zero.",
+        ),
+        Scaler(
+            "A letter wedged in",
+            "${FilterTuning.SUSPICIOUS_WEIGHT} pts + counted",
+            "\"poarn\", \"pxorn\", \"blowzjob\" - a banned word with one extra character.",
+            "Deliberately NOT a block. One is a typo. What makes it worth catching is that " +
+                "it gets COUNTED: a stream of near-misses in one app is somebody working " +
+                "through spellings, and that is what BorderlineWatch is watching for.\n\n" +
+                "The test only ever runs one way - delete a character from what was TYPED " +
+                "and see if it lands on a banned word. Going the other way would flag " +
+                "\"corn\" off \"porn\" and \"um\" off \"cum\".",
         ),
     )
 
@@ -630,15 +728,6 @@ object FilterCatalogue {
                 "often it appears.",
         ),
         Scaler(
-            "Ceiling for one word",
-            "${FilterTuning.SINGLE_WORD_MAX} pts",
-            "One family can never earn more than this in total.",
-            "This is the whole safety property: ${FilterTuning.SINGLE_WORD_MAX} sits one point " +
-                "under the web bar of ${FilterTuning.THRESHOLD}, so a block ALWAYS takes at " +
-                "least two different signals. Core words and Loud phrases are the deliberate " +
-                "exception.",
-        ),
-        Scaler(
             "Word families",
             "count as one",
             "Inflections are one signal, not several: \"nude\" + \"nudes\" is one word.",
@@ -649,8 +738,8 @@ object FilterCatalogue {
     )
 
     private fun fragmentLine(f: ModeFragments.Fragment): String =
-        "\"${f.text}\"  —  ${f.weight} pts, counts as \"${f.family}\"" +
-            if (f.hard) "  —  BLOCKS ALONE" else ""
+        "\"${f.text}\"  -  ${f.weight} pts, counts as \"${f.family}\"" +
+            if (f.hard) "  -  BLOCKS ALONE" else ""
 }
 
 
@@ -715,6 +804,8 @@ object BorderlineScorer {
         val reason: String,
         /** Biggest first. Empty from [score], which is only ever asked for a number. */
         val contributions: List<Contribution> = emptyList(),
+        /** Near-misses of banned words seen this pass — see BorderlineWatch. */
+        val suspicious: Int = 0,
     )
 
     /**
@@ -770,10 +861,28 @@ object BorderlineScorer {
         var count = 0       // eligible occurrences, INCLUDING the ones the cap threw away
         var counted = 0     // occurrences that actually scored
         var points = 0f
+        /**
+         * Did this ever score at FULL weight, i.e. undamped by the gender switches?
+         *
+         * It is what stops "one explicit signal always blocks" from quietly overriding those
+         * switches. "bikini haul" is a LOUD phrase, so it is explicit-tier - but with the
+         * sexualised-women filter turned down it is worth a quarter, and a quarter of a
+         * signal is not the unmistakable thing that rule is about.
+         */
+        var full = false
     }
 
     /** What one scoring pass produced: the score, and the per-family breakdown behind it. */
-    private class Tally(val score: Int, val detail: Map<String, Detail>) {
+    private class Tally(
+        val score: Int,
+        val detail: Map<String, Detail>,
+        /** Did a CORE word, LOUD phrase or hard fragment fire? One of those always blocks. */
+        val explicitHit: Boolean = false,
+        /** Words in the BODY text — how much was on screen. See APP_LONG_TEXT_WORDS. */
+        val bodyWords: Int = 0,
+        /** Near-misses of banned words. Evidence of someone trying spellings. */
+        val suspicious: Int = 0,
+    ) {
         /** Distinct signals that actually scored — what the in-app threshold gates on. */
         val families: Int get() = detail.count { it.value.points > 0f }
     }
@@ -785,35 +894,69 @@ object BorderlineScorer {
     }
 
     /**
-     * Non-null (with a block reason) only when the score reaches the block THRESHOLD.
-     *
-     * [thresholdMultiplier] raises (or lowers) the bar for this one call — see
-     * FilterTuning.PLUGIN_COVERED_MULTIPLIER, the one caller that passes anything but 1.
+     * The verdict for a WEB PAGE. Two ways to block, and only two:
+     *   • ONE unmistakable signal - a CORE word, a LOUD phrase, a hard fragment. Always
+     *     enough, on its own, at any length, in any mode. "porn" is porn.
+     *   • or the score reaches WEB_THRESHOLD, which no single word can do alone.
      */
-    fun evaluate(
-        title: String?, url: String?, content: String?,
-        s: Settings = Settings.ALL_ON,
-        thresholdMultiplier: Float = 1f,
-    ): Result? {
+    fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
         val t = compute(title, url, content, s)
-        return if (t.score >= webBar(thresholdMultiplier)) resultOf(t) else null
+        return if (t.explicitHit || t.score >= FilterTuning.WEB_THRESHOLD) resultOf(t) else null
     }
 
     /**
-     * The same judgement for a NON-WEB app screen, at the tighter APP_THRESHOLD - see the
-     * note on that constant. Anything at or above the ordinary web THRESHOLD blocks exactly
-     * as it would in a browser; between APP_THRESHOLD and THRESHOLD it blocks only when at
-     * least APP_MIN_FAMILIES distinct word families contributed, so one word still can't do
-     * it alone.
+     * The judgement for a NON-WEB app screen. Three rules, and HOW MUCH TEXT IS ON THE
+     * SCREEN decides which applies:
+     *
+     *   score ≥ THRESHOLD, short screen  → BLOCK. One unmistakable word ("porn", "pron") on
+     *       a screen with a handful of words on it IS the screen. No corroboration wanted.
+     *   score ≥ THRESHOLD, wall of text  → block only with APP_MIN_FAMILIES distinct signals.
+     *       The same word once inside a long article or thread is a mention, not the point.
+     *   score ≥ APP_THRESHOLD            → always needs APP_MIN_FAMILIES distinct signals.
+     *       Below the web bar the one-word arithmetic no longer protects us, so the distinct-
+     *       signal rule has to do it by hand.
+     *
+     * See APP_THRESHOLD and APP_LONG_TEXT_WORDS for why an app is judged differently from a
+     * web page at all.
      */
-    fun evaluateInApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
-        val t = compute(title, url, content, s)
-        if (t.score >= FilterTuning.THRESHOLD) return resultOf(t)
-        if (t.score >= FilterTuning.APP_THRESHOLD && t.families >= FilterTuning.APP_MIN_FAMILIES) {
-            return resultOf(t)
-        }
-        return null
+    fun evaluateInApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? =
+        judgeApp(title, url, content, s).result
+
+    /**
+     * The raw numbers a screen produced, for callers that watch a screen over TIME rather
+     * than judge it once - see BorderlineWatch. Never a verdict.
+     */
+    data class Reading(val score: Int, val families: Int, val suspicious: Int, val bodyWords: Int) {
+        /** Not enough to block, but not nothing either. What BorderlineWatch counts. */
+        val borderline: Boolean
+            get() = suspicious > 0 || score >= FilterTuning.BORDERLINE_FLOOR
     }
+
+    /** The verdict AND the reading behind it, from ONE scoring pass. */
+    data class AppVerdict(val result: Result?, val reading: Reading)
+
+    /**
+     * Judge an app screen and report the numbers at the same time. The service needs both on
+     * every event - the verdict to block, the reading to watch a screen that keeps coming
+     * back borderline - and scoring the same text twice to get them would double the cost of
+     * the hottest path in the app.
+     */
+    fun judgeApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): AppVerdict {
+        val t = compute(title, url, content, s)
+        val reading = Reading(t.score, t.families, t.suspicious, t.bodyWords)
+        val wall = t.bodyWords > FilterTuning.APP_LONG_TEXT_WORDS
+        val corroborated = t.families >= FilterTuning.APP_MIN_FAMILIES
+        val result = when {
+            t.explicitHit || t.score >= FilterTuning.THRESHOLD ->
+                if (!wall || corroborated) resultOf(t) else null
+            t.score >= FilterTuning.APP_THRESHOLD && corroborated -> resultOf(t)
+            else -> null
+        }
+        return AppVerdict(result, reading)
+    }
+
+    fun read(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Reading =
+        judgeApp(title, url, content, s).reading
 
     /**
      * The full breakdown WITHOUT a verdict: the score and what built it, whether or not it
@@ -825,11 +968,8 @@ object BorderlineScorer {
         return if (t.score <= 0) null else resultOf(t)
     }
 
-    /**
-     * The effective block bar for a web page after [multiplier] - the one place that
-     * arithmetic lives, so a screen that reports the bar can never disagree with [evaluate].
-     */
-    fun webBar(multiplier: Float = 1f): Int = bar(FilterTuning.THRESHOLD, multiplier)
+    /** The score a web page needs. One place, so a screen reporting it can't disagree. */
+    fun webBar(): Int = FilterTuning.WEB_THRESHOLD
 
     /**
      * The handful of signals worth putting in front of a user: everything at or above
@@ -845,12 +985,8 @@ object BorderlineScorer {
     private const val FALLBACK_SHOWN = 3
     private const val MAX_SHOWN = 4
 
-    /** The effective block bar after a multiplier, never below 1. */
-    private fun bar(base: Int, multiplier: Float): Int =
-        maxOf(1, Math.round(base * multiplier))
-
     private fun resultOf(t: Tally): Result =
-        Result(t.score, reasonFor(t.score), contributionsOf(t))
+        Result(t.score, reasonFor(t.score), contributionsOf(t), t.suspicious)
 
     /** The per-family detail as a user-facing list, biggest share first. */
     private fun contributionsOf(t: Tally): List<Contribution> =
@@ -891,18 +1027,35 @@ object BorderlineScorer {
         var explicitTotal = 0f
         var otherTotal = 0f
 
+        val bodyTokens = tokenize(body)
         val fields = listOf(
             tokenize(title) to FilterTuning.TITLE_URL_MULTIPLIER,
             tokenize(url) to FilterTuning.TITLE_URL_MULTIPLIER,
-            tokenize(body) to 1,
+            bodyTokens to 1,
         )
+        var suspicious = 0
         for ((words, mult) in fields) {
             for (i in words.indices) {
-                val hit = resolve(words, i, a) ?: continue
+                val hit = resolve(words, i, a)
+                if (hit == null) {
+                    // Not a banned word - but is it one with a character wedged into it?
+                    // "pornn", "poarn", "sexxy". Scores a little and, more usefully, gets
+                    // COUNTED: one is a typo, a stream of them is somebody trying spellings.
+                    val near = nearMiss(words[i], a) ?: continue
+                    suspicious++
+                    otherTotal += add(
+                        "suspicious:$near", "suspicious", FilterTuning.SUSPICIOUS_WEIGHT,
+                        mult, 1f, detail,
+                    )
+                    continue
+                }
                 if (hit.base == 0) continue
                 val p = add(hit.fam, hit.tier, hit.base, mult, genderMultiplier(hit.word, set), detail)
                 if (hit.tier == TIER_EXPLICIT) explicitTotal += p else otherTotal += p
             }
+            // The other half of the same trick: a word split across spaces. Glue short runs
+            // back together and check again ("p o r n", "pr o n" -> "porn").
+            explicitTotal += scoreJoined(words, mult, a, detail)
         }
 
         // Phrases are matched on the whole (normalised) field, because the meaning is in the
@@ -938,7 +1091,11 @@ object BorderlineScorer {
             otherTotal *= FilterTuning.MEDICAL_DAMPEN
             for (d in detail.values) if (d.tier != TIER_EXPLICIT) d.points *= FilterTuning.MEDICAL_DAMPEN
         }
-        return Tally(Math.round(explicitTotal + otherTotal), detail)
+        return Tally(
+            Math.round(explicitTotal + otherTotal), detail,
+            explicitHit = detail.values.any { it.tier == TIER_EXPLICIT && it.full && it.points > 0f },
+            bodyWords = bodyTokens.size, suspicious = suspicious,
+        )
     }
 
     /**
@@ -966,6 +1123,69 @@ object BorderlineScorer {
             }
         }
         return null
+    }
+
+    /**
+     * IS THIS A BANNED WORD WITH SOMETHING WEDGED INTO IT? Returns the word it is a near-miss
+     * of, or null.
+     *
+     * The test is deliberately one-directional: delete ONE character from the token and see
+     * whether the result is EXACTLY a banned word. That catches the insertions people
+     * actually use to slip past a word list - "pornn", "poarn", "sexxy", "pxorn" - while
+     * being incapable of the classic false positive in the other direction. Going the other
+     * way (does the BANNED word minus a character equal this token?) would flag "um" off
+     * "cum" and "on" off "con", which is worse than useless.
+     *
+     * Length-gated to 5..16 so it never fires on the short, common tokens where a coincidence
+     * is likely, and so it stays cheap: it is one substring build per character.
+     */
+    private fun nearMiss(token: String, a: ActiveSets): String? {
+        if (token.length !in 5..16) return null
+        for (t in candidates(token)) {
+            for (i in t.indices) {
+                val cut = t.substring(0, i) + t.substring(i + 1)
+                if (cut in a.explicit) return cut
+            }
+        }
+        return null
+    }
+
+    /**
+     * A WORD SPLIT ACROSS SPACES, glued back together. "p o r n", "pr o n", "po rn" all
+     * become "porn" and score exactly as if they had been typed that way.
+     *
+     * Only runs of short tokens are joined (JOIN_MAX_LEN), only a few at a time
+     * (JOIN_MAX_TOKENS), and the result has to match a banned word EXACTLY - so ordinary
+     * English, which is full of short words, produces nothing. Checked against the EXPLICIT
+     * set only: those are the words worth this much effort to hide, and matching a longer,
+     * unmistakable word keeps the coincidence rate at zero.
+     */
+    private fun scoreJoined(
+        words: List<String>, mult: Int, a: ActiveSets, detail: HashMap<String, Detail>,
+    ): Float {
+        var total = 0f
+        var i = 0
+        while (i < words.size) {
+            if (words[i].length > FilterTuning.JOIN_MAX_LEN) { i++; continue }
+            val sb = StringBuilder(words[i])
+            var j = i + 1
+            var matched: String? = null
+            while (j < words.size && j - i < FilterTuning.JOIN_MAX_TOKENS &&
+                words[j].length <= FilterTuning.JOIN_MAX_LEN
+            ) {
+                sb.append(words[j])
+                j++
+                val joined = sb.toString()
+                if (candidates(joined).any { it in a.explicit }) { matched = joined; break }
+            }
+            if (matched != null) {
+                total += add(matched, TIER_EXPLICIT, FilterTuning.EXPLICIT_WEIGHT, mult, 1f, detail)
+                i = j                       // don't re-use these tokens for another join
+            } else {
+                i++
+            }
+        }
+        return total
     }
 
     /** A scoring hit, unless an innocent-context word vetoes it ("naked mole rat" → nothing). */
@@ -998,6 +1218,7 @@ object BorderlineScorer {
         if (pts <= 0f) return 0f
         d.counted++
         d.points += pts
+        if (gender >= 1f) d.full = true
         return pts
     }
 
@@ -1102,7 +1323,15 @@ object BorderlineScorer {
         return out
     }
 
-    /** Digit/symbol substitutions: p0rn → porn, s3x → sex, b00bs → boobs. */
+    /**
+     * Digit/symbol substitutions: p0rn → porn, s3x → sex, b00bs → boobs.
+     *
+     * Also folds the LOOKALIKE letters from other alphabets. Cyrillic "о" and Latin "o" are
+     * different characters that render identically, so "pоrn" with a Cyrillic o sails through
+     * every list we have while looking exactly like the word it is. Greek omicron, alpha and
+     * epsilon do the same job. Cheap to fold, and there is no innocent reason for a single
+     * Cyrillic letter in the middle of an otherwise Latin word.
+     */
     private fun deleet(s: String): String {
         val sb = StringBuilder(s.length)
         for (ch in s) {
@@ -1110,6 +1339,36 @@ object BorderlineScorer {
                 when (ch) {
                     '0' -> 'o'; '1' -> 'i'; '3' -> 'e'; '4' -> 'a'
                     '5' -> 's'; '7' -> 't'; '@' -> 'a'; '$' -> 's'
+                    else -> ch
+                },
+            )
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Letters from other alphabets that RENDER as Latin ones. Applied before anything else
+     * splits the text up, because tokenize() throws away everything outside a-z0-9 - so a
+     * single Cyrillic "о" in "pоrn" would otherwise turn it into "p" and "rn" and no amount
+     * of later cleverness could put it back together.
+     *
+     * There is no innocent reason for one Cyrillic letter in the middle of a Latin word.
+     */
+    private fun foldLookalikes(s: String): String {
+        var needs = false
+        for (ch in s) if (ch.code > 127) { needs = true; break }
+        if (!needs) return s                    // the overwhelmingly common case, untouched
+        val sb = StringBuilder(s.length)
+        for (ch in s) {
+            sb.append(
+                when (ch) {
+                    // Cyrillic
+                    'а' -> 'a'; 'е' -> 'e'; 'о' -> 'o'; 'р' -> 'p'; 'с' -> 'c'
+                    'х' -> 'x'; 'у' -> 'y'; 'к' -> 'k'; 'м' -> 'm'; 'т' -> 't'
+                    'в' -> 'b'; 'н' -> 'h'; 'і' -> 'i'; 'ѕ' -> 's'; 'ј' -> 'j'
+                    // Greek
+                    'ο' -> 'o'; 'α' -> 'a'; 'ε' -> 'e'; 'ρ' -> 'p'; 'ν' -> 'v'
+                    'τ' -> 't'; 'υ' -> 'u'; 'κ' -> 'k'; 'ι' -> 'i'; 'χ' -> 'x'
                     else -> ch
                 },
             )
@@ -1138,16 +1397,20 @@ object BorderlineScorer {
      */
     private fun normalise(s: String?): String {
         if (s.isNullOrEmpty()) return ""
-        return " " + s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
+        return " " + foldLookalikes(s.lowercase()).replace(Regex("[^a-z0-9]+"), " ").trim() + " "
     }
 
     /**
-     * Lowercase, split on anything that isn't a letter or DIGIT, keep tokens length >= 2.
+     * Lowercase, fold lookalike letters, split on anything that isn't a letter or DIGIT.
+     *
      * Digits are kept deliberately: strip them and "p0rn" tokenises to "p"/"rn" and no amount
-     * of de-leeting can save it.
+     * of de-leeting can save it. SINGLE letters are kept for the same reason - "p o r n" is
+     * four one-letter tokens, and dropping them would throw away the very thing scoreJoined
+     * exists to put back together. They cost nothing: no one-letter token is on any list, and
+     * nearMiss ignores anything under five characters.
      */
     private fun tokenize(s: String?): List<String> {
         if (s.isNullOrEmpty()) return emptyList()
-        return s.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 2 }
+        return foldLookalikes(s.lowercase()).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
     }
 }

@@ -373,28 +373,14 @@ object AppConfig {
 
     fun temptation(id: String): TemptationSpec? = TEMPTATIONS.firstOrNull { it.id == id }
 
-    // === Trusted domains (heuristic scorer skipped here) =============================
-    val SAFE_DOMAINS: Set<String> = setOf(
-        "wikipedia.org", "wikimedia.org", "wiktionary.org", "britannica.com",
-        "stackoverflow.com", "stackexchange.com", "superuser.com", "serverfault.com",
-        "github.com", "gitlab.com", "bitbucket.org", "developer.android.com", "developer.mozilla.org",
-        "developer.apple.com", "kotlinlang.org", "python.org", "npmjs.com", "pypi.org", "rust-lang.org",
-        "go.dev", "w3.org", "w3schools.com", "geeksforgeeks.org",
-        "maps.google.com", "docs.google.com", "drive.google.com", "calendar.google.com",
-        "mail.google.com", "translate.google.com", "scholar.google.com", "openstreetmap.org",
-        "gov.uk", "nhs.uk", "who.int", "cdc.gov", "nih.gov", "nasa.gov", "europa.eu", "usa.gov",
-        // Health/medical: anatomy words are unavoidable here, and nobody should be blocked
-        // from looking up a symptom. (The scorer also damps medical context generally - see
-        // MedicalContext - but these are common enough to be worth skipping outright.)
-        "mayoclinic.org", "healthline.com", "webmd.com", "nhsinform.scot", "patient.info",
-        "medlineplus.gov", "plannedparenthood.org", "brook.org.uk", "netdoctor.co.uk",
-        "hopkinsmedicine.org", "clevelandclinic.org", "bupa.co.uk",
-        "khanacademy.org", "coursera.org", "edx.org", "mit.edu", "duolingo.com",
-        "notion.so", "todoist.com", "trello.com", "asana.com", "slack.com", "figma.com", "linear.app",
-        "outlook.com", "outlook.office.com", "office.com", "microsoft.com", "apple.com", "icloud.com",
-        "metoffice.gov.uk", "accuweather.com", "arxiv.org", "pubmed.ncbi.nlm.nih.gov",
-        "paypal.com", "wise.com", "revolut.com",
-    )
+    // === Trusted domains - NEVER blocked, by anything ================================
+    //  Moved to assets/filter/domains_trusted.txt (2026-08-04) and heavily expanded. It
+    //  used to be a Kotlin set of ~60 mostly-developer domains; it is now the deliberate
+    //  answer to filter over-blocking, and it OUTRANKS every block we have including the
+    //  ~550k downloaded list. See the long note at the top of that file for why crisis
+    //  lines, sexual-health charities, LGBT+ support and porn-addiction RECOVERY sites are
+    //  enumerated there by name.
+    val SAFE_DOMAINS: Set<String> get() = FilterData.set("domains_trusted.txt")
 
     // === Browsers ====================================================================
     // We standardise on Firefox. ALLOWED_BROWSERS stay usable; everything in
@@ -520,6 +506,52 @@ object AppConfig {
         PageMatch("App info - force stop", listOf("Web Traffic Monitor", "force stop")),
         PageMatch("Page monitoring (accessibility)", listOf("page monitoring")),
         PageMatch("Overlay - Appear on top", listOf("Appear on top")),
+    )
+
+    // Settings packages these pages are matched in. It was hardcoded to com.android.settings,
+    // which missed the most obvious uninstall route of all: THE PLAY STORE. Our own listing
+    // there has an Uninstall button, and device admin refusing the uninstall is no use if we
+    // never notice the attempt - that attempt is our best early warning.
+    val GUARDED_SETTINGS_PACKAGES: Set<String> = setOf(
+        "com.android.settings",
+        "com.android.vending",              // Play Store: our app page has Uninstall on it
+        "com.samsung.android.settings",     // some Samsung builds
+    )
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    //  (2b) THE OTHER WAYS OUT  -  bounced and recorded like the uninstall pages
+    // ═══════════════════════════════════════════════════════════════════════════════
+    //  Documented Android parental-control bypasses that we had no answer to. Each is a
+    //  place where a person can put apps, time or network traffic somewhere this service
+    //  cannot see, and each is a deliberate act rather than somewhere you land by mistake.
+    //
+    //  ⚠️ DEVELOPER OPTIONS AND USB DEBUGGING ARE DELIBERATELY ABSENT. ADB can switch this
+    //  service off, and every competitor treats that as a hole to close. We leave it open
+    //  on purpose: it is the master override. An app that can lock itself in against a
+    //  cable and a computer is one nobody can rescue themselves from after a bad build or
+    //  a forgotten passcode. Do not "fix" this.
+    //
+    //  Only enforced from STRICT upwards - see AccessibilityService.escapeRouteReason.
+    val ESCAPE_ROUTE_PAGES: List<PageMatch> = listOf(
+        // A second user, work profile or private space is a whole second phone this
+        // service is not registered in. Android 15's Private Space is exactly that.
+        PageMatch("Multiple users", listOf("Multiple users")),
+        PageMatch("Add user", listOf("Add user")),
+        PageMatch("Private space", listOf("Private space")),
+        PageMatch("Secure folder", listOf("Secure Folder")),
+        // A cloned app has a DIFFERENT package name, so every blacklist we have misses it.
+        PageMatch("Dual apps", listOf("Dual apps")),
+        PageMatch("App cloner", listOf("Dual Messenger")),
+        // Sideloading puts any blocked app back under any name.
+        PageMatch("Install unknown apps", listOf("Install unknown apps")),
+        PageMatch("Unknown sources", listOf("Unknown sources")),
+        // Every timer we run is wall-clock based; winding the clock forward ends them all.
+        PageMatch("Date and time", listOf("Set time automatically")),
+        // Not a threat to us (we do no DNS), but it is the layer people run underneath us.
+        PageMatch("Private DNS", listOf("Private DNS")),
+        // Unpreventable, but worth recording as the attempt it is.
+        PageMatch("Factory reset", listOf("Erase all data")),
+        PageMatch("Factory reset (alt)", listOf("Factory data reset")),
     )
 
     // The system Colour/Color-correction page (where Greyscale is toggled). Blocked only

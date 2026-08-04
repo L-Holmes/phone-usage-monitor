@@ -1,0 +1,20 @@
+# FILTER-BYPASS APPS - blocked outright.
+#
+# The app half of domains_bypass.txt. Most of this category is web-only, which is why the
+# domains file is where the work happens.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# NOTE: the VPN and proxy APPS live in apps_vpn.txt, not here - they were already a
+# category before this one existed and moving them would only split the list in two.
+
+Opera (built-in VPN) = com.opera.browser
+Opera Beta = com.opera.browser.beta
+Opera Mini = com.opera.mini.native
+Opera GX = com.opera.gx
+Aloha Browser = com.alohamobile.browser
+Puffin Browser = com.cloudmosa.puffinFree
+UC Browser = com.UCMobile.intl
+Tor Browser = org.torproject.torbrowser
+Orbot = org.torproject.android

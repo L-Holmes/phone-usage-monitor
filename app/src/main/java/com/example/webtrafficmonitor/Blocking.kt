@@ -593,6 +593,241 @@ object BlockEscalation {
  * SAME app inside that window earns a hard 90-minute block - browser or not. Kept
  * in memory (the window is short); a process restart forgives the count.
  */
+// =====================================================================================
+// TamperWatch  —  the clock, and the gaps
+// =====================================================================================
+/**
+ * Two documented ways to defeat a blocker that neither blocks nor detects them, until now.
+ *
+ * ── THE CLOCK ────────────────────────────────────────────────────────────────────────
+ * Every timed thing in this app - AppTimedBlock, Lockdown, LoosenWindow, GreyUsage, the
+ * week-long strict lock - is wall-clock based. Winding the system clock forward ends all of
+ * them at once. It is one of the first tricks in every published Family Link bypass.
+ *
+ * The fix is not to stop using the wall clock (a block that has to survive a reboot needs
+ * it), it is to keep a SECOND, monotonic reading alongside it. `elapsedRealtime()` counts
+ * from boot and cannot be set by anyone. If the two disagree by more than a rounding error,
+ * the wall clock moved on its own, and we can say so.
+ *
+ * ── THE GAPS ─────────────────────────────────────────────────────────────────────────
+ * Safe Mode boots Android with third-party apps disabled: this service does not run, nothing
+ * is blocked, and ordinarily we would never find out. Same for a force-stop that sticks, or
+ * an OEM battery manager killing us overnight.
+ *
+ * We cannot prevent either. What we CAN do is notice: a heartbeat every few minutes, and on
+ * the next start, compare where we were with where we are. A gap with no matching boot is
+ * time this app was supposed to be watching and wasn't. Competitors send that to an
+ * accountability partner; with no partner (a deliberate choice) it goes to the user, which
+ * is the honest local version of the same idea.
+ */
+object TamperWatch {
+
+    private const val PREFS = "tamper_watch"
+    private const val KEY_WALL = "last_wall"
+    private const val KEY_ELAPSED = "last_elapsed"
+    private const val KEY_GAP_AT = "gap_at"
+    private const val KEY_GAP_MS = "gap_ms"
+    private const val KEY_CLOCK_AT = "clock_at"
+    private const val KEY_CLOCK_BY = "clock_by"
+
+    /** How often the heartbeat is written. Cheap; it is two longs. */
+    const val HEARTBEAT_MS = 2 * 60 * 1000L
+
+    /** A gap longer than this counts as "the guard was not running". */
+    private const val GAP_THRESHOLD_MS = 5 * 60 * 1000L
+
+    /** Wall-clock movement beyond this, with no matching elapsed movement, is tampering. */
+    private const val CLOCK_SLIP_MS = 2 * 60 * 1000L
+
+    /**
+     * Write the heartbeat, and report anything odd since the last one. Called on a timer by
+     * the service, and once at startup.
+     *
+     * Returns true if this beat detected tampering (a clock jump or an unexplained gap), so
+     * the caller can react immediately rather than waiting for someone to open the app.
+     */
+    @Synchronized
+    fun beat(ctx: Context): Boolean {
+        val p = prefs(ctx)
+        val wall = System.currentTimeMillis()
+        val elapsed = android.os.SystemClock.elapsedRealtime()
+        val lastWall = p.getLong(KEY_WALL, 0L)
+        val lastElapsed = p.getLong(KEY_ELAPSED, 0L)
+        var flagged = false
+
+        if (lastWall > 0L) {
+            val wallDelta = wall - lastWall
+            val elapsedDelta = elapsed - lastElapsed
+            val rebooted = elapsedDelta < 0            // elapsedRealtime resets on boot
+            if (!rebooted) {
+                // Both clocks should advance together. If the wall clock ran away from the
+                // monotonic one, somebody set it.
+                val slip = wallDelta - elapsedDelta
+                if (kotlin.math.abs(slip) > CLOCK_SLIP_MS) {
+                    p.edit().putLong(KEY_CLOCK_AT, wall).putLong(KEY_CLOCK_BY, slip).apply()
+                    flagged = true
+                }
+                // A long stretch with no heartbeat, while the device was up, means we were
+                // not running: safe mode, a force stop, or an OEM battery killer.
+                if (elapsedDelta > GAP_THRESHOLD_MS) {
+                    p.edit().putLong(KEY_GAP_AT, wall).putLong(KEY_GAP_MS, elapsedDelta).apply()
+                    flagged = true
+                }
+            }
+        }
+        p.edit().putLong(KEY_WALL, wall).putLong(KEY_ELAPSED, elapsed).apply()
+        return flagged
+    }
+
+    /** ms the clock was moved by, and when - or null if it has not been. */
+    fun clockSlip(ctx: Context): Pair<Long, Long>? {
+        val p = prefs(ctx)
+        val at = p.getLong(KEY_CLOCK_AT, 0L)
+        return if (at == 0L) null else at to p.getLong(KEY_CLOCK_BY, 0L)
+    }
+
+    /** How long the guard was last not running, and when - or null if it always has been. */
+    fun lastGap(ctx: Context): Pair<Long, Long>? {
+        val p = prefs(ctx)
+        val at = p.getLong(KEY_GAP_AT, 0L)
+        return if (at == 0L) null else at to p.getLong(KEY_GAP_MS, 0L)
+    }
+
+    /** Read and clear, for a notice shown once. */
+    fun acknowledge(ctx: Context) =
+        prefs(ctx).edit().remove(KEY_GAP_AT).remove(KEY_GAP_MS)
+            .remove(KEY_CLOCK_AT).remove(KEY_CLOCK_BY).apply()
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// BorderlineWatch  —  the app that keeps ALMOST blocking
+// =====================================================================================
+/**
+ * A single borderline screen means nothing. "hot", "girls", "tight" - ordinary words that
+ * score a few points and are supposed to. That is why one of them can never block anything,
+ * and it is the right call every single time you look at one screen.
+ *
+ * Look at ten MINUTES of screens and it is a different question. An app that keeps coming
+ * back at eight points, over and over, is not a coincidence: it is a feed that has worked
+ * out what holds your attention, and the filter watching one frame at a time will never
+ * see it. Neither would you, in the moment - that is rather the point of the feed.
+ *
+ * So this counts. Borderline readings for one app inside a rolling WINDOW_MS:
+ *   • at WARN_AT   → a WARNING cover for a few seconds, saying plainly what is about to
+ *                    happen and why. Nothing is taken away yet.
+ *   • at BLOCK_AT  → the app closes for PENALTY_MS.
+ *
+ * STRICT AND ABOVE ONLY. In Relaxed this is exactly the sort of thing that should be left
+ * alone: nothing here has crossed the line, and Relaxed is the mode that says it will only
+ * act on things that have.
+ *
+ * Counters are in memory only, like CheckingGuard's. They live in the accessibility
+ * service's process, which runs all day, and losing them on a restart costs one lenient
+ * window - which is the right way round for a rule that acts on a suspicion.
+ */
+object BorderlineWatch {
+
+    // ── Tuning: what "borderline for five minutes" actually means ────────────────────
+    // A LEAKY BUCKET, sampled at MIN_GAP_MS. Every ~10 seconds the screen in front counts
+    // once: a borderline reading fills the bucket by one, a clean one drains it by one.
+    // So the bucket measures the PROPORTION of the last few minutes that was borderline,
+    // not merely how long the app has been open, and a feed with the occasional bad frame
+    // never gets there while one that is mostly bad does.
+    //
+    // The numbers below mean: warn after roughly one and a half minutes of near-continuous
+    // borderline content, block after roughly three. The window caps how far back it can
+    // reach, so nothing accumulated an hour ago can be held against you now.
+
+    /** How long a borderline reading stays on the books. */
+    const val WINDOW_MS = 5 * 60 * 1000L
+    /** One reading per app per this long, so a burst of events counts once. */
+    const val SAMPLE_MS = 10_000L
+    /** Borderline readings in the bucket before the user is warned. (~1.5 min) */
+    const val WARN_AT = 9
+    /** ...and before the app is shut. (~3 min) */
+    const val BLOCK_AT = 18
+    /** How long the warning cover stays up. Long enough to read, short enough not to punish. */
+    const val WARN_HOLD_MS = 8_000L
+    const val PENALTY_MS = 60 * 60 * 1000L
+    const val PENALTY_LABEL = "an hour"
+
+    enum class Action { NONE, WARN, BLOCK }
+
+    private val hits = HashMap<String, ArrayDeque<Long>>()
+    private val lastAt = HashMap<String, Long>()
+    private val warned = HashSet<String>()
+    @Volatile private var warnPkg: String? = null
+    @Volatile private var warnUntil = 0L
+
+    /**
+     * Record what the screen in front of [pkg] looks like and say what should happen.
+     *
+     * Safe to call on every event: only one reading per SAMPLE_MS is taken, because fifty
+     * events about the same unchanged screen are one look at one screen, not fifty.
+     */
+    fun record(pkg: String, borderline: Boolean): Action =
+        recordAt(pkg, borderline, System.currentTimeMillis())
+
+    /**
+     * [record] with the clock passed in. The tuning here is all about elapsed time, so the
+     * tests drive it through a fake clock rather than sitting through three real minutes.
+     */
+    @Synchronized
+    internal fun recordAt(pkg: String, borderline: Boolean, now: Long): Action {
+        if (now - (lastAt[pkg] ?: 0L) < SAMPLE_MS) return Action.NONE
+        lastAt[pkg] = now
+        val q = hits.getOrPut(pkg) { ArrayDeque() }
+        while (q.isNotEmpty() && now - q.first() > WINDOW_MS) q.removeFirst()
+        if (!borderline) {
+            // A clean screen DRAINS the bucket by one rather than emptying it. Emptying it
+            // would make the whole rule trivial to sit out - one clean frame between every
+            // bad one and it never fires. Draining keeps it honest in both directions.
+            if (q.isNotEmpty()) q.removeFirst()
+            if (q.isEmpty()) warned.remove(pkg)
+            return Action.NONE
+        }
+        q.addLast(now)
+        return when {
+            q.size >= BLOCK_AT -> { reset(pkg); Action.BLOCK }
+            q.size >= WARN_AT && warned.add(pkg) -> {
+                warnPkg = pkg; warnUntil = now + WARN_HOLD_MS
+                Action.WARN
+            }
+            else -> Action.NONE
+        }
+    }
+
+    /** True while the warning cover for [pkg] should be up. */
+    fun warningUp(pkg: String?): Boolean =
+        pkg != null && pkg == warnPkg && System.currentTimeMillis() < warnUntil
+
+    /**
+     * How full the bucket is, as of the last reading taken. Not re-pruned here on purpose:
+     * recordAt prunes on every call, so this is accurate the moment it matters, and leaving
+     * it alone keeps the readout free of a clock this object otherwise never needs.
+     */
+    @Synchronized
+    fun pressure(pkg: String): Int = hits[pkg]?.size ?: 0
+
+    /** A clean screen, or a real block: either way this app's run of near-misses is over. */
+    @Synchronized
+    fun clear(pkg: String?) {
+        if (pkg == null) return
+        hits.remove(pkg); lastAt.remove(pkg); warned.remove(pkg)
+        if (warnPkg == pkg) warnUntil = 0L
+    }
+
+    @Synchronized
+    private fun reset(pkg: String) {
+        hits.remove(pkg); lastAt.remove(pkg); warned.remove(pkg)
+    }
+}
+
+
 object RapidBlockMonitor {
 
     /**

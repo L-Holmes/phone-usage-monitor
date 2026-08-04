@@ -156,11 +156,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private val recheck = object : Runnable {
         override fun run() {
             if (!appBlockActive) return
-            val pkg = currentForegroundPackage()
-            val blocked = appBlockReason(pkg)
+            // Any VISIBLE app, not just the focused one - a blocked app in the other
+            // split-screen pane or in a PiP window is still on screen (§2.6).
+            val hit = blockedVisibleApp()
             when {
-                blocked != null -> showAppBlock(blocked, pkg!!) // keeps cover + reposts
-                pkg != null -> {
+                hit != null -> showAppBlock(hit.second, hit.first) // keeps cover + reposts
+                currentForegroundPackage() != null -> {
                     appBlockActive = false
                     overlay?.hide()
                 }
@@ -393,6 +394,59 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // room fires no accessibility event, so it re-evaluates the foreground app
         // itself - same shape as the night guard's sensor callback.
         RoomGuard.start(this) { updateRoomGuard() }
+        startTamperWatch()
+        startInstallWatch()
+    }
+
+    /**
+     * The heartbeat behind TamperWatch: notices a wound-forward clock, and stretches where
+     * this service was not running at all (safe mode, a force stop, an OEM battery killer).
+     * Neither is preventable; both are worth knowing about, and until now we knew about
+     * neither.
+     */
+    private val tamperBeat = object : Runnable {
+        override fun run() {
+            if (TamperWatch.beat(this@PageMonitorAccessibilityService)) {
+                android.util.Log.w("PageMonitor", "tamper signal: clock jump or coverage gap")
+            }
+            mainHandler.postDelayed(this, TamperWatch.HEARTBEAT_MS)
+        }
+    }
+
+    private fun startTamperWatch() {
+        mainHandler.removeCallbacks(tamperBeat)
+        mainHandler.post(tamperBeat)
+    }
+
+    /**
+     * A NEW APP APPEARING is the other half of the sideloading story: guarding the "install
+     * unknown apps" screen stops the casual route, but an APK can still arrive over ADB, a
+     * work profile, or an already-granted installer. So we also watch for the arrival.
+     *
+     * A new install while Strict+ is on is checked against the category lists immediately -
+     * if it is on one, it is blocked from its first launch rather than from whenever we
+     * happen to next reload the lists.
+     */
+    private val installReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != Intent.ACTION_PACKAGE_ADDED) return
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return  // an update
+            val pkg = intent.data?.schemeSpecificPart ?: return
+            if (Mode.isOff(this@PageMonitorAccessibilityService)) return
+            val category = BlockedCategories.appCategory(pkg)
+            if (category != null) {
+                BypassWatch.record(this@PageMonitorAccessibilityService, BypassWatch.Reason.INSTALLED_BLOCKED)
+                android.util.Log.w("PageMonitor", "blocked-category app installed: $pkg (${category.id})")
+            }
+            InstallLog.record(this@PageMonitorAccessibilityService, pkg, category?.title)
+        }
+    }
+
+    private fun startInstallWatch() {
+        val filter = android.content.IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply {
+            addDataScheme("package")
+        }
+        runCatching { registerReceiver(installReceiver, filter) }
     }
 
     // ═════════════════════════════════════════════════════════════════════════════════
@@ -470,8 +524,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private fun coverForeground() {
         if (appBlockActive || leaving) return
-        val pkg = currentForegroundPackage() ?: return
-        val reason = appBlockReason(pkg) ?: return
+        val (pkg, reason) = blockedVisibleApp() ?: return
         showAppBlock(reason, pkg)
     }
 
@@ -646,6 +699,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             return
         }
 
+        // NOTIFICATIONS  (§2.6). A notification is the one surface that arrives WITHOUT the
+        // user opening anything, and its preview text is shown on the lock screen and over
+        // whatever is in front. We cannot cover it - it is drawn by the system, and a block
+        // screen over the shade would be both impossible and useless.
+        //
+        // What we can do is READ it. A notification scoring like adult content tells us the
+        // app is still pushing that content at the user even while it is blocked, and that
+        // is worth counting and worth logging. It feeds BorderlineWatch against the app that
+        // sent it, so a stream of them behaves exactly like a stream of borderline screens.
+        if (type == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+            handleNotification(event, packageName)
+            return
+        }
+
         if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) {
@@ -660,11 +727,25 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // The RECORDING happens whether or not the lock is on: reaching for the uninstall
         // button is the signal we care about, and someone without the lock enabled is if
         // anything closer to actually going through with it. Bouncing still needs the lock.
-        if (packageName == "com.android.settings") {
+        if (packageName in AppConfig.GUARDED_SETTINGS_PACKAGES) {
             val guardPage = ourUninstallScreen()
             if (guardPage != null) {
                 recordBypassAttempt(guardPage)
                 if (UninstallGuard.isAdminActive(this)) {
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    return
+                }
+            }
+            // The OTHER ways out: a second user, a private space, a cloned app, sideloading,
+            // the system clock, Private DNS, a factory reset. Strict and above only - in
+            // Relaxed these are ordinary settings somebody is entitled to open.
+            if (!Mode.isRelaxed(this) && !Mode.isOff(this)) {
+                val escape = AppConfig.ESCAPE_ROUTE_PAGES.firstOrNull { pageMatches(it) }
+                if (escape != null) {
+                    BypassWatch.record(this, BypassWatch.Reason.ESCAPE_ROUTE)
+                    Toast.makeText(
+                        this, getString(R.string.br_escape_route, escape.label), Toast.LENGTH_LONG,
+                    ).show()
                     performGlobalAction(GLOBAL_ACTION_HOME)
                     return
                 }
@@ -698,6 +779,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (blockedApp != null) {
             showAppBlock(blockedApp, packageName)
             return // No point reading or logging pages inside a blocked app.
+        }
+        // The event's package is only ONE of the apps on screen. A window change is exactly
+        // when a second split-screen pane or a picture-in-picture window appears, so that is
+        // the moment to look at all of them (§2.6). Only on state changes - doing this on
+        // every content change would walk the window list dozens of times a second.
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val alsoBlocked = blockedVisibleApp()
+            if (alsoBlocked != null) {
+                showAppBlock(alsoBlocked.second, alsoBlocked.first)
+                return
+            }
         }
 
         // ---- Breathing gate: a calming pause when a chosen app opens ----
@@ -770,7 +862,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // The bar text is the full address (URL or search), as a screen reader sees
         // it. The host is derived from it purely for blocking.
         val barText = readAddressBarText()
+        // An app's OWN in-app browser has no toolbar we recognise, so fall back to reading
+        // the domain out of its chrome (§2.5). Only when there is genuinely a web page on
+        // screen and this is not a real browser - in a browser the address bar is the truth.
         val host = barText?.let { hostInText(it) }
+            ?: if (!AppBlocklist.isBrowser(packageName) && hasWebView())
+                readInAppBrowserHost(root) else null
 
         if (packageName != lastPackage) {
             lastPackage = packageName
@@ -847,6 +944,39 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         )
     }
 
+    /**
+     * Score a notification's text and act on the pattern rather than the one notification.
+     *
+     * Deliberately NOT a block: there is nothing to block. It is a read, a count and a log
+     * entry. The one thing it can trigger on its own is the hour-long close, and only via
+     * BorderlineWatch's ordinary thresholds - the same bar a stream of borderline screens
+     * has to clear.
+     */
+    private fun handleNotification(event: AccessibilityEvent, packageName: String) {
+        if (Mode.isOff(this)) return
+        if (packageName == this.packageName) return
+        if (Whitelist.isSafeApp(this, packageName)) return
+        val text = event.text.joinToString(" ") { it.toString() }.trim()
+        if (text.isBlank()) return
+
+        val reading = BorderlineScorer.read(null, null, text, filterSettings())
+        if (reading.score <= 0) return
+
+        BlockEventLog.recordWeb(
+            this, packageName, null, null,
+            getString(R.string.br_notification_flagged, appLabelFor(packageName)),
+            reading.score,
+        )
+        // Strict and above only, same as every other BorderlineWatch path.
+        if (Mode.isRelaxed(this) || !reading.borderline) return
+        if (BorderlineWatch.record(packageName, true) == BorderlineWatch.Action.BLOCK) {
+            AppTimedBlock.blockFor(
+                this, packageName, BorderlineWatch.PENALTY_MS,
+                getString(R.string.br_borderline_block, BorderlineWatch.PENALTY_LABEL),
+            )
+        }
+    }
+
     /** Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop. */
     private fun showAppBlock(reason: String, blockedPackage: String) {
         val controller = overlay ?: return
@@ -892,6 +1022,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // Strict was chosen but the setup that enforces it never finished. Ahead of every
         // other guard, because the others are the ones that aren't fully working yet.
         setupGuardReason(pkg)?.let { return it }
+        // The borderline WARNING - a real cover, but only for a few seconds. Held here rather
+        // than by the caller so the recheck loop keeps it up for its full run and then drops
+        // it by itself, and so it obeys the keyguard rule above like everything else.
+        if (pkg != null && BorderlineWatch.warningUp(pkg)) return borderlineWarningText(pkg)
         nightGuardReason(pkg)?.let { return it }
         roomGuardReason(pkg)?.let { return it }
         bluetoothGuardReason(pkg)?.let { return it }
@@ -912,8 +1046,32 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     return getString(R.string.br_grey_limit, appLabelFor(pkg), GreyUsage.LIMIT_MIN)
         }
         AppBlocklist.blockedReason(pkg)?.let { return getString(R.string.br_blocked_app_pkg, it) }
+        // The hand-maintained category lists (UGC feeds, adult, strangers, VPNs). AFTER the
+        // user's own AppRules above, so an explicit personal rule still wins, and after the
+        // browser check so a blocked browser keeps its own clearer wording.
+        //
+        // ⚠️ THIS SUPERSEDES THE BUILT-IN GREYLIST for the ~17 apps on both lists (TikTok,
+        // Instagram, YouTube, Reddit, Snapchat, Discord, Twitch, the Facebook family, X...).
+        // AppRules.appTier returns GREY for them, but GREY only blocks once the hourly
+        // budget is spent - so it falls through to here and they are blocked outright
+        // instead of time-limited. That was the 2026-08-04 instruction ("put on the
+        // blacklist"), not an accident.
+        //
+        // TO PUT THE GREYLIST BACK IN CHARGE for the overlap, move this call ABOVE the
+        // `when (AppRules.appTier(...))` block and return null when the tier is GREY.
+        BlockedCategories.appCategory(pkg)?.let {
+            return getString(R.string.br_blocked_category_app, appLabelFor(pkg!!), it.title)
+        }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
+
+    /**
+     * The borderline warning's wording. Says what is happening, why, and exactly what
+     * happens next - a warning that doesn't name the consequence is just an interruption.
+     */
+    private fun borderlineWarningText(pkg: String): String = getString(
+        R.string.br_borderline_warn, appLabelFor(pkg), BorderlineWatch.PENALTY_LABEL,
+    )
 
     /**
      * STRICT MODE THAT ISN'T SET UP YET - see SetupGuard for the full reasoning.
@@ -1110,23 +1268,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /** The gender switches, read fresh each pass so a change takes effect on the next page. */
     private fun filterSettings() = BorderlineScorer.Settings.of(this)
-
-    /**
-     * How much to RAISE the heuristic's bar for this app - see the long note on
-     * FilterTuning.PLUGIN_COVERED_MULTIPLIER.
-     *
-     * Firefox with our image add-on confirmed is the one surface where a second filter is
-     * already reading the page from the inside, and it can see the images, which is the half
-     * we can't. Two filters at the same bar just doubles the false positives, so this one
-     * steps back a little there and nowhere else. Deliberately NOT every browser: the other
-     * browsers are funnelled away rather than supported, and the add-on only exists for
-     * Firefox, so "a plugin is covering this" simply isn't true anywhere else.
-     */
-    private fun pluginThresholdMultiplier(packageName: String): Float =
-        if (packageName in AppConfig.FIREFOX_PACKAGES && BrowserSetup.extensionConfirmed(this))
-            FilterTuning.PLUGIN_COVERED_MULTIPLIER
-        else
-            1f
 
     /**
      * The "here is WHY" block under a cover's reason: the handful of words that actually
@@ -1381,15 +1522,48 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // as a separate, unscored, outright block. They are now a TIER OF THE SCORER
         // (ModeFragments), which is why there is nothing left to check at this level.
         var verdict: BorderlineScorer.Result? = null
+        // The numbers behind an APP screen's verdict, kept so a screen that did not block can
+        // still be counted by BorderlineWatch. Null for anything that isn't an app screen.
+        var appReading: BorderlineScorer.Reading? = null
         val baseReason = when {
                appGuard != null -> appGuard
                extGuard != null -> extGuard
+               // ── TRUSTED DOMAINS WIN, OVER EVERYTHING ─────────────────────────────
+               // This used to sit BELOW the domain blocklist, which made it almost
+               // useless: the ~550k community list is built by automated categorisation,
+               // and automated categorisation is measurably bad at telling a sexual-health
+               // charity from a porn site. So a trusted domain that happened to be on that
+               // list was blocked anyway - including, in the real-world UK rollout this is
+               // modelled on, rape crisis centres and porn-addiction recovery sites.
+               //
+               // Being wrong in that direction is worse than the thing we are preventing.
+               // The list is short, hand-maintained and documented (domains_trusted.txt);
+               // it is allowed to outrank the machine-built ones.
+               host != null && Whitelist.isSafeDomain(this, host) -> null
                host != null && DomainBlocklist.isBlocked(host) -> getString(R.string.br_adult_site, host)
                // Search engines: only Google is allowed, in every mode.
                host != null && SearchEngineBlocklist.isBlocked(host) -> getString(R.string.br_search_engine, host)
+               // ...and Google only counts as allowed while SafeSearch is actually on.
+               // There is no innocent route to "&safe=off", so it is recorded as an attempt.
+               SafeSearch.isSearchHost(host) && SafeSearch.isExplicitlyOff(url) -> {
+                   BypassWatch.record(this, BypassWatch.Reason.SAFESEARCH_OFF)
+                   getString(R.string.br_safesearch_off)
+               }
+               // Image results are the surface this is really about. Strict and above only:
+               // in Relaxed a picture search is not by itself evidence of anything.
+               !Mode.isRelaxed(this) && SafeSearch.isSearchHost(host) &&
+                   SafeSearch.isImageSearch(url) -> getString(R.string.br_image_search)
                // The hand-maintained ban list (reddit + its frontends/mirrors, imageboards,
                // borderline shops): banned in EVERY mode.
                host != null && AlwaysBlocklist.isBlocked(host) -> getString(R.string.br_blocked_site, host)
+               // The hand-maintained category site lists. Same standing as the ban list
+               // above - absolute, in every mode above Off - but they can say WHICH kind of
+               // site it was, which is a more useful sentence to be shown.
+               host != null && BlockedCategories.hostCategory(host) != null ->
+                   getString(
+                       R.string.br_blocked_category_site, host,
+                       BlockedCategories.hostCategory(host)!!.title,
+                   )
                // Strict+-only hosts (list currently empty - see StrictOnlyBlocklist).
                host != null && !Mode.isRelaxed(this) && StrictOnlyBlocklist.isBlocked(host) ->
                    getString(R.string.br_blocked_site, host)
@@ -1397,13 +1571,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
                    GreyUsage.isOverLimit(this, host) ->
                        getString(R.string.br_grey_limit_host, GreyUsage.LIMIT_MIN, host)
-               host != null && Whitelist.isSafeDomain(this, host) -> null   // trusted domain: skip heuristic
                // The heuristic - and ONLY the heuristic - waits for real page text.
                !contentReady -> null
-               host != null || AppBlocklist.isBrowser(packageName) ->
-                   BorderlineScorer.evaluate(
-                       title, url, content, filterSettings(), pluginThresholdMultiplier(packageName),
-                   )?.also { verdict = it }?.reason
+               // A REAL browser gets the web bar. An app's in-app browser does NOT: the web
+               // bar is 21 because the image add-on is reading the same page from the
+               // inside, and it is not doing that inside Instagram. Domain rules apply
+               // either way now (that is the point of §2.5) - only the scoring bar differs.
+               AppBlocklist.isBrowser(packageName) ->
+                   BorderlineScorer.evaluate(title, url, content, filterSettings())
+                       ?.also { verdict = it }?.reason
                // NON-BROWSER APPS. This used to be the hole in the whole design: the
                // heuristic ran on web pages and inside browsers, and nowhere else - so an
                // app feed got nothing but a keyword match against its screen TITLE, which
@@ -1412,11 +1588,50 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                //
                // Now the same scorer runs on the sampled screen text, at the tighter
                // in-app bar (see FilterTuning.APP_THRESHOLD).
-               isScannableApp(packageName) ->
-                   BorderlineScorer.evaluateInApp(title, url, content, filterSettings())
-                       ?.also { verdict = it }?.reason
+               isScannableApp(packageName) -> {
+                   // ONE scoring pass gives both the verdict and the raw numbers. The numbers
+                   // are what BorderlineWatch needs: a screen that does not block is still
+                   // worth remembering if it keeps not-quite-blocking (see below).
+                   val judged = BorderlineScorer.judgeApp(title, url, content, filterSettings())
+                   appReading = judged.reading
+                   judged.result?.also { verdict = it }?.reason
+               }
                else -> null
            }
+
+        // ── THE APP THAT KEEPS ALMOST BLOCKING (see BorderlineWatch) ─────────────────
+        // Nothing here has crossed the line, which is exactly why one screen can't be acted
+        // on. A RUN of them, in one app, over minutes, is a different fact - and the only
+        // place it can be noticed is here, where the readings arrive.
+        if (baseReason == null && !Mode.isRelaxed(this) && !Mode.isOff(this)) {
+            val reading = appReading
+            if (reading != null) {
+                // Clean screens are reported too - they drain the bucket. Only feeding it the
+                // bad ones would make it a counter of "how long has this app been open".
+                when (BorderlineWatch.record(packageName, reading.borderline)) {
+                    BorderlineWatch.Action.BLOCK -> {
+                        AppTimedBlock.blockFor(
+                            this, packageName, BorderlineWatch.PENALTY_MS,
+                            getString(R.string.br_borderline_block, BorderlineWatch.PENALTY_LABEL),
+                        )
+                        showAppBlock(
+                            AppTimedBlock.reasonIfBlocked(this, packageName)
+                                ?: getString(R.string.br_app_blocked),
+                            packageName,
+                        )
+                        return
+                    }
+                    // The warning is a real cover, for a few seconds, because a toast behind a
+                    // feed is not a warning - it is a thing you scroll past. appBlockReason
+                    // keeps it up until it expires, then the ordinary loop drops it.
+                    BorderlineWatch.Action.WARN -> {
+                        showAppBlock(borderlineWarningText(packageName), packageName)
+                        return
+                    }
+                    BorderlineWatch.Action.NONE -> Unit
+                }
+            }
+        }
 
         if (baseReason != null) {
             val freshShow = !controller.isShowing
@@ -1540,6 +1755,44 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return if (isNoise(pkg)) null else pkg
     }
 
+    /**
+     * EVERY app package with a window on screen - not just the focused one.  (§2.6)
+     *
+     * currentForegroundPackage() answers "what is the user looking at", which is the right
+     * question for logging and the wrong one for blocking. Two cases it gets wrong:
+     *
+     *   • SPLIT SCREEN. Two apps, both visible, one focused. A blocked app in the other pane
+     *     is fully usable - you can read it, scroll it, and it never has focus.
+     *   • PICTURE-IN-PICTURE. A PiP window is an application window that is never active and
+     *     never focused. A video from a blocked app keeps playing in the corner over the
+     *     home screen, and the focused package is the launcher.
+     *
+     * So blocking asks this instead, and covers if ANY of them is blocked.
+     */
+    private fun visibleAppPackages(): List<String> {
+        val out = ArrayList<String>(3)
+        try {
+            for (window in windows) {
+                if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                val pkg = window.root?.packageName?.toString() ?: continue
+                if (isNoise(pkg)) continue
+                if (pkg !in out) out.add(pkg)
+            }
+        } catch (_: Throwable) {
+            // windows can throw mid-transition; the caller falls back to the focused package
+        }
+        if (out.isEmpty()) currentForegroundPackage()?.let { out.add(it) }
+        return out
+    }
+
+    /** The first VISIBLE app that should be covered, and why. Focused or not. */
+    private fun blockedVisibleApp(): Pair<String, String>? {
+        for (pkg in visibleAppPackages()) {
+            appBlockReason(pkg)?.let { return pkg to it }
+        }
+        return null
+    }
+
     private fun isNoise(pkg: String): Boolean =
         pkg == packageName || pkg in IGNORED_PACKAGES || pkg.lowercase() in keyboardPackages
 
@@ -1657,6 +1910,52 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             collectText(node.getChild(i), out, depth + 1)
         }
     }
+
+    /**
+     * THE HOST OF A PAGE INSIDE AN APP'S OWN BROWSER  (§2.5)
+     *
+     * Instagram, Reddit, Telegram, Discord and most of the rest open links in a WebView they
+     * own rather than handing them to Firefox. That WebView has no toolbar we recognise, so
+     * readAddressBarText() returns nothing, `host` comes back null - and every domain rule we
+     * have silently does not apply. Not the 550k blocklist, not the ban list, not one of the
+     * six category lists. Only the word scorer ran, and a page of pictures has no words.
+     *
+     * That was the largest remaining hole in the design: every app on the blacklist ships a
+     * browser that walks straight past the blacklist.
+     *
+     * These in-app browsers do almost always show the DOMAIN somewhere in their own chrome -
+     * a header line, a subtitle under the page title, a share sheet. So: walk the tree, stay
+     * OUT of the WebView subtree (inside it is page content, which is somebody else's text
+     * and full of other people's domains), and take the first node whose entire text is a
+     * host and nothing else.
+     *
+     * "Entire text" is the load-bearing part. A sentence that happens to mention a domain is
+     * not an address bar, and treating it as one would let a page block itself by quoting a
+     * URL. Whitespace anywhere in the string disqualifies it.
+     */
+    private fun readInAppBrowserHost(root: AccessibilityNodeInfo): String? {
+        var found: String? = null
+        fun walk(node: AccessibilityNodeInfo?, depth: Int, insideWeb: Boolean) {
+            if (node == null || found != null || depth > ADDRESS_BAR_DEPTH) return
+            val nowInside = insideWeb || node.className == "android.webkit.WebView"
+            if (!nowInside) {
+                bareHost(node.text?.toString())?.let { found = it; return }
+                bareHost(node.contentDescription?.toString())?.let { found = it; return }
+            }
+            for (i in 0 until node.childCount) {
+                walk(node.getChild(i), depth + 1, nowInside)
+                if (found != null) return
+            }
+        }
+        walk(root, 0, false)
+        return found
+    }
+
+    /**
+     * A string that IS an address, not one that CONTAINS an address. "instagram.com" and
+     * "https://example.com/x" qualify; "see instagram.com for more" does not.
+     */
+    private fun bareHost(raw: String?): String? = InAppBrowser.bareHost(raw)
 
     private fun hostInText(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
@@ -1787,6 +2086,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         closeUsageSegment()                                    // bank the time we were mid-way through
         runCatching { unregisterReceiver(screenReceiver) }
         runCatching { unregisterReceiver(bluetoothReceiver) }
+        runCatching { unregisterReceiver(installReceiver) }
+        mainHandler.removeCallbacks(tamperBeat)
         super.onDestroy()
     }
 

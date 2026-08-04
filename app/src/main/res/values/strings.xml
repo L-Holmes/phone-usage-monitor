@@ -256,7 +256,9 @@
     <string name="always_on_12">It IS still there, but you only get offered it if you go for the uninstall button, the device-admin lock, the monitoring switch, or try to escape a locked strict mode. Reach for the destructive option and you\'ll be offered the honest one instead - a wait, a written commitment, a fixed window, and everything still standing afterwards.</string>
     <string name="always_on_13">The app never presses Back for you. Blocking covers the screen and offers you the way out; it never navigates your browser behind your back.</string>
     <string name="always_on_14">A word-score block shows its working: the block screen lists the words that actually carried the score, so you can see why - and tell us when we got it wrong.</string>
-    <string name="always_on_15">In Firefox, with the image add-on installed, a page needs a HIGHER word score before it is blocked. The add-on is already reading that page from the inside, so this side of it can afford to be less twitchy.</string>
+    <string name="always_on_15">A web page needs a higher word score than an app screen before it is blocked, because in a browser the image add-on is reading the same page from the inside. One unmistakable word still blocks either, on its own.</string>
+    <string name="always_on_16">Spelling it differently does not get past it. Numbers for letters, stretched letters, lookalike letters from other alphabets, and words split across spaces are all put back together before anything is checked.</string>
+    <string name="always_on_17">Inside an APP, one unmistakable word is enough on a short screen - but the same word buried in a long page of text needs a second one, because a mention is not the same as a page about it.</string>
 
     <!-- Per-mode rule bullets (shown on the mode-rules screen). Keep in step with the mode
          behaviour flags in AppConfig.MODES. -->
@@ -281,6 +283,7 @@
         <item>The daily pass resets at midnight.</item>
         <item>NIGHT GUARD: none in Strict. Lying down or sitting in the dark never blocks anything here - that only happens in Super hardcore.</item>
         <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
+        <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
         <item>THE SETUP IS ENFORCED, not just asked for: while anything is still missing - the \"appear on top\" permission, Firefox, or its add-on - everything except the essentials is covered with a screen naming the step you still owe. Calls, texts, alarms, maps, Settings, Firefox and this app all stay open, so you can always finish it (or drop back to Relaxed).</item>
         <item>The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.</item>
         <item>Greyscale: your screen turns grey while you are lying down.</item>
@@ -293,6 +296,7 @@
         <item>NIGHT GUARD - only in this mode: while you are LYING DOWN, or the room is genuinely dark (lights off, curtains drawn), only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.</item>
         <item>Greyscale: your screen turns grey while you are lying down, same as Strict.</item>
         <item>Everything in \"Always on\" above still applies.</item>
+        <item>The borderline-pattern rule from Strict applies here too.</item>
         <item>The setup is enforced outside this app exactly as it is in Strict: anything still missing and only the essentials open.</item>
         <item>This is Strict with the daily pass taken away.</item>
     </string-array>
@@ -1041,7 +1045,12 @@
     <string name="br_bluetooth_off">Bluetooth is off.\nYour room sensors need it to work, so this stays shut until it\'s back on.\nSwitch Bluetooth on and this app opens again.</string>
     <string name="br_adult_site">Adult site (blocklist): %1$s</string>
     <string name="br_search_engine">Search engine blocked: %1$s</string>
+    <string name="br_safesearch_off">SafeSearch is switched off.\nTurn it back on in your Google account and this page opens again.</string>
+    <string name="br_image_search">Image search is off the table in this mode.</string>
+    <string name="br_escape_route">%1$s is off limits in this mode - it is a place apps can hide from the guard.</string>
     <string name="br_blocked_site">Blocked site: %1$s</string>
+    <string name="br_blocked_category_app">%1$s is blocked.\n%2$s</string>
+    <string name="br_blocked_category_site">Blocked site: %1$s\n%2$s</string>
     <string name="br_extension_page">The image-monitor add-on\'s page is blocked - the add-on stays on.</string>
     <string name="br_setup_incomplete">Strict mode isn\'t set up yet.\n\n%1$s\n\nOpen Web Traffic Monitor and finish the setup - then everything unlocks.</string>
     <string name="br_setup_missing_overlay">Still to do: allow the app to appear on top of other apps.</string>
@@ -1053,6 +1062,9 @@
     <string name="br_blocked_keyword">Blocked keyword: \"%1$s\"</string>
     <string name="br_back_same">Still the SAME blocked page. Press Back again, or go home.</string>
     <string name="br_back_diff">That\'s a DIFFERENT page - but it\'s blocked too. Press Back again, or go home.</string>
+    <string name="br_borderline_warn">%1$s keeps coming close.\n\nNothing here has crossed the line on its own - but the same borderline words have been on screen for a few minutes now, and that pattern is usually the feed, not you.\n\nKeep going and %1$s closes for %2$s. Leaving now costs you nothing.</string>
+    <string name="br_borderline_block">Closed for %1$s - borderline content kept coming up</string>
+    <string name="br_notification_flagged">Notification from %1$s scored as adult content</string>
     <string name="br_app_too_many">App blocked for %1$s (too many blocks)</string>
     <string name="br_app_blocked">App blocked</string>
 

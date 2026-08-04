@@ -1,0 +1,42 @@
+# SEXUALISED-CONTENT APPS  -  blocked outright, in every mode above Off.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ MOST OF THIS CATEGORY HAS NO ANDROID APP AT ALL. Google Play does not carry adult
+#    content, so OnlyFans, Pornhub, Chaturbate and the rest are web-only or sideloaded APKs
+#    with no fixed package name. That is not a gap: domains_adult.txt is where this category
+#    is actually enforced, and it is complete. Only the ones that DO ship a Play Store app
+#    are listed here.
+#
+#    The messengers and file-lockers below are here for one specific reason - they are the
+#    common delivery route once the sites themselves are blocked. That makes them a broader
+#    block than the rest of this list, so decide deliberately rather than by inheritance.
+
+# ── Messaging / storage used to move this content once the sites are blocked ─────────
+Telegram = org.telegram.messenger
+Telegram X = org.thunderdog.challegram
+Kik = kik.android
+Session = network.loki.messenger
+MEGA = mega.privacy.android.app
+
+# ── Dating / hookup apps that ship on Play ───────────────────────────────────────────
+Tinder = com.tinder
+Bumble = com.bumble.app
+Hinge = co.hinge.app
+Feeld = com.feeld
+Grindr = com.grindrapp.android
+Badoo = com.badoo.mobile
+
+# ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Pure
+# Fanvue
+# OmeTV
+# Emerald Chat
+# Monkey
+# Flingster
+#
+# ── NO ANDROID APP (web only) - enforced by domains_adult.txt ────────────────────────
+# OnlyFans, Fansly, Loyalfans, ManyVids, Chaturbate, Stripchat, BongaCams, LiveJasmin,
+# Cam4, CamSoda, Pornhub, XVideos, xHamster, RedTube, YouPorn, SpankBang, Rule34, E621,
+# 4chan

@@ -1,23 +1,14 @@
-# GREYLIST apps — social / short-form apps that MAY contain bad stuff. Never whitelisted;
-# defaulted to the time-limited GREY tier unless the user overrides. Format: Name = pkg.
-# LANGUAGE-NEUTRAL. Loaded by FilterData → AppConfig.GREYLIST_APPS_BY_NAME / GREYLIST_APPS.
+# GREYLIST apps - time-limited rather than blocked. Format: Name = pkg.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> AppConfig.GREYLIST_APPS_BY_NAME / GREYLIST_APPS.
+#
+# 2026-08-04: this list used to carry nineteen apps. Everything that is genuinely a feed of
+# strangers' uploads moved to the blacklist (apps_ugc.txt / apps_strangers.txt), LinkedIn
+# moved to the whitelist, and what is left is the Facebook family - kept here on purpose
+# because it is also how a lot of people are actually contacted.
+#
+# An app must NOT appear both here and on a blacklist: the blacklist wins (appBlockReason
+# checks it after the GREY tier falls through), so the time budget would silently do nothing.
 
-TikTok = com.zhiliaoapp.musically
-TikTok (trill) = com.ss.android.ugc.trill
-TikTok Lite = com.zhiliaoapp.musically.go
-Instagram = com.instagram.android
-Instagram Lite = com.instagram.lite
-Snapchat = com.snapchat.android
-Reddit = com.reddit.frontpage
-X / Twitter = com.twitter.android
-X Lite = com.twitter.android.lite
 Facebook = com.facebook.katana
 Facebook Lite = com.facebook.lite
 Messenger = com.facebook.orca
-Pinterest = com.pinterest
-Tumblr = com.tumblr
-Twitch = tv.twitch.android.app
-Discord = com.discord
-YouTube = com.google.android.youtube
-LinkedIn = com.linkedin.android
-Bluesky = xyz.blueskyweb.app

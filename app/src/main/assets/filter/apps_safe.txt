@@ -15,7 +15,11 @@ Google Earth = com.google.earth
 # Messaging & calls (no public feed)
 WhatsApp = com.whatsapp
 WhatsApp Business = com.whatsapp.w4b
-Telegram = org.telegram.messenger
+# REMOVED 2026-08-04: Telegram. It was on this whitelist AND on the adult/strangers block
+# lists, which is a straight contradiction - and the block wins anyway, because
+# appBlockReason runs before the whitelist check. Listing it here as "safe, never even
+# scanned" while it is blocked would just mislead the next person reading this file.
+# Telegram = org.telegram.messenger
 Signal = org.thoughtcrime.securesms
 Google Messages = com.google.android.apps.messaging
 AOSP Messaging = com.android.mms
@@ -101,3 +105,4 @@ Play Books = com.google.android.apps.books
 Kindle = com.amazon.kindle
 Kobo = com.kobobooks.android
 Google Translate = com.google.android.apps.translate
+LinkedIn = com.linkedin.android

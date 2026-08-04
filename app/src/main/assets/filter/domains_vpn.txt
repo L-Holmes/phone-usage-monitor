@@ -1,0 +1,57 @@
+# VPN / PROXY / ANONYMISER SITES  -  blocked in every mode above Off.
+#
+# The web half of apps_vpn.txt: where a VPN gets downloaded in the first place.
+# A bare domain also covers its subdomains. One host per line, "#" = comment.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ TWO ENTRIES HERE ARE BROADER THAN THEY LOOK, and were included because they were on the
+#    brief - check you still want them:
+#      • avast.com and kaspersky.com are ANTIVIRUS companies that happen to also sell a VPN.
+#        Blocking the domain blocks their security products, downloads and support too.
+#      • cloudflare.com is the homepage of an infrastructure company. It does NOT break sites
+#        that sit behind Cloudflare (those serve from their own domains), but it does block
+#        their docs and dashboard, which is a real cost if you ever build anything.
+#    Delete either line if that trade isn't worth it.
+
+nordvpn.com
+expressvpn.com
+protonvpn.com
+surfshark.com
+cyberghostvpn.com
+windscribe.com
+mullvad.net
+tunnelbear.com
+privateinternetaccess.com
+ipvanish.com
+purevpn.com
+hotspotshield.com
+hide.me
+vyprvpn.com
+speedify.com
+privadovpn.com
+turbovpn.com
+thundervpn.com
+supervpn.com
+psiphon.ca
+getoutline.org
+adguard-vpn.com
+ivpn.net
+airvpn.org
+torguard.net
+zenmate.com
+betternet.co
+touchvpn.net
+securevpn.com
+vpn360.com
+freeplanetvpn.com
+vpnproxymaster.com
+torproject.org
+brave.com
+duckduckgo.com
+onionbrowser.com
+1.1.1.1
+
+# ── Broader than they look - see the note at the top ─────────────────────────────────
+avast.com
+kaspersky.com
+cloudflare.com

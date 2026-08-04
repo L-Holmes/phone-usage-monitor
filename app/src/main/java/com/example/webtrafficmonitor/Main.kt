@@ -505,6 +505,8 @@ private fun alwaysOnRules(): List<String> = listOf(
     getString(R.string.always_on_13),
     getString(R.string.always_on_14),
     getString(R.string.always_on_15),
+    getString(R.string.always_on_16),
+    getString(R.string.always_on_17),
 )
 
 /**
@@ -2306,7 +2308,7 @@ private fun setupHomeScreen() {
             setPadding((14 * dp).toInt(), 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             addView(TextView(this@MainActivity).apply {
-                text = if (today.hasData) "${today.score}" else "–"
+                text = if (today.hasData) "${today.score}" else "-"
                 textSize = 44f; setTypeface(typeface, Typeface.BOLD); includeFontPadding = false
                 setTextColor(if (today.hasData) today.colour else Palette.labelTertiary)
             })
@@ -2915,7 +2917,7 @@ private fun showProductivity() {
         setOnClickListener { dopamineBack = { showProductivity() }; showDopamine() }
     }
     dopCard.addView(TextView(this).apply {
-        text = if (todayScore.hasData) "${todayScore.score}" else "–"
+        text = if (todayScore.hasData) "${todayScore.score}" else "-"
         textSize = 34f; setTypeface(typeface, Typeface.BOLD)
         setTextColor(if (todayScore.hasData) todayScore.colour else Palette.labelTertiary)
         includeFontPadding = false
@@ -6623,7 +6625,7 @@ private fun startWeekStrict() {
                 }
                 card.note.visibility =
                     if (st.verdict == RoomPresence.Verdict.MAYBE_IN_TRUE) View.VISIBLE else View.GONE
-                card.big.text = st.rssi?.let { "$it dBm" } ?: "–– dBm"
+                card.big.text = st.rssi?.let { "$it dBm" } ?: "-- dBm"
                 card.sub.text = when {
                     !st.assigned -> "No beacon assigned"
                     st.rssi == null -> "Beacon assigned, not heard yet"
@@ -7159,35 +7161,33 @@ private fun startWeekStrict() {
     // ═════════════════════════════════════════════════════════════════════════════════
     //  WORD FILTER  (Developer tools → Word filter)
     // ═════════════════════════════════════════════════════════════════════════════════
-    //  Everything the text filter does, for the mode the user is actually in, built FROM
+    //  Everything the content filter does, for the mode the user is actually in, built FROM
     //  the filter (FilterCatalogue) and the page rules (AppConfig.GUARDED_SCREENS) rather
     //  than written alongside them - a hand-written version is wrong the first time
     //  somebody edits a word list.
     //
-    //  IT IS A REFERENCE PAGE, SO IT IS BUILT TO BE SCANNED, NOT READ. The numbers that
-    //  matter (the cutoff, what each word is worth) are large, coloured and near the top;
-    //  the prose is one line per idea and lives under the thing it explains. If you add to
-    //  this page, add a ROW or a CARD, not a paragraph.
+    //  IT IS A REFERENCE PAGE, SO IT IS BUILT TO BE SCANNED, NOT READ. Rules to keep:
+    //    • every number that matters is large, coloured, and near the top;
+    //    • EVERY list on this page is tappable - if it says "552 hosts", you can see them;
+    //    • every rule that is easy to misread carries a worked SCORES / DOESN'T SCORE pair,
+    //      because an abstract description of a context gate teaches nobody anything;
+    //    • prose is one line under the thing it explains, never a paragraph on its own.
     //
     //  Dev-tools pages are hardcoded English by convention here (see showDevConsole): they
-    //  are diagnostics, not product surface, and 80 dev-only keys in strings.xml would be a
-    //  translation bill for nobody's benefit.
+    //  are diagnostics, not product surface, and ~100 dev-only keys in strings.xml would be
+    //  a translation bill for nobody's benefit.
     // ═════════════════════════════════════════════════════════════════════════════════
 
+    /** Kept so returning from a drill-in lands where you left, not at the top. */
+    private var filterScroll: ScrollView? = null
+    private var filterScrollY = 0
+
     /** Colour for a points badge: louder the more one hit is worth. */
-    private fun pointsTone(points: Int, active: Boolean): Pair<Int, Int> = when {
-        !active -> Palette.surfaceSunken to Palette.labelTertiary
+    private fun pointsTone(points: Int): Pair<Int, Int> = when {
         points >= FilterTuning.EXPLICIT_WEIGHT -> Palette.dangerSoft to Palette.dangerText
         points >= FilterTuning.STRONG_WEIGHT -> Palette.warningSoft to Palette.warningText
         points > 0 -> Palette.tintSoft to Palette.tintDeep
         else -> Palette.surfaceSunken to Palette.labelSecondary
-    }
-
-    private fun behaviourLabel(b: FilterCatalogue.Behaviour): String = when (b) {
-        FilterCatalogue.Behaviour.BLOCKS_ALONE -> "Blocks on its own"
-        FilterCatalogue.Behaviour.NEEDS_A_SECOND -> "Needs a second word"
-        FilterCatalogue.Behaviour.ONLY_IN_CONTEXT -> "Only counts in context"
-        FilterCatalogue.Behaviour.NO_SCORE -> "Never scores"
     }
 
     private fun behaviourTone(b: FilterCatalogue.Behaviour): Int = when (b) {
@@ -7197,11 +7197,87 @@ private fun startWeekStrict() {
         FilterCatalogue.Behaviour.NO_SCORE -> Palette.labelTertiary
     }
 
+    // ── THE MODE COLOUR SYSTEM ──────────────────────────────────────────────────────
+    //  One colour per mode, used on every card that behaves differently between them, so
+    //  "what changes if I go stricter" is answerable by looking rather than by reading.
+    //  Escalating warmth: grey, teal, amber, red.
+    private data class ModeChip(val id: String, val label: String, val colour: Int)
+
+    private val MODE_CHIPS = listOf(
+        ModeChip(Mode.OFF, "Off", Palette.labelQuaternary),
+        ModeChip(Mode.RELAXED, "Relaxed", Palette.tint),
+        ModeChip(Mode.STRICT, "Strict", Palette.warning),
+        ModeChip(Mode.SUPERHARDCORE, "Hardcore", Palette.danger),
+    )
+
+    /** Is [g] switched on in the given mode? Off means monitoring is off entirely. */
+    private fun activeInMode(g: FilterCatalogue.Group, modeId: String): Boolean = when (modeId) {
+        Mode.OFF -> false
+        Mode.RELAXED -> g.activeIn(true, false)
+        Mode.STRICT -> g.activeIn(false, false)
+        else -> g.activeIn(false, true)
+    }
+
+    /** The key, at the top of the page: what the four colours mean. */
+    private fun modeKeyCard(): View {
+        val dp = resources.displayMetrics.density
+        val here = Mode.current(this)
+        val card = glassCard(Space.md)
+        card.addView(ruleHeading("THE COLOURS BELOW", Palette.labelTertiary))
+        for (m in MODE_CHIPS) {
+            card.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
+                addView(TextView(this@MainActivity).apply {
+                    text = "\u25CF"; textSize = 15f; setTextColor(m.colour)
+                    setPadding(0, 0, (10 * dp).toInt(), 0)
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = AppConfig.modeName(m.id) + if (m.id == here) "   (you are here)" else ""
+                    textSize = Type.callout
+                    setTypeface(typeface, if (m.id == here) Typeface.BOLD else Typeface.NORMAL)
+                    setTextColor(if (m.id == here) Palette.label else Palette.labelSecondary)
+                })
+            })
+        }
+        card.addView(TextView(this).apply {
+            text = "A filled dot means the rule is on in that mode. A hollow one means it " +
+                "scores nothing there."
+            textSize = Type.caption; setTextColor(Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (8 * dp).toInt(), 0, 0)
+        })
+        return card
+    }
+
+    /**
+     * The four dots for one rule, in the key's order: filled where it is on, hollow where it
+     * is not. No labels - the key at the top of the page carries those, and repeating
+     * "Off Relaxed Strict Hardcore" on forty cards is noise, not information.
+     */
+    private fun modeDots(activePerMode: List<Boolean>): View {
+        val dp = resources.displayMetrics.density
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (10 * dp).toInt(), 0, 0)
+            MODE_CHIPS.forEachIndexed { i, m ->
+                val on = activePerMode.getOrElse(i) { false }
+                addView(TextView(this@MainActivity).apply {
+                    text = if (on) "\u25CF" else "\u25CB"
+                    textSize = 15f
+                    setTextColor(if (on) m.colour else Palette.labelQuaternary)
+                    setPadding(0, 0, (7 * dp).toInt(), 0)
+                })
+            }
+        }
+    }
+
     private fun showFilterBreakdown() {
         val settings = BorderlineScorer.Settings.of(this)
         val relaxed = settings.relaxed
         val superHardcore = settings.superHardcore
         val modeName = AppConfig.modeName(Mode.current(this))
+        val webBar = BorderlineScorer.webBar()
 
         val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
@@ -7213,11 +7289,15 @@ private fun startWeekStrict() {
         })
 
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(ScrollView(this).apply {
+        val scroll = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             isFillViewport = true; addView(list)
-        })
-        setContentWithThumb(root) { setupMainScreen() }
+        }
+        filterScroll = scroll
+        root.addView(scroll)
+        setContentWithThumb(root) { filterScrollY = 0; setupMainScreen() }
+        // Coming back from a word list should land where you left, not at the top.
+        scroll.post { scroll.scrollTo(0, filterScrollY) }
 
         // ── building blocks ──────────────────────────────────────────────────────────
         /** A big section break. Rule, then the heading - reads as a new chapter. */
@@ -7244,25 +7324,6 @@ private fun startWeekStrict() {
             })
         }
 
-        /** label on the left, a strong value on the right. The page's workhorse row. */
-        fun statRow(parent: LinearLayout, label: String, value: String, tone: Int = Palette.label) {
-            parent.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, (7 * dp).toInt(), 0, (7 * dp).toInt())
-                addView(TextView(this@MainActivity).apply {
-                    text = label; textSize = Type.callout; setTextColor(Palette.labelSecondary)
-                    setLineSpacing(0f, Type.lineSpacing)
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                })
-                addView(TextView(this@MainActivity).apply {
-                    text = value; textSize = Type.callout
-                    setTypeface(typeface, Typeface.BOLD); setTextColor(tone)
-                    gravity = Gravity.END
-                    setPadding((10 * dp).toInt(), 0, 0, 0)
-                })
-            })
-        }
-
         fun note(t: String) = list.addView(TextView(this).apply {
             text = t; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
             setLineSpacing(0f, Type.lineSpacing)
@@ -7270,205 +7331,318 @@ private fun startWeekStrict() {
         })
 
         // ═════════════════════════════════════════════════════════════════════════════
-        section("The cutoff", "How many points it takes before anything is blocked.")
-        val cutoffs = glassCard(Space.md)
-        fun cutoffRow(number: String, title: String, sub: String, tone: Int, first: Boolean = false) {
-            if (!first) cutoffs.addView(separator())
-            cutoffs.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(TextView(this@MainActivity).apply {
-                    text = number; textSize = 30f
-                    setTypeface(typeface, Typeface.BOLD); setTextColor(tone)
-                    gravity = Gravity.CENTER
-                    layoutParams = LinearLayout.LayoutParams((62 * dp).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
-                })
-                addView(LinearLayout(this@MainActivity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    addView(TextView(this@MainActivity).apply {
-                        text = title; textSize = Type.headline
-                        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-                    })
-                    addView(TextView(this@MainActivity).apply {
-                        text = sub; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
-                        setLineSpacing(0f, Type.lineSpacing)
-                    })
-                })
-            })
-        }
-        val addonOn = BrowserSetup.extensionConfirmed(this)
-        cutoffRow("${BorderlineScorer.webBar()}", "A web page",
-            "points needed before the page is covered", Palette.dangerText, first = true)
-        cutoffRow("${BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER)}",
-            "A web page in Firefox",
-            if (addonOn) "IN FORCE - the image add-on is confirmed, so the bar is ×${FilterTuning.PLUGIN_COVERED_MULTIPLIER} higher here"
-            else "not in force - needs the image add-on confirmed. Firefox uses ${BorderlineScorer.webBar()} today.",
-            if (addonOn) Palette.warningText else Palette.labelTertiary)
-        cutoffRow("${FilterTuning.APP_THRESHOLD}", "An app screen",
-            "…AND at least ${FilterTuning.APP_MIN_FAMILIES} different words must have scored",
-            Palette.dangerText)
-        cutoffRow("${FilterTuning.SINGLE_WORD_MAX}", "Any ONE word, ever",
-            "the ceiling for a single word - one point under the web bar, on purpose",
-            Palette.tintDeep)
-        list.addView(cutoffs)
-        note("Because one word can never earn more than ${FilterTuning.SINGLE_WORD_MAX} and the " +
-            "web bar is ${BorderlineScorer.webBar()}, blocking a page ALWAYS takes at least two " +
-            "different words. Core words and Loud phrases are the deliberate exception - one of " +
-            "those is enough on its own.")
+        //  0. THE MODE KEY  —  everything below is colour-coded against this
+        // ═════════════════════════════════════════════════════════════════════════════
+        list.addView(modeKeyCard())
 
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  1. THE CUTOFF
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("The cutoff", "Words add up to a score. These are the scores that block.")
+
+        val webCard = glassCard(Space.md)
+        webCard.addView(ruleHeading("A WEB PAGE", Palette.dangerText))
+        webCard.addView(bigNumberRow("$webBar", "points blocks it", "", Palette.dangerText))
+        webCard.addView(separator())
+        webCard.addView(smallRule("or ONE Core word, Loud phrase or site name. Always enough, " +
+            "on its own.", true))
+        list.addView(webCard)
+
+        val appCard = glassCard(Space.md)
+        appCard.addView(ruleHeading("ANY OTHER APP SCREEN", Palette.dangerText))
+        appCard.addView(bigNumberRow("${FilterTuning.APP_THRESHOLD}", "points blocks it", "",
+            Palette.dangerText))
+        appCard.addView(separator())
+        appCard.addView(smallRule("under ${FilterTuning.APP_LONG_TEXT_WORDS} words on screen:  " +
+            "one Core word blocks it", true))
+        appCard.addView(smallRule("over ${FilterTuning.APP_LONG_TEXT_WORDS} words on screen:  " +
+            "a Core word needs a second different word", true))
+        list.addView(appCard)
+
+        val ssCard = glassCard(Space.md)
+        ssCard.addView(ruleHeading("AND SEARCH HAS TO BE SAFE", Palette.dangerText))
+        ssCard.addView(smallRule("Google is the only search engine allowed, in every mode", true))
+        ssCard.addView(smallRule("a URL that switches SafeSearch off is blocked, and recorded " +
+            "as a bypass attempt - there is no innocent way to arrive at \"&safe=off\"", true))
+        ssCard.addView(smallRule("image search is blocked from Strict upwards", !relaxed))
+        list.addView(ssCard)
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  2. THE WORDS
         // ═════════════════════════════════════════════════════════════════════════════
         section("What each word is worth",
             "One hit, before any multiplier. Tap a row for the full word list.")
         for (g in FilterCatalogue.GROUPS) {
-            val on = g.activeIn(relaxed, superHardcore)
-            list.addView(filterGroupCard(g, on, modeName))
+            list.addView(filterGroupCard(g))
         }
         note("Grey rows are switched OFF in $modeName and score nothing at all right now.")
 
         // ═════════════════════════════════════════════════════════════════════════════
+        //  3. CONTEXT GATES
+        // ═════════════════════════════════════════════════════════════════════════════
         section("Words that only count in context",
             "Some words are ordinary English until something else on the page changes that. " +
-                "On their own they score ZERO - not a little, zero.")
+                "On their own they score ZERO - not a little, zero. This is the rule that " +
+                "keeps \"hot chocolate\" and \"tight deadline\" out of it.")
         val gated = FilterCatalogue.GROUPS.filter {
             it.behaviour == FilterCatalogue.Behaviour.ONLY_IN_CONTEXT && it.activeIn(relaxed, superHardcore)
         }
-        val ctx = glassCard(Space.md)
         if (gated.isEmpty()) {
-            ctx.addView(bodyText("No context-gated groups are switched on in $modeName."))
+            val none = glassCard(Space.md)
+            none.addView(bodyText("No context-gated groups are switched on in $modeName."))
+            list.addView(none)
         } else {
-            for ((i, g) in gated.withIndex()) {
-                if (i > 0) ctx.addView(separator())
-                ctx.addView(TextView(this).apply {
-                    text = g.name; textSize = Type.headline
-                    setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-                })
-                ctx.addView(TextView(this).apply {
-                    text = "scores ${g.points} pts, but ONLY with ${g.gate}"
-                    textSize = Type.footnote; setTextColor(Palette.warningText)
-                    setPadding(0, (2 * dp).toInt(), 0, 0)
-                })
-                if (g.examples.isNotBlank()) ctx.addView(TextView(this).apply {
-                    text = g.examples; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
-                    setPadding(0, (2 * dp).toInt(), 0, 0)
-                })
-            }
+            for (g in gated) list.addView(gateCard(g))
         }
-        list.addView(ctx)
-        list.addView(filterGroupCard(FilterCatalogue.PERSON_WORDS, true, modeName))
-        note("\"Person words\" is the TRIGGER list, which is why it is worth 0. It never adds a " +
-            "point of its own - it just sits next to an Ambiguous or Combo word and switches it on.")
+        list.addView(filterGroupCard(FilterCatalogue.PERSON_WORDS))
+        note("\"Person words\" is worth 0 because it is the TRIGGER list, not a score. It " +
+            "never adds a point of its own - it sits next to a gated word and switches it on.")
 
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  4. EXCEPTIONS
         // ═════════════════════════════════════════════════════════════════════════════
         section("Exceptions",
             "The sharpest tool in the filter, and the first place to look when something is " +
                 "blocking that shouldn't.")
-        val exCard = glassCard(Space.md)
-        exCard.addView(TextView(this).apply {
-            text = "An innocent neighbour DELETES the match"
-            textSize = Type.headline; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-        })
-        exCard.addView(TextView(this).apply {
-            text = "Not \"scores less\" - scores nothing at all."
-            textSize = Type.footnote; setTextColor(Palette.successText)
-            setPadding(0, (2 * dp).toInt(), 0, (8 * dp).toInt())
-        })
-        for (ex in listOf(
-            "\"naked mole rat\"  →  0",
-            "\"nude lipstick\"  →  0",
-            "\"vaginal health\"  →  0",
-            "\"summa cum laude\"  →  0",
-        )) exCard.addView(TextView(this).apply {
-            text = ex; textSize = Type.callout; setTextColor(Palette.labelSecondary)
-            setPadding(0, (3 * dp).toInt(), 0, (3 * dp).toInt())
-        })
-        list.addView(exCard)
-        list.addView(filterGroupCard(FilterCatalogue.EXCEPTIONS, true, modeName))
-        note("The neighbour has to be within ${FilterTuning.EXCEPTION_WINDOW} words. Looked up by " +
-            "the matched word AND its family head, so an entry for \"nude\" also covers \"nudes\".")
+        list.addView(exceptionsCard())
+        note("It is a hand-written list, one line per word: \"the word: the neighbours that " +
+            "excuse it\". Tap it to read the whole thing.")
 
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  5. EVASION
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Spelling it differently",
+            "Five mechanisms, all running BEFORE any word list is consulted - so none of them " +
+                "needs a new spelling to be added to a list first.")
+        for (s in FilterCatalogue.EVASION) list.addView(scalerCard(s))
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  6. THE APP THAT KEEPS ALMOST BLOCKING
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("The app that keeps almost blocking",
+            if (relaxed) "Strict and above only - off in $modeName."
+            else "One borderline screen means nothing. Minutes of them, in one app, is a feed.")
+        val bw = glassCard(Space.md)
+        bw.addView(ruleHeading(
+            if (relaxed) "OFF IN $modeName".uppercase() else "ON IN $modeName".uppercase(),
+            if (relaxed) Palette.labelTertiary else Palette.warningText))
+        bw.addView(bodyText(
+            "Every ${BorderlineWatch.SAMPLE_MS / 1000} seconds, the screen in front counts " +
+                "once. Scoring ${FilterTuning.BORDERLINE_FLOOR}+ (or carrying a suspicious " +
+                "near-miss spelling) fills the bucket by one; a clean screen drains it by " +
+                "one. So it measures how much of the last few minutes was borderline - not " +
+                "how long the app has been open.",
+        ))
+        bw.addView(separator())
+        bw.addView(smallRule("bucket reaches ${BorderlineWatch.WARN_AT}  (about " +
+            "${BorderlineWatch.WARN_AT * BorderlineWatch.SAMPLE_MS / 60_000} min of it)  →  a " +
+            "warning screen for ${BorderlineWatch.WARN_HOLD_MS / 1000} seconds, saying " +
+            "exactly what happens next", !relaxed))
+        bw.addView(smallRule("bucket reaches ${BorderlineWatch.BLOCK_AT}  (about " +
+            "${BorderlineWatch.BLOCK_AT * BorderlineWatch.SAMPLE_MS / 60_000} min)  →  the " +
+            "app closes for ${BorderlineWatch.PENALTY_LABEL}", !relaxed))
+        bw.addView(smallRule("nothing counts from more than " +
+            "${BorderlineWatch.WINDOW_MS / 60_000} minutes ago", !relaxed))
+        bw.addView(smallRule("draining means a clean stretch undoes it - the bucket cannot " +
+            "be filled by an app you simply left open", !relaxed))
+        list.addView(bw)
+        note("Nothing here has crossed the line, which is exactly why no single screen can be " +
+            "acted on. Relaxed is left alone on purpose: it is the mode that promises to act " +
+            "only on things that HAVE crossed the line.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  7. SCALERS AND CAPS
         // ═════════════════════════════════════════════════════════════════════════════
         section("What scales a score", "These multiply what everything above is worth.")
         for (s in FilterCatalogue.SCALERS) list.addView(scalerCard(s))
 
-        section("The two caps", "Why one word can never block a page on its own.")
+        section("The caps", "Why one word can never block a page on its own.")
         for (s in FilterCatalogue.CAPS) list.addView(scalerCard(s))
 
         // ═════════════════════════════════════════════════════════════════════════════
-        section("Web pages vs apps", "The same words, judged against different bars.")
-        val cmp = glassCard(Space.md)
-        cmp.addView(TextView(this).apply {
-            text = "WEB PAGE, IN A BROWSER"; textSize = Type.caption
-            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary); letterSpacing = 0.06f
-        })
-        statRow(cmp, "Blocks at", "${BorderlineScorer.webBar()} points", Palette.dangerText)
-        statRow(cmp, "Different words needed", "1 is enough (if it's a Core word)")
-        statRow(cmp, "Reads", "the title, the URL and the page text")
-        statRow(cmp, "In Firefox with the add-on",
-            "${BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER)} points",
-            if (addonOn) Palette.warningText else Palette.labelTertiary)
-        cmp.addView(separator())
-        cmp.addView(TextView(this).apply {
-            text = "ANY OTHER APP SCREEN"; textSize = Type.caption
-            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary); letterSpacing = 0.06f
-        })
-        statRow(cmp, "Blocks at", "${FilterTuning.APP_THRESHOLD} points", Palette.dangerText)
-        statRow(cmp, "Different words needed", "${FilterTuning.APP_MIN_FAMILIES}, always")
-        statRow(cmp, "Reads", "the sampled on-screen text")
-        list.addView(cmp)
-        note("The app bar is LOWER because an app feed is the harder problem: no address bar to " +
-            "read, no domain to blocklist, no add-on to lean on, and the content arrives already " +
-            "personalised. A lower bar breaks the one-word arithmetic above, so in-app blocking " +
-            "demands ${FilterTuning.APP_MIN_FAMILIES} different words instead - same guarantee, " +
-            "enforced a different way.")
+        //  8. THE LISTS
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("The app lists", "Which apps get looked at, and how. Tap any of them to read.")
+        list.addView(listCard(
+            "Whitelist  ·  never looked at", AppConfig.SAFE_APPS.size, "apps",
+            "No read, no scan, no screenshot, no log. Nothing on this page applies to them.",
+            "Apps with no public feed and no arbitrary adult content: maps, messaging, " +
+                "banking, utilities. Skipping them outright is most of why the monitor is " +
+                "cheap to run. Edit the set in Developer tools → Whitelisted apps.",
+            Palette.successText,
+        ) { AppConfig.SAFE_APPS_BY_NAME.entries.sortedBy { it.key }.map { "${it.key}  -  ${it.value}" } })
+        list.addView(listCard(
+            "Greylist  ·  scanned AND time-limited", AppConfig.GREYLIST_APPS.size, "apps",
+            "Scored like anything else, and additionally capped at ${GreyUsage.LIMIT_MIN} " +
+                "minutes an hour.",
+            "Social and short-form apps that MAY carry adult content but are also genuinely " +
+                "used. Blocking them outright is a fight nobody wins; a time budget is the " +
+                "honest middle. Never whitelisted, whatever else changes.",
+            Palette.warningText,
+        ) { AppConfig.GREYLIST_APPS_BY_NAME.entries.sortedBy { it.key }.map { "${it.key}  -  ${it.value}" } })
+        list.addView(listCard(
+            "Blocked browsers  ·  covered on sight", AppConfig.BLOCKED_BROWSERS.size, "packages",
+            "Every browser except Firefox is covered the moment it opens.",
+            "One browser is the whole strategy: the address bar can be read, the add-on can " +
+                "be required, and there is no second surface to police. Anything Android " +
+                "reports as able to open a web link is ALSO treated as a browser at runtime, " +
+                "so this list is a floor, not a ceiling.",
+            Palette.dangerText,
+        ) { entryList(AppConfig.BLOCKED_BROWSERS.sorted()) })
+        list.addView(listCard(
+            "Allowed browsers", AppConfig.ALLOWED_BROWSERS.size, "packages",
+            "The only browsers left usable.",
+            "",
+            Palette.successText,
+        ) { entryList(AppConfig.ALLOWED_BROWSERS.sorted()) })
 
+        section("The blacklist",
+            "Hand-maintained lists of apps and sites, blocked outright in every mode above " +
+                "Off. No score, no threshold.")
+        list.addView(listCard(
+            "Blacklisted apps & sites", BlockedCategories.ALL.size, "categories",
+            "User-uploaded feeds, sexual content, livestreams and dating, VPNs.",
+            "Each category is a pair of plain text files. Tap to read them.",
+            Palette.dangerText, openPage = { showBlacklistPage() },
+        ))
+
+        section("Other things never scanned")
+        list.addView(listCard(
+            "Trusted domains  ·  word scoring skipped", AppConfig.SAFE_DOMAINS.size, "domains",
+            "The word scorer never runs here. The domain blocklist still does.",
+            "Wikipedia, Stack Overflow, the NHS, Mayo Clinic and friends. Anatomy words are " +
+                "unavoidable on a health site, and nobody should be blocked from looking up a " +
+                "symptom. A bare domain covers its subdomains.",
+            Palette.successText,
+        ) { entryList(AppConfig.SAFE_DOMAINS.sorted()) })
+        val surfaces = glassCard(Space.md)
+        surfaces.addView(ruleHeading("SURFACES BEYOND THE FOREGROUND APP", Palette.tintDeep))
+        surfaces.addView(smallRule("SPLIT SCREEN - both panes are checked, not just the focused " +
+            "one. A blocked app in the other half used to be fully usable.", true))
+        surfaces.addView(smallRule("PICTURE-IN-PICTURE - a PiP window is never focused and never " +
+            "active, so a video from a blocked app used to keep playing over the home screen. " +
+            "Now covered like any other visible app.", true))
+        surfaces.addView(smallRule("IN-APP BROWSERS - a link opened inside Instagram, Reddit or " +
+            "Telegram renders in the app's own WebView with no address bar. The domain is now " +
+            "read out of the app's chrome, so every domain rule applies there too. It is scored " +
+            "at the APP bar, not the web bar: the image add-on is not watching inside Instagram.", true))
+        surfaces.addView(smallRule("NOTIFICATIONS - read and scored, never covered. There is " +
+            "nothing to cover: the system draws them. A stream of adult-scoring notifications " +
+            "from one app counts toward that app's borderline pattern.", true))
+        surfaces.addView(smallRule("RECENT APPS - the carousel shows live thumbnails of " +
+            "everything open, and is NOT covered. Blocking the app switcher would trap you; the " +
+            "thumbnail is a moment, the app itself is already blocked.", false))
+        list.addView(surfaces)
+
+        val skip = glassCard(Space.md)
+        skip.addView(smallRule("The home screen / launcher - it carries the name of every app " +
+            "on the device, which is somebody else's text, not something you chose to look at", true))
+        skip.addView(smallRule("Keyboards - they draw their own window over whatever is underneath", true))
+        skip.addView(smallRule("This app", true))
+        skip.addView(smallRule("The browser's OWN screens - its tab list, settings and history. " +
+            "Covering those would trap you on the one screen you need in order to close a bad " +
+            "tab. The watched screens further down are the deliberate exception", true))
+        list.addView(skip)
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  9. BLOCKED WITHOUT A SCORE
+        // ═════════════════════════════════════════════════════════════════════════════
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Tamper watch",
+            "Two things we cannot prevent but can now notice. Neither goes anywhere - " +
+                "there is no partner and no server; this is the local version.")
+        val tw = glassCard(Space.md)
+        val slip = TamperWatch.clockSlip(this)
+        val gap = TamperWatch.lastGap(this)
+        tw.addView(smallRule(
+            if (slip == null) "System clock: never moved unexpectedly"
+            else "System clock was moved by ${slip.second / 60_000} min on " +
+                java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(slip.first)) +
+                " - every timer in the app is wall-clock based, so that ends them all",
+            slip == null))
+        tw.addView(smallRule(
+            if (gap == null) "Coverage: no gaps recorded"
+            else "The guard was not running for ${gap.second / 60_000} min on " +
+                java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(gap.first)) +
+                " - safe mode, a force stop, or a battery manager",
+            gap == null))
+        tw.addView(smallRule(
+            if (BatteryGuard.isExempt(this)) "Battery optimisation: exempt, the service can stay up"
+            else "Battery optimisation is ON for this app - the system may kill the guard. " +
+                "Tap to fix.",
+            BatteryGuard.isExempt(this)))
+        if (!BatteryGuard.isExempt(this)) {
+            tw.isClickable = true
+            tw.setOnClickListener { BatteryGuard.request(this) }
+        }
+        list.addView(tw)
+
+        val installs = InstallLog.recent(this)
+        list.addView(listCard(
+            "Apps installed since monitoring started", installs.size, "installs",
+            "A run of installs during Strict looks exactly like somebody working through " +
+                "VPNs until one sticks.",
+            "Local only, capped at 60 entries, package names not contents.",
+            if (installs.any { it.second != "not on any list" }) Palette.dangerText else Palette.successText,
+            entries = { installs.map { Entry(it.first, it.second) } },
+        ))
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Blocked with no score at all",
+            "These never reach the word filter. No threshold, no multiplier, no appeal. " +
+                "Tap any of them to see what is on the list.")
+        list.addView(listCard(
+            "Known adult domains", -1,
+            if (DomainBlocklist.isReady) "~550k hosts" else "not loaded in this process",
+            "Built once from public blocklists, then cached on the device.",
+            "Far too large to page through here - use the Try it box, or the log, to check a " +
+                "specific host. The service builds it in the background on first run.",
+            if (DomainBlocklist.isReady) Palette.dangerText else Palette.labelTertiary,
+            null,
+        ))
+        list.addView(listCard(
+            "The hand-maintained ban list", AlwaysBlocklist.DOMAINS.size, "hosts",
+            "Reddit and its mirrors and frontends, imageboards, borderline shops.",
+            "Banned in EVERY mode above Off, deliberately: a bypass surface that Relaxed lets " +
+                "through is still a bypass surface.",
+            Palette.dangerText,
+        ) { entryList(AlwaysBlocklist.DOMAINS.sorted()) })
+        list.addView(listCard(
+            "Search engines other than Google", SearchEngineBlocklist.DOMAINS.size, "hosts",
+            "Google is the only search engine allowed, in every mode.",
+            "Only the SEARCH host is listed, never a whole company - \"search.yahoo.com\", " +
+                "not \"yahoo.com\", so Yahoo Mail still works. Self-hosted metasearch has no " +
+                "fixed domain and cannot be enumerated; add instances as you meet them.",
+            Palette.dangerText,
+        ) { entryList(SearchEngineBlocklist.DOMAINS.sorted()) })
+        list.addView(listCard(
+            "Strict-only hosts", StrictOnlyBlocklist.DOMAINS.size, "hosts",
+            if (relaxed) "Not in force in $modeName." else "In force in $modeName.",
+            "Currently empty by design - everything it held was promoted to the always-banned " +
+                "list. The mechanism stays for a host that genuinely should be allowed in " +
+                "Relaxed but not above it.",
+            if (relaxed) Palette.labelTertiary else Palette.dangerText,
+        ) { entryList(StrictOnlyBlocklist.DOMAINS.sorted()) })
+        list.addView(listCard(
+            "Your own ban list", BlockRules.all().size, "rules",
+            "The sites, pages and keywords you banned yourself from.",
+            "Edit them in Developer tools → Manage block rules.",
+            Palette.dangerText,
+        ) { entryList(BlockRules.all().sorted()) })
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  10. WATCHED SCREENS
         // ═════════════════════════════════════════════════════════════════════════════
         section("Specific screens we watch for",
             "Not words - these are recognised by the text ON them, and each one was added " +
                 "from a real log entry. If an OS update changes the wording, that is what " +
-                "breaks, and the matched text is listed so it can be fixed.")
+                "breaks, so the matched text is listed here to be fixed.")
         for (g in AppConfig.GUARDED_SCREENS) list.addView(guardedScreenCard(g))
 
         // ═════════════════════════════════════════════════════════════════════════════
-        section("Never scanned at all", "Nothing on this page applies to these.")
-        val skip = glassCard(Space.md)
-        statRow(skip, "Whitelisted apps\nno read, no scan, no log",
-            "${AppConfig.SAFE_APPS.size}", Palette.successText)
-        skip.addView(separator())
-        statRow(skip, "Trusted domains\nthe word scorer is skipped; the domain blocklist is not",
-            "${AppConfig.SAFE_DOMAINS.size}", Palette.successText)
-        skip.addView(separator())
-        statRow(skip, "The launcher, keyboards and this app", "always skipped", Palette.successText)
-        skip.addView(separator())
-        statRow(skip, "Browser chrome (tab switcher, settings)",
-            "no word scoring", Palette.successText)
-        list.addView(skip)
-        note("A whitelisted app has no public feed and no arbitrary adult content - maps, " +
-            "messaging, banking. Trusted domains are Wikipedia, the NHS, Mayo Clinic and friends: " +
-            "anatomy words are unavoidable there and nobody should be blocked from looking up a " +
-            "symptom. Browser chrome is skipped so you can always reach the tab switcher and " +
-            "close a bad tab - the watched screens above are the exception to that.")
-
-        // ═════════════════════════════════════════════════════════════════════════════
-        section("Blocked with no score at all",
-            "These never reach the word filter. No threshold, no multiplier, no appeal.")
-        val abs = glassCard(Space.md)
-        statRow(abs, "Known adult domains",
-            if (DomainBlocklist.isReady) "~550k hosts" else "not loaded in this process",
-            if (DomainBlocklist.isReady) Palette.dangerText else Palette.labelTertiary)
-        abs.addView(separator())
-        statRow(abs, "The hand-maintained ban list", "${AlwaysBlocklist.DOMAINS.size} hosts", Palette.dangerText)
-        abs.addView(separator())
-        statRow(abs, "Search engines other than Google", "${SearchEngineBlocklist.DOMAINS.size} hosts", Palette.dangerText)
-        abs.addView(separator())
-        statRow(abs, "Strict-only hosts", "${StrictOnlyBlocklist.DOMAINS.size} hosts",
-            if (relaxed) Palette.labelTertiary else Palette.dangerText)
-        abs.addView(separator())
-        statRow(abs, "Your own ban list", "${BlockRules.all().size} rules", Palette.dangerText)
-        abs.addView(separator())
-        statRow(abs, "Browsers other than Firefox", "all covered", Palette.dangerText)
-        list.addView(abs)
-
+        //  11. TRY IT
         // ═════════════════════════════════════════════════════════════════════════════
         section("Try it", "Type anything and see exactly what it scores, and why, in $modeName.")
         val input = EditText(this).apply {
@@ -7502,74 +7676,264 @@ private fun startWeekStrict() {
         result.text = scoreExplanation("", settings)
     }
 
+    // ── the page's own components ────────────────────────────────────────────────────
+
+    /** A small all-caps heading INSIDE a card, marking which rule the card is about. */
+    private fun ruleHeading(text: String, tone: Int): TextView = TextView(this).apply {
+        this.text = text; textSize = Type.caption
+        setTypeface(typeface, Typeface.BOLD); setTextColor(tone); letterSpacing = 0.08f
+        setPadding(0, 0, 0, dp(Space.xs))
+    }
+
+    /** The page's headline figure: a big numeral, a label, and the reasoning under it. */
+    private fun bigNumberRow(number: String, label: String, why: String, tone: Int): View {
+        val dp = resources.displayMetrics.density
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = number; textSize = 40f
+                setTypeface(typeface, Typeface.BOLD); setTextColor(tone)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = label; textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                setLineSpacing(0f, Type.lineSpacing)
+                setPadding((12 * dp).toInt(), 0, 0, 0)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+        })
+        box.addView(TextView(this).apply {
+            text = why; textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (8 * dp).toInt(), 0, 0)
+        })
+        return box
+    }
+
+    /** A single "and this is also true" line inside a card. Never a two-column squeeze. */
+    private fun smallRule(text: String, on: Boolean): TextView = TextView(this).apply {
+        this.text = (if (on) "•  " else "○  ") + text
+        textSize = Type.footnote
+        setTextColor(if (on) Palette.labelSecondary else Palette.labelTertiary)
+        setLineSpacing(0f, Type.lineSpacing)
+        setPadding(0, dp(Space.xxs), 0, dp(Space.xxs))
+    }
+
+    /** A worked example pair: what scores, and the near-identical thing that doesn't. */
+    private fun exampleLines(parent: LinearLayout, scores: String, passes: String) {
+        val dp = resources.displayMetrics.density
+        if (scores.isNotBlank()) parent.addView(TextView(this).apply {
+            text = "SCORES:  $scores"; textSize = Type.caption
+            setTextColor(Palette.dangerText); setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (6 * dp).toInt(), 0, 0)
+        })
+        if (passes.isNotBlank()) parent.addView(TextView(this).apply {
+            text = "PASSES:  $passes"; textSize = Type.caption
+            setTextColor(Palette.successText); setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (3 * dp).toInt(), 0, 0)
+        })
+    }
+
     /**
      * One row of the "what each word is worth" table: status, name, points badge, how it
      * behaves, how many words, and a way in to the list.
      */
     private fun filterGroupCard(
-        g: FilterCatalogue.Group, active: Boolean, modeName: String,
+        g: FilterCatalogue.Group,
     ): View {
         val dp = resources.displayMetrics.density
-        val (badgeFill, badgeText) = pointsTone(g.points, active)
+        val (badgeFill, badgeText) = pointsTone(g.points)
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = tappableBg(if (active) Palette.glass else Palette.surfaceSunken)
-            elevation = if (active) dpf(1f) else 0f
+            background = tappableBg(Palette.glass)
+            elevation = dpf(1f)
             val p = dp(Space.md); setPadding(p, p, p, p)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { bottomMargin = dp(Space.xs) }
             isClickable = true; isFocusable = true
-            setOnClickListener { showFilterGroup(g, active, modeName) }
+            setOnClickListener { showFilterGroup(g) }
             pressable()
         }
-        // line 1: name ......... [n pts] ›
         card.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             addView(TextView(this@MainActivity).apply {
                 text = g.name; textSize = Type.headline
                 setTypeface(typeface, Typeface.BOLD)
-                setTextColor(if (active) Palette.label else Palette.labelTertiary)
+                setTextColor(Palette.label)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             addView(badge(
-                if (g.points > 0) "${g.points} pts" else "no score",
-                badgeFill, badgeText,
+                if (g.points > 0) "${g.points} pts" else "no score", badgeFill, badgeText,
             ))
             addView(TextView(this@MainActivity).apply {
                 text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
                 setPadding(dp(Space.xs), 0, 0, 0)
             })
         })
-        // line 2: what it is
         card.addView(TextView(this).apply {
             text = g.what; textSize = Type.footnote
-            setTextColor(if (active) Palette.labelSecondary else Palette.labelTertiary)
+            setTextColor(Palette.labelSecondary)
             setLineSpacing(0f, Type.lineSpacing)
             setPadding(0, dp(Space.xxs), 0, 0)
         })
-        // line 3: examples
         if (g.examples.isNotBlank()) card.addView(TextView(this).apply {
-            text = g.examples; textSize = Type.footnote
-            setTextColor(Palette.labelTertiary)
+            text = g.examples; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
             setPadding(0, dp(Space.xxs) / 2, 0, 0)
         })
-        // line 4: behaviour + count, or why it is off
+        exampleLines(card, g.scores, g.passes)
+        // "Blocks on its own" and "only counts in context" are real rules. "Needs a second
+        // word" is not - it is just the arithmetic of the score against the bar, and saying
+        // it out loud only invites the question "in what context?".
+        val rule = when (g.behaviour) {
+            FilterCatalogue.Behaviour.BLOCKS_ALONE -> "One is enough on its own"
+            FilterCatalogue.Behaviour.ONLY_IN_CONTEXT -> "Only counts in context"
+            else -> null
+        }
         card.addView(TextView(this).apply {
-            text = if (!active) "OFF in $modeName  ·  ${g.entries().size} entries"
-            else behaviourLabel(g.behaviour) +
-                (g.gate?.let { "  ·  needs $it" } ?: "") +
-                "  ·  ${g.entries().size} entries"
+            text = listOfNotNull(rule, "${g.entries().size} entries").joinToString("  ·  ")
             textSize = Type.caption
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(if (active) behaviourTone(g.behaviour) else Palette.labelTertiary)
+            setTextColor(behaviourTone(g.behaviour))
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xs), 0, 0)
+        })
+        card.addView(modeDots(MODE_CHIPS.map { activeInMode(g, it.id) }))
+        return card
+    }
+
+    /** A context-gated group, spelled out: the trigger, then a worked pair. */
+    private fun gateCard(g: FilterCatalogue.Group): View {
+        val dp = resources.displayMetrics.density
+        val card = glassCard(Space.md)
+        card.addView(TextView(this).apply {
+            text = g.name; textSize = Type.headline
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+        })
+        card.addView(TextView(this).apply {
+            text = "Worth ${g.points} pts - but ONLY if there is ${g.gate}.\n" +
+                "Otherwise it is worth nothing at all."
+            textSize = Type.footnote; setTextColor(Palette.warningText)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (4 * dp).toInt(), 0, 0)
+        })
+        exampleLines(card, g.scores, g.passes)
+        return card
+    }
+
+    /** The exceptions explainer - tappable, because "how does that work" is the question. */
+    private fun exceptionsCard(): View {
+        val dp = resources.displayMetrics.density
+        val g = FilterCatalogue.EXCEPTIONS
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = tappableBg(Palette.glass); elevation = dpf(1f)
+            val p = dp(Space.md); setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(Space.xs) }
+            isClickable = true; isFocusable = true
+            setOnClickListener { showFilterGroup(g) }
+            pressable()
+        }
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = "An innocent neighbour DELETES the match"
+                textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                setLineSpacing(0f, Type.lineSpacing)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(badge("${g.entries().size} words", Palette.successSoft, Palette.successText))
+            addView(TextView(this@MainActivity).apply {
+                text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
+                setPadding(dp(Space.xs), 0, 0, 0)
+            })
+        })
+        card.addView(TextView(this).apply {
+            text = "Not \"scores less\" - scores nothing at all."
+            textSize = Type.footnote; setTextColor(Palette.successText)
+            setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
+        })
+        card.addView(TextView(this).apply {
+            text = "It is a hand-written list. Each banned word carries its own set of " +
+                "innocent neighbours, and if one of them turns up within " +
+                "${FilterTuning.EXCEPTION_WINDOW} words, that match is thrown away.\n\n" +
+                "\"naked mole rat\"  →  0\n" +
+                "\"nude lipstick\"  →  0\n" +
+                "\"vaginal health\"  →  0\n" +
+                "\"summa cum laude\"  →  0\n\n" +
+                "Looked up by the matched word AND its family head, so the entry for " +
+                "\"nude\" also covers \"nudes\" and \"nudity\"."
+            textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+        })
+        return card
+    }
+
+    /** A reference list: name, count badge, what it does, and a way in to read it. */
+    private fun listCard(
+        name: String, count: Int, unit: String, what: String, note: String, tone: Int,
+        entries: (() -> List<Entry>)? = null,
+        openPage: (() -> Unit)? = null,
+    ): View {
+        val dp = resources.displayMetrics.density
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val tappable = entries != null || openPage != null
+            background = if (tappable) tappableBg(Palette.glass) else glassBg()
+            elevation = dpf(1f)
+            val p = dp(Space.md); setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(Space.xs) }
+            if (tappable) {
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    if (openPage != null) openPage()
+                    else showWordList(name, if (count >= 0) "$count $unit" else unit, what, note, entries!!())
+                }
+                pressable()
+            }
+        }
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = name; textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                setLineSpacing(0f, Type.lineSpacing)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(badge(
+                if (count >= 0) "$count $unit" else unit,
+                if (tone == Palette.dangerText) Palette.dangerSoft
+                else if (tone == Palette.successText) Palette.successSoft
+                else if (tone == Palette.warningText) Palette.warningSoft
+                else Palette.surfaceSunken,
+                tone,
+            ))
+            if (entries != null || openPage != null) addView(TextView(this@MainActivity).apply {
+                text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
+                setPadding(dp(Space.xs), 0, 0, 0)
+            })
+        })
+        card.addView(TextView(this).apply {
+            text = what; textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xxs), 0, 0)
+        })
+        if (note.isNotBlank()) card.addView(TextView(this).apply {
+            text = note; textSize = Type.caption; setTextColor(Palette.labelTertiary)
             setLineSpacing(0f, Type.lineSpacing)
             setPadding(0, dp(Space.xs), 0, 0)
         })
         return card
     }
 
-    /** A multiplier / cap card: name, the effect as a badge, one line of what it does. */
+    /** A multiplier / cap / evasion card: name, the effect as a badge, what it does. */
     private fun scalerCard(s: FilterCatalogue.Scaler): View {
         val dp = resources.displayMetrics.density
         val hasList = s.entries != null
@@ -7584,7 +7948,7 @@ private fun startWeekStrict() {
             if (hasList) {
                 isClickable = true; isFocusable = true
                 setOnClickListener {
-                    showWordList(s.name, s.effect, s.what, s.note, s.entries!!())
+                    showWordList(s.name, s.effect, s.what, s.note, entryList(s.entries!!()))
                 }
                 pressable()
             }
@@ -7594,6 +7958,7 @@ private fun startWeekStrict() {
             addView(TextView(this@MainActivity).apply {
                 text = s.name; textSize = Type.headline
                 setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                setLineSpacing(0f, Type.lineSpacing)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             addView(badge(s.effect, Palette.tintSoft, Palette.tintDeep))
@@ -7625,6 +7990,7 @@ private fun startWeekStrict() {
             addView(TextView(this@MainActivity).apply {
                 text = g.name; textSize = Type.headline
                 setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                setLineSpacing(0f, Type.lineSpacing)
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             addView(badge(
@@ -7664,32 +8030,35 @@ private fun startWeekStrict() {
      * you are tuning ("why is this sitting on 12?").
      *
      * Two scoring passes, not one per verdict: explain() gives the score and the breakdown,
-     * and the two web verdicts fall out of comparing it to webBar(). Only the in-app verdict
-     * needs its own pass, because it also counts distinct families. This runs on every
-     * keystroke, so it is worth not doing five times over.
+     * and the web verdict falls out of comparing it to webBar(). Only the in-app verdict
+     * needs its own pass, because it also weighs how much text is on screen. This runs on
+     * every keystroke, so it is worth not doing five times over.
      */
-    private fun scoreExplanation(text: String, settings: BorderlineScorer.Settings): String {
+    private fun scoreExplanation(
+        text: String, settings: BorderlineScorer.Settings,
+    ): String {
         if (text.isBlank()) return "Nothing typed yet."
         val ex = BorderlineScorer.explain(text, null, null, settings)
             ?: return "Scores 0.\nNothing in there is on any list."
-        val web = ex.score >= BorderlineScorer.webBar()
-        val plugin = ex.score >= BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER)
+        val bar = BorderlineScorer.webBar()
+        val web = ex.score >= bar
         val inApp = BorderlineScorer.evaluateInApp(text, null, null, settings) != null
         val sb = StringBuilder()
-        sb.append("SCORE ${ex.score}   (read as a page title,\n")
-        sb.append("so hits count ×${FilterTuning.TITLE_URL_MULTIPLIER};\n")
-        sb.append("the same words in body text\nwould score about half this)\n\n")
-        fun verdict(blocks: Boolean, where: String, bar: Int) =
-            sb.append(if (blocks) "BLOCKED" else "allowed").append("  $where (bar $bar)\n")
-        verdict(web, "as a web page", BorderlineScorer.webBar())
-        verdict(plugin, "in Firefox + add-on",
-            BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER))
-        verdict(inApp, "on an app screen", FilterTuning.APP_THRESHOLD)
+        sb.append("SCORE ${ex.score}\n")
+        sb.append("read as a page TITLE, so every hit\n")
+        sb.append("counts x${FilterTuning.TITLE_URL_MULTIPLIER}. The same words in\n")
+        sb.append("body text would score about half.\n\n")
+        sb.append(if (web) "BLOCKED" else "allowed").append("  as a web page (bar $bar)\n")
+        sb.append(if (inApp) "BLOCKED" else "allowed")
+            .append("  on an app screen (bar ${FilterTuning.APP_THRESHOLD})\n")
+        if (ex.suspicious > 0) {
+            sb.append("\n${ex.suspicious} suspicious near-miss spelling(s)\n")
+        }
         if (ex.contributions.isNotEmpty()) {
             sb.append("\nWHAT SCORED\n")
             for (c in ex.contributions) {
                 sb.append("  \"${c.word}\"\n")
-                sb.append("    ${c.tier}, ${c.count}×, ${c.points} pts, ${c.pct}%")
+                sb.append("    ${c.tier}, ${c.count}x, ${c.points} pts, ${c.pct}%")
                 if (c.capped) sb.append(", capped at ${FilterTuning.PER_WORD_CAP}")
                 sb.append('\n')
             }
@@ -7699,29 +8068,95 @@ private fun startWeekStrict() {
         return sb.toString().trimEnd()
     }
 
-    /** The words inside one group. Back returns to the breakdown page. */
-    private fun showFilterGroup(group: FilterCatalogue.Group, active: Boolean, modeName: String) {
+    /** The words inside one group. Back returns to the breakdown page, where you left it. */
+    private fun showFilterGroup(group: FilterCatalogue.Group) {
         val head = buildString {
             append(if (group.points > 0) "${group.points} points per hit" else "Scores nothing")
-            append("  ·  ")
-            append(behaviourLabel(group.behaviour))
+            if (group.behaviour == FilterCatalogue.Behaviour.BLOCKS_ALONE) {
+                append("  ·  one is enough on its own")
+            }
             group.gate?.let { append("\nOnly counts with $it.") }
-            append("\n")
-            append(if (active) "Switched ON in $modeName." else "Switched OFF in $modeName - scores nothing right now.")
+            val on = MODE_CHIPS.filter { activeInMode(group, it.id) }.map { AppConfig.modeName(it.id) }
+            append("\nOn in: " + if (on.isEmpty()) "no mode" else on.joinToString(", "))
         }
-        showWordList(group.name, head, group.what, group.note, group.entries())
+        showWordList(group.name, head, group.what, group.note, entryList(group.entries()))
     }
 
     /**
-     * A list of words with its explanation above it. Shared by the word groups and by the
-     * multipliers that have a list behind them.
+     * THE BLACKLIST, on its own page: four categories, each a pair of plain text files.
+     * Split out of the word-filter page because none of it is word scoring - these are flat
+     * lists that block outright, and mixing them into the scoring explanation made both
+     * harder to read.
+     */
+    private fun showBlacklistPage() {
+        filterScrollY = filterScroll?.scrollY ?: filterScrollY
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Blacklist"))
+        root.addView(TextView(this).apply {
+            text = "Blocked outright in every mode above Off. No score, no threshold, no appeal."
+            textSize = Type.callout; setTextColor(Palette.labelSecondary)
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        })
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            isFillViewport = true; addView(list)
+        })
+        setContentWithThumb(root) { showFilterBreakdown() }
+
+        for (cat in BlockedCategories.ALL) {
+            val apps = BlockedCategories.apps(cat)
+            val doms = BlockedCategories.domains(cat)
+            list.addView(TextView(this).apply {
+                text = cat.title.uppercase(); textSize = Type.caption
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
+                letterSpacing = 0.06f
+                setPadding((2 * dp).toInt(), (20 * dp).toInt(), 0, (6 * dp).toInt())
+            })
+            list.addView(listCard(
+                "${cat.appsTitle} (apps)", apps.size, "apps", cat.why, "From ${cat.appsFile}.",
+                Palette.dangerText,
+                entries = { apps.entries.sortedBy { it.key }.map { Entry(it.key, it.value) } },
+            ))
+            list.addView(listCard(
+                "${cat.appsTitle} (websites)", doms.size, "hosts",
+                "The web half of the same category.", "From ${cat.domainsFile}.",
+                Palette.dangerText,
+                entries = { doms.sorted().map { Entry(it) } },
+            ))
+        }
+        list.addView(TextView(this).apply {
+            text = "An app and its website are SEPARATE decisions. Facebook and YouTube are " +
+                "blocked as apps but reachable as sites, because in a browser the address is " +
+                "visible, the page text is scored and the image add-on is watching from the " +
+                "inside. None of that is true inside an app. To ban one outright, add its " +
+                "domain to that category's domains file."
+            textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding((2 * dp).toInt(), (20 * dp).toInt(), (2 * dp).toInt(), (40 * dp).toInt())
+        })
+    }
+
+    /**
+     * One row of a reference list: a name, and optionally the technical detail under it.
+     * "Instagram" / "com.instagram.android"; "naked" / "mole, rat, eye, truth".
+     */
+    data class Entry(val main: String, val sub: String? = null)
+
+    /**
+     * A list of entries with its explanation above it. Shared by the word groups, the
+     * multipliers and every reference list on the page.
      *
-     * The entries are ONE TextView, not one per word: some of these lists run to several
-     * hundred, and a view each makes the page crawl on the way in.
+     * Rendered as ONE TextView with spans rather than a view per row: some of these run to
+     * several hundred entries, and a view each makes the page crawl on the way in. The spans
+     * give the same result - name in bold, detail indented and quiet underneath - for the
+     * cost of a single layout pass.
      */
     private fun showWordList(
-        title: String, head: String, what: String, note: String, entries: List<String>,
+        title: String, head: String, what: String, note: String, entries: List<Entry>,
     ) {
+        filterScrollY = filterScroll?.scrollY ?: filterScrollY
         val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val root = vbox(pad)
         root.addView(titleText(title))
@@ -7764,11 +8199,53 @@ private fun startWeekStrict() {
                 .apply { bottomMargin = (40 * dp).toInt() }
         }
         words.addView(TextView(this).apply {
-            text = if (entries.isEmpty()) "(empty)" else entries.joinToString("\n")
+            text = spannedEntries(entries)
             textSize = Type.callout; setTextColor(Palette.label)
             setLineSpacing(0f, Type.lineSpacing)
         })
         list.addView(words)
+    }
+
+    /**
+     * Plain strings as entries. A line carrying a "word: detail" split - which is exactly
+     * the shape of exceptions.txt and family_groups.txt - becomes a bold word with its
+     * detail indented underneath, because a wall of "naked: mole, rat, eye, truth, gun"
+     * lines is unreadable and the word is the thing you are scanning for.
+     */
+    private fun entryList(items: List<String>): List<Entry> = items.map { line ->
+        val colon = line.indexOf(':')
+        if (colon > 0) Entry(line.substring(0, colon).trim(), line.substring(colon + 1).trim())
+        else Entry(line)
+    }
+
+    /** Name in bold; detail, if any, indented and quiet on the next line. */
+    private fun spannedEntries(entries: List<Entry>): CharSequence {
+        if (entries.isEmpty()) return "(empty)"
+        val sb = android.text.SpannableStringBuilder()
+        for ((i, e) in entries.withIndex()) {
+            if (i > 0) sb.append("\n")
+            val from = sb.length
+            sb.append(e.main)
+            sb.setSpan(
+                android.text.style.StyleSpan(Typeface.BOLD), from, sb.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            val sub = e.sub
+            if (!sub.isNullOrBlank()) {
+                sb.append("\n     ")
+                val subFrom = sb.length
+                sb.append(sub)
+                sb.setSpan(
+                    android.text.style.ForegroundColorSpan(Palette.labelTertiary),
+                    subFrom, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+                sb.setSpan(
+                    android.text.style.RelativeSizeSpan(0.88f),
+                    subFrom, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
+        }
+        return sb
     }
 
     private fun showDevConsole() {

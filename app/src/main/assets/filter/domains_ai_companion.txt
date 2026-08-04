@@ -1,0 +1,67 @@
+# AI COMPANION / NSFW CHATBOT SITES - blocked in every mode above Off.
+#
+# The web half of apps_ai_companion.txt, and the more important half: most of this
+# category is browser-first, because Play and the App Store will not carry the explicit
+# versions.
+#
+# A bare domain also covers its subdomains. One host per line, "#" = comment.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ GENERAL-PURPOSE ASSISTANTS ARE NOT HERE, on purpose - chatgpt.com, claude.ai,
+#    gemini.google.com and copilot.microsoft.com have real work uses and are left alone.
+
+# ── Explicitly adult by design ───────────────────────────────────────────────────────
+janitorai.com
+janitorai.chat
+crushon.ai
+spicychat.ai
+candy.ai
+muah.ai
+dreamgf.ai
+candyai.ai
+juicychat.ai
+soulfun.ai
+lovescape.com
+secrets.ai
+girlfriendgpt.ai
+kupid.ai
+herahaven.com
+nectar.ai
+sakura.fm
+venus.chub.ai
+chub.ai
+risuai.net
+yodayo.com
+moescape.ai
+
+# ── Companion apps with adult tiers or unfiltered modes ──────────────────────────────
+character.ai
+c.ai
+replika.com
+replika.ai
+nomi.ai
+kindroid.ai
+polybuzz.ai
+talkie-ai.com
+chai-research.com
+botify.ai
+paradot.ai
+anima.ai
+myanima.ai
+eva-ai.chat
+genesia.ai
+linky.ai
+
+# ── "Uncensored" image generators, commonly used for the same thing ──────────────────
+civitai.com
+perchance.org
+seaart.ai
+tensor.art
+pixai.art
+unstability.ai
+soulgen.net
+promptchan.ai
+deepswap.ai
+nudify.online
+undress.app
+clothoff.io

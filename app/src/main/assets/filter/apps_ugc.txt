@@ -1,0 +1,67 @@
+# USER-UPLOADED PHOTO / VIDEO APPS  -  blocked outright.
+#
+# Feeds of media uploaded by strangers. There is no address bar to read, no domain to ban
+# and no add-on to lean on inside an app, and the content arrives already tuned to whatever
+# you last lingered on. The web versions are handled separately in domains_ugc.txt.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ THE FACEBOOK FAMILY IS DELIBERATELY NOT HERE. Facebook, Facebook Lite and Messenger are
+#    GREYLISTED instead (apps_greylist.txt) - time-limited, not blocked - because Messenger
+#    is how a lot of people are actually contacted. facebook.com stays reachable too.
+#
+# ⚠️ A package that isn't installed is simply never matched, so a wrong entry is harmless -
+#    but a wrong entry that happens to be a REAL other app is not. Everything below is a
+#    package name I could state with confidence; the ones I could not are listed at the
+#    bottom, commented out, WITH THEIR NAMES, so they can be filled in from the monitor log
+#    the first time one is opened. Do not guess at them.
+
+TikTok = com.zhiliaoapp.musically
+TikTok (trill) = com.ss.android.ugc.trill
+TikTok Lite = com.zhiliaoapp.musically.go
+Douyin = com.ss.android.ugc.aweme
+Instagram = com.instagram.android
+Instagram Lite = com.instagram.lite
+Threads = com.instagram.barcelona
+YouTube = com.google.android.youtube
+YouTube Go = com.google.android.apps.youtube.mango
+Snapchat = com.snapchat.android
+Triller = co.triller.droid
+Likee = video.like
+Lomotif = com.lomotif.android
+Pinterest = com.pinterest
+BeReal = com.bereal.ft
+Tumblr = com.tumblr
+VSCO = com.vsco.cam
+Lemon8 = com.bd.nproject
+Flickr = com.flickr.android
+500px = com.fivehundredpx.viewer
+Imgur = com.imgur.mobile
+Kuaishou = com.smile.gifmaker
+Kwai = com.kwai.video
+RedNote (Xiaohongshu) = com.xingin.xhs
+Josh = com.eterno.shortvideos
+Chingari = io.chingari.app
+Bilibili = tv.danmaku.bili
+Weibo = com.sina.weibo
+Twitch = tv.twitch.android.app
+Bigo Live = sg.bigo.live
+Tango = com.sgiggle.production
+Bluesky = xyz.blueskyweb.app
+X / Twitter = com.twitter.android
+X Lite = com.twitter.android.lite
+Reddit = com.reddit.frontpage
+Discord = com.discord
+
+# ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Clapper
+# Rizzle
+# Zigazoo
+# We Heart It
+# Moj
+# Vigo Video
+# Kick
+# Yubo
+# YouNow
+# Superlive

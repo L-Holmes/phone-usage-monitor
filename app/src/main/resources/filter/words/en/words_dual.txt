@@ -63,3 +63,8 @@ toys
 vixen
 wet
 women
+pjs
+pyjamas
+pyjama
+pajamas
+pajama

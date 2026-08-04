@@ -1,0 +1,194 @@
+# SEXUALISED-CONTENT SITES  -  blocked in every mode above Off.
+#
+# The hand-maintained core of the adult block. It is deliberately SEPARATE from the ~550k
+# downloaded blocklist: that list is community-maintained and rebuilt from the network, so
+# a host can quietly fall out of it. Everything here is ours and stays put.
+#
+# A bare domain also covers its subdomains. One host per line, "#" = comment.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+
+# ── Subscription / creator platforms ─────────────────────────────────────────────────
+onlyfans.com
+fansly.com
+fanvue.com
+loyalfans.com
+manyvids.com
+fanhouse.app
+justfor.fans
+avn.com
+
+# ── Cam sites ────────────────────────────────────────────────────────────────────────
+chaturbate.com
+stripchat.com
+bongacams.com
+livejasmin.com
+cam4.com
+camsoda.com
+myfreecams.com
+flirt4free.com
+streamate.com
+jerkmate.com
+bonga.com
+
+# ── Tube sites ───────────────────────────────────────────────────────────────────────
+pornhub.com
+xvideos.com
+xhamster.com
+redtube.com
+youporn.com
+spankbang.com
+xnxx.com
+tube8.com
+brazzers.com
+motherless.com
+eporner.com
+txxx.com
+hqporner.com
+porntrex.com
+thumbzilla.com
+youjizz.com
+beeg.com
+tnaflix.com
+empflix.com
+sxyprn.com
+porn.com
+sex.com
+nudevista.com
+theporndude.com
+
+# ── Image boards / art sites carrying adult sections ─────────────────────────────────
+rule34.xxx
+rule34.paheal.net
+e621.net
+e926.net
+gelbooru.com
+danbooru.donmai.us
+konachan.com
+yande.re
+nhentai.net
+hanime.tv
+hentaihaven.xxx
+multporn.net
+luscious.net
+imagefap.com
+erome.com
+scrolller.com
+coomer.su
+kemono.su
+fapello.com
+sxchat.com
+
+# ── Random-stranger video chat ───────────────────────────────────────────────────────
+ome.tv
+omegle.com
+emeraldchat.com
+monkey.cool
+flingster.com
+chatroulette.com
+camsurf.com
+chathub.cam
+bazoocam.org
+shagle.com
+
+# ── Delivery routes once the above are blocked ───────────────────────────────────────
+telegram.org
+t.me
+kik.com
+getsession.org
+mega.nz
+4chan.org
+4channel.org
+
+# ── ADDED 2026-08-04 after a second look at what actually slips through ──────────────
+# The research question was "what should be blocked but isn't". These are the genuine
+# misses: art/manga platforms with enormous adult sections, doujin readers, leak
+# aggregators and adult game portals. None of them reads as "porn site" to an automated
+# categoriser, which is exactly why the community lists miss them too.
+
+# Art & illustration platforms with large adult sections
+pixiv.net
+pximg.net
+deviantart.com
+newgrounds.com
+inkbunny.net
+furaffinity.net
+e-hentai.org
+exhentai.org
+hitomi.la
+nhentai.to
+nhentai.xxx
+imhentai.xxx
+hentai2read.com
+hentaifox.com
+simply-hentai.com
+tsumino.com
+doujins.com
+mangadex.org
+iwara.tv
+
+# Leak aggregators and "free" repost sites
+thothub.to
+thothub.lol
+leakedzone.com
+influencersgonewild.com
+fapachi.com
+faponic.com
+nudostar.com
+sexy-youtubers.com
+bunkr.si
+bunkrr.su
+gofile.io
+cyberdrop.me
+pixeldrain.com
+saint2.su
+
+# Adult game / visual novel portals
+f95zone.to
+nutaku.net
+dlsite.com
+erolabs.com
+lewdzone.com
+itch.io
+
+# Adult fiction
+literotica.com
+asstr.org
+storiesonline.net
+
+# Rule34 mirrors and boorus not already listed
+rule34.us
+rule34video.com
+rule34hentai.net
+paheal.net
+sankakucomplex.com
+idol.sankakucomplex.com
+booru.org
+safebooru.org
+realbooru.com
+xbooru.com
+
+# Reddit mirrors and NSFW front-ends
+redgifs.com
+scrolller.net
+reddit.nsfw.win
+libreddit.de
+teddit.net
+eddrit.com
+
+# Cam / escort aggregators
+adultwork.com
+eros.com
+tryst.link
+slixa.com
+skipthegames.com
+listcrawler.com
+
+# Misc high-traffic
+camwhores.tv
+camwhorestv.to
+recurbate.com
+stripcash.com
+adultdeepfakes.com
+mrdeepfakes.com
+sxyprn.net
+

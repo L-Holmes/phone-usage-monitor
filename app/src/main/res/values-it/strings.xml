@@ -209,9 +209,11 @@
     <string name="always_on_10">Sbloccare una finestra rilassata è limitato: una volta al giorno, e solo %1$d volte in tutto.</string>
     <string name="always_on_11">Non c\'è nessun pulsante \"guardo comunque\". Non è su nessuna schermata, di proposito - un pulsante così è solo una porta con una maniglia, e prima o poi l\'impulso prova la maniglia.</string>
     <string name="always_on_12">C\'È ancora, ma ti viene offerto solo se punti al pulsante di disinstallazione, al blocco amministratore del dispositivo, all\'interruttore del monitoraggio, o provi a uscire da una modalità rigida bloccata. Punta all\'opzione distruttiva e ti verrà offerta invece quella onesta - un\'attesa, un impegno scritto, una finestra fissa, e tutto resta in piedi dopo.</string>
+    <string name="always_on_16">Scriverlo in modo diverso non serve a passare. Numeri al posto di lettere, lettere allungate, lettere sosia di altri alfabeti e parole spezzate dagli spazi vengono tutte ricomposte prima di qualsiasi controllo.</string>
+    <string name="always_on_17">Dentro un\'APP, una parola inequivocabile basta su una schermata breve - ma la stessa parola sepolta in una lunga pagina di testo ne richiede una seconda, perché una menzione non è una pagina che parla di quello.</string>
     <string name="always_on_13">L\'app non preme mai Indietro al posto tuo. Il blocco copre lo schermo e ti offre la via d\'uscita; non naviga mai nel tuo browser alle tue spalle.</string>
     <string name="always_on_14">Un blocco basato sul punteggio delle parole mostra come ci è arrivato: la schermata di blocco elenca le parole che hanno davvero pesato, così vedi il perché - e puoi dirci quando abbiamo sbagliato.</string>
-    <string name="always_on_15">In Firefox, con l\'estensione immagini installata, una pagina ha bisogno di un punteggio PIÙ ALTO per essere bloccata. L\'estensione sta già leggendo quella pagina dall\'interno, quindi questo lato può permettersi di essere meno nervoso.</string>
+    <string name="always_on_15">Una pagina web richiede un punteggio più alto di una schermata di app prima di essere bloccata, perché nel browser l\'estensione immagini legge la stessa pagina dall\'interno. Una parola inequivocabile blocca comunque entrambe, da sola.</string>
 
     <string name="manage_title">Gestisci i blocchi</string>
     <string name="manage_blocked_apps">App bloccate</string>
@@ -851,7 +853,12 @@
     <string name="br_bluetooth_off">Il Bluetooth è spento.\nI tuoi sensori di stanza ne hanno bisogno per funzionare, quindi questa app resta chiusa finché non lo riattivi.\nAccendi il Bluetooth e l\'app si riaprirà.</string>
     <string name="br_adult_site">Sito per adulti (lista di blocco): %1$s</string>
     <string name="br_search_engine">Motore di ricerca bloccato: %1$s</string>
+    <string name="br_safesearch_off">SafeSearch è disattivato.\nRiattivalo nel tuo account Google e questa pagina si riaprirà.</string>
+    <string name="br_image_search">La ricerca immagini non è disponibile in questa modalità.</string>
+    <string name="br_escape_route">%1$s non è disponibile in questa modalità: è un posto dove le app possono nascondersi dal monitoraggio.</string>
     <string name="br_blocked_site">Sito bloccato: %1$s</string>
+    <string name="br_blocked_category_app">%1$s è bloccata.\n%2$s</string>
+    <string name="br_blocked_category_site">Sito bloccato: %1$s\n%2$s</string>
     <string name="br_extension_page">La pagina dell\'estensione monitor immagini è bloccata: l\'estensione resta attiva.</string>
     <string name="br_setup_incomplete">La modalità rigida non è ancora configurata.\n\n%1$s\n\nApri Web Traffic Monitor e completa la configurazione: poi si sblocca tutto.</string>
     <string name="br_setup_missing_overlay">Ancora da fare: consenti all\'app di apparire sopra le altre app.</string>
@@ -862,6 +869,9 @@
     <string name="br_blocked_keyword">Parola chiave bloccata: \"%1$s\"</string>
     <string name="br_back_same">È ancora LA STESSA pagina bloccata. Premi di nuovo Indietro, o vai alla Home.</string>
     <string name="br_back_diff">È una pagina DIVERSA - ma è bloccata anche questa. Premi di nuovo Indietro, o vai alla Home.</string>
+    <string name="br_borderline_warn">%1$s continua ad andarci vicino.\n\nNiente qui ha superato il limite da solo - ma le stesse parole borderline sono sullo schermo da qualche minuto, e di solito quello schema è il feed, non tu.\n\nSe continui, %1$s si chiude per %2$s. Uscire adesso non ti costa nulla.</string>
+    <string name="br_borderline_block">Chiusa per %1$s - continuavano a comparire contenuti borderline</string>
+    <string name="br_notification_flagged">Una notifica da %1$s è stata valutata come contenuto per adulti</string>
     <string name="br_app_too_many">App bloccata per %1$s (troppi blocchi)</string>
     <string name="br_app_blocked">App bloccata</string>
 
@@ -899,6 +909,7 @@
         <item>Il pass giornaliero si ripristina a mezzanotte.</item>
         <item>GUARDIA NOTTURNA: nessuna in Rigida. Essere sdraiato o al buio non blocca mai nulla qui - succede solo in Super rigida.</item>
         <item>PORTA A SENSO UNICO: scegliere Rigida una volta rimuove Off per sempre da questa installazione. Potrai tornare a Rilassata - mai a Off.</item>
+        <item>L\'APP CHE CI VA SEMPRE VICINO: se in un\'app continuano a comparire parole borderline per qualche minuto, compare una schermata di avviso - e se la cosa prosegue, quell\'app si chiude per un\'ora. Niente qui ha superato il limite da solo; è lo schema il punto. Un tratto pulito annulla tutto.</item>
         <item>LA CONFIGURAZIONE VIENE IMPOSTA, non solo richiesta: finché manca qualcosa - il permesso \"mostra sopra le altre app\", Firefox o la sua estensione - tutto tranne gli elementi essenziali viene coperto da una schermata che indica il passo che ti resta. Chiamate, messaggi, sveglie, mappe, Impostazioni, Firefox e questa app restano aperti, così puoi sempre finire (o tornare a Rilassata).</item>
         <item>Gli interruttori \"per chi è il filtro\" sono BLOCCATI al massimo. Puoi cambiarli solo in Rilassata.</item>
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato.</item>
@@ -911,6 +922,7 @@
         <item>GUARDIA NOTTURNA - solo in questa modalità: mentre sei SDRAIATO, o la stanza è davvero al buio (luci spente, tende tirate), si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, contatti, fotocamera, mappe. Tutto il resto, WhatsApp compreso, è bloccato finché non ti siedi o accendi una luce.</item>
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato, come in Rigida.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
+        <item>La regola dello schema borderline della Rigida vale anche qui.</item>
         <item>La configurazione viene imposta fuori da questa app esattamente come in Rigida: se manca qualcosa, si aprono solo gli elementi essenziali.</item>
         <item>Questa è Rigida senza il pass giornaliero.</item>
     </string-array>

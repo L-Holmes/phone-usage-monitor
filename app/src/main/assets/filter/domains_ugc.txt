@@ -1,0 +1,56 @@
+# USER-UPLOADED PHOTO / VIDEO SITES  -  blocked in every mode above Off.
+#
+# The web half of apps_ugc.txt. A bare domain also covers its subdomains, so "tiktok.com"
+# covers "www.tiktok.com" and "vm.tiktok.com". One host per line, "#" = comment.
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ FACEBOOK IS DELIBERATELY ABSENT. The brief was "tiktok website should be banned (and
+#    most others)... but like facebook - user can access that but only via their web
+#    browser". So the Facebook APP is blocked (apps_ugc.txt) while facebook.com stays
+#    reachable in Firefox, where the address is visible, the page text is scored and the
+#    image add-on is watching. If you want it banned outright, uncomment the line at the
+#    bottom - that is the only change needed.
+
+tiktok.com
+lite.tiktok.com
+douyin.com
+instagram.com
+threads.net
+snapchat.com
+triller.co
+likee.video
+clapperapp.com
+lomotif.com
+rizzle.tv
+zigazoo.com
+pinterest.com
+bereal.com
+tumblr.com
+vsco.co
+lemon8-app.com
+flickr.com
+500px.com
+imgur.com
+weheartit.com
+kuaishou.com
+xiaohongshu.com
+mojapp.in
+myjosh.in
+chingari.io
+bilibili.com
+vigovideo.net
+weibo.com
+twitch.tv
+kick.com
+bigo.tv
+tango.me
+yubo.live
+younow.com
+superlive.io
+x.com
+twitter.com
+reddit.com
+discord.com
+
+# ── Blocked as an APP, allowed as a WEBSITE (see the note at the top) ────────────────
+# facebook.com

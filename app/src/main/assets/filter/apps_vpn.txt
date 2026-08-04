@@ -1,0 +1,60 @@
+# VPN / PROXY / ANONYMISING-BROWSER APPS  -  blocked outright.
+#
+# A VPN is the one tool that defeats every network-level control at once, and installing one
+# in a weak moment is a five-minute job. This app does not filter at the network level, so a
+# VPN does not actually get past the accessibility monitor - but it does get past the DNS
+# and router filtering people usually run alongside it, and reaching for one is itself the
+# signal worth acting on.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# NOTE: Tor Browser, Brave and DuckDuckGo are BROWSERS as well as anonymisers, and are
+# already covered by browsers_blocked.txt (only Firefox is allowed). They are repeated here
+# so this category reads as a complete answer to "what about VPNs and proxies" - a duplicate
+# costs nothing, the sets are unioned.
+
+NordVPN = com.nordvpn.android
+ExpressVPN = com.expressvpn.vpn
+Proton VPN = ch.protonvpn.android
+Surfshark = com.surfshark.vpnclient.android
+CyberGhost VPN = de.mobileconcepts.cyberghost
+Windscribe = com.windscribe.vpn
+Mullvad VPN = net.mullvad.mullvadvpn
+TunnelBear = com.tunnelbear.android
+Private Internet Access = com.privateinternetaccess.android
+IPVanish = com.ixolit.ipvanish
+Hotspot Shield = hotspotshield.android.vpn
+VyprVPN = com.goldenfrog.vyprvpn.app
+Speedify = com.speedify.speedifyandroid
+Turbo VPN = free.vpn.unblock.proxy.turbovpn
+Thunder VPN = com.fast.free.unblock.thunder.vpn
+SuperVPN = com.jrzheng.supervpnfree
+Psiphon = org.psiphon3
+Psiphon Pro = org.psiphon3.subscription
+Outline VPN = org.outline.android.client
+Cloudflare WARP (1.1.1.1) = com.cloudflare.onedotonedotonedotone
+AdGuard VPN = com.adguard.vpn
+IVPN = net.ivpn.client
+ZenMate = com.zenmate.android
+Betternet = com.freevpnintouch
+Avast SecureLine VPN = com.avast.android.vpn
+Kaspersky VPN = com.kaspersky.secure.connection
+Touch VPN = com.northghost.touchvpn
+Secure VPN = com.fast.free.unblock.secure.vpn
+Planet VPN = com.freeplanetvpn
+Tor Browser = org.torproject.torbrowser
+Tor Browser (alpha) = org.torproject.torbrowser_alpha
+Orbot = org.torproject.android
+Brave Browser = com.brave.browser
+DuckDuckGo Browser = com.duckduckgo.mobile.android
+
+# ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# PureVPN
+# Hide.me
+# PrivadoVPN
+# AirVPN
+# TorGuard
+# VPN360
+# VPN Proxy Master
+# Onion Browser  (iOS only - there is no Android build)

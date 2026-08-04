@@ -1,0 +1,44 @@
+# AI COMPANION / NSFW CHATBOT APPS - blocked outright.
+#
+# The newest category on the board. It barely existed when the established blockers wrote
+# their lists, and through 2025-26 it has become one of the largest adult surfaces there
+# is - a chatbot that will write anything, on a Play Store app, with no images to classify
+# and no domain to recognise once the app is installed.
+#
+# It is also the hardest category to be fair about. Some of these are general-purpose
+# companion apps whose adult use is a paid tier or an unofficial mode; others exist for
+# nothing else. Both are here, because the distinction is a subscription toggle away.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ GENERAL-PURPOSE ASSISTANTS ARE NOT HERE. ChatGPT, Claude, Gemini and Copilot are not
+#    companion apps and have real work uses; they are left alone deliberately. If one of
+#    them ever ships an unfiltered companion mode, revisit that.
+
+Character.AI = ai.character.app
+Replika = ai.replika.app
+Chai = com.Beauchamp.Messenger.external
+Talkie = com.talkie.aichat
+Poly.AI = ai.polybuzz.app
+Linky AI = com.linky.ai
+Nomi.ai = ai.nomi
+Kindroid = com.kindroid.ai
+Paradot = ai.paradot.app
+Anima AI = com.apperto.animaapp
+iGirl = com.animaapp.igirl
+EVA AI = com.eva.ai
+Genesia AI = ai.genesia.app
+DreamGF = ai.dreamgf.app
+Candy AI = ai.candy.app
+Muah AI = ai.muah.app
+Botify AI = ai.botify.app
+
+# ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Janitor AI      (web-first; domains_ai_companion.txt covers it)
+# Crushon.AI      (web-first)
+# SpicyChat       (web-first)
+# JuicyChat
+# Secrets AI
+# Soulfun
+# Lovescape

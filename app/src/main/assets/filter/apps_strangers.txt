@@ -1,0 +1,67 @@
+# LIVESTREAMS, FORUMS, IMAGE BOARDS, DATING & HOOKUP  -  blocked outright.
+#
+# One thing in common: an endless supply of strangers, and no moderation you can rely on.
+# Whether the pull is a live stream, an unmoderated board or a dating feed, the surface is
+# the same - content from people you don't know, arriving faster than anyone reads it.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+
+# ── Livestreaming ────────────────────────────────────────────────────────────────────
+Twitch = tv.twitch.android.app
+Bigo Live = sg.bigo.live
+Tango = com.sgiggle.production
+LiveMe = com.cmcm.live
+Azar = com.azarlive.android
+
+# ── Forums / image boards / group chat ───────────────────────────────────────────────
+Reddit = com.reddit.frontpage
+Discord = com.discord
+Telegram = org.telegram.messenger
+Telegram X = org.thunderdog.challegram
+Band = com.nhn.android.band
+
+# ── Dating / hookup ──────────────────────────────────────────────────────────────────
+Tinder = com.tinder
+Bumble = com.bumble.app
+Hinge = co.hinge.app
+Feeld = com.feeld
+Grindr = com.grindrapp.android
+Badoo = com.badoo.mobile
+OkCupid = com.okcupid.okcupid
+Plenty of Fish = com.pof.android
+Zoosk = com.zoosk.zoosk
+MeetMe = com.myyearbook.m
+Skout = com.skout.android
+Scruff = com.appspot.scruffapp
+HER = com.weareher.her
+Ashley Madison = com.ashleymadison.mobile
+
+# ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Kick
+# Yubo
+# YouNow
+# Superlive
+# Uplive
+# OmeTV
+# Emerald Chat
+# Monkey
+# Flingster
+# 8kun
+# 5ch / 2ch
+# Kiwi Farms
+# Endchan
+# Pure
+# Seeking
+# AdultFriendFinder
+# Flirt.com
+# Alt.com
+# HUD
+# Down
+# Jack'd
+# GROWLR
+# 3Fun
+# Cougar Life
+# Secret Benefits
+# BeNaughty
+# FetLife

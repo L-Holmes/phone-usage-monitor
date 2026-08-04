@@ -295,6 +295,9 @@ object BypassWatch {
         const val OVERLAY = "you went to take away the block screen's permission"
         const val LEAVE_STRICT = "you tried to drop out of strict mode"
         const val WIPE_RULES = "you tried to wipe your own ban list"
+        const val SAFESEARCH_OFF = "you turned Google SafeSearch off"
+        const val ESCAPE_ROUTE = "you opened a settings page that hides apps from the guard"
+        const val INSTALLED_BLOCKED = "you installed an app that is on a block list"
     }
 
     // Sitting on the Settings uninstall page fires accessibility events continuously, so a
@@ -931,3 +934,81 @@ object SetupGuard {
         return AppConfig.LOCKDOWN_ALLOWED_SUBSTRINGS.any { p.contains(it) }
     }
 }
+
+
+// =====================================================================================
+// InstallLog  —  what got installed, and when
+// =====================================================================================
+/**
+ * A short rolling record of apps installed while monitoring was on. Two uses: the dev
+ * console can show it, and a run of installs during Strict is a pattern worth seeing -
+ * somebody working through VPNs until one sticks looks exactly like this.
+ *
+ * Deliberately small and local. It is a list of package names, not a surveillance feed.
+ */
+object InstallLog {
+    private const val PREFS = "install_log"
+    private const val KEY = "entries"
+    private const val MAX = 60
+
+    /** "<millis>|<package>|<category or blank>" per line, newest last. */
+    fun record(c: Context, pkg: String, category: String?) {
+        val p = prefs(c)
+        val lines = read(c).toMutableList()
+        lines.add("${System.currentTimeMillis()}|$pkg|${category.orEmpty()}")
+        while (lines.size > MAX) lines.removeAt(0)
+        p.edit().putString(KEY, lines.joinToString("\n")).apply()
+    }
+
+    fun read(c: Context): List<String> =
+        prefs(c).getString(KEY, "").orEmpty().split("\n").filter { it.isNotBlank() }
+
+    /** Newest first, as "package  -  category or 'not on any list'". */
+    fun recent(c: Context): List<Pair<String, String>> = read(c).reversed().mapNotNull { line ->
+        val parts = line.split('|')
+        if (parts.size < 2) return@mapNotNull null
+        parts[1] to (parts.getOrNull(2)?.takeIf { it.isNotBlank() } ?: "not on any list")
+    }
+
+    fun clear(c: Context) = prefs(c).edit().remove(KEY).apply()
+
+    private fun prefs(c: Context) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// BatteryGuard  —  the permission we declared and never asked for
+// =====================================================================================
+/**
+ * REQUEST_IGNORE_BATTERY_OPTIMIZATIONS has been in the manifest since the beginning and
+ * was never once requested in code. On stock Android that is survivable; on Samsung,
+ * Xiaomi, OnePlus and Huawei builds the battery manager will put a long-running
+ * accessibility service to sleep, and when it does, blocking silently stops. No cover, no
+ * warning, nothing in the log - the guard is simply not there.
+ *
+ * That makes it the quietest failure mode this app has, which is the worst kind.
+ */
+object BatteryGuard {
+
+    fun isExempt(c: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val pm = c.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return true
+        return pm.isIgnoringBatteryOptimizations(c.packageName)
+    }
+
+    /**
+     * Send the user to the exemption prompt. Uses the targeted intent where it is allowed
+     * and falls back to the general settings list, because the direct one is policy-
+     * restricted on Play builds and throws on some OEM ROMs.
+     */
+    fun request(c: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:" + c.packageName))
+        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        runCatching { c.startActivity(direct) }
+            .onFailure { runCatching { c.startActivity(fallback) } }
+    }
+}
+

@@ -36,11 +36,29 @@ import java.util.zip.GZIPInputStream
 //    * To force a fresh rebuild (e.g. a settings button), call rebuild(context).
 object DomainBlocklist {
 
-    // Plain host/txt sources the APP can fetch and parse itself:
+    // Plain host/txt sources the APP can fetch and parse itself.
+    //
+    // 2026-08-04: HaGeZi's lists were added alongside the three originals. They are actively
+    // maintained, far larger, and - this is the part that matters - they cover the two
+    // categories our hand-written files cannot realistically keep up with:
+    //
+    //   • doh-vpn-proxy-bypass  ~17,500 hosts. Our hand-written domains_vpn.txt has 40. Ours
+    //     is the readable core that survives a list going stale; theirs is the one that
+    //     survives somebody actually shopping for a VPN.
+    //   • nosafesearch          ~200 hosts. Search engines that cannot enforce SafeSearch,
+    //     which is precisely the set we want gone given Google is our only allowed engine.
+    //
+    // All of it lands in ONE merged set. Categorised reporting would need one set per list
+    // and roughly triple the memory; the block screen already names a category when one of
+    // our own files matched, which is the case where the distinction is useful.
     val NETWORK_SOURCES: List<String> = listOf(
         "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts",
         "https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/pornography-hosts",
         "https://raw.githubusercontent.com/blocklistproject/Lists/master/porn.txt",
+        // HaGeZi - "wildcard" format is one bare host per line, which parseHost already reads.
+        "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/nsfw-onlydomains.txt",
+        "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/doh-vpn-proxy-bypass-onlydomains.txt",
+        "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/nosafesearch-onlydomains.txt",
     )
     // .tar.gz archives handled by the build script only (not fetched in-app):
     val SCRIPT_ONLY_SOURCES: List<String> = listOf(
@@ -77,7 +95,7 @@ object DomainBlocklist {
                         hosts = built
                         Log.i("DomainBlocklist", "built ${built.size} hosts from network; cached")
                     } else if (hosts == null) {
-                        Log.w("DomainBlocklist", "no cache, no asset, no network — blocklist empty for now")
+                        Log.w("DomainBlocklist", "no cache, no asset, no network - blocklist empty for now")
                     }
                 }
             } catch (t: Throwable) {
@@ -114,7 +132,7 @@ object DomainBlocklist {
     } catch (t: Throwable) { null }
 
     private fun downloadAndBuild(): HashSet<String>? {
-        val set = HashSet<String>(600_000)
+        val set = HashSet<String>(800_000)
         var anyOk = false
         for (url in NETWORK_SOURCES) {
             try {
@@ -257,6 +275,202 @@ object SearchEngineBlocklist {
 object AlwaysBlocklist {
     val DOMAINS: Set<String> get() = FilterData.set("domains_banned.txt")
     fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
+}
+
+
+// ── IN-APP BROWSERS: is this string an ADDRESS, or a sentence mentioning one? ─────────
+/**
+ * The rule behind reading a domain out of an app's own in-app browser (§2.5). Pure, so it
+ * can be tested - it is the part that decides whether a piece of on-screen text is treated
+ * as THE PAGE'S ADDRESS, and getting it wrong in the permissive direction would let a page
+ * block itself simply by quoting a URL, or misattribute a block to the wrong site.
+ *
+ * The rule: the ENTIRE trimmed string has to be a host or a URL. Any whitespace and it is
+ * prose, not an address bar.
+ */
+object InAppBrowser {
+
+    private const val MAX_LEN = 300
+
+    private val HOST = Regex(
+        """^(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/?#]\S*)?$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * Final labels that are almost always a FILE, not a top-level domain. In-app browsers
+     * show downloads and attachments in the same chrome as the address, and "photo.jpg" is
+     * a perfectly well-formed hostname as far as a regex is concerned.
+     *
+     * Note that .zip, .mov, .app and .dev are all genuine TLDs. In this one context - a
+     * string sitting in an app's browser chrome - a filename is the likelier reading, and
+     * the cost of being wrong is only that one domain rule does not fire on one page. The
+     * cost the other way is treating every downloaded file as the page's address.
+     */
+    private val FILE_ENDINGS = setOf(
+        "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "ico",
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf",
+        "zip", "rar", "tar", "gz", "apk", "exe", "dmg", "iso",
+        "mp3", "mp4", "mov", "avi", "mkv", "wav", "webm", "flac", "m4a",
+        "html", "htm", "css", "js", "json", "xml", "md", "log", "tmp", "bak",
+    )
+
+    fun bareHost(raw: String?): String? {
+        val t = raw?.trim() ?: return null
+        if (t.isEmpty() || t.length > MAX_LEN) return null
+        if (t.any { it.isWhitespace() }) return null
+        val host = HOST.find(t)?.groupValues?.get(1)?.lowercase() ?: return null
+        // A bare "photo.jpg" is a download, not the page you are on.
+        if ('/' !in t && host.substringAfterLast('.') in FILE_ENDINGS) return null
+        return host
+    }
+}
+
+
+// ── SAFESEARCH: Google is the only engine we allow, so it has to actually be safe ─────
+/**
+ * We block every search engine except Google. That is worth very little on its own, because
+ * Google with SafeSearch OFF is one of the highest-yield adult surfaces there is - image
+ * search in particular. Every established blocker treats forcing SafeSearch as table
+ * stakes; until 2026-08-04 we did nothing about it at all.
+ *
+ * We cannot set the setting for them - it lives in a Google account, and DNS-level
+ * forcing (forcesafesearch.google.com) is not available to an app that does no DNS. What we
+ * CAN do is refuse the page when the URL says SafeSearch is off, which is what the "off"
+ * state actually looks like in practice: Google carries the choice in the query string.
+ *
+ * Treated as a bypass attempt rather than an ordinary block, because there is no innocent
+ * way to arrive at `&safe=off`.
+ */
+object SafeSearch {
+
+    /** Hosts this applies to. Only Google - everything else is blocked outright anyway. */
+    private val ENGINES = listOf("google.")
+
+    /** The query strings that mean "SafeSearch is off". */
+    private val OFF_MARKERS = listOf("safe=off", "safe=images", "safeui=off", "safe=0")
+
+    /** The image-search markers. Image results are the surface this is really about. */
+    private val IMAGE_MARKERS = listOf("tbm=isch", "/imghp", "udm=2")
+
+    fun isSearchHost(host: String?): Boolean {
+        val h = host?.lowercase() ?: return false
+        return ENGINES.any { h.contains(it) }
+    }
+
+    /** True when the URL explicitly turns SafeSearch off. */
+    fun isExplicitlyOff(url: String?): Boolean {
+        val u = url?.lowercase() ?: return false
+        return OFF_MARKERS.any { it in u }
+    }
+
+    /** True when this is an image-search URL. Blocked in Strict+ only - see the caller. */
+    fun isImageSearch(url: String?): Boolean {
+        val u = url?.lowercase() ?: return false
+        return IMAGE_MARKERS.any { it in u }
+    }
+}
+
+
+// =====================================================================================
+//  BLOCKED CATEGORIES  —  the hand-maintained app + site lists, by category
+// =====================================================================================
+/**
+ * Four categories, each an APP list and a SITE list, each in its own file under
+ * assets/filter/. Adding a site or an app means editing a text file, never this code -
+ * which is the whole reason they are files: a list that lives in Kotlin can only be changed
+ * by someone who can build the app, and these lists change far more often than the code
+ * around them does.
+ *
+ * The categories are separate rather than one big blocklist because the BLOCK SCREEN says
+ * which one caught you, and "blocked: VPN app" and "blocked: adult site" are different
+ * sentences that deserve different reactions. The dev console lists them the same way.
+ *
+ * All four are enforced in EVERY mode above Off. None of them is a judgement call the
+ * filter has to make - a VPN is a VPN in Relaxed too - so none of them is mode-gated.
+ *
+ * ── AN APP AND ITS WEBSITE ARE SEPARATE DECISIONS ──────────────────────────────────
+ * Deliberately so. Facebook and YouTube are blocked as APPS but reachable as SITES,
+ * because in a browser the address is visible, the page text is scored, and the image
+ * add-on is watching from the inside - none of which is true in an app. If you want one of
+ * them banned outright, add the domain to its category's domains file.
+ */
+object BlockedCategories {
+
+    data class Category(
+        val id: String,
+        /** What the block screen and the dev console call it. */
+        val title: String,
+        /** One line: why this category exists at all. */
+        val why: String,
+        /** What to call the lists themselves, so a card never just says "Apps". */
+        val appsTitle: String,
+        val appsFile: String,
+        val domainsFile: String,
+    )
+
+    val ALL: List<Category> = listOf(
+        Category(
+            "ugc", "User-uploaded video & photo feeds",
+            "Endless media uploaded by strangers, tuned to whatever you last lingered on. " +
+                "Inside an app there is no address to read and no add-on to lean on.",
+            appsTitle = "User content upload & sharing",
+            "apps_ugc.txt", "domains_ugc.txt",
+        ),
+        Category(
+            "adult", "Sexualised content",
+            "The hand-maintained core of the adult block, kept separate from the downloaded " +
+                "blocklist so a host can never quietly fall out of it.",
+            appsTitle = "Sexualised content",
+            "apps_adult.txt", "domains_adult.txt",
+        ),
+        Category(
+            "strangers", "Livestreams, forums, image boards, dating",
+            "An endless supply of strangers and no moderation you can rely on.",
+            appsTitle = "Livestreams, forums & dating",
+            "apps_strangers.txt", "domains_strangers.txt",
+        ),
+        Category(
+            "bypass", "Filter bypass services",
+            why = "They re-serve somebody else's page from their own domain, which is exactly " +
+                "what defeats a host-based block. None of them hosts anything itself.",
+            appsTitle = "Translation proxies, caches & archives",
+            appsFile = "apps_bypass.txt", domainsFile = "domains_bypass.txt",
+        ),
+        Category(
+            "ai_companion", "AI companions & NSFW chatbots",
+            why = "A category that barely existed when the older blockers wrote their lists, " +
+                "and the fastest-growing surface there is.",
+            appsTitle = "AI companion & chatbot",
+            appsFile = "apps_ai_companion.txt", domainsFile = "domains_ai_companion.txt",
+        ),
+                Category(
+            "vpn", "VPNs, proxies and anonymisers",
+            "The one tool that defeats every network-level control at once - and reaching " +
+                "for one is itself the signal worth acting on.",
+            appsTitle = "VPNs, proxies & anonymisers",
+            "apps_vpn.txt", "domains_vpn.txt",
+        ),
+    )
+
+    /** Friendly name → package, for one category. Cached by FilterData. */
+    fun apps(c: Category): Map<String, String> = FilterData.map(c.appsFile)
+
+    /** The hosts for one category. Cached by FilterData. */
+    fun domains(c: Category): Set<String> = FilterData.set(c.domainsFile)
+
+    /** The category that blocks this package, or null. */
+    fun appCategory(pkg: String?): Category? {
+        if (pkg.isNullOrBlank()) return null
+        val p = pkg.lowercase()
+        return ALL.firstOrNull { p in apps(it).values }
+    }
+
+    /** The category that blocks this host (or a parent domain of it), or null. */
+    fun hostCategory(host: String?): Category? {
+        if (host.isNullOrBlank()) return null
+        return ALL.firstOrNull { hostOrParentIn(host, domains(it)) }
+    }
 }
 
 
