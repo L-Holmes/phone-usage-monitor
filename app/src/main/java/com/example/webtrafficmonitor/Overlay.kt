@@ -387,15 +387,49 @@ class BreathingOverlay(private val context: Context) {
 
         // Watchdog: if the orb still hasn't moved a moment later, treat the gate as broken,
         // surface the hint and let a tap through rather than stranding the user.
+        //
+        // The TAP ESCAPE is now armed unconditionally, not only when the animation failed to
+        // start. The hint on screen says "if nothing happens, tap to enter", and that has to
+        // be TRUE whatever state the orb is in - a full-screen overlay that promises a way
+        // out and doesn't have one is the worst thing in this file.
         handler.postDelayed({
-            if (view === root && orbAnim?.hasAdvanced != true) {
+            if (view !== root) return@postDelayed
+            root.setOnClickListener { if (controlsActive) onContinue() }
+            root.isClickable = true
+            if (orbAnim?.hasAdvanced != true) {
                 tapHint.animate().cancel()
                 tapHint.alpha = 0.8f
                 releaseControls(phase, controls, dontWant)
-                root.setOnClickListener { if (controlsActive) onContinue() }
-                root.isClickable = true
             }
         }, WATCHDOG_MS)
+
+        // ── THE RELEASE DEADLINE  ────────────────────────────────────────────────────
+        // ⚠️ 2026-08-04 - THIS IS THE FIX FOR "STUCK ON BREATHE IN", READ BEFORE REMOVING.
+        //
+        // releaseControls() used to have exactly two callers: the animation COMPLETING, and
+        // the watchdog above when the animation never STARTED. Nothing covered the case in
+        // between - an animation that starts and then stalls - and that is not a rare edge
+        // case, it is what the screen turning off does to a running animator. The orb froze
+        // mid-breath, onComplete never fired, the controls stayed invisible, and the phone
+        // was unusable behind a screen that said "Breathe in" and responded to nothing.
+        //
+        // So the release is now on a DEADLINE rather than on an event. One breath is about
+        // ten seconds; after this the buttons light up whatever the animation is doing.
+        handler.postDelayed({
+            if (view === root) releaseControls(phase, controls, dontWant)
+        }, RELEASE_DEADLINE_MS)
+
+        // ── HARD CEILING ON HOW LONG THIS CAN EXIST ─────────────────────────────────
+        // A full-screen overlay that outlives its reason is a bricked phone, and on
+        // 2026-08-04 that is exactly what happened: an early return in the service meant
+        // nothing ever called hide(), and the user sat looking at "Breathe in" unable to
+        // use the device at all.
+        //
+        // The service-side ordering is fixed, but this is a FULL-SCREEN OVERLAY - it does
+        // not get to depend on somebody else remembering. One breath is a few seconds; a
+        // minute is far longer than anyone needs, and after that it comes down by itself
+        // whatever the rest of the app is doing.
+        handler.postDelayed({ if (view === root) hide() }, MAX_LIFETIME_MS)
     }
 
     private fun startBreathing(
@@ -440,6 +474,10 @@ class BreathingOverlay(private val context: Context) {
 
     private companion object {
         const val WATCHDOG_MS = 1500L
+        /** The buttons light up by this point no matter what the animation is doing. */
+        const val RELEASE_DEADLINE_MS = 12_000L
+        /** Nothing this app draws over the whole screen may outlive this, for any reason. */
+        const val MAX_LIFETIME_MS = 25_000L
     }
 
     private fun overlayType(): Int =

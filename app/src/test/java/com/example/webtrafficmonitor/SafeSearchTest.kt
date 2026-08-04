@@ -37,15 +37,17 @@ class SafeSearchTest {
     }
 
     @Test
-    fun `image search is recognised in each of its forms`() {
+    fun `image search is NOT blocked`() {
+        // Removed 2026-08-04 as over-blocking. Google Images is an ordinary tool; the
+        // Firefox add-on covers images by looking at them, which is the right way round.
+        // This test exists so nobody quietly reintroduces it.
         listOf(
             "https://www.google.com/search?q=x&tbm=isch",
             "https://www.google.com/imghp",
             "https://www.google.com/search?q=x&udm=2",
         ).forEach {
-            assertTrue("'$it' should read as image search", SafeSearch.isImageSearch(it))
+            assertFalse("image search must not read as SafeSearch off", SafeSearch.isExplicitlyOff(it))
         }
-        assertFalse(SafeSearch.isImageSearch("https://www.google.com/search?q=x"))
     }
 
     @Test

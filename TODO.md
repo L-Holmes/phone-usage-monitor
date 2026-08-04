@@ -27,7 +27,6 @@ MANUAL TODO:
    - Need to keep themselves busy!
    - No tracking needed on this — they'll know where they're at.
 
-
 ------------------------------
 
 TODO LATER:
@@ -54,7 +53,6 @@ Can we determine where they are on a map?
 (BUT! Will this be affected by VPNs??) 
 
 -------
-
 
 do the thing where we show a picture of a loved one before unlocking?
 

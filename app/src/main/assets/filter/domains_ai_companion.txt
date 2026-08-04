@@ -52,13 +52,11 @@ eva-ai.chat
 genesia.ai
 linky.ai
 
-# ── "Uncensored" image generators, commonly used for the same thing ──────────────────
-civitai.com
-perchance.org
-seaart.ai
-tensor.art
-pixai.art
-unstability.ai
+# ── Image generators: only the ones that exist for nothing else ──────────────────────
+# 2026-08-04: civitai, perchance, seaart, tensor.art and pixai came out of this list. They
+# are general-purpose generation sites with large ordinary uses, and blocking a whole art
+# tool because part of it is misused is over-blocking. What is left below is the set whose
+# entire product is generating sexual images of people, several of them non-consensually.
 soulgen.net
 promptchan.ai
 deepswap.ai

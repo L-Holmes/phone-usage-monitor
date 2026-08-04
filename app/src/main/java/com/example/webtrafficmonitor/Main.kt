@@ -3919,6 +3919,14 @@ private fun showReportScreen(offerLock: Boolean = false) {
             setOnClickListener { showModeRules() }
         })
     })
+    // Say WHY Off vanished, once, right under the picker. A choice that quietly disappears
+    // is unsettling; a choice that disappears with a reason is the ratchet working.
+    if (Mode.everStrict(this)) content.addView(TextView(this).apply {
+        text = getString(R.string.mode_off_gone)
+        textSize = Type.caption; setTextColor(Palette.labelTertiary)
+        setLineSpacing(0f, Type.lineSpacing)
+        setPadding(dp(Space.xs), 0, dp(Space.xs), dp(Space.sm))
+    })
 
     // The protocol is the one thing on this page that gets the accent, because it is the
     // one thing here that fixes the problem rather than reacting to it.
@@ -7364,7 +7372,8 @@ private fun startWeekStrict() {
         ssCard.addView(smallRule("Google is the only search engine allowed, in every mode", true))
         ssCard.addView(smallRule("a URL that switches SafeSearch off is blocked, and recorded " +
             "as a bypass attempt - there is no innocent way to arrive at \"&safe=off\"", true))
-        ssCard.addView(smallRule("image search is blocked from Strict upwards", !relaxed))
+        ssCard.addView(smallRule("ordinary searching and image search are NOT touched - web " +
+            "browsing is monitored lightly, because the Firefox add-on is what covers images", true))
         list.addView(ssCard)
 
         // ═════════════════════════════════════════════════════════════════════════════
@@ -8344,14 +8353,22 @@ private fun startWeekStrict() {
         }
         val px = (14 * dp).toInt(); val py = (6 * dp).toInt()
         sp.setPadding(px, py, px, py)
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, AppConfig.MODES.map { modeDisplayName(it.id) })
+        // THE RATCHET, MADE VISIBLE. Once Strict has been entered, Off is gone for good -
+        // Mode.setMode has always refused it, but the picker went on offering it and then
+        // snapped back with a toast. An option that is always refused is not a choice, it
+        // is a trap: it reads as "you can still turn this off" right up until you can't.
+        // Take it off the list instead, and say why underneath the picker.
+        val modes = AppConfig.MODES.filterNot {
+            it.id == Mode.OFF && Mode.everStrict(this)
+        }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes.map { modeDisplayName(it.id) })
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         sp.adapter = adapter
-        fun curIdx() = AppConfig.MODES.indexOfFirst { it.id == Mode.current(this) }.coerceAtLeast(0)
+        fun curIdx() = modes.indexOfFirst { it.id == Mode.current(this) }.coerceAtLeast(0)
         sp.setSelection(curIdx())
         sp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                val chosen = AppConfig.MODES.getOrNull(pos)?.id ?: return
+                val chosen = modes.getOrNull(pos)?.id ?: return
                 if (chosen == Mode.current(this@MainActivity)) return
                 // Super hardcore needs the uninstall lock first - a mode this strict is
                 // pointless if the app can just be deleted in a weak moment.

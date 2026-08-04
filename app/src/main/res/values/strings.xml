@@ -216,6 +216,7 @@
     <string name="mode_superhardcore_name">Super hardcore</string>
     <string name="mode_on_toast">%1$s mode on</string>
     <string name="mode_ratchet_toast">Off is gone for good - you chose Strict once. Relaxed is as loose as it gets now.</string>
+    <string name="mode_off_gone">Off is no longer on the list. You chose Strict at some point, and turning monitoring off entirely stopped being an option from then on. Relaxed is the loosest setting from here - it still blocks adult sites, the banned host list and every search engine but Google.</string>
     <string name="mode_off_toast">Monitoring off - nothing is watched or blocked</string>
     <string name="mode_needs_lock_toast">Super hardcore needs the uninstall lock on first</string>
     <string name="mode_reverted_toast">Monitoring needs the whole setup - the mode is back to %1$s.</string>
@@ -1046,7 +1047,6 @@
     <string name="br_adult_site">Adult site (blocklist): %1$s</string>
     <string name="br_search_engine">Search engine blocked: %1$s</string>
     <string name="br_safesearch_off">SafeSearch is switched off.\nTurn it back on in your Google account and this page opens again.</string>
-    <string name="br_image_search">Image search is off the table in this mode.</string>
     <string name="br_escape_route">%1$s is off limits in this mode - it is a place apps can hide from the guard.</string>
     <string name="br_blocked_site">Blocked site: %1$s</string>
     <string name="br_blocked_category_app">%1$s is blocked.\n%2$s</string>

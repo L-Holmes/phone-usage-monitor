@@ -108,8 +108,6 @@ mega.nz
 # Art & illustration platforms with large adult sections
 pixiv.net
 pximg.net
-deviantart.com
-newgrounds.com
 inkbunny.net
 furaffinity.net
 e-hentai.org
@@ -123,7 +121,6 @@ hentaifox.com
 simply-hentai.com
 tsumino.com
 doujins.com
-mangadex.org
 iwara.tv
 
 # Leak aggregators and "free" repost sites
@@ -137,9 +134,7 @@ nudostar.com
 sexy-youtubers.com
 bunkr.si
 bunkrr.su
-gofile.io
 cyberdrop.me
-pixeldrain.com
 saint2.su
 
 # Adult game / visual novel portals
@@ -148,7 +143,6 @@ nutaku.net
 dlsite.com
 erolabs.com
 lewdzone.com
-itch.io
 
 # Adult fiction
 literotica.com
@@ -192,3 +186,16 @@ adultdeepfakes.com
 mrdeepfakes.com
 sxyprn.net
 
+# ── REMOVED 2026-08-04 as OVER-BLOCKING ──────────────────────────────────────────────
+# These were added in the first pass and taken straight back out. A general-purpose
+# platform that happens to host adult material alongside everything else is not an adult
+# site, and blocking one is the kind of collateral damage that makes somebody rip the whole
+# app off their phone. If the adult part of one of these becomes the problem, the word
+# scorer and the Firefox add-on are already reading the page.
+#
+#   itch.io  -  the main indie GAME distribution platform - an adult section does not make it an adult site
+#   gofile.io  -  a general file host
+#   pixeldrain.com  -  a general file host
+#   mangadex.org  -  a general manga reader
+#   newgrounds.com  -  a general animation/games community, most of it not adult
+#   deviantart.com  -  a general art community with a mature filter of its own

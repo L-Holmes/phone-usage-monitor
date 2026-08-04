@@ -158,10 +158,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (!appBlockActive) return
             // Any VISIBLE app, not just the focused one - a blocked app in the other
             // split-screen pane or in a PiP window is still on screen (§2.6).
-            val hit = blockedVisibleApp()
+            // OUR OWN APP IS NEVER COVERED. It is the only route to lowering the mode or
+            // finishing the setup, so a cover that survives over it is unescapable.
+            val front = currentForegroundPackage()
+            val hit = if (front == packageName) null else blockedVisibleApp()
             when {
                 hit != null -> showAppBlock(hit.second, hit.first) // keeps cover + reposts
-                currentForegroundPackage() != null -> {
+                front != null || rootInActiveWindow?.packageName?.toString() == packageName -> {
                     appBlockActive = false
                     overlay?.hide()
                 }
@@ -473,6 +476,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    // A breath is over when the phone goes in your pocket. Leaving the orb
+                    // up across a lock is how it came back on unlock, still frozen, with
+                    // its animation long since stopped by the screen turning off.
+                    if (breathing?.isShowing == true) breathing?.hide()
                     closeUsageSegment()
                     // Stop charging greylist time to whatever was in front. A dark screen is
                     // not two minutes of Instagram, and the tick has no other way to find out
@@ -771,6 +778,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (packageName != segPkg) onForegroundChanged(packageName)
         }
 
+        // ---- Left the app we were breathing for? Drop the orb. FIRST, before anything ----
+        // This used to live further down, next to the code that RAISES the orb, which meant
+        // any of the half-dozen early returns between here and there could strand it on
+        // screen with the phone unusable. It has no business being conditional on any of
+        // them: the orb belongs to one app, and the moment the foreground is a different
+        // app it is stale. (2026-08-04: this is the "stuck on Breathe in" bug.)
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            packageName != lastForegroundPkgForBreathing && breathing?.isShowing == true
+        ) {
+            breathing?.hide()
+        }
+
         // ---- App-level block: FIRST, on every event, before any throttling. ----
         // A plain set lookup is effectively free, and running it on the very first
         // window event of an app launch is what makes the cover appear instantly
@@ -801,8 +820,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             packageName != lastForegroundPkgForBreathing
         ) {
-            if (breathing?.isShowing == true) breathing?.hide()   // left the gated app: drop it
-            lastForegroundPkgForBreathing = packageName
+            lastForegroundPkgForBreathing = packageName   // the drop happens at the top now
             if (packageName in BREATHING_APPS && overlay?.isShowing != true &&
                 BreathingGate.shouldBreathe(this, packageName)) {
                 BreathingGate.markBreathed(this, packageName)
@@ -980,6 +998,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     /** Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop. */
     private fun showAppBlock(reason: String, blockedPackage: String) {
         val controller = overlay ?: return
+        // The breathing orb is a SEPARATE overlay, and it sits above this one. If it is up
+        // when a block lands, it stays up - and because every path that hides it lives
+        // further down handleEvent, past several early returns, the user is left staring at
+        // "Breathe in" forever with the phone unusable. (Exactly what happened on
+        // 2026-08-04: the Play Store is a breathing app, installing TikTok raised the orb,
+        // the new install was blocked, and the orb was never taken down.)
+        //
+        // A block always wins over a breath. Kill it here, where every block path passes.
+        if (breathing?.isShowing == true) breathing?.hide()
         val freshAppBlock = !appBlockActive          // ADD
         appBlockActive = true
         if (freshAppBlock) BlockEventLog.recordApp(this, blockedPackage, reason)   // ADD
@@ -1549,10 +1576,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                    BypassWatch.record(this, BypassWatch.Reason.SAFESEARCH_OFF)
                    getString(R.string.br_safesearch_off)
                }
-               // Image results are the surface this is really about. Strict and above only:
-               // in Relaxed a picture search is not by itself evidence of anything.
-               !Mode.isRelaxed(this) && SafeSearch.isSearchHost(host) &&
-                   SafeSearch.isImageSearch(url) -> getString(R.string.br_image_search)
                // The hand-maintained ban list (reddit + its frontends/mirrors, imageboards,
                // borderline shops): banned in EVERY mode.
                host != null && AlwaysBlocklist.isBlocked(host) -> getString(R.string.br_blocked_site, host)
@@ -1774,6 +1797,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         try {
             for (window in windows) {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                if (!isReallyOnScreen(window)) continue
                 val pkg = window.root?.packageName?.toString() ?: continue
                 if (isNoise(pkg)) continue
                 if (pkg !in out) out.add(pkg)
@@ -1785,9 +1809,40 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return out
     }
 
-    /** The first VISIBLE app that should be covered, and why. Focused or not. */
+    /**
+     * Is this window ACTUALLY in front of the user right now?
+     *
+     * ⚠️ 2026-08-04 - THIS TEST IS THE FIX FOR A BAD REGRESSION, DO NOT LOOSEN IT AGAIN.
+     * When PiP and split-screen support went in, this filter was dropped altogether on the
+     * theory that "every application window is on screen". It is not: the window list keeps
+     * entries for apps that are merely still alive, so a blocked app the user had opened
+     * once made blockedVisibleApp() return it forever. The recheck loop then held the cover
+     * up over EVERYTHING - including this app's own settings - reporting a block for an app
+     * that was nowhere on screen. It bricked the phone.
+     *
+     * So: focused or active as the base (which is what "in front" means for an ordinary
+     * app), plus picture-in-picture explicitly, because a PiP window is deliberately never
+     * either of those and is the whole reason this function exists.
+     */
+    private fun isReallyOnScreen(window: AccessibilityWindowInfo): Boolean {
+        if (window.isActive || window.isFocused) return true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // A PiP window is on screen by definition and never focused.
+            if (runCatching { window.isInPictureInPictureMode }.getOrDefault(false)) return true
+        }
+        return false
+    }
+
+    /**
+     * The first app that is ON SCREEN and should be covered, and why.
+     *
+     * NEVER returns this app. Our own UI is the only place the mode can be lowered or the
+     * setup finished, so a cover over it is a cover nobody can get out from under. isNoise
+     * already excludes us; this is the second belt.
+     */
     private fun blockedVisibleApp(): Pair<String, String>? {
         for (pkg in visibleAppPackages()) {
+            if (pkg == packageName) continue
             appBlockReason(pkg)?.let { return pkg to it }
         }
         return null

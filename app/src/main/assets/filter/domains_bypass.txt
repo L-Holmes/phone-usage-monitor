@@ -1,64 +1,33 @@
-# BYPASS SERVICES - blocked in every mode above Off.
+# FILTER-CIRCUMVENTION SERVICES - blocked in every mode above Off.
 #
-# None of these hosts adult content. They RE-SERVE somebody else's page from their own
-# domain, which is precisely what defeats a host-based block: the address bar says
-# "translate.google.com" and the screen says whatever was blocked. Every published guide
-# on getting round a content filter names these in the first three steps.
+# Sites whose ONLY purpose is to fetch a blocked page and re-serve it from their own domain.
+# They advertise themselves that way. That is the entire test for being on this list.
 #
-# Four families:
-#   • TRANSLATION PROXIES - paste the URL, read the page through the translator.
-#   • CACHES AND ARCHIVES - the page as it was, served from an archive's domain.
-#   • READER / TEXT EXTRACTORS - strip a page to its text and re-host it.
-#   • WEB PROXIES AND "UNBLOCKERS" - openly advertised as filter circumvention.
+# ── WHAT WAS REMOVED, AND WHY IT IS NOT COMING BACK  (2026-08-04) ────────────────────
+# This file was originally three times longer. It carried Google Translate, DeepL,
+# translate.com, archive.org, the Wayback Machine, archive.today, 12ft.io, printfriendly
+# and the rest - on the reasoning that all of them CAN be used to read a blocked page.
 #
-# URL SHORTENERS ARE HANDLED DIFFERENTLY - see the note at the bottom.
+# They can. So can any text box. Every one of those is a legitimate tool with an ordinary
+# daily use: translating a page, reading a source, checking what a site said last year.
+# The Internet Archive is a library. Blocking a library because somebody could misuse it is
+# exactly the over-blocking this app is supposed to be better than - and the reason it was
+# wrong here in particular is that WEB BROWSING IS MONITORED LIGHTLY ON PURPOSE. The
+# Firefox add-on reads the images on whatever page ends up on screen, proxy or not, and the
+# word scorer reads the text. A proxied porn page is still a porn page to both of them.
+#
+# What survives is the set with no second use: the "unblock any site" proxies. If you find
+# yourself adding a general-purpose tool to this file, that is the signal to stop.
+#
+# URL SHORTENERS are deliberately absent for the same reason - see the note at the bottom.
 #
 # A bare domain also covers its subdomains. One host per line, "#" = comment.
 # LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
-
-# ── Translation proxies ──────────────────────────────────────────────────────────────
-# translate.google.com is the oldest trick in the book and still works. It is deliberately
-# NOT in domains_trusted.txt for this reason.
-translate.google.com
-translate.googleusercontent.com
-translate.yandex.com
-translate.yandex.ru
-translatetheweb.com
-microsofttranslator.com
-deepl.com
-translate.com
-tradukka.com
-onlinedoctranslator.com
-
-# ── Caches and archives ──────────────────────────────────────────────────────────────
-webcache.googleusercontent.com
-cachedview.nl
-archive.org
-web.archive.org
-archive.ph
-archive.today
-archive.is
-archive.li
-archive.vn
-archive.fo
-archive.md
-timetravel.mementoweb.org
-cachedpages.com
-
-# ── Reader / text extractors ─────────────────────────────────────────────────────────
-12ft.io
-r.jina.ai
-txtify.it
-outline.com
-printfriendly.com
-freedium.cfd
-removepaywall.com
 
 # ── Web proxies and openly-advertised "unblockers" ───────────────────────────────────
 croxyproxy.com
 croxyproxy.rocks
 proxysite.com
-hide.me/proxy
 kproxy.com
 4everproxy.com
 zalmos.com
@@ -67,31 +36,26 @@ unblockit.dev
 unblocked.name
 proxyium.com
 plainproxies.com
-whoer.net
 hidester.com
 proxfree.com
 filterbypass.me
 freeproxy.io
-vpnbook.com
 site2unblock.com
 unblockyoutube.video
-tunnelbear.com/proxy
-phantom.me
 holaproxy.com
 hola.org
 browsec.com
-zenmate.com/proxy
 veepn.com
 urban-vpn.com
 setupvpn.com
+vpnbook.com
 
 # ── NOTE ON URL SHORTENERS ───────────────────────────────────────────────────────────
 # bit.ly, tinyurl and friends hide the destination from a host check, and the community
-# lists carry ~10,000 of them. They are NOT listed here on purpose: unlike everything
-# above, a shortener has an enormous legitimate life (every newsletter, every QR code,
-# every "share" button), so blocking them outright would break far more than it protects.
+# lists carry ~10,000 of them. They are NOT listed here on purpose: a shortener has an
+# enormous legitimate life (every newsletter, every QR code, every share button), so
+# blocking them outright would break far more than it protects.
 #
-# The right handling is behavioural, not a list: treat a known shortener host as an
-# UNKNOWN DESTINATION and re-check the moment the redirect lands. That belongs in the
-# service, not in this file. Until it exists, the redirect target is checked normally by
-# the address-bar read, which catches most of it a beat late.
+# The right handling is behavioural, not a list: treat a known shortener as an UNKNOWN
+# DESTINATION and re-check when the redirect lands. Until that exists, the redirect target
+# is checked normally by the address-bar read, which catches it a beat late.

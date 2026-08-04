@@ -174,6 +174,7 @@
     <string name="mode_superhardcore_name">Super rigida</string>
     <string name="mode_on_toast">Modalità %1$s attivata</string>
     <string name="mode_ratchet_toast">Off non esiste più - hai scelto Rigida una volta. Rilassata è il massimo di permissività ora.</string>
+    <string name="mode_off_gone">Off non è più nell\'elenco. A un certo punto hai scelto Rigida, e da allora disattivare del tutto il monitoraggio ha smesso di essere un\'opzione. Rilassata è l\'impostazione più permissiva da qui in avanti: blocca comunque i siti per adulti, l\'elenco di host vietati e tutti i motori di ricerca tranne Google.</string>
     <string name="mode_off_toast">Monitoraggio disattivato: niente è controllato o bloccato</string>
     <string name="mode_needs_lock_toast">La modalità Super rigida richiede prima il blocco della disinstallazione</string>
     <string name="mode_reverted_toast">Il monitoraggio richiede tutta la configurazione: la modalità è tornata su %1$s.</string>
@@ -854,7 +855,6 @@
     <string name="br_adult_site">Sito per adulti (lista di blocco): %1$s</string>
     <string name="br_search_engine">Motore di ricerca bloccato: %1$s</string>
     <string name="br_safesearch_off">SafeSearch è disattivato.\nRiattivalo nel tuo account Google e questa pagina si riaprirà.</string>
-    <string name="br_image_search">La ricerca immagini non è disponibile in questa modalità.</string>
     <string name="br_escape_route">%1$s non è disponibile in questa modalità: è un posto dove le app possono nascondersi dal monitoraggio.</string>
     <string name="br_blocked_site">Sito bloccato: %1$s</string>
     <string name="br_blocked_category_app">%1$s è bloccata.\n%2$s</string>

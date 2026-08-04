@@ -336,8 +336,11 @@ object InAppBrowser {
  *
  * We cannot set the setting for them - it lives in a Google account, and DNS-level
  * forcing (forcesafesearch.google.com) is not available to an app that does no DNS. What we
- * CAN do is refuse the page when the URL says SafeSearch is off, which is what the "off"
- * state actually looks like in practice: Google carries the choice in the query string.
+ * CAN do is refuse the page when the URL EXPLICITLY says SafeSearch is off.
+ *
+ * That is the whole scope, deliberately. Ordinary searching is untouched, image search is
+ * untouched - this fires only on "&safe=off", where somebody has gone and turned the safety
+ * filter off. There is no innocent route to that string.
  *
  * Treated as a bypass attempt rather than an ordinary block, because there is no innocent
  * way to arrive at `&safe=off`.
@@ -350,9 +353,6 @@ object SafeSearch {
     /** The query strings that mean "SafeSearch is off". */
     private val OFF_MARKERS = listOf("safe=off", "safe=images", "safeui=off", "safe=0")
 
-    /** The image-search markers. Image results are the surface this is really about. */
-    private val IMAGE_MARKERS = listOf("tbm=isch", "/imghp", "udm=2")
-
     fun isSearchHost(host: String?): Boolean {
         val h = host?.lowercase() ?: return false
         return ENGINES.any { h.contains(it) }
@@ -364,11 +364,10 @@ object SafeSearch {
         return OFF_MARKERS.any { it in u }
     }
 
-    /** True when this is an image-search URL. Blocked in Strict+ only - see the caller. */
-    fun isImageSearch(url: String?): Boolean {
-        val u = url?.lowercase() ?: return false
-        return IMAGE_MARKERS.any { it in u }
-    }
+    // REMOVED 2026-08-04: image-search blocking. Google Images is an ordinary tool and
+    // blocking it is over-blocking, full stop. Web browsing is monitored LIGHTLY here -
+    // the Firefox add-on is what covers images, and it covers them properly by looking at
+    // the pictures rather than by refusing the page. Do not add this back.
 }
 
 
