@@ -173,9 +173,10 @@
     <string name="mode_strict_name">Rigida</string>
     <string name="mode_superhardcore_name">Super rigida</string>
     <string name="mode_on_toast">Modalità %1$s attivata</string>
+    <string name="mode_ratchet_toast">Off non esiste più - hai scelto Rigida una volta. Rilassata è il massimo di permissività ora.</string>
     <string name="mode_off_toast">Monitoraggio disattivato: niente è controllato o bloccato</string>
     <string name="mode_needs_lock_toast">La modalità Super rigida richiede prima il blocco della disinstallazione</string>
-    <string name="mode_reverted_toast">Il monitoraggio richiede entrambe le autorizzazioni: la modalità è tornata su Off.</string>
+    <string name="mode_reverted_toast">Il monitoraggio richiede tutta la configurazione: la modalità è tornata su %1$s.</string>
 
     <string name="adult_section_looks">Cosa cerca il filtro</string>
     <string name="adult_intro">Per impostazione predefinita il filtro tratta allo stesso modo le immagini sessualizzate di donne e di uomini. Se una delle due semplicemente non è una tentazione per te, puoi ridurla — così puoi cercare costumi o intimo senza combattere.\n\nQuesto ammorbidisce solo il lato ALLUSIVO. I contenuti espliciti e i siti per adulti noti restano bloccati comunque, qualunque cosa dicano questi interruttori.</string>
@@ -209,6 +210,8 @@
     <string name="always_on_11">Non c\'è nessun pulsante \"guardo comunque\". Non è su nessuna schermata, di proposito - un pulsante così è solo una porta con una maniglia, e prima o poi l\'impulso prova la maniglia.</string>
     <string name="always_on_12">C\'È ancora, ma ti viene offerto solo se punti al pulsante di disinstallazione, al blocco amministratore del dispositivo, all\'interruttore del monitoraggio, o provi a uscire da una modalità rigida bloccata. Punta all\'opzione distruttiva e ti verrà offerta invece quella onesta - un\'attesa, un impegno scritto, una finestra fissa, e tutto resta in piedi dopo.</string>
     <string name="always_on_13">L\'app non preme mai Indietro al posto tuo. Il blocco copre lo schermo e ti offre la via d\'uscita; non naviga mai nel tuo browser alle tue spalle.</string>
+    <string name="always_on_14">Un blocco basato sul punteggio delle parole mostra come ci è arrivato: la schermata di blocco elenca le parole che hanno davvero pesato, così vedi il perché - e puoi dirci quando abbiamo sbagliato.</string>
+    <string name="always_on_15">In Firefox, con l\'estensione immagini installata, una pagina ha bisogno di un punteggio PIÙ ALTO per essere bloccata. L\'estensione sta già leggendo quella pagina dall\'interno, quindi questo lato può permettersi di essere meno nervoso.</string>
 
     <string name="manage_title">Gestisci i blocchi</string>
     <string name="manage_blocked_apps">App bloccate</string>
@@ -717,44 +720,39 @@
 
     <string name="temptspec_scrolling_title">Scrolling infinito / Brain rot  🤳</string>
     <string name="temptspec_scrolling_subtitle">Spezza il ciclo del feed infinito.</string>
-    <string name="temptspec_scrolling_insteadof">Metti il telefono in un\'altra stanza e fai per dieci minuti l\'unica cosa che stavi evitando.</string>
     <string name="temptspec_scrolling_blocks">reels, shorts e feed infiniti</string>
     <string name="temptspec_binge_title">Binge watching  📺</string>
     <string name="temptspec_binge_subtitle">Sfuggi ai loop di evasione con la visione infinita.</string>
-    <string name="temptspec_binge_insteadof">Decidi l\'UNICO episodio prima di iniziare, e imposta un timer per quando finisce.</string>
     <string name="temptspec_comparison_title">Confronto sociale / Social media  👥</string>
     <string name="temptspec_comparison_subtitle">Spezza il ciclo di confronto e ricerca di approvazione.</string>
-    <string name="temptspec_comparison_insteadof">Scrivi a una persona a cui tieni davvero, invece di guardarne cento a cui non tieni.</string>
     <string name="temptspec_checking_title">Controllo del telefono  📱</string>
     <string name="temptspec_checking_subtitle">Ferma l\'abitudine del controllo automatico.</string>
-    <string name="temptspec_checking_insteadof">Lascia il telefono a faccia in giù in un\'altra stanza per la prossima ora.</string>
     <string name="temptspec_news_title">Cicli di notizie / Ansia esistenziale  📰</string>
     <string name="temptspec_news_subtitle">Allontanati dalla preoccupazione infinita.</string>
-    <string name="temptspec_news_insteadof">Scegli un momento domani per leggere le notizie una volta, e non agire su nient\'altro fino ad allora.</string>
     <string name="temptspec_gaming_title">Gaming e cicli di ricompensa  🎮</string>
     <string name="temptspec_gaming_subtitle">Comprendi i cicli di ricompensa digitali.</string>
-    <string name="temptspec_gaming_insteadof">Dai un nome a ciò che eviti giocando, e fanne cinque minuti.</string>
     <string name="temptspec_shopping_title">Acquisti d\'impulso  💳</string>
     <string name="temptspec_shopping_subtitle">Spezza il ciclo del comprare per un\'emozione.</string>
-    <string name="temptspec_shopping_insteadof">Mettilo nel carrello e lascialo lì per 48 ore. Gran parte muore da sola.</string>
 
     <string name="temp_managing">Cosa stai gestendo?</string>
     <string name="temp_adult_title">Contenuti per adulti 🔞</string>
     <string name="temp_adult_sub">Strumenti per il momento, e per il lungo periodo.</string>
-    <string name="temp_sound_like">Ti ci ritrovi?</string>
-    <string name="temp_stats">%1$d superate  ·  %2$d ricadut(a/e) questa settimana</string>
+    <string name="temp_stats">%1$d superate</string>
     <string name="temp_pull_title">Sento l\'impulso adesso</string>
     <string name="temp_pull_sub">resisti - passa</string>
-    <string name="temp_slipped_title">Sono ricaduto</string>
-    <string name="temp_slipped_sub">registralo, senza vergogna</string>
-    <string name="temp_try_instead">Prova invece:  %1$s</string>
+    <string name="temp_examples_info">Come si presenta</string>
+    <string name="temp_block_info">Esattamente cosa viene bloccato</string>
+    <string name="temp_info_sites">Siti: %1$s</string>
+    <string name="temp_info_apps_blocked">App vietate del tutto: %1$s</string>
+    <string name="temp_info_apps_grey">App limitate a %2$d min/ora: %1$s</string>
     <string name="temp_lockdown">oppure blocca tutto per 30 minuti</string>
     <string name="temp_lockdown_toast">In isolamento per 30 min. L\'essenziale funziona ancora.</string>
     <string name="temp_block_on">●  Sta bloccando ciò che lo alimenta</string>
     <string name="temp_block_off">○  Blocca ciò che lo alimenta</string>
     <string name="temp_block_named_on">●  Sta bloccando %1$s</string>
     <string name="temp_block_named_off">○  Blocca %1$s</string>
-    <string name="temp_block_applimit"> e limita %1$d app a %2$d min/ora</string>
+    <string name="temp_block_applimit">" e limita %1$d app a %2$d min/ora"</string>
+    <string name="temp_block_appban">" e vieta %1$d app"</string>
     <string name="temp_block_sub_on">Sta bloccando %1$d sit(o/i)%2$s.  Tocca per disattivare.</string>
     <string name="temp_block_sub_off">Blocca %1$d sit(o/i)%2$s.  Tocca per attivare.</string>
     <string name="temp_ride_title">Resisti</string>
@@ -767,9 +765,16 @@
     <string name="temp_ridden_out">%1$d superate</string>
     <string name="temp_put_down">Posa il telefono</string>
     <string name="temp_put_down_sub">chiude l\'app</string>
-    <string name="temp_slip_title">Registrato.</string>
-    <string name="temp_slip_body">Questa è onestà, e vale più di una serie pulita per cui hai dovuto mentire.\n\n%1$d questa settimana. Il numero non è un verdetto - sono solo dati. Guarda in che direzione si muove.</string>
-    <string name="temp_slip_next">La prossima volta, prova:  %1$s</string>
+    <string name="checking_master_on">●  Misure anti-controllo attive</string>
+    <string name="checking_master_off">○  Attiva le misure anti-controllo</string>
+    <string name="checking_master_sub">Qui non c\'è nulla da bloccare - l\'impulso è il telefono stesso. Queste aggiungono attrito.</string>
+    <string name="checking_level_relaxed">Rilassata</string>
+    <string name="checking_level_relaxed_sub">Solo un avviso quando tocchi molto lo schermo (%1$d+ tocchi al minuto). Non viene mai bloccato nulla.</string>
+    <string name="checking_level_hardcore">Hardcore</string>
+    <string name="checking_level_hardcore_sub">Attrito vero: brevi pause quando il controllo ti sfugge di mano.</string>
+    <string name="checking_opt_unlocks">Pausa dopo troppi sblocchi - oltre %1$d sblocchi in un\'ora e ogni sblocco mette in pausa il telefono per %2$ds</string>
+    <string name="checking_opt_clicks">Pausa sui tocchi rapidi - oltre %1$d tocchi al minuto mette in pausa per %2$ds</string>
+    <string name="checking_popup">Volume di clic elevato (%1$d clic al minuto)</string>
 
     <string name="home_banner_blocking_off">⚠  Il blocco è disattivo - manca ancora una rapida configurazione. Tocca per completarla.</string>
     <string name="status_header">STATO</string>
@@ -835,18 +840,25 @@
     <string name="br_waiting">Aspetta che passi - stai lontano dalle altre app per ora</string>
     <string name="br_blocked_app">App bloccata</string>
     <string name="br_blocked_app_pkg">App bloccata: %1$s</string>
-    <string name="br_grey_limit">Questi sono i tuoi %1$d min per quest\'ora - si riaprirà a breve</string>
+    <string name="br_grey_limit">%1$s ha un limite di tempo.\nQuesti sono i tuoi %2$d min per quest\'ora - si riaprirà a breve.</string>
     <string name="br_grey_limit_host">Questi sono i tuoi %1$d min per quest\'ora - %2$s si riaprirà a breve</string>
     <string name="br_night_lying_dark">Non mentre sei sdraiato al buio.\nMettiti seduto, o accendi una luce.</string>
     <string name="br_night_lying">Non mentre sei sdraiato.\nMettiti seduto e si riaprirà.</string>
+    <string name="br_checking_unlocks">Sblocco numero %1$d in quest\'ora.\nUna breve pausa - respira, poi decidi se ti serve davvero il telefono.</string>
+    <string name="br_checking_clicks">Tocchi a raffica (%1$d al minuto).\nUna breve pausa - respira.</string>
     <string name="br_night_dark">Non al buio.\nAccendi una luce e si riaprirà.</string>
     <string name="br_room">Stanza protetta: sei in %1$s.\nIn modalità rigida qui si aprono solo chiamate, messaggi e altri elementi essenziali.\nEsci da %1$s e tutto si sblocca.</string>
     <string name="br_bluetooth_off">Il Bluetooth è spento.\nI tuoi sensori di stanza ne hanno bisogno per funzionare, quindi questa app resta chiusa finché non lo riattivi.\nAccendi il Bluetooth e l\'app si riaprirà.</string>
     <string name="br_adult_site">Sito per adulti (lista di blocco): %1$s</string>
     <string name="br_search_engine">Motore di ricerca bloccato: %1$s</string>
     <string name="br_blocked_site">Sito bloccato: %1$s</string>
-    <string name="br_blocked_term">Termine bloccato: %1$s</string>
     <string name="br_extension_page">La pagina dell\'estensione monitor immagini è bloccata: l\'estensione resta attiva.</string>
+    <string name="br_setup_incomplete">La modalità rigida non è ancora configurata.\n\n%1$s\n\nApri Web Traffic Monitor e completa la configurazione: poi si sblocca tutto.</string>
+    <string name="br_setup_missing_overlay">Ancora da fare: consenti all\'app di apparire sopra le altre app.</string>
+    <string name="br_setup_missing_firefox">Ancora da fare: installa Firefox.</string>
+    <string name="br_setup_missing_extension">Ancora da fare: aggiungi l\'estensione monitor immagini a Firefox.</string>
+    <string name="block_contributors_header">COSA HA PUNTEGGIATO</string>
+    <string name="block_contributor_line">\"%1$s\" - %2$d×, %3$d%% del punteggio</string>
     <string name="br_blocked_keyword">Parola chiave bloccata: \"%1$s\"</string>
     <string name="br_back_same">È ancora LA STESSA pagina bloccata. Premi di nuovo Indietro, o vai alla Home.</string>
     <string name="br_back_diff">È una pagina DIVERSA - ma è bloccata anche questa. Premi di nuovo Indietro, o vai alla Home.</string>
@@ -869,6 +881,7 @@
     <string-array name="mode_off_rules">
         <item>Il monitoraggio è OFF. Niente viene analizzato e niente viene bloccato - nessuna delle regole \"Sempre attive\" viene applicata in questa modalità.</item>
         <item>È la modalità iniziale su un\'installazione nuova.</item>
+        <item>PORTA A SENSO UNICO: una volta entrato in Rigida anche solo una volta, Off sparisce per sempre. Rilassata diventa la modalità più permissiva raggiungibile.</item>
         <item>La configurazione che serve al blocco (monitoraggio delle pagine, schermata di blocco, Firefox e la sua estensione) è FACOLTATIVA mentre sei qui - l\'app non la richiede mai.</item>
         <item>Scegli QUALSIASI altra modalità ed entrambe le autorizzazioni diventano obbligatorie: l\'app ti guida ad attivarle e non lascia questa schermata finché non lo sono.</item>
         <item>La pagina Produttività e le sue statistiche di tempo schermo continuano a funzionare comunque.</item>
@@ -878,14 +891,15 @@
         <item>Scala di grigi: disattivata. Lo schermo resta a colori.</item>
         <item>Essere sdraiato o al buio non cambia nulla. Ogni app si apre comunque.</item>
         <item>Gli interruttori \"per chi è il filtro\" (Contenuti per adulti → Impostazioni) si possono modificare qui (e in Off). In qualsiasi modalità più rigida sono forzati al massimo.</item>
-        <item>Tutto in \"Sempre attive\" qui sopra vale ancora - il blocco non si ferma in Rilassata.</item>
-        <item>Puoi uscire da questa modalità quando vuoi, a meno che sia attivo il blocco rigido di 7 giorni.</item>
+        <item>Tutto in \"Sempre attive\" qui sopra vale ancora - il blocco non si ferma in Rilassata. Siti per adulti noti, reddit (e ogni suo mirror/frontend), imageboard, una lista curata di siti borderline e motori di ricerca diversi da Google restano bloccati anche qui.</item>
+        <item>Puoi uscire da questa modalità quando vuoi, a meno che sia attivo il blocco rigido di 7 giorni - ma se sei mai stato in Rigida, Off non è più tra le scelte.</item>
     </string-array>
     <string-array name="mode_strict_rules">
         <item>Pausa di respiro: la PRIMA volta che apri un\'app monitorata ogni giorno. Riaprila più tardi lo stesso giorno e va dritta - così codici 2FA e controlli rapidi non vengono interrotti.</item>
         <item>Il pass giornaliero si ripristina a mezzanotte.</item>
-        <item>GUARDIA NOTTURNA: mentre sei SDRAIATO, o la stanza è davvero BUIA, si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, contatti, fotocamera, mappe. Tutto il resto, WhatsApp compreso, è bloccato finché non ti siedi o accendi una luce.</item>
-        <item>È tutto qui il punto: il telefono a letto, al buio, è dove va storto.</item>
+        <item>GUARDIA NOTTURNA: nessuna in Rigida. Essere sdraiato o al buio non blocca mai nulla qui - succede solo in Super rigida.</item>
+        <item>PORTA A SENSO UNICO: scegliere Rigida una volta rimuove Off per sempre da questa installazione. Potrai tornare a Rilassata - mai a Off.</item>
+        <item>LA CONFIGURAZIONE VIENE IMPOSTA, non solo richiesta: finché manca qualcosa - il permesso \"mostra sopra le altre app\", Firefox o la sua estensione - tutto tranne gli elementi essenziali viene coperto da una schermata che indica il passo che ti resta. Chiamate, messaggi, sveglie, mappe, Impostazioni, Firefox e questa app restano aperti, così puoi sempre finire (o tornare a Rilassata).</item>
         <item>Gli interruttori \"per chi è il filtro\" sono BLOCCATI al massimo. Puoi cambiarli solo in Rilassata.</item>
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
@@ -894,9 +908,10 @@
     <string-array name="mode_superhardcore_rules">
         <item>Pausa di respiro: OGNI singola volta che apri un\'app monitorata. Non c\'è nessun pass giornaliero.</item>
         <item>Attenzione: questo TI interromperà quando salti a un\'app di autenticazione per un codice 2FA. È il compromesso che stai scegliendo.</item>
-        <item>GUARDIA NOTTURNA: mentre sei SDRAIATO, o la stanza è davvero BUIA, si aprono solo gli elementi essenziali - stessi trigger di Rigida.</item>
+        <item>GUARDIA NOTTURNA - solo in questa modalità: mentre sei SDRAIATO, o la stanza è davvero al buio (luci spente, tende tirate), si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, contatti, fotocamera, mappe. Tutto il resto, WhatsApp compreso, è bloccato finché non ti siedi o accendi una luce.</item>
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato, come in Rigida.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
+        <item>La configurazione viene imposta fuori da questa app esattamente come in Rigida: se manca qualcosa, si aprono solo gli elementi essenziali.</item>
         <item>Questa è Rigida senza il pass giornaliero.</item>
     </string-array>
     <string-array name="feel_neg"><item>Rimpianto</item><item>Intorpidito</item><item>Vuoto</item><item>In colpa</item></string-array>

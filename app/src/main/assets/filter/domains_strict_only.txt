@@ -1,47 +1,7 @@
-# Hand-maintained hosts blocked when NOT in Relaxed mode (i.e. Strict / Super hardcore).
+# Hand-maintained hosts blocked ONLY in Strict / Super hardcore (allowed in Relaxed).
 # One host per line. "#" starts a comment. A bare domain also covers its subdomains.
 # LANGUAGE-NEUTRAL. Loaded by FilterData → StrictOnlyBlocklist.
-
-# ── Reddit frontends / mirrors / viewers ──────────────────────────────────────
-photon-reddit.com
-lite.redgifs.com
-peekstr.com
-redlite.app
-scrolller.com
-rdx.overdevs.com
-viewri.com
-troddit.com
-ghostddit.pages.dev
-search.pullpush.io
-reditr.com
-reddit-viewer.com
-infini.wtf
-inini.wtf
-redditp.com
-reddit-stream.com
-reveddit.com
-rosint.dev
-subranking.com
-veo.world
-
-# ── Reddit itself (Strict+ only; Relaxed keeps it greylisted/limited) ──────────
-reddit.com
-redd.it
-
-# ── Borderline shopping / fashion (Strict+ only) ──────────────────────────────
-etsy.com
-depop.com
-shein.com
-
-# ── Imageboards / "mixed" forums (hand-curated; no canonical public list) ──────
-4chan.org
-4channel.org
-8kun.top
-2ch.hk
-kohlchan.net
-endchan.org
-endchan.net
-soyjak.party
-sportschan.org
-wizchan.org
-lainchan.org
+#
+# EMPTY on purpose (2026-08-01): the whole list - reddit frontends/mirrors, reddit itself,
+# borderline shopping, imageboards - moved to domains_banned.txt, which blocks in EVERY
+# mode. The mechanism stays so a genuinely Strict-only host can be added back here later.

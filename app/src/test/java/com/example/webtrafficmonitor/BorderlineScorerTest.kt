@@ -213,4 +213,125 @@ class BorderlineScorerTest {
             assertTrue("'$it' blocks on the web, so it must block in an app", blocksInApp(it))
         }
     }
+
+    // ── Mode-gated FRAGMENTS (ModeFragments) ─────────────────────────────────────────
+    // These are blunt SUBSTRING matches, which is why they used to be a disaster: as an
+    // outright block they covered ordinary apps for saying "browser" and caught "necklace"
+    // on "lace". They are scored now, so the tests that matter are the ones below.
+
+    private val superHardcore =
+        BorderlineScorer.Settings(blockFemale = true, blockMale = true, relaxed = false, superHardcore = true)
+
+    @Test
+    fun `a soft fragment can never block on its own`() {
+        // Every one of these was an OUTRIGHT block before 2026-08-04. A substring is not
+        // evidence: "lace" is in "necklace", "haul" is in "overhaul", every UI toolkit has
+        // a "scroller". If one of these starts failing, a fragment's weight is too high.
+        listOf(
+            "handmade lace necklace",
+            "fireplace tiles",
+            "a complete overhaul of the tax system",
+            "u haul truck rental",
+            "custom scroller component react",
+            "sheer curtains for the living room",
+        ).forEach {
+            assertTrue(
+                "'$it' must NOT block on a fragment alone (scored ${scoreAsTitle(it)})",
+                !blocksAsTitle(it),
+            )
+        }
+    }
+
+    @Test
+    fun `browser is no longer a banned word at all`() {
+        // The report that started this: ordinary apps covered because the word "browser"
+        // was on screen. It is generic vocabulary and must score NOTHING.
+        assertEquals(0, scoreAsTitle("open in browser"))
+        assertEquals(0, scoreAsTitle("browser settings"))
+    }
+
+    @Test
+    fun `hard fragments still block on their own`() {
+        // The site names are unmistakable spellings; they keep CORE-tier behaviour.
+        assertTrue("scrolller must still block", blocksAsTitle("scrolller"))
+        // Reddit stays Super-hardcore-only, exactly as before.
+        assertTrue(
+            "reddit must block in super hardcore",
+            BorderlineScorer.evaluate("red dit pics", null, null, superHardcore) != null,
+        )
+        assertTrue(
+            "reddit must NOT block below super hardcore",
+            BorderlineScorer.evaluate("red dit pics", null, null) == null,
+        )
+    }
+
+    @Test
+    fun `fragments still corroborate - several weak signals do block`() {
+        // The point of scoring them rather than dropping them: one is nothing, a pile is a
+        // page. "lace" + "lingerie" + "bikini" in one title is not a hardware shop.
+        assertTrue(blocksAsTitle("lace lingerie bikini"))
+    }
+
+    @Test
+    fun `an evasion spelling is the same signal as the word, not a second one`() {
+        // "bikini" and "bik ini" share a family, so the single-word guarantee still holds
+        // across the two spellings - spacing a word out must not manufacture corroboration.
+        assertTrue(
+            "'bik ini' must not block alone (scored ${scoreAsTitle("bik ini")})",
+            !blocksAsTitle("bik ini"),
+        )
+        assertTrue(
+            "'bikini bik ini bikinis' must not block on one concept " +
+                "(scored ${scoreAsTitle("bikini bik ini bikinis")})",
+            !blocksAsTitle("bikini bik ini bikinis"),
+        )
+    }
+
+    // ── Showing the working ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `a block explains itself with the words that carried it`() {
+        val r = BorderlineScorer.evaluate("lace lingerie bikini", null, null)!!
+        assertTrue("a block must come with contributions", r.contributions.isNotEmpty())
+        // Biggest share first, and the shares add up to the score.
+        assertEquals(r.contributions.sortedByDescending { it.points }, r.contributions)
+        assertEquals(r.score, r.contributions.sumOf { it.points })
+        // The words are readable, not internal keys ("phrase:"/family prefixes stripped).
+        assertTrue(r.contributions.none { it.word.contains(':') })
+        val shown = BorderlineScorer.topContributors(r.contributions)
+        assertTrue("something must be worth showing", shown.isNotEmpty())
+        assertEquals("lingerie", shown.first().word)
+    }
+
+    @Test
+    fun `a phrase block names the phrase, not one of its words`() {
+        val r = BorderlineScorer.evaluate("try on haul", null, null)!!
+        assertTrue(
+            "expected the phrase itself in ${r.contributions.map { it.word }}",
+            r.contributions.any { it.word == "try on haul" },
+        )
+    }
+
+    // ── The bar Firefox is held to when the add-on is also watching ──────────────────
+
+    @Test
+    fun `the plugin multiplier raises the bar without moving the floor`() {
+        val m = FilterTuning.PLUGIN_COVERED_MULTIPLIER
+        assertTrue("the multiplier must actually loosen something", m > 1f)
+        // A borderline pile-up: enough for a page we are the only guard on, not enough
+        // when the add-on is reading the same page from the inside.
+        val borderline = "lace lingerie bikini"
+        assertTrue(borderline + " must block unaided", blocksAsTitle(borderline))
+        assertTrue(
+            "$borderline (scored ${scoreAsTitle(borderline)}) must pass with the add-on covering it",
+            BorderlineScorer.evaluate(borderline, null, null, BorderlineScorer.Settings.ALL_ON, m) == null,
+        )
+        // ...and it must NEVER unblock actual pornography. This is the safety property.
+        listOf("free porn videos", "blowjob compilation", "pornhub", "leaked nudes").forEach {
+            assertTrue(
+                "'$it' must still block inside a plugin-covered browser",
+                BorderlineScorer.evaluate(it, null, null, BorderlineScorer.Settings.ALL_ON, m) != null,
+            )
+        }
+    }
 }

@@ -118,7 +118,7 @@ object AppConfig {
         val greyscale: Boolean,        // let the greyscale watcher grey the screen in this mode
         /**
          * The NIGHT GUARD: block every non-essential app while the phone says you are lying
-         * down, or the room is dark. [flagLyingDown] and [lightFlagBelow] are its triggers.
+         * down, or the room is dark. [flagLyingDown] and [nightGuardLuxBelow] are its triggers.
          */
         val nightGuard: Boolean = false,
         // NOT WIRED INTO THE SCORER. flagThreshold is dev-console display only - the live
@@ -127,30 +127,37 @@ object AppConfig {
         val flagThreshold: Int,
         // These two ARE live, but only as the night-guard's triggers (see nightGuard above).
         val flagLyingDown: Boolean = false,
-        val lightFlagBelow: LightLevel = LightLevel.DARK,
+        /** Lux at or below which the guard's DARK trigger fires - null means light NEVER
+         *  trips the guard in this mode (2026-08-01: light now only blocks in Super hardcore,
+         *  and only in genuine darkness - the light trigger was too harsh everywhere else). */
+        val nightGuardLuxBelow: Float? = null,
     )
+    // The one lux level the night guard's DARK trigger uses (Super hardcore only). 15 lux is
+    // genuinely dark - lights off, curtains drawn - so an ordinary lamp-lit room never trips it.
+    const val NIGHT_GUARD_LUX = 15f
+
     val MODES: List<ModeSpec> = listOf(
         ModeSpec(id = "off", displayName = "Off",
             breathingOn = false, breathEveryOpen = false, greyscale = false,
             nightGuard = false,
-            flagThreshold = 0, flagLyingDown = false, lightFlagBelow = LightLevel.DARK),
+            flagThreshold = 0, flagLyingDown = false),
         ModeSpec(id = "relaxed", displayName = "Relaxed",
             breathingOn = false, breathEveryOpen = false, greyscale = false,
             nightGuard = false,
-            flagThreshold = 60, flagLyingDown = false, lightFlagBelow = LightLevel.DARK),
+            flagThreshold = 60, flagLyingDown = false),
         ModeSpec(id = "strict",  displayName = "Strict",
             breathingOn = true,  breathEveryOpen = false, greyscale = true,
-            nightGuard = true,
-            // DARK, not DULL: lightFlagBelow means "this band OR DARKER", so DULL was also
-            // catching an ordinary dim room. Only genuine darkness should trip Strict.
-            flagThreshold = 45, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK),
+            // NO night guard in Strict any more (2026-08-01). First the light trigger kept
+            // catching ordinary dim evening rooms (2026-07-15 DULL->DARK), then the lying-
+            // down trigger proved too harsh as well - both now live in Super hardcore only.
+            // Lying down in Strict still greys the screen (greyscale above), it just never
+            // BLOCKS.
+            nightGuard = false,
+            flagThreshold = 45, flagLyingDown = false),
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
             nightGuard = true,
-            // DARK here too (2026-07-15). This used to be DULL ("a dim room counts"), but
-            // lightFlagBelow means "this band OR DARKER", so DULL tripped the guard in an
-            // ordinary 35-lux evening room. Only genuine darkness should block, in every mode.
-            flagThreshold = 30, flagLyingDown = true,  lightFlagBelow = LightLevel.DARK),
+            flagThreshold = 30, flagLyingDown = true,  nightGuardLuxBelow = NIGHT_GUARD_LUX),
     )
 
     // === Night guard: what still opens while lying down / in the dark =================
@@ -161,16 +168,8 @@ object AppConfig {
     // Data now in assets/filter/apps_night_guard.txt (FilterData).
     val NIGHT_GUARD_ALLOWED_SUBSTRINGS: List<String> get() = FilterData.lines("apps_night_guard.txt")
 
-    /** The lux ceiling of a light band - the level is "at or below" this. */
-    fun lightBandMax(level: LightLevel): Float = when (level) {
-        LightLevel.DARK -> LIGHT_DULL_MAX        // < 20 lux
-        LightLevel.DULL -> LIGHT_NORMAL_MAX      // < 80 lux
-        LightLevel.NORMAL -> LIGHT_BRIGHT_MAX    // < 400 lux
-        LightLevel.BRIGHT -> Float.MAX_VALUE
-    }
-
-    // Hysteresis for the night guard's DARK trigger. It blocks at or below the band ceiling,
-    // but does not release until the light is comfortably past it (ceiling x this). Without
+    // Hysteresis for the night guard's DARK trigger. It blocks at or below NIGHT_GUARD_LUX,
+    // but does not release until the light is comfortably past it (threshold x this). Without
     // the gap, a reading hovering on the threshold - which is exactly what happens when the
     // cover's own glow hits the sensor - makes the block flicker on and off.
     const val NIGHT_GUARD_LIGHT_RELEASE = 1.6f
@@ -279,6 +278,12 @@ object AppConfig {
         val blockPatterns: List<String> = emptyList(),
         /** Packages the same switch drops to the GREY tier (time-limited, not banned). */
         val greyApps: List<String> = emptyList(),
+        /** Packages the same switch BANS outright (AppRules.BLOCK - for things like game
+         *  apps, where a time limit is just a shorter session, not a deterrent). */
+        val blockApps: List<String> = emptyList(),
+        /** The Phone Checking page's friction measures (see CheckingGuard) - the one
+         *  category with nothing to block, because the pull is the device itself. */
+        val checkingMeasures: Boolean = false,
         // Display text (title / subtitle / covers / insteadOf) now lives in
         // res/values/strings.xml as temptspec_<id>_* (keyed by id) so it can be translated.
         // Resolved at display time in Main.kt (temptTitle/temptSubtitle/temptCovers/temptInsteadOf).
@@ -296,36 +301,66 @@ object AppConfig {
         TemptationSpec(
             id = "binge",
             blockPatterns = listOf(
-                "netflix.com", "hulu.com", "disneyplus.com", "primevideo.com", "twitch.tv",
-                "youtube.com/feed/recommended",
+                "youtube.com", "netflix.com", "hulu.com", "disneyplus.com", "primevideo.com",
+                "twitch.tv",
             ),
-            greyApps = listOf("com.netflix.mediaclient", "tv.twitch.android.app"),
+            greyApps = listOf(
+                "com.google.android.youtube", "com.netflix.mediaclient", "tv.twitch.android.app",
+                "com.disney.disneyplus", "com.amazon.avod.thirdpartyclient",
+            ),
         ),
         TemptationSpec(
             id = "comparison",
             blockPatterns = listOf(
-                "instagram.com", "facebook.com", "x.com", "twitter.com", "linkedin.com/feed",
+                "instagram.com", "facebook.com", "x.com", "twitter.com", "tiktok.com",
+                "snapchat.com", "pinterest.com", "tumblr.com", "threads.net", "linkedin.com/feed",
             ),
             greyApps = listOf(
                 "com.instagram.android", "com.instagram.lite", "com.facebook.katana",
                 "com.facebook.lite", "com.twitter.android", "com.pinterest",
+                "com.snapchat.android", "com.tumblr",
             ),
         ),
         TemptationSpec(
             id = "checking",
             // Nothing to block: the pull here is the device itself, not a site. The page
-            // offers the 30-minute lockdown instead.
+            // offers the CheckingGuard friction measures (and the 30-minute lockdown) instead.
+            checkingMeasures = true,
         ),
         TemptationSpec(
             id = "news",
             blockPatterns = listOf(
                 "news.google.com", "cnn.com", "foxnews.com", "bbc.co.uk/news",
                 "theguardian.com", "dailymail.co.uk", "reddit.com/r/worldnews",
+                "reuters.com", "apnews.com", "news.sky.com", "nytimes.com",
+                "washingtonpost.com", "independent.co.uk", "telegraph.co.uk", "aljazeera.com",
+                "news.yahoo.com",
+            ),
+            // News APPS are banned outright, not time-limited - five minutes of doomscroll
+            // is still a doomscroll. (Google's Discover feed itself lives inside the Google
+            // app / launcher and can't be blocked without killing search - news.google.com
+            // and the Google News app above are as close as we can get.)
+            blockApps = listOf(
+                "com.google.android.apps.magazines",     // Google News
+                "bbc.mobile.news.ww", "com.cnn.mobile.android.phone",
+                "com.bskyb.skynews.android", "com.dailymail.online", "com.guardian",
+                "com.reuters.rna", "com.foxnews.android",
             ),
         ),
         TemptationSpec(
             id = "gaming",
             blockPatterns = listOf("poki.com", "crazygames.com", "miniclip.com", "coolmathgames.com"),
+            // The common mobile games, banned outright while the switch is on. Grow freely -
+            // a package that isn't installed is just never matched.
+            blockApps = listOf(
+                "com.king.candycrushsaga", "com.king.candycrushsodasaga",
+                "com.supercell.clashofclans", "com.supercell.clashroyale", "com.supercell.brawlstars",
+                "com.roblox.client", "com.mojang.minecraftpe", "com.kiloo.subwaysurf",
+                "com.tencent.ig", "com.activision.callofduty.shooter", "com.epicgames.fortnite",
+                "com.dts.freefireth", "com.mihoyo.genshinimpact", "com.innersloth.spacemafia",
+                "com.moonactive.coinmaster", "com.scopely.monopolygo", "com.dreamgames.royalmatch",
+                "com.miniclip.eightballpool",
+            ),
         ),
         TemptationSpec(
             id = "shopping",
@@ -438,9 +473,15 @@ object AppConfig {
         // whole screen is blocked. Dump: title "History"; content "History / Recently
         // closed tabs / N tabs / No history here". ("history" alone as a title keyword
         // is safe: these guards only run on Firefox's own non-web screens.)
+        //
+        // "recently closed tabs" is deliberately NOT a content keyword, even though it is
+        // on this screen: it is ALSO an item in the tab switcher's overflow menu, and the
+        // tab switcher must stay reachable (see the note in evaluateBlock - it is the only
+        // way to close a bad tab). The title and "no history here" identify this screen
+        // without reaching into the tab tray.
         Triple("History screen",
             listOf("history"),
-            listOf("recently closed tabs", "no history here")),
+            listOf("no history here")),
     )
 
     val SCREEN_GUARDS: List<ScreenGuard> = mutableListOf<ScreenGuard>().apply {
@@ -454,6 +495,17 @@ object AppConfig {
             }
         }
     }
+
+    // ─── The image add-on's OWN page (its off-switch) ──────────────────────────────
+    // Lives here rather than in the service, because this file is the one place page-text
+    // rules are edited. Two ways in, so both are matched:
+    //   • AMO serves the add-on's page under a locale segment - matched on the URL slug
+    //     (BrowserSetup.EXTENSION_SLUG) or on the add-on's name on addons.mozilla.org;
+    //   • Firefox's own add-on manager shows the same switches with no web URL at all -
+    //     matched on the add-on's NAME plus one of the switches below.
+    // Dump that produced these (2026-08-04, Firefox stable): "Distracting Image Monitor /
+    // Enabled / Run in private browsing / Details / Permissions / Remove / Report".
+    val EXTENSION_MANAGER_KEYWORDS: List<String> = listOf("run in private browsing", "remove")
 
     // (2) & (3) Settings pages matched by text. A page matches when EVERY string in
     // `mustContain` is present on screen (case-insensitive substring). Strings copied
@@ -475,6 +527,86 @@ object AppConfig {
     // is currently on (so they can't disable it, but can never lock themselves out of
     // enabling it). "correction" + "yscale" match both Colour/Color and Grey/Grayscale.
     val COLOR_CORRECTION_PAGE = PageMatch("Colour correction", listOf("correction", "yscale"))
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    //  (4) THE CATALOGUE OF WATCHED SCREENS  —  for Developer tools → Word filter
+    // ═══════════════════════════════════════════════════════════════════════════════
+    //  Every SPECIFIC screen the monitor recognises by its text, described in one place so
+    //  the dev console can list them. Built FROM the rule data above wherever possible, so
+    //  editing a keyword list updates the page too - the moment this is retyped by hand it
+    //  starts lying.
+    //
+    //  Two different things happen to a matched screen, and the difference matters:
+    //    • COVER  - the block overlay goes over it. Used inside apps we don't control.
+    //    • BOUNCE - we send the user to the home screen instead. Used for Settings pages,
+    //               where a cover could be dismissed by the page underneath carrying on.
+    // ═══════════════════════════════════════════════════════════════════════════════
+    enum class GuardAction { COVER, BOUNCE }
+
+    data class GuardedScreen(
+        val name: String,
+        /** The app it lives in, in plain words. */
+        val where: String,
+        /** When the guard is armed - the mode, or the setting it depends on. */
+        val whenArmed: String,
+        val action: GuardAction,
+        /** Why this screen in particular. One line. */
+        val why: String,
+        /** The exact text we match on, for when an OS update changes the wording. */
+        val matches: List<String>,
+    )
+
+    val GUARDED_SCREENS: List<GuardedScreen> = mutableListOf<GuardedScreen>().apply {
+        add(GuardedScreen(
+            "The image add-on's own page", "Firefox",
+            "Every mode above Off, once you've confirmed the add-on is installed",
+            GuardAction.COVER,
+            "It carries the Remove and Disable switches. A guard whose off-switch is one " +
+                "tap away is not a guard.",
+            listOf(
+                "URL contains \"${BrowserSetup.EXTENSION_SLUG}\"",
+                "or the screen says \"${BrowserSetup.EXTENSION_NAME}\" AND one of:",
+            ) + EXTENSION_MANAGER_KEYWORDS.map { "      \"$it\"" },
+        ))
+        add(GuardedScreen(
+            "Stealth / privacy settings", "Firefox Focus",
+            "Every mode above Off",
+            GuardAction.COVER,
+            "Focus's stealth option blocks screenshots, which would blind the monitor " +
+                "completely.",
+            listOf("title contains \"privacy\"", "screen says \"stealth\""),
+        ))
+        if (DISABLE_DELETE_HISTORY) {
+            for ((label, titles, content) in FIREFOX_HISTORY_CLEAR_SCREENS) {
+                add(GuardedScreen(
+                    label, "Firefox",
+                    "SUPER HARDCORE ONLY",
+                    GuardAction.COVER,
+                    "Wiping history is how a slip gets erased before anyone - you included - " +
+                        "can look back at it.",
+                    titles.map { "title contains \"$it\"" } + content.map { "screen says \"$it\"" },
+                ))
+            }
+        }
+        for (page in UNINSTALL_GUARD_PAGES) {
+            add(GuardedScreen(
+                page.label, "Android Settings",
+                "While the uninstall lock is on. The VISIT is recorded either way.",
+                GuardAction.BOUNCE,
+                "One of the four ways to take the guard down: uninstall it, force-stop it, " +
+                    "deactivate its admin, or revoke a permission it runs on.",
+                page.mustContain.map { "screen says \"$it\"" },
+            ))
+        }
+        add(GuardedScreen(
+            COLOR_CORRECTION_PAGE.label, "Android Settings",
+            "Only if you turned on \"lock this page\", and only while greyscale is ON",
+            GuardAction.BOUNCE,
+            "Stops greyscale being switched back off. Deliberately inactive while greyscale " +
+                "is off, so you can never lock yourself out of turning it ON.",
+            COLOR_CORRECTION_PAGE.mustContain.map { "screen says \"$it\"" },
+        ))
+    }
 
     // === Search engines (term lives in a query param; only the search path matters) ==
     data class Search(val domain: String, val path: String, val params: List<String>)

@@ -50,6 +50,22 @@
         android:textColor="@color/ds_cover_reason"
         android:textSize="18sp" />
 
+    <!--
+      The block showing its working: the words that actually carried the score, biggest
+      share first. GONE unless the block came from the text scorer - a banned domain or a
+      screen guard is its own explanation and gets no word list under it.
+    -->
+    <TextView
+        android:id="@+id/block_details"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:lineSpacingExtra="3dp"
+        android:textColor="@color/ds_cover_text_dim"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
     <!-- Only ever set after the user taps "Go back". Empty otherwise. -->
     <TextView
         android:id="@+id/block_status"

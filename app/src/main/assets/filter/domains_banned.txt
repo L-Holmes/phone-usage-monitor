@@ -1,0 +1,50 @@
+# Hand-maintained hosts banned in EVERY mode the monitor runs in (Relaxed included).
+# This is the WHOLE list that used to be Strict-only (domains_strict_only.txt) - reddit
+# frontends/mirrors/viewers, reddit itself, borderline shopping and imageboards - promoted
+# on 2026-08-01: Relaxed has to hold the line on these too, or dropping to Relaxed IS the
+# bypass. One host per line. "#" starts a comment. A bare domain also covers its subdomains.
+# LANGUAGE-NEUTRAL. Loaded by FilterData → AlwaysBlocklist.
+
+# ── Reddit frontends / mirrors / viewers ──────────────────────────────────────
+photon-reddit.com
+lite.redgifs.com
+peekstr.com
+redlite.app
+scrolller.com
+rdx.overdevs.com
+viewri.com
+troddit.com
+ghostddit.pages.dev
+search.pullpush.io
+reditr.com
+reddit-viewer.com
+infini.wtf
+inini.wtf
+redditp.com
+reddit-stream.com
+reveddit.com
+rosint.dev
+subranking.com
+veo.world
+
+# ── Reddit itself (banned in every mode - the greylist entry is moot now) ──────
+reddit.com
+redd.it
+
+# ── Borderline shopping / fashion ──────────────────────────────────────────────
+etsy.com
+depop.com
+shein.com
+
+# ── Imageboards / "mixed" forums (hand-curated; no canonical public list) ──────
+4chan.org
+4channel.org
+8kun.top
+2ch.hk
+kohlchan.net
+endchan.org
+endchan.net
+soyjak.party
+sportschan.org
+wizchan.org
+lainchan.org

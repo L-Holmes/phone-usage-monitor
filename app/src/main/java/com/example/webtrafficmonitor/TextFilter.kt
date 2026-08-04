@@ -40,6 +40,8 @@ import android.content.Context
 //      already scores these via DUAL/SUBTLE.
 //  PHRASES — word ORDER carries the meaning ("try on haul", "leaked nudes"). LOUD phrases
 //      count in both modes; SOFT (fashion) phrases are strict-only.
+//  FRAGMENTS (strict+, see ModeFragments) — blunt SUBSTRINGS of the title/URL, including
+//      spaced-out spellings ("ling eri", "bik ini"), for someone typing around the filter.
 //
 //  ── TWO GLOBAL SOFTENERS (both modes) ───────────────────────────────────────────────
 //  1. NO SINGLE WORD EVER BLOCKS, except CORE/EXPLICIT: each word FAMILY's total is capped
@@ -102,6 +104,19 @@ object FilterTuning {
     // score by this. Someone looking up a symptom must not be blocked. A damper, not an
     // exemption: a porn page that says "doctor" once still needs only a little more evidence.
     const val MEDICAL_DAMPEN = 0.35f
+
+    // ── FIREFOX IS THE ONE PLACE WE ARE NOT THE ONLY GUARD ───────────────────────────
+    // Everywhere else this scorer is all there is. Inside Firefox, with our image add-on
+    // installed and confirmed, a second filter is reading the page from the INSIDE - it
+    // sees the actual images, which is the thing accessibility text can never see. Two
+    // filters stacked at the same bar means twice the false positives on the one surface
+    // where a false positive is most annoying (ordinary browsing).
+    //
+    // So the web threshold is multiplied by this for pages in Firefox when the add-on is
+    // confirmed: 15 -> 21. Nothing else changes - the domain blocklist, the ban list and
+    // the search-engine rule are all still absolute, because those are judgements the
+    // add-on does not duplicate. Only the HEURISTIC gets the wider berth.
+    const val PLUGIN_COVERED_MULTIPLIER = 1.4f
 }
 
 
@@ -212,6 +227,433 @@ object BannedPhrases {
 }
 
 
+// ── MODE-GATED FRAGMENTS: the "typed around the filter" tier ──────────────────────────
+//  Blunt SUBSTRINGS of the page TITLE and URL, deliberately including spaced-out spellings
+//  ("ling eri", "bik ini", "red dit") to catch someone typing around a block. Gated by mode:
+//    * SUPER_HARDCORE — only while the mode is Super hardcore.
+//    * STRICT_PLUS    — Strict or Super hardcore.
+//  Nothing here fires in Relaxed (or Off).
+//
+//  ⚠️ 2026-08-04 — WHY THESE ARE NO LONGER A VERDICT ON THEIR OWN
+//  This list used to block OUTRIGHT: one substring anywhere in a title and the app was
+//  covered, with no score and no explanation. That is how an ordinary app ended up blocked
+//  by the word "browser", and how "necklace" got caught by "lace" — a substring match is far
+//  too blunt to be a verdict. ("haul" is in "overhaul", "scroller" is in every UI toolkit.)
+//
+//  So every fragment now carries a WEIGHT and goes through BorderlineScorer like any other
+//  signal. That buys the SINGLE_WORD_MAX guarantee for free: a soft fragment can never block
+//  anything by itself, no matter how many times it appears. Only the [hard] ones — the site
+//  names, and Reddit in Super hardcore — still count like a CORE word and block on one hit.
+//
+//  [family] is the CONCEPT, not the spelling, so "bikini" the word and "bik ini" the evasion
+//  are ONE signal instead of two corroborating ones. It deliberately uses the same family
+//  heads as family_groups.txt, so the word tier and this tier share one budget.
+object ModeFragments {
+
+    data class Fragment(
+        /** Matched as a plain substring of the normalised title/URL — NOT a whole word. */
+        val text: String,
+        /** The concept this belongs to; shared with the word tier's family head. */
+        val family: String,
+        val weight: Int,
+        /** true = counts like a CORE word: exempt from the single-signal cap, blocks alone. */
+        val hard: Boolean = false,
+    )
+
+    // Super-hardcore-only: Reddit, and the ways it gets typed around a filter. Reddit itself
+    // is on the always-banned domain list; these catch it being reached some other way.
+    val SUPER_HARDCORE: List<Fragment> = listOf(
+        "reddit", "redd", "red dit", "re ddit", "reddi t", "redd it",
+        "eddit", "e ddit", "r eddit",
+    ).map { Fragment(it, "reddit", FilterTuning.EXPLICIT_WEIGHT, hard = true) }
+
+    // Strict and above.
+    val STRICT_PLUS: List<Fragment> = listOf(
+        // scrolller.com, a porn aggregator. The three-l spelling is unmistakable, so it
+        // still blocks on its own; the ordinary "scroller" spelling is a real word (every
+        // UI toolkit has one), so that one only corroborates.
+        Fragment("scrolller", "scrolller", FilterTuning.EXPLICIT_WEIGHT, hard = true),
+        Fragment("scroller", "scrolller", FilterTuning.SUBTLE_WEIGHT),
+
+        // "lingerie" itself is already SUBTLE in the word list. The SPACED spellings are
+        // somebody working around a filter, which is far better evidence than the word.
+        Fragment("lin gerie", "lingerie", FilterTuning.STRONG_WEIGHT),
+        Fragment("lin geri", "lingerie", FilterTuning.STRONG_WEIGHT),
+        Fragment("ling eri", "lingerie", FilterTuning.STRONG_WEIGHT),
+        Fragment("lingeri", "lingerie", FilterTuning.SUBTLE_WEIGHT),
+
+        // "lace" is in "necklace", "shoelace", "fireplace". Weakest weight there is: it can
+        // corroborate a page that already looks wrong, and it can never block one alone.
+        Fragment("lace", "lace", FilterTuning.SUBTLE_WEIGHT),
+
+        // The full "try on haul" is a LOUD phrase (phrases_loud.txt) and still blocks by
+        // itself. These are the mangled spellings; "haul" bare is in "overhaul", "u-haul".
+        Fragment("try on hau", "haul", FilterTuning.PHRASE_LOUD_WEIGHT),
+        Fragment("t ry on haul", "haul", FilterTuning.PHRASE_LOUD_WEIGHT),
+        Fragment("try n haul", "haul", FilterTuning.PHRASE_LOUD_WEIGHT),
+        Fragment("haul", "haul", FilterTuning.SUBTLE_WEIGHT),
+
+        // "sheer" is already AMBIGUOUS in the word list; the split spellings are evasion.
+        Fragment("shee r", "sheer", FilterTuning.STRONG_WEIGHT),
+        Fragment("sh eer", "sheer", FilterTuning.STRONG_WEIGHT),
+
+        // "bikini" is already SUBTLE in the word list; again, only the split spellings here.
+        Fragment("bik ini", "bikini", FilterTuning.STRONG_WEIGHT),
+        Fragment("bi kini", "bikini", FilterTuning.STRONG_WEIGHT),
+        Fragment("ikini", "bikini", FilterTuning.SUBTLE_WEIGHT),
+
+        // REMOVED 2026-08-04: "browser" / "brow ser". They were blocking ordinary apps for
+        // saying the word "browser", which is not evidence of anything. Do not add generic
+        // vocabulary here — a fragment has to be a spelling nobody types by accident.
+    )
+
+    /** The fragments in force. Empty in Relaxed and Off. */
+    fun active(strict: Boolean, superHardcore: Boolean): List<Fragment> = when {
+        superHardcore -> SUPER_HARDCORE + STRICT_PLUS
+        strict -> STRICT_PLUS
+        else -> emptyList()
+    }
+}
+
+
+// =====================================================================================
+//  FILTER CATALOGUE  —  the filter, described in its own words
+// =====================================================================================
+/**
+ * Every scoring group in one list: what it is worth, how it behaves, when it is switched
+ * on, and the actual words in it. It exists so the "Word filter" page in Developer tools
+ * can be generated FROM the filter rather than written alongside it — a hand-written page
+ * describing this file would be wrong the first time somebody edited a .txt, and a filter
+ * you cannot see inside is one nobody can tune.
+ *
+ * It is pure description: nothing here decides anything. If you add a tier to
+ * BorderlineScorer, add its row here too, or the page quietly stops telling the truth.
+ */
+object FilterCatalogue {
+
+    /**
+     * How a group behaves once it has scored. This is the thing people actually need to
+     * know about a word, and "8 pts" on its own never conveys it.
+     */
+    enum class Behaviour {
+        /** One hit reaches the bar by itself. CORE words, LOUD phrases, hard fragments. */
+        BLOCKS_ALONE,
+        /** Scores freely, but the family cap means it can never reach the bar alone. */
+        NEEDS_A_SECOND,
+        /** Scores NOTHING at all unless the right kind of word is nearby. */
+        ONLY_IN_CONTEXT,
+        /** Never scores. It is a trigger for other groups, or a veto. */
+        NO_SCORE,
+    }
+
+    data class Group(
+        val name: String,
+        /** What ONE hit is worth before any multiplier. 0 for the trigger-only groups. */
+        val points: Int,
+        val behaviour: Behaviour,
+        /** What must be nearby for this to count at all. Null unless ONLY_IN_CONTEXT. */
+        val gate: String? = null,
+        /** One short line: what this group IS. */
+        val what: String,
+        /** Examples, in the user's language. Kept to three or four. */
+        val examples: String = "",
+        /** The caveat worth knowing, shown on the drill-in page. */
+        val note: String = "",
+        /** Is this group live for the given mode? */
+        val activeIn: (relaxed: Boolean, superHardcore: Boolean) -> Boolean,
+        /** The entries, for the drill-in list. */
+        val entries: () -> List<String>,
+    )
+
+    private val ALWAYS: (Boolean, Boolean) -> Boolean = { _, _ -> true }
+    private val STRICT_UP: (Boolean, Boolean) -> Boolean = { relaxed, _ -> !relaxed }
+    private val RELAXED_ONLY: (Boolean, Boolean) -> Boolean = { relaxed, _ -> relaxed }
+    private val SUPER_ONLY: (Boolean, Boolean) -> Boolean = { _, superHardcore -> superHardcore }
+
+    private const val NEAR_SEXUAL = "a sexual word within ${FilterTuning.CONTEXT_WINDOW} words"
+    private const val NEAR_PERSON = "a person word within ${FilterTuning.CONTEXT_WINDOW} words"
+    private const val NEAR_EITHER =
+        "a sexual word OR a person word within ${FilterTuning.CONTEXT_WINDOW} words"
+
+    /** The SCORING groups, strongest first. */
+    val GROUPS: List<Group> = listOf(
+        Group(
+            name = "Core / explicit",
+            points = FilterTuning.EXPLICIT_WEIGHT,
+            behaviour = Behaviour.BLOCKS_ALONE,
+            what = "Sexual in essentially every context.",
+            examples = "porn · blowjob · milf · hentai",
+            note = "The only tier nothing softens. The medical damper skips it, the gender " +
+                "switches skip it, and the one-word ceiling does not apply to it. One hit " +
+                "anywhere and the page is blocked.",
+            activeIn = ALWAYS,
+        ) { BannedWords.CORE.sorted() },
+
+        Group(
+            name = "Evasion spellings",
+            points = FilterTuning.EXPLICIT_WEIGHT,
+            behaviour = Behaviour.BLOCKS_ALONE,
+            what = "Deliberate misspellings and adult site names.",
+            examples = "pornhub · fap · seggs · onlyfanz",
+            note = "Leetspeak and stretched letters are NOT in this list and never need to " +
+                "be: p0rn and pooorn are normalised onto \"porn\" by the scorer before any " +
+                "list is consulted. This list is for spellings normalising can't reach.",
+            activeIn = ALWAYS,
+        ) { BannedWords.VARIANT_EXPLICIT.sorted() },
+
+        Group(
+            name = "Loud phrases",
+            points = FilterTuning.PHRASE_LOUD_WEIGHT,
+            behaviour = Behaviour.BLOCKS_ALONE,
+            what = "Word ORDER is the giveaway, not the words.",
+            examples = "try on haul · leaked nudes · nip slip",
+            note = "Not one word of \"try on haul\" is bannable; the three in that order " +
+                "plainly are. Counted like Core, so ×2 in a title reaches the bar alone. " +
+                "Matched against the page with punctuation stripped, so \"Try-On HAUL!!\" " +
+                "still matches.",
+            activeIn = ALWAYS,
+        ) { BannedPhrases.LOUD.sorted() },
+
+        Group(
+            name = "Mixed",
+            points = FilterTuning.MIXED_WEIGHT,
+            behaviour = Behaviour.NEEDS_A_SECOND,
+            what = "Strongly sexual, but with real innocent uses.",
+            examples = "nude · naked · topless · xxx",
+            note = "Art history, lab mice, \"naked options\" in finance, phone cases. Far too " +
+                "useful a word to block a page on its own, so it never does.",
+            activeIn = ALWAYS,
+        ) { BannedWords.MIXED.sorted() },
+
+        Group(
+            name = "Support / strong",
+            points = FilterTuning.STRONG_WEIGHT,
+            behaviour = Behaviour.NEEDS_A_SECOND,
+            what = "Clearly sexual anatomy and slang.",
+            examples = "cock · vagina · sex · slut",
+            note = "Most of these carry medical exceptions - see the Exceptions section. " +
+                "\"vaginal health\" and \"breast cancer\" score nothing at all.",
+            activeIn = ALWAYS,
+        ) { BannedWords.SUPPORT.sorted() },
+
+        Group(
+            name = "Strict-only explicit extras",
+            points = FilterTuning.STRONG_WEIGHT,
+            behaviour = Behaviour.NEEDS_A_SECOND,
+            what = "Always sexual, but too context-dependent to run in Relaxed.",
+            activeIn = STRICT_UP,
+        ) { BannedWords.EXTRA_EXPLICIT.sorted() },
+
+        Group(
+            name = "Combo",
+            points = FilterTuning.COMBO_WEIGHT,
+            behaviour = Behaviour.ONLY_IN_CONTEXT,
+            gate = NEAR_PERSON,
+            what = "\"hot\" and \"sexy\", but only when they are about a PERSON.",
+            examples = "\"hot women\" scores · \"hot chocolate\" scores nothing",
+            note = "RELAXED ONLY. In Strict these same words are already covered by the " +
+                "Subtle and Dual groups, so keeping Combo on as well would double-count them.",
+            activeIn = RELAXED_ONLY,
+        ) { BannedWords.COMBO.sorted() },
+
+        Group(
+            name = "Dual",
+            points = FilterTuning.DUAL_SEXUAL_WEIGHT,
+            behaviour = Behaviour.ONLY_IN_CONTEXT,
+            gate = NEAR_SEXUAL,
+            what = "Sexual in some contexts, completely innocent in others.",
+            examples = "hot · wet · girls · tight",
+            note = "On their own these are ordinary English and score ZERO. They only start " +
+                "counting once the page has already said something sexual nearby.",
+            activeIn = STRICT_UP,
+        ) { BannedWords.EXTRA_DUAL.sorted() },
+
+        Group(
+            name = "Evasion spellings (dual)",
+            points = FilterTuning.DUAL_SEXUAL_WEIGHT,
+            behaviour = Behaviour.ONLY_IN_CONTEXT,
+            gate = NEAR_SEXUAL,
+            what = "Community slang that also has an innocent life.",
+            examples = "\"garden hoe\" scores nothing · \"the goon squad\" scores nothing",
+            activeIn = STRICT_UP,
+        ) { BannedWords.VARIANT_DUAL.sorted() },
+
+        Group(
+            name = "Subtle",
+            points = FilterTuning.SUBTLE_WEIGHT,
+            behaviour = Behaviour.NEEDS_A_SECOND,
+            what = "Suggestive, with plenty of innocent uses.",
+            examples = "bikini · lingerie · cleavage · underwear",
+            note = "Worth very little each, which is the point: it takes a pile of them to " +
+                "matter. That is what makes \"bikini ×10\" different from \"bikini ×2\".",
+            activeIn = STRICT_UP,
+        ) { BannedWords.EXTRA_SUBTLE.sorted() },
+
+        Group(
+            name = "Ambiguous",
+            points = FilterTuning.AMBIGUOUS_WEIGHT,
+            behaviour = Behaviour.ONLY_IN_CONTEXT,
+            gate = NEAR_EITHER,
+            what = "Usually not about people at all.",
+            examples = "sheer · webcam · cosplay · transparent",
+            note = "\"sheer drop\" and \"webcam driver\" score nothing. These need either a " +
+                "sexual word or a person word beside them before they count.",
+            activeIn = STRICT_UP,
+        ) { BannedWords.EXTRA_AMBIGUOUS.sorted() },
+
+        Group(
+            name = "Soft phrases",
+            points = FilterTuning.PHRASE_SOFT_WEIGHT,
+            behaviour = Behaviour.NEEDS_A_SECOND,
+            what = "Lean adult, but have a genuine innocent life.",
+            examples = "try on · fashion haul · gym fit",
+            note = "A real fashion haul is a real thing. A weak corroborator, nothing more.",
+            activeIn = STRICT_UP,
+        ) { BannedPhrases.SOFT.sorted() },
+
+        Group(
+            name = "Typed-around fragments",
+            points = FilterTuning.SUBTLE_WEIGHT,
+            behaviour = Behaviour.NEEDS_A_SECOND,
+            what = "Chunks of text, including spaced-out spellings, in the title or URL only.",
+            examples = "ling eri · bik ini · lace · haul",
+            note = "These are SUBSTRINGS, so they match inside other words - \"lace\" is in " +
+                "\"necklace\", \"haul\" is in \"overhaul\". That is exactly why they are " +
+                "scored rather than absolute: before 2026-08-04 one of these blocked a page " +
+                "outright, which is how apps ended up blocked for saying \"browser\".\n\n" +
+                "Each fragment's own weight is listed below. A few are marked BLOCKS ALONE - " +
+                "those are unmistakable site names, not vocabulary. They are checked against " +
+                "the title and URL only, never the body text, because a page of ordinary " +
+                "text would find these everywhere.",
+            activeIn = STRICT_UP,
+        ) { ModeFragments.STRICT_PLUS.map { fragmentLine(it) } },
+
+        Group(
+            name = "Reddit fragments",
+            points = FilterTuning.EXPLICIT_WEIGHT,
+            behaviour = Behaviour.BLOCKS_ALONE,
+            what = "Reddit, and the ways it gets typed around a filter.",
+            examples = "red dit · r eddit · reddi t",
+            note = "SUPER HARDCORE ONLY. Reddit is on the always-banned domain list in every " +
+                "mode anyway; these catch it being reached some other way.",
+            activeIn = SUPER_ONLY,
+        ) { ModeFragments.SUPER_HARDCORE.map { fragmentLine(it) } },
+    )
+
+    /**
+     * The TRIGGER list. It scores nothing, ever - it is what switches the context-gated
+     * groups above on. Called out separately because "0 points" in a list of scores reads
+     * as a mistake rather than as a different job.
+     */
+    val PERSON_WORDS = Group(
+        name = "Person words",
+        points = 0,
+        behaviour = Behaviour.NO_SCORE,
+        what = "The trigger list for the context-gated groups.",
+        examples = "girl · woman · model · she",
+        note = "These NEVER add a single point. Their only job is to sit next to an " +
+            "Ambiguous or Combo word and switch it on. \"sheer\" alone is nothing; " +
+            "\"sheer\" next to \"model\" counts.",
+        activeIn = ALWAYS,
+    ) { BannedWords.PERSON.sorted() }
+
+    /** The innocent-context veto. Its own thing: it doesn't scale a score, it deletes one. */
+    val EXCEPTIONS = Group(
+        name = "Innocent-context exceptions",
+        points = 0,
+        behaviour = Behaviour.NO_SCORE,
+        what = "Neighbours that throw a match away entirely.",
+        examples = "naked mole rat · nude lipstick · vaginal health · pussy riot",
+        note = "If one of a word's listed neighbours sits within ${FilterTuning.EXCEPTION_WINDOW} " +
+            "words of it, that match scores NOTHING - not less, nothing. This is the sharpest " +
+            "tool in the filter and the first place to look when something is blocking that " +
+            "shouldn't.\n\nRead each line as \"word: the neighbours that excuse it\". Looked " +
+            "up by the matched word AND by its family head, so an entry for \"nude\" also " +
+            "covers \"nudes\" and \"nudity\".",
+        activeIn = ALWAYS,
+    ) { FilterData.langLines("exceptions.txt").sorted() }
+
+    /** Everything that SCALES a score rather than adding to it. */
+    data class Scaler(
+        val name: String,
+        /** The multiplier, in the page's words. */
+        val effect: String,
+        val what: String,
+        val note: String = "",
+        val entries: (() -> List<String>)? = null,
+    )
+
+    val SCALERS: List<Scaler> = listOf(
+        Scaler(
+            "In the title or the URL",
+            "×${FilterTuning.TITLE_URL_MULTIPLIER}",
+            "A word in the title or address counts double. Body text counts once.",
+            "It is a much stronger signal: nobody's page title mentions this by accident.",
+        ),
+        Scaler(
+            "The page reads medical",
+            "×${FilterTuning.MEDICAL_DAMPEN}",
+            "Any clinical word on the page damps every SOFT signal, hard.",
+            "A damper, not an exemption. Core words and Loud phrases are never touched, so a " +
+                "porn page that happens to say \"doctor\" still blocks - but looking up a " +
+                "symptom does not.",
+        ) { MedicalContext.WORDS.sorted() },
+        Scaler(
+            "Sexualised women, switch off",
+            "×${FilterTuning.GENDER_OFF_MULTIPLIER}",
+            "Softens the suggestive words about women's bodies and clothing.",
+            "Locked fully ON outside Relaxed. Core words are never affected by either " +
+                "switch, so turning one off can never unblock pornography.",
+        ) { (GenderedTerms.SOFT_FEMALE + GenderedTerms.PHRASES_FEMALE).sorted() },
+        Scaler(
+            "Sexualised men, switch off",
+            "×${FilterTuning.GENDER_OFF_MULTIPLIER}",
+            "Softens the suggestive words about men's bodies.",
+            "Same rule: Core words are never affected.",
+        ) { (GenderedTerms.SOFT_MALE + GenderedTerms.PHRASES_MALE).sorted() },
+        Scaler(
+            "Firefox, with the image add-on",
+            "bar ×${FilterTuning.PLUGIN_COVERED_MULTIPLIER}",
+            "Raises the score a page needs, rather than lowering what words are worth.",
+            "The add-on is reading the same page from the inside and can see the IMAGES, " +
+                "which text can never do. Two filters at the same bar just doubles the false " +
+                "positives on the one surface where they are most annoying.",
+        ),
+    )
+
+    /** The two caps: the reason a single word can never block anything. */
+    val CAPS: List<Scaler> = listOf(
+        Scaler(
+            "Same word, over and over",
+            "max ${FilterTuning.PER_WORD_CAP}×",
+            "One word family counts at most ${FilterTuning.PER_WORD_CAP} times, however " +
+                "often it appears.",
+        ),
+        Scaler(
+            "Ceiling for one word",
+            "${FilterTuning.SINGLE_WORD_MAX} pts",
+            "One family can never earn more than this in total.",
+            "This is the whole safety property: ${FilterTuning.SINGLE_WORD_MAX} sits one point " +
+                "under the web bar of ${FilterTuning.THRESHOLD}, so a block ALWAYS takes at " +
+                "least two different signals. Core words and Loud phrases are the deliberate " +
+                "exception.",
+        ),
+        Scaler(
+            "Word families",
+            "count as one",
+            "Inflections are one signal, not several: \"nude\" + \"nudes\" is one word.",
+            "This is what makes the ceiling above actually hold - without it, spelling a word " +
+                "three ways would manufacture its own corroboration. A typed-around fragment " +
+                "shares its family with the real word for the same reason.",
+        ) { FilterData.langLines("family_groups.txt").sorted() },
+    )
+
+    private fun fragmentLine(f: ModeFragments.Fragment): String =
+        "\"${f.text}\"  —  ${f.weight} pts, counts as \"${f.family}\"" +
+            if (f.hard) "  —  BLOCKS ALONE" else ""
+}
+
+
 // ── The two "sexualised women / sexualised men" switches. Both default ON. ─────────────
 /**
  * LOCKED OUTSIDE RELAXED MODE. In strict or super hardcore these are forced back on and
@@ -252,20 +694,48 @@ object AttractionFilter {
 // whole-page medical damper.
 object BorderlineScorer {
 
-    data class Result(val score: Int, val reason: String)
+    /**
+     * ONE signal's share of a score — what the block screen shows the user so a block is
+     * never just a number. [word] is the family head ("bikini" covers "bikinis" and the
+     * "bik ini" fragment), [count] is how many times it was seen, [counted] how many of
+     * those actually scored (the rest hit PER_WORD_CAP), and [pct] its share of the total.
+     */
+    data class Contribution(
+        val word: String,
+        val tier: String,
+        val count: Int,
+        val counted: Int,
+        val points: Int,
+        val pct: Int,
+        val capped: Boolean,
+    )
+
+    data class Result(
+        val score: Int,
+        val reason: String,
+        /** Biggest first. Empty from [score], which is only ever asked for a number. */
+        val contributions: List<Contribution> = emptyList(),
+    )
 
     /**
      * The switches in force for this scoring pass. Passed in rather than read from a cache,
      * so flipping a switch or changing mode takes effect on the very next page. [relaxed]
      * selects the RELAXED tier set (suggestive tiers off); strict is a superset.
+     * [superHardcore] adds the Super-hardcore-only fragments (see ModeFragments).
      */
-    data class Settings(val blockFemale: Boolean, val blockMale: Boolean, val relaxed: Boolean) {
+    data class Settings(
+        val blockFemale: Boolean,
+        val blockMale: Boolean,
+        val relaxed: Boolean,
+        val superHardcore: Boolean = false,
+    ) {
         companion object {
             val ALL_ON = Settings(true, true, relaxed = false)
             fun of(c: Context) = Settings(
                 AttractionFilter.blockFemale(c),
                 AttractionFilter.blockMale(c),
                 relaxed = Mode.isRelaxed(c) || Mode.isOff(c),
+                superHardcore = Mode.isSuperHardcore(c),
             )
         }
     }
@@ -295,8 +765,18 @@ object BorderlineScorer {
         if (relaxed) (relaxedSets ?: ActiveSets(true).also { relaxedSets = it })
         else (strictSets ?: ActiveSets(false).also { strictSets = it })
 
-    /** What one scoring pass produced: the score, and how many distinct families fed it. */
-    private data class Tally(val score: Int, val families: Int)
+    /** One family's running total during a pass. Becomes a [Contribution] on the way out. */
+    private class Detail(val tier: String) {
+        var count = 0       // eligible occurrences, INCLUDING the ones the cap threw away
+        var counted = 0     // occurrences that actually scored
+        var points = 0f
+    }
+
+    /** What one scoring pass produced: the score, and the per-family breakdown behind it. */
+    private class Tally(val score: Int, val detail: Map<String, Detail>) {
+        /** Distinct signals that actually scored — what the in-app threshold gates on. */
+        val families: Int get() = detail.count { it.value.points > 0f }
+    }
 
     /** Raw score for logging/flagging; null when nothing sexual was found. */
     fun score(title: String?, url: String?, text: String?, s: Settings = Settings.ALL_ON): Result? {
@@ -304,10 +784,19 @@ object BorderlineScorer {
         return if (v <= 0) null else Result(v, reasonFor(v))
     }
 
-    /** Non-null (with a block reason) only when the score reaches the block THRESHOLD. */
-    fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
-        val v = compute(title, url, content, s).score
-        return if (v >= FilterTuning.THRESHOLD) Result(v, reasonFor(v)) else null
+    /**
+     * Non-null (with a block reason) only when the score reaches the block THRESHOLD.
+     *
+     * [thresholdMultiplier] raises (or lowers) the bar for this one call — see
+     * FilterTuning.PLUGIN_COVERED_MULTIPLIER, the one caller that passes anything but 1.
+     */
+    fun evaluate(
+        title: String?, url: String?, content: String?,
+        s: Settings = Settings.ALL_ON,
+        thresholdMultiplier: Float = 1f,
+    ): Result? {
+        val t = compute(title, url, content, s)
+        return if (t.score >= webBar(thresholdMultiplier)) resultOf(t) else null
     }
 
     /**
@@ -319,12 +808,68 @@ object BorderlineScorer {
      */
     fun evaluateInApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
         val t = compute(title, url, content, s)
-        if (t.score >= FilterTuning.THRESHOLD) return Result(t.score, reasonFor(t.score))
+        if (t.score >= FilterTuning.THRESHOLD) return resultOf(t)
         if (t.score >= FilterTuning.APP_THRESHOLD && t.families >= FilterTuning.APP_MIN_FAMILIES) {
-            return Result(t.score, reasonFor(t.score))
+            return resultOf(t)
         }
         return null
     }
+
+    /**
+     * The full breakdown WITHOUT a verdict: the score and what built it, whether or not it
+     * blocks. What the dev console's "try it" box needs - "why did this score 12" is the
+     * question you ask about text that did NOT block, so [evaluate] can't answer it.
+     */
+    fun explain(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
+        val t = compute(title, url, content, s)
+        return if (t.score <= 0) null else resultOf(t)
+    }
+
+    /**
+     * The effective block bar for a web page after [multiplier] - the one place that
+     * arithmetic lives, so a screen that reports the bar can never disagree with [evaluate].
+     */
+    fun webBar(multiplier: Float = 1f): Int = bar(FilterTuning.THRESHOLD, multiplier)
+
+    /**
+     * The handful of signals worth putting in front of a user: everything at or above
+     * SHOW_PCT of the score, falling back to the top few when the score is spread thinly
+     * across many small signals. (Mirrors selectContributors() in the extension.)
+     */
+    fun topContributors(all: List<Contribution>, max: Int = MAX_SHOWN): List<Contribution> {
+        val big = all.filter { it.pct >= SHOW_PCT }
+        return (if (big.isEmpty()) all.take(FALLBACK_SHOWN) else big).take(max)
+    }
+
+    private const val SHOW_PCT = 30
+    private const val FALLBACK_SHOWN = 3
+    private const val MAX_SHOWN = 4
+
+    /** The effective block bar after a multiplier, never below 1. */
+    private fun bar(base: Int, multiplier: Float): Int =
+        maxOf(1, Math.round(base * multiplier))
+
+    private fun resultOf(t: Tally): Result =
+        Result(t.score, reasonFor(t.score), contributionsOf(t))
+
+    /** The per-family detail as a user-facing list, biggest share first. */
+    private fun contributionsOf(t: Tally): List<Contribution> =
+        t.detail.entries
+            .filter { it.value.points > 0f }
+            .map { (fam, d) ->
+                val pts = Math.round(d.points)
+                Contribution(
+                    // "phrase:try on haul" / "fragment:bik ini" read as the thing itself.
+                    word = fam.substringAfter(':'),
+                    tier = d.tier,
+                    count = d.count,
+                    counted = d.counted,
+                    points = pts,
+                    pct = if (t.score > 0) Math.round(d.points * 100f / t.score) else 0,
+                    capped = d.count > d.counted,
+                )
+            }
+            .sortedByDescending { it.points }
 
     private fun reasonFor(score: Int): String = "Sexual / adult content (score $score)"
 
@@ -334,9 +879,9 @@ object BorderlineScorer {
 
     private fun compute(title: String?, url: String?, body: String?, set: Settings): Tally {
         val a = active(set.relaxed)
-        val counted = HashMap<String, Int>()   // family -> capped occurrences, shared across fields
-        val points = HashMap<String, Float>()   // family -> points so far (for SINGLE_WORD_MAX)
-        var total = 0f
+        // family -> occurrences + points so far. Shared across every field and every tier,
+        // so PER_WORD_CAP and SINGLE_WORD_MAX apply to a CONCEPT, not to one spelling of it.
+        val detail = HashMap<String, Detail>()
 
         // CORE / EXPLICIT points (and LOUD phrases) are kept SEPARATE from everything else,
         // because the medical damper below must NOT touch them: a page saying "porn" is porn
@@ -355,8 +900,8 @@ object BorderlineScorer {
             for (i in words.indices) {
                 val hit = resolve(words, i, a) ?: continue
                 if (hit.base == 0) continue
-                val p = add(hit.fam, hit.tier, hit.base, mult, hit.word, set, counted, points)
-                if (hit.tier == "explicit") explicitTotal += p else otherTotal += p
+                val p = add(hit.fam, hit.tier, hit.base, mult, genderMultiplier(hit.word, set), detail)
+                if (hit.tier == TIER_EXPLICIT) explicitTotal += p else otherTotal += p
             }
         }
 
@@ -367,18 +912,33 @@ object BorderlineScorer {
             normalise(url) to FilterTuning.TITLE_URL_MULTIPLIER,
             normalise(body) to 1,
         )) {
-            val (loud, soft) = scorePhrases(text, mult, set, counted, points)
+            val (loud, soft) = scorePhrases(text, mult, set, detail)
             explicitTotal += loud
             otherTotal += soft
         }
 
+        // Mode-gated FRAGMENTS (ModeFragments): title and URL only, never the body. They are
+        // substring matches, so letting them loose on a whole page of text would find "lace"
+        // in every "necklace" on a shopping page. Title and URL are where someone types
+        // around a filter, and that is the only place this tier has ever earned its keep.
+        for ((text, mult) in listOf(
+            normalise(title) to FilterTuning.TITLE_URL_MULTIPLIER,
+            normalise(url) to FilterTuning.TITLE_URL_MULTIPLIER,
+        )) {
+            val (hard, soft) = scoreFragments(text, mult, set, detail)
+            explicitTotal += hard
+            otherTotal += soft
+        }
+
         // Looking up a symptom is not looking at porn. Damp the SOFT signals hard when the
-        // page reads medical; CORE/LOUD are never damped, so real porn still blocks.
-        if (hasMedicalContext(title, body)) otherTotal *= FilterTuning.MEDICAL_DAMPEN
-        // `points` holds one entry per family (words AND phrases) that actually scored, so
-        // its size is the number of DISTINCT signals behind this score - what the in-app
-        // threshold needs in order to stay safe below the web bar.
-        return Tally(Math.round(explicitTotal + otherTotal), points.count { it.value > 0f })
+        // page reads medical; CORE/LOUD are never damped, so real porn still blocks. The
+        // per-family detail is damped alongside the total, or the shares we show the user
+        // would be percentages of a number that no longer exists.
+        if (hasMedicalContext(title, body)) {
+            otherTotal *= FilterTuning.MEDICAL_DAMPEN
+            for (d in detail.values) if (d.tier != TIER_EXPLICIT) d.points *= FilterTuning.MEDICAL_DAMPEN
+        }
+        return Tally(Math.round(explicitTotal + otherTotal), detail)
     }
 
     /**
@@ -390,7 +950,7 @@ object BorderlineScorer {
         for (w in candidates(words[i])) {
             val fam = BannedWords.famOf(w)
             when {
-                w in a.explicit -> return hitOrVeto(words, i, fam, "explicit", FilterTuning.EXPLICIT_WEIGHT, w)
+                w in a.explicit -> return hitOrVeto(words, i, fam, TIER_EXPLICIT, FilterTuning.EXPLICIT_WEIGHT, w)
                 w in a.mixed -> return hitOrVeto(words, i, fam, "mixed", FilterTuning.MIXED_WEIGHT, w)
                 w in a.strong -> return hitOrVeto(words, i, fam, "strong", FilterTuning.STRONG_WEIGHT, w)
                 w in a.subtle -> return hitOrVeto(words, i, fam, "subtle", FilterTuning.SUBTLE_WEIGHT, w)
@@ -412,25 +972,32 @@ object BorderlineScorer {
     private fun hitOrVeto(words: List<String>, i: Int, fam: String, tier: String, base: Int, word: String): Hit =
         if (hasExceptionNear(words, i, word)) Hit(fam, tier, 0, word) else Hit(fam, tier, base, word)
 
+    /** The tier that is exempt from every softener: CORE words, LOUD phrases, hard fragments. */
+    private const val TIER_EXPLICIT = "explicit"
+
     /**
      * Add one hit for [fam]. Two caps apply: PER_WORD_CAP on occurrences, and — for every
      * tier except explicit — SINGLE_WORD_MAX on the family's total points, the guarantee that
      * no single word can ever block a page by itself. Returns the points actually added.
+     *
+     * [detail] carries the running tally AND the breakdown the block screen shows: `count`
+     * is every eligible occurrence, `counted` only the ones that got through the cap, so a
+     * page saying "bikini" fifty times can be shown as capped rather than as fifty hits.
      */
     private fun add(
-        fam: String, tier: String, base: Int, mult: Int, word: String,
-        set: Settings, counted: HashMap<String, Int>, points: HashMap<String, Float>,
+        fam: String, tier: String, base: Int, mult: Int, gender: Float,
+        detail: HashMap<String, Detail>,
     ): Float {
-        val c = counted.getOrDefault(fam, 0)
-        if (c >= FilterTuning.PER_WORD_CAP) return 0f     // over cap: ignored
-        counted[fam] = c + 1
-        var pts = base * mult * genderMultiplier(word, set)
-        if (tier != "explicit") {
-            val room = FilterTuning.SINGLE_WORD_MAX - points.getOrDefault(fam, 0f)
-            pts = minOf(pts, maxOf(0f, room))
+        val d = detail.getOrPut(fam) { Detail(tier) }
+        d.count++
+        if (d.counted >= FilterTuning.PER_WORD_CAP) return 0f     // over cap: ignored
+        var pts = base * mult * gender
+        if (tier != TIER_EXPLICIT) {
+            pts = minOf(pts, maxOf(0f, FilterTuning.SINGLE_WORD_MAX - d.points))
         }
         if (pts <= 0f) return 0f
-        points[fam] = points.getOrDefault(fam, 0f) + pts
+        d.counted++
+        d.points += pts
         return pts
     }
 
@@ -453,34 +1020,49 @@ object BorderlineScorer {
 
     /** Returns (loudPoints, softPoints) — kept apart so the medical damper spares the loud ones. */
     private fun scorePhrases(
-        text: String, mult: Int, set: Settings,
-        counted: HashMap<String, Int>, points: HashMap<String, Float>,
+        text: String, mult: Int, set: Settings, detail: HashMap<String, Detail>,
     ): Pair<Float, Float> {
         if (text.isBlank()) return 0f to 0f
         fun run(phrases: Set<String>, weight: Int, tier: String): Float {
             var s = 0f
             for (p in phrases) {
                 if (!text.contains(" $p ")) continue
-                val fam = "phrase:$p"
-                val c = counted.getOrDefault(fam, 0)
-                if (c >= FilterTuning.PER_WORD_CAP) continue
-                counted[fam] = c + 1
-                var pts = weight * mult * phraseMultiplier(p, set)
-                if (tier != "explicit") {
-                    val room = FilterTuning.SINGLE_WORD_MAX - points.getOrDefault(fam, 0f)
-                    pts = minOf(pts, maxOf(0f, room))
-                }
-                if (pts <= 0f) continue
-                points[fam] = points.getOrDefault(fam, 0f) + pts
-                s += pts
+                s += add("phrase:$p", tier, weight, mult, phraseMultiplier(p, set), detail)
             }
             return s
         }
         // LOUD is treated like CORE (exempt from the single-word cap) so a loud phrase in a
         // title blocks alone; SOFT is a weak, strict-only corroborator.
-        val loud = run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT, "explicit")
+        val loud = run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT, TIER_EXPLICIT)
         val soft = if (!set.relaxed) run(BannedPhrases.SOFT, FilterTuning.PHRASE_SOFT_WEIGHT, "phrase") else 0f
         return loud to soft
+    }
+
+    /**
+     * MODE-GATED FRAGMENTS (see ModeFragments) against one normalised field. Returns
+     * (hardPoints, softPoints), split for the medical damper exactly like the phrases.
+     *
+     * Every fragment goes through the SAME add() as every word, which is the whole point of
+     * the 2026-08-04 rework: a soft fragment shares its family's SINGLE_WORD_MAX budget, so
+     * "lace" — or a dozen "lace"s — can corroborate a block but can never be one.
+     */
+    private fun scoreFragments(
+        text: String, mult: Int, set: Settings, detail: HashMap<String, Detail>,
+    ): Pair<Float, Float> {
+        if (text.isBlank()) return 0f to 0f
+        var hard = 0f
+        var soft = 0f
+        for (f in ModeFragments.active(strict = !set.relaxed, superHardcore = set.superHardcore)) {
+            if (!text.contains(f.text)) continue
+            val tier = if (f.hard) TIER_EXPLICIT else "fragment"
+            // Keyed by FAMILY, not by spelling: "bik ini" lands on the same budget as the
+            // word "bikini", so an evasion and the real word are one signal, not two. The
+            // gender switches read the family too, so turning the women side down softens
+            // "bik ini" exactly as much as it softens "bikini".
+            val pts = add(f.family, tier, f.weight, mult, genderMultiplier(f.family, set), detail)
+            if (f.hard) hard += pts else soft += pts
+        }
+        return hard to soft
     }
 
     private fun hasMedicalContext(title: String?, body: String?): Boolean {

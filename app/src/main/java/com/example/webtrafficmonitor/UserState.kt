@@ -110,6 +110,7 @@ object Mode {
     private const val PREFS = "app_mode"
     private const val KEY_MODE = "mode"
     private const val KEY_LOCK_UNTIL = "strict_locked_until"
+    private const val KEY_EVER_STRICT = "ever_strict"
     private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
 
     const val OFF = "off"
@@ -138,9 +139,20 @@ object Mode {
         // permissions stay optional until the user picks a real mode (or finishes the
         // guided permission flow, which bumps this to RELAXED).
         val stored = prefs(ctx).getString(KEY_MODE, OFF) ?: OFF
+        // Migration for installs already sitting in Strict+ from before the ratchet
+        // existed: latch the flag off the stored mode, not just off future setMode calls.
+        if (rank(stored) >= rank(STRICT) && !everStrict(ctx))
+            prefs(ctx).edit().putBoolean(KEY_EVER_STRICT, true).apply()
         if (isLocked(ctx) && rank(stored) < rank(STRICT)) return STRICT
         return stored
     }
+
+    /**
+     * True once the user has EVER been in Strict (or above). One-way by design: it is what
+     * makes OFF permanently unavailable (see setMode). There is deliberately no setter that
+     * clears it.
+     */
+    fun everStrict(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_EVER_STRICT, false)
 
     fun isOff(ctx: Context) = current(ctx) == OFF
     fun isRelaxed(ctx: Context) = current(ctx) == RELAXED
@@ -191,15 +203,24 @@ object Mode {
     /**
      * Change the mode. While the strict lock is active any LOOSENING is refused (returns
      * false) - so you can go strict -> superhardcore, but not back down to relaxed.
+     *
+     * THE RATCHET (2026-08-01): entering Strict once removes OFF from the menu FOR GOOD.
+     * You can always drop back to Relaxed - which still blocks adult sites, the banned
+     * mirror/imageboard hosts and non-Google search engines - but "nothing is monitored"
+     * stops being a choice the moment you asked to be protected.
+     *
      * Super hardcore additionally REQUIRES the uninstall lock to be active: a mode this
      * strict is pointless if the app can just be deleted in a weak moment. Callers should
-     * check the same condition first to give a useful message (see modeSpinner).
+     * check the same conditions first to give a useful message (see modeSpinner).
      */
     fun setMode(ctx: Context, mode: String): Boolean {
         if (isLocked(ctx) && rank(mode) < rank(STRICT)) return false
+        if (mode == OFF && everStrict(ctx)) return false
         if (mode == SUPERHARDCORE &&
             !(UninstallGuard.isEnabled(ctx) && UninstallGuard.isAdminActive(ctx))) return false
-        prefs(ctx).edit().putString(KEY_MODE, mode).apply()
+        val e = prefs(ctx).edit().putString(KEY_MODE, mode)
+        if (rank(mode) >= rank(STRICT)) e.putBoolean(KEY_EVER_STRICT, true)
+        e.apply()
         return true
     }
 
@@ -207,6 +228,7 @@ object Mode {
     fun startWeekStrict(ctx: Context) {
         prefs(ctx).edit()
             .putString(KEY_MODE, STRICT)
+            .putBoolean(KEY_EVER_STRICT, true)
             .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + WEEK_MS)
             .apply()
     }
@@ -823,4 +845,89 @@ object BrowserSetup {
 
     private fun prefs(c: Context) =
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// SetupGuard  —  STRICT WITH THE SAFETY OFF
+// =====================================================================================
+/**
+ * MainActivity's setup gate only holds the door inside OUR app. Someone can pick Strict,
+ * back out of the gate and go straight to Instagram, and the mode still reads "Strict" on
+ * the home screen while half of what enforces it is missing - no overlay permission, no
+ * Firefox, no image add-on. A mode that only LOOKS enforced is worse than one that plainly
+ * isn't: it is a promise the app quietly stopped keeping.
+ *
+ * So from Strict upwards the setup is enforced OUTSIDE the app too: the accessibility
+ * service covers non-essential apps and names the step that is missing. Not a punishment -
+ * the same gate, moved to where the user actually is.
+ *
+ * WHAT IS DELIBERATELY STILL OPEN, and why none of this is a lockout:
+ *   * our own app - the only place the setup can be finished, and the only way DOWN. With
+ *     the setup unfinished, MainActivity shows the gate instead of the mode spinner, so
+ *     the route out is Back at that gate: it drops to Off, or - once the ratchet has taken
+ *     Off away - to Relaxed, which this guard does not cover. That fallback in
+ *     onBackPressed is load-bearing; without it, "ratchet + unfinished setup" would be a
+ *     phone nobody could use. Do not remove it without removing this guard too.
+ *   * Settings - where "appear on top" is granted.
+ *   * Firefox and the Play Store - where the last two steps are actually done.
+ *   * the lockdown essentials (launcher, dialer, SMS, clock...) - an unfinished setup must
+ *     never stand between somebody and a phone call.
+ *
+ * Relaxed is NOT covered. Relaxed still blocks adult sites, the ban list and the non-Google
+ * search engines off the accessibility service alone, so it is honest about itself with no
+ * add-on installed. Strict is the one that claims more than it can deliver.
+ */
+object SetupGuard {
+
+    /**
+     * The places the missing steps are actually DONE, matched as substrings. On top of the
+     * lockdown essentials (launcher, dialer, SMS, clock...) and Firefox, both handled below.
+     */
+    private val REPAIR_APPS: List<String> = listOf(
+        "com.android.settings",     // grant "appear on top"
+        "com.android.vending",      // Play Store: install Firefox
+        "permissioncontroller",     // the permission dialogs themselves
+    )
+
+    // The answer is asked for on EVERY accessibility event, and firefoxInstalled() is a
+    // PackageManager binder call - far too expensive to run at that rate. A couple of
+    // seconds of staleness costs nothing either way: the cover appears a moment after the
+    // mode changes, and drops a moment after the missing permission is granted, and the
+    // user is walking back from Settings for longer than that regardless.
+    private const val CACHE_MS = 2_000L
+    @Volatile private var cachedAt = 0L
+    @Volatile private var cachedStep: String? = null
+
+    /**
+     * The setup step still missing, as a user-facing line, or null when nothing is. Only the
+     * parts the SERVICE can verify: accessibility is on by definition here (this service is
+     * what asks), so what is left is the overlay permission and the browser half.
+     */
+    fun missingStep(c: Context): String? {
+        val now = System.currentTimeMillis()
+        if (now - cachedAt < CACHE_MS) return cachedStep
+        cachedStep = when {
+            !Settings.canDrawOverlays(c) -> c.getString(R.string.br_setup_missing_overlay)
+            !BrowserSetup.firefoxInstalled(c) -> c.getString(R.string.br_setup_missing_firefox)
+            !BrowserSetup.extensionConfirmed(c) -> c.getString(R.string.br_setup_missing_extension)
+            else -> null
+        }
+        cachedAt = now
+        return cachedStep
+    }
+
+    /**
+     * Open while the guard is up: our app, the places the setup is finished, the essentials.
+     * Asked on every accessibility event, so it stays allocation-free apart from the
+     * lowercase - the two lists are checked in turn rather than concatenated.
+     */
+    fun isAllowed(c: Context, pkg: String?): Boolean {
+        if (pkg == null) return true
+        if (pkg == c.packageName) return true
+        if (pkg in AppConfig.FIREFOX_PACKAGES) return true   // step 4 happens inside Firefox
+        val p = pkg.lowercase()
+        if (REPAIR_APPS.any { p.contains(it) }) return true
+        return AppConfig.LOCKDOWN_ALLOWED_SUBSTRINGS.any { p.contains(it) }
+    }
 }

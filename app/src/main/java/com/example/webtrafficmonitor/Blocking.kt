@@ -405,13 +405,14 @@ object ShortForm {
 // TemptationBlocks  (the "block what feeds this" switch on each Temptations page)
 // =====================================================================================
 // Exactly like ShortForm, but per category: flipping it on adds that category's curated
-// patterns to BlockRules and drops its apps to the GREY tier (time-limited, not banned -
-// a hard ban on Instagram would just get the whole feature switched off in a huff).
+// patterns to BlockRules, drops its greyApps to the GREY tier (time-limited, not banned -
+// a hard ban on Instagram would just get the whole feature switched off in a huff), and
+// BANS its blockApps outright (game and news apps, where a time limit is no deterrent).
 // Nothing bespoke lives here; a new category is a new AppConfig.TemptationSpec.
 object TemptationBlocks {
 
     fun hasBlocks(spec: AppConfig.TemptationSpec): Boolean =
-        spec.blockPatterns.isNotEmpty() || spec.greyApps.isNotEmpty()
+        spec.blockPatterns.isNotEmpty() || spec.greyApps.isNotEmpty() || spec.blockApps.isNotEmpty()
 
     /**
      * Keyed on the PATTERNS only, never the apps: several of these apps (TikTok, Instagram)
@@ -428,9 +429,10 @@ object TemptationBlocks {
         if (on) {
             spec.blockPatterns.forEach { BlockRules.add(context, it) }
             spec.greyApps.forEach { AppRules.setApp(context, it, AppRules.GREY) }
+            spec.blockApps.forEach { AppRules.setApp(context, it, AppRules.BLOCK) }
         } else {
             spec.blockPatterns.forEach { BlockRules.remove(context, it) }
-            spec.greyApps.forEach { AppRules.remove(context, isApp = true, it) }
+            (spec.greyApps + spec.blockApps).forEach { AppRules.remove(context, isApp = true, it) }
         }
     }
 }

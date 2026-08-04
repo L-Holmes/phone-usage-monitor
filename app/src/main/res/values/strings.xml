@@ -215,9 +215,10 @@
     <string name="mode_strict_name">Strict</string>
     <string name="mode_superhardcore_name">Super hardcore</string>
     <string name="mode_on_toast">%1$s mode on</string>
+    <string name="mode_ratchet_toast">Off is gone for good - you chose Strict once. Relaxed is as loose as it gets now.</string>
     <string name="mode_off_toast">Monitoring off - nothing is watched or blocked</string>
     <string name="mode_needs_lock_toast">Super hardcore needs the uninstall lock on first</string>
-    <string name="mode_reverted_toast">Monitoring needs both permissions - the mode is back to Off.</string>
+    <string name="mode_reverted_toast">Monitoring needs the whole setup - the mode is back to %1$s.</string>
 
     <!-- ── Adult-content settings screen (Main.kt) ───────────────────────────────────── -->
     <string name="adult_section_looks">What the filter looks for</string>
@@ -243,7 +244,7 @@
     <!-- Always-on rules (shown in every mode). 8/9/10 take a numeric arg. -->
     <string name="always_on_01">One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.</string>
     <string name="always_on_02">Known adult sites are blocked outright. Beyond Off, mode makes no difference.</string>
-    <string name="always_on_03">Pages are scanned for sexual words. Enough of them and the page is blocked, in every mode - including Relaxed.</string>
+    <string name="always_on_03">Pages are scanned for sexual words. Every word carries a weight and they add up to a score - enough of them and the page is blocked, in every mode including Relaxed. No single word ever does it alone.</string>
     <string name="always_on_04">Anything on your ban list is blocked - the sites, pages, search terms and keywords you have banned yourself from.</string>
     <string name="always_on_05">Blocked browsers are covered the moment you open them. Only Firefox is left usable.</string>
     <string name="always_on_06">Dismiss a block on the same site enough times in one day and the whole site gets banned automatically for a while.</string>
@@ -254,12 +255,15 @@
     <string name="always_on_11">There is no \"let me look anyway\" button. It is not on any screen, on purpose - a button like that is just a door with a handle, and sooner or later the urge tries the handle.</string>
     <string name="always_on_12">It IS still there, but you only get offered it if you go for the uninstall button, the device-admin lock, the monitoring switch, or try to escape a locked strict mode. Reach for the destructive option and you\'ll be offered the honest one instead - a wait, a written commitment, a fixed window, and everything still standing afterwards.</string>
     <string name="always_on_13">The app never presses Back for you. Blocking covers the screen and offers you the way out; it never navigates your browser behind your back.</string>
+    <string name="always_on_14">A word-score block shows its working: the block screen lists the words that actually carried the score, so you can see why - and tell us when we got it wrong.</string>
+    <string name="always_on_15">In Firefox, with the image add-on installed, a page needs a HIGHER word score before it is blocked. The add-on is already reading that page from the inside, so this side of it can afford to be less twitchy.</string>
 
     <!-- Per-mode rule bullets (shown on the mode-rules screen). Keep in step with the mode
          behaviour flags in AppConfig.MODES. -->
     <string-array name="mode_off_rules">
         <item>Monitoring is OFF. Nothing is scanned and nothing is blocked - none of the \"Always on\" rules run in this mode.</item>
         <item>This is the starting mode on a fresh install.</item>
+        <item>ONE-WAY DOOR: once you have EVER entered Strict, Off disappears for good. Relaxed becomes the loosest mode this install can reach.</item>
         <item>The setup the blocker needs (page monitoring, the block screen, Firefox and its add-on) is OPTIONAL while you are here - the app never demands it.</item>
         <item>Pick ANY other mode and both permissions become required: the app walks you through turning them on, and won\'t leave this screen until they are.</item>
         <item>The Productivity page and its screen-time stats keep working either way.</item>
@@ -269,14 +273,15 @@
         <item>Greyscale: off. Your screen stays in colour.</item>
         <item>Lying down or sitting in the dark changes nothing. Every app still opens.</item>
         <item>The \"who is the filter for\" switches (Adult content -&gt; Settings) can be changed here (and in Off). In any stricter mode they are forced fully on.</item>
-        <item>Everything in \"Always on\" above still applies - blocking does not stop in Relaxed.</item>
-        <item>You can switch out of this mode whenever you like, unless the 7-day strict lock is running.</item>
+        <item>Everything in \"Always on\" above still applies - blocking does not stop in Relaxed. Known adult sites, reddit (and every mirror/frontend of it), imageboards, a hand-picked borderline list and non-Google search engines are all still blocked here.</item>
+        <item>You can switch out of this mode whenever you like, unless the 7-day strict lock is running - but if you have ever been Strict, Off is no longer one of the choices.</item>
     </string-array>
     <string-array name="mode_strict_rules">
         <item>Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.</item>
         <item>The daily pass resets at midnight.</item>
-        <item>NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.</item>
-        <item>That is the whole point: the phone in bed, in the dark, is where this goes wrong.</item>
+        <item>NIGHT GUARD: none in Strict. Lying down or sitting in the dark never blocks anything here - that only happens in Super hardcore.</item>
+        <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
+        <item>THE SETUP IS ENFORCED, not just asked for: while anything is still missing - the \"appear on top\" permission, Firefox, or its add-on - everything except the essentials is covered with a screen naming the step you still owe. Calls, texts, alarms, maps, Settings, Firefox and this app all stay open, so you can always finish it (or drop back to Relaxed).</item>
         <item>The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.</item>
         <item>Greyscale: your screen turns grey while you are lying down.</item>
         <item>Everything in \"Always on\" above still applies.</item>
@@ -285,9 +290,10 @@
     <string-array name="mode_superhardcore_rules">
         <item>Breathing pause: EVERY single time you open a watched app. There is no daily pass.</item>
         <item>Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.</item>
-        <item>NIGHT GUARD: while you are LYING DOWN, or the room is properly DARK, only the essentials open - same triggers as Strict.</item>
+        <item>NIGHT GUARD - only in this mode: while you are LYING DOWN, or the room is genuinely dark (lights off, curtains drawn), only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.</item>
         <item>Greyscale: your screen turns grey while you are lying down, same as Strict.</item>
         <item>Everything in \"Always on\" above still applies.</item>
+        <item>The setup is enforced outside this app exactly as it is in Strict: anything still missing and only the essentials open.</item>
         <item>This is Strict with the daily pass taken away.</item>
     </string-array>
 
@@ -845,7 +851,6 @@
     <!-- Names what the block switch kills. This category owns the reels/shorts/feeds switch
          that used to sit on the Productivity page - same patterns, said out loud. -->
     <string name="temptspec_scrolling_blocks">reels, shorts &amp; endless feeds</string>
-    <string name="temptspec_scrolling_insteadof">Put the phone in another room and do the one thing you were avoiding for ten minutes.</string>
     <string-array name="temptspec_scrolling_covers">
         <item>TikTok, Reels, Shorts, Reddit feeds - anything that never ends</item>
         <item>The \"just one more scroll\" loop</item>
@@ -855,7 +860,6 @@
     </string-array>
     <string name="temptspec_binge_title">Binge Watching  📺</string>
     <string name="temptspec_binge_subtitle">Escape loops through endless viewing.</string>
-    <string name="temptspec_binge_insteadof">Decide the ONE episode before you start, and set a timer for when it ends.</string>
     <string-array name="temptspec_binge_covers">
         <item>Netflix, YouTube, streaming, autoplay running on and on</item>
         <item>Watching hours longer than you meant to</item>
@@ -865,7 +869,6 @@
     </string-array>
     <string name="temptspec_comparison_title">Social Comparison / Social Media  👥</string>
     <string name="temptspec_comparison_subtitle">Break the comparison and validation loop.</string>
-    <string name="temptspec_comparison_insteadof">Message one person you actually care about, instead of watching a hundred you don\'t.</string>
     <string-array name="temptspec_comparison_covers">
         <item>Watching friends, influencers and peers post the highlight reel of their lives</item>
         <item>FOMO - the sense that everyone else is somewhere better</item>
@@ -875,7 +878,6 @@
     </string-array>
     <string name="temptspec_checking_title">Phone Checking  📱</string>
     <string name="temptspec_checking_subtitle">Stop the automatic checking habit.</string>
-    <string name="temptspec_checking_insteadof">Leave the phone face-down in another room for the next hour.</string>
     <string-array name="temptspec_checking_covers">
         <item>Unlocking the phone with no idea why you picked it up</item>
         <item>Checking notifications and messages purely out of reflex</item>
@@ -885,7 +887,6 @@
     </string-array>
     <string name="temptspec_news_title">News Cycles / Existential Anxiety  📰</string>
     <string name="temptspec_news_subtitle">Step away from endless worry.</string>
-    <string name="temptspec_news_insteadof">Pick one time tomorrow to read the news once, and act on nothing else until then.</string>
     <string-array name="temptspec_news_covers">
         <item>Refreshing the news all day for an update that never settles anything</item>
         <item>Reading the same bad story again and again, and doing nothing with it</item>
@@ -895,7 +896,6 @@
     </string-array>
     <string name="temptspec_gaming_title">Gaming &amp; Reward Loops  🎮</string>
     <string name="temptspec_gaming_subtitle">Understand digital reward cycles.</string>
-    <string name="temptspec_gaming_insteadof">Name what you\'re avoiding by playing, and do five minutes of it.</string>
     <string-array name="temptspec_gaming_covers">
         <item>Games built around streaks, unlocks, levels and daily rewards</item>
         <item>Chasing progress that only exists inside the game</item>
@@ -905,7 +905,6 @@
     </string-array>
     <string name="temptspec_shopping_title">Impulse Shopping  💳</string>
     <string name="temptspec_shopping_subtitle">Break the buying-for-a-feeling loop.</string>
-    <string name="temptspec_shopping_insteadof">Put it in the basket and leave it there for 48 hours. Most of it dies on its own.</string>
     <string-array name="temptspec_shopping_covers">
         <item>Amazon, Temu, discount sites, ads following you around</item>
         <item>Buying because you\'re bored, stressed, or high on getting a deal</item>
@@ -918,13 +917,14 @@
     <string name="temp_managing">What are you managing?</string>
     <string name="temp_adult_title">Adult Content 🔞</string>
     <string name="temp_adult_sub">Tools for the moment, and the longer game.</string>
-    <string name="temp_sound_like">Does this sound like you?</string>
-    <string name="temp_stats">%1$d ridden out  ·  %2$d slip(s) this week</string>
+    <string name="temp_stats">%1$d ridden out</string>
     <string name="temp_pull_title">I feel the pull right now</string>
     <string name="temp_pull_sub">ride it out - it passes</string>
-    <string name="temp_slipped_title">I slipped</string>
-    <string name="temp_slipped_sub">log it, no shame</string>
-    <string name="temp_try_instead">Try instead:  %1$s</string>
+    <string name="temp_examples_info">What this looks like</string>
+    <string name="temp_block_info">Exactly what gets blocked</string>
+    <string name="temp_info_sites">Sites: %1$s</string>
+    <string name="temp_info_apps_blocked">Apps blocked outright: %1$s</string>
+    <string name="temp_info_apps_grey">Apps limited to %2$d min/hour: %1$s</string>
     <string name="temp_lockdown">or lock everything down for 30 minutes</string>
     <string name="temp_lockdown_toast">Locked down for 30 min. Essentials still work.</string>
     <string name="temp_block_on">●  Blocking what feeds this</string>
@@ -933,7 +933,8 @@
          switch can name the thing it kills rather than saying "what feeds this". -->
     <string name="temp_block_named_on">●  Blocking %1$s</string>
     <string name="temp_block_named_off">○  Block %1$s</string>
-    <string name="temp_block_applimit"> and limits %1$d app(s) to %2$d min/hour</string>
+    <string name="temp_block_applimit">" and limits %1$d app(s) to %2$d min/hour"</string>
+    <string name="temp_block_appban">" and bans %1$d app(s)"</string>
     <string name="temp_block_sub_on">Blocking %1$d site(s)%2$s.  Tap to turn off.</string>
     <string name="temp_block_sub_off">Blocks %1$d site(s)%2$s.  Tap to turn on.</string>
     <string name="temp_ride_title">Ride it out</string>
@@ -946,9 +947,18 @@
     <string name="temp_ridden_out">%1$d ridden out</string>
     <string name="temp_put_down">Put the phone down</string>
     <string name="temp_put_down_sub">closes the app</string>
-    <string name="temp_slip_title">Logged.</string>
-    <string name="temp_slip_body">That\'s honesty, and it\'s worth more than a clean streak you had to lie for.\n\n%1$d this week. The number isn\'t a verdict - it\'s just data. Watch which way it moves.</string>
-    <string name="temp_slip_next">Next time, try:  %1$s</string>
+
+    <!-- ── Phone-checking measures (CheckingGuard, rendered by Main.checkingCard) ────── -->
+    <string name="checking_master_on">●  Checking measures on</string>
+    <string name="checking_master_off">○  Turn on checking measures</string>
+    <string name="checking_master_sub">Nothing to block here - the pull is the phone itself. These add friction instead.</string>
+    <string name="checking_level_relaxed">Relaxed</string>
+    <string name="checking_level_relaxed_sub">Just a heads-up popup when you\'re tapping a lot (%1$d+ taps a minute). Nothing is ever blocked.</string>
+    <string name="checking_level_hardcore">Hardcore</string>
+    <string name="checking_level_hardcore_sub">Real friction: short pauses when the checking runs away with you.</string>
+    <string name="checking_opt_unlocks">Pause after heavy unlocking - more than %1$d unlocks in an hour and each unlock pauses the phone for %2$ds</string>
+    <string name="checking_opt_clicks">Pause on rapid tapping - over %1$d taps a minute pauses for %2$ds</string>
+    <string name="checking_popup">High volume of clicks (%1$d clicks per minute)</string>
 
     <!-- ── Home permission-nudge banner + STATUS + sensors console (Main.kt) ─────────── -->
     <string name="home_banner_blocking_off">⚠  Blocking is off - the app still needs a quick setup. Tap to finish it.</string>
@@ -1020,18 +1030,26 @@
     <string name="br_waiting">Waiting it out - stay off other apps for now</string>
     <string name="br_blocked_app">Blocked app</string>
     <string name="br_blocked_app_pkg">Blocked app: %1$s</string>
-    <string name="br_grey_limit">That\'s your %1$d min for this hour - it\'ll open again soon</string>
+    <string name="br_grey_limit">%1$s is on your time limit.\nThat\'s your %2$d min of it for this hour - it opens again soon.</string>
     <string name="br_grey_limit_host">That\'s your %1$d min for this hour - %2$s opens again soon</string>
     <string name="br_night_lying_dark">Not while you\'re lying down in the dark.\nSit up, or turn a light on.</string>
     <string name="br_night_lying">Not while you\'re lying down.\nSit up and this opens again.</string>
     <string name="br_night_dark">Not in the dark.\nTurn a light on and this opens again.</string>
+    <string name="br_checking_unlocks">Unlock number %1$d this hour.\nA short pause - breathe, then decide if you actually need the phone.</string>
+    <string name="br_checking_clicks">Rapid-fire tapping (%1$d a minute).\nA short pause - breathe.</string>
     <string name="br_room">Protected room: you\'re in the %1$s.\nIn strict mode only calls, texts and other essentials open here.\nStep out of the %1$s and everything unlocks.</string>
     <string name="br_bluetooth_off">Bluetooth is off.\nYour room sensors need it to work, so this stays shut until it\'s back on.\nSwitch Bluetooth on and this app opens again.</string>
     <string name="br_adult_site">Adult site (blocklist): %1$s</string>
     <string name="br_search_engine">Search engine blocked: %1$s</string>
     <string name="br_blocked_site">Blocked site: %1$s</string>
-    <string name="br_blocked_term">Blocked term: %1$s</string>
     <string name="br_extension_page">The image-monitor add-on\'s page is blocked - the add-on stays on.</string>
+    <string name="br_setup_incomplete">Strict mode isn\'t set up yet.\n\n%1$s\n\nOpen Web Traffic Monitor and finish the setup - then everything unlocks.</string>
+    <string name="br_setup_missing_overlay">Still to do: allow the app to appear on top of other apps.</string>
+    <string name="br_setup_missing_firefox">Still to do: install Firefox.</string>
+    <string name="br_setup_missing_extension">Still to do: add the image-monitor add-on to Firefox.</string>
+    <!-- The block cover's "why": the words that carried the score. %1$s word, %2$d times seen, %3$d percent of the score. -->
+    <string name="block_contributors_header">WHAT SCORED</string>
+    <string name="block_contributor_line">\"%1$s\" - %2$d×, %3$d%% of the score</string>
     <string name="br_blocked_keyword">Blocked keyword: \"%1$s\"</string>
     <string name="br_back_same">Still the SAME blocked page. Press Back again, or go home.</string>
     <string name="br_back_diff">That\'s a DIFFERENT page - but it\'s blocked too. Press Back again, or go home.</string>

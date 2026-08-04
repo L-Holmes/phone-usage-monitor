@@ -1,16 +1,46 @@
 
+
+
+
+- add the whitelist, greylist and blacklist on that page as well
+    - I want to be able to see what they are
+    - same with trusted domains- i can't see the list...
+    - same with lots of things further down, like 'blocked with no score at all'--
+        - I should be able to click on it to see what the lists /hosts etc are!
+- web page and web page in firefox are the same- all web pages treated the same.
+    - also we'll only allow firefox in the final one anyway...
+- I've noticed in an app screen it says AND at least 2 differnet words must have scored...
+    - that is false right?
+    - it is just purely off of score isn't it?
+    - perhaps we have a rule that borderline things like 'hot' must have other associated words 'like women' there before we block...
+    - also can we make it so if its borderline for like 5 minutes (lots of 'hot' pop up), that we block that app for like an hour?!? (but maybe give the user a warning screen first telling them that they are about to be blocked due to borderline words showing up?)
+        -> perhaps make that only work in strict mode and above
+    --> its a bit confusing you have 'any ONE word, ever' and 'An app screen'right next to each other... like what does that mean? I'm in an app and then what? they are just different rules aren't they? the only difference is that firefox hsa higher thresholds for both !?!? BE MORE CLEAR!
+- blocking a page should not require at least 2 words- one very bad word (like 'pron') should block... for apps...
+    --> But only if the page gives a very short amount of text? If we have lots of text, then be more strict... 
+- also, do we not have a sort of algorithm for evasion spellings? or something more complex?!?!?
+    - otherise, user will just try different combinations!
+    - If there are evasions that are close to other words at least mark it as 'suspicious'... continued suspeciousness is likely suspicious! (lets detect that!)
+    - perhaps as a second / additional check step, we combine words together (in case someone is doing like 'pr o n' for 'pron', and check again...
+- what on earth does 'only counts with a sexual word within 4 words'? add examples for confusing tihngs like that- not just that one, but all around!
+- when i press the back button afte rclicking on an entry (e.g. 'person words'), it takes me back to the top of the page, it should save the scroll position...
+- an innocent neighbour deletes the match- I can't click on it.
+    - I need to know how that works- do we have hardcoded lists or what? how does that work?
+- dont repeat 'firefox, with image add on', we've already extablished that earlier on.
+- in web pages vs apps, 
+    - text is all messaed up- 'diff\neren\nt\n wo\n ...' can read it. 
+- what on earth is 'browser chrome'?
+
+
 ---------
 
-❯ redesign the app, particularly the 'adult content' page, in a modern style.
-Be inspired by apple's design principles.
-make it look like designed by professional apple team, with choesiveness in all parts of the app.
 
 
--------------
+-------
 
-- second page unclear
-- light and maybe angle blocking too harsh.
-- --> do we always allow say just a Google search not no websites (regardless of light and angle?)
+--------
+
+add translations?
 
 =======================================================================
 =======================================================================
@@ -20,29 +50,28 @@ make it look like designed by professional apple team, with choesiveness in all 
 ------------------
 ------------------
 ------------------
-
-LATER:
-- plugin: integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
-
 
 MANUAL TODO:
 - block all app store vpns...
+    - just block 'tiktok' app outright.. and any similar popular ones where app shows pictures / videos...
+    ---> want a really comprehensive list for this, like 30+ apps... that are similar...
 - add the holiday stuff? / guideance?
    - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place).
    - Coping-rehearsal scenarios can live here too.
    - Need to keep themselves busy!
    - No tracking needed on this — they'll know where they're at.
 - add N slip to list of rules...
-    - + no cloth..
-    - + downblou
+    - + no clothes
+    - + downblouse
     - + pokie
+    - + jiggle
 
 
 ------------------------------
 
 TODO LATER:
-
 - FINISH THE PLUGIN + integrate plugin enforcement...
+- plugin: integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
 
 ------------
 
@@ -62,6 +91,11 @@ Can we determine where they are on a map?
 --> then if they're out of the house.. they can't doom scroll.. 
 --> but more importantly.. if they're out of the house.. we don't have to worry about them with adult content. 
 (BUT! Will this be affected by VPNs??) 
+
+-------
+
+
+do the thing where we show a picture of a loved one before unlocking?
 
 -------
 

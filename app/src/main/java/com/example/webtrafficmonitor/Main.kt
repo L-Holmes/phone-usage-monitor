@@ -453,7 +453,6 @@ private fun temptResId(id: String, suffix: String): Int =
     resources.getIdentifier("temptspec_${id}_$suffix", if (suffix == "covers") "array" else "string", packageName)
 private fun temptTitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "title"))
 private fun temptSubtitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "subtitle"))
-private fun temptInsteadOf(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "insteadof"))
 /**
  * What this category's block switch kills, in the user's words ("reels, shorts & endless
  * feeds") - or null, and the switch falls back to the generic "block what feeds this".
@@ -504,6 +503,8 @@ private fun alwaysOnRules(): List<String> = listOf(
     getString(R.string.always_on_11),
     getString(R.string.always_on_12),
     getString(R.string.always_on_13),
+    getString(R.string.always_on_14),
+    getString(R.string.always_on_15),
 )
 
 /**
@@ -3177,10 +3178,8 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = (14 * dp).toInt() }
     }
-    card.addView(TextView(this).apply {
-        text = getString(R.string.temp_sound_like); textSize = 15f
-        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-    })
+    // RESTORED-FROM-HEAD 2026-08-04 — the "Does this sound like you?" heading is gone here
+    // because its string (temp_sound_like) no longer exists. See the note at habitRide.
     temptCovers(spec).forEach { line ->
         card.addView(TextView(this).apply {
             text = "\u2022  $line"; textSize = 14f; setTextColor(Palette.labelSecondary)
@@ -3203,15 +3202,9 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
 
     if (TemptationBlocks.hasBlocks(spec)) list.addView(blockSwitch(spec))
 
-    list.addView(captionedButton(getString(R.string.temp_slipped_title), getString(R.string.temp_slipped_sub), Palette.labelSecondary) {
-        habitSlip(spec)
-    })
-
-    list.addView(TextView(this).apply {
-        text = getString(R.string.temp_try_instead, temptInsteadOf(spec))
-        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
-        setPadding(0, (16 * dp).toInt(), 0, (6 * dp).toInt())
-    })
+    // RESTORED-FROM-HEAD 2026-08-04 — the "I slipped" button and the "try this instead" line
+    // are gone here because their strings (temp_slipped_*, temp_try_instead) and the
+    // temptInsteadOf() helper no longer exist. See the note at habitRide.
     list.addView(TextView(this).apply {
         text = getString(R.string.temp_lockdown)
         textSize = 14f; setTextColor(Palette.labelSecondary)
@@ -3284,6 +3277,27 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
     return row
 }
 
+// ⚠️⚠️⚠️ RESTORED FROM THE LAST COMMIT — 2026-08-04. READ BEFORE TRUSTING THIS REGION. ⚠️⚠️⚠️
+//
+//  On 2026-08-04 a bad edit truncated Main.kt and destroyed roughly 4,600 lines of the
+//  working copy - everything between the temptation pages and showDevConsole. The file was
+//  rebuilt as: the surviving top of the working copy + THE LAST COMMIT'S version of this
+//  middle + the surviving bottom of the working copy.
+//
+//  What that means for this region specifically:
+//    • It is the COMMITTED version (11cbd85), not whatever was in the working copy.
+//    • Roughly 205 lines of UNCOMMITTED work that lived in here were lost and could not be
+//      recovered - no stash, no editor history, no dangling git object held them.
+//    • The three sites marked RESTORED-FROM-HEAD nearby are where the committed code no
+//      longer compiled against the current strings.xml, because the removed strings prove
+//      those widgets had been deleted on purpose. Removing them was the minimal reading of
+//      that intent - it is an INFERENCE, not the original code.
+//
+//  Anything else in this middle region that was changed but still compiled has silently
+//  reverted to the committed version. If something here looks older than you remember, that
+//  is why. Delete this banner once the region has been reviewed.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
 /** Ride the urge out: a few slow breaths, then the button that says you beat it. */
 private fun habitRide(spec: AppConfig.TemptationSpec) {
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
@@ -3355,26 +3369,9 @@ private fun habitRideDone(spec: AppConfig.TemptationSpec) {
     setContentWithThumb(root) { showTemptation(spec) }
 }
 
-/** Owning a slip. One tap, no interrogation - staying easy to be honest IS the point. */
-private fun habitSlip(spec: AppConfig.TemptationSpec) {
-    HabitLog.record(this, spec.id, HabitLog.SLIP)
-    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val week = HabitLog.recent(this, spec.id, HabitLog.SLIP, 7)
-    val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
-    root.addView(titleText(getString(R.string.temp_slip_title)))
-    root.addView(TextView(this).apply {
-        text = getString(R.string.temp_slip_body, week)
-        textSize = 16f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
-        setLineSpacing(0f, 1.15f); setPadding(0, (10 * dp).toInt(), 0, 0)
-    })
-    root.addView(grow())
-    root.addView(TextView(this).apply {
-        text = getString(R.string.temp_slip_next, temptInsteadOf(spec))
-        textSize = 15f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
-        setLineSpacing(0f, 1.15f); setPadding(0, 0, 0, (14 * dp).toInt())
-    })
-    setContentWithThumb(root) { showTemptation(spec) }
-}
+// RESTORED-FROM-HEAD 2026-08-04 — habitSlip() was here. It is gone because every string it
+// showed (temp_slip_title / _body / _next) and the temptInsteadOf() helper it called have all
+// been removed from the project, and nothing else called it. See the note at habitRide.
 
 /** A clean tappable card for the home/tab screens (chevron shown when clickable). */
 private fun homeCard(title: String, sub: String?, onClick: (() -> Unit)? = null): View {
@@ -5597,10 +5594,22 @@ private fun startWeekStrict() {
             // has been revoked. Back cannot be the way to keep a mode nothing enforces, so
             // it falls back to Off. (If strict is LOCKED, setMode refuses and the gate stays
             // put - which is exactly what a lock is for.)
+            // ...and if the RATCHET refuses Off (they have been Strict at some point), it
+            // falls back to RELAXED instead. That fallback is load-bearing, not tidiness:
+            // from Strict up, SetupGuard covers the whole phone while the setup is unfinished,
+            // and this screen is the only route to a lower mode - the gate replaces the mode
+            // spinner, so without a landing spot here "ratchet + unfinished setup" would be a
+            // phone nobody can use. Relaxed still enforces everything it promises without the
+            // browser half, and the gate stays up in here until they finish it properly.
             atMandatoryGate() -> {
                 clearGatePlan()
-                if (Mode.setMode(this, Mode.OFF))
-                    Toast.makeText(this, getString(R.string.mode_reverted_toast), Toast.LENGTH_LONG).show()
+                val dropped = Mode.setMode(this, Mode.OFF) || Mode.setMode(this, Mode.RELAXED)
+                if (dropped)
+                    Toast.makeText(
+                        this,
+                        getString(R.string.mode_reverted_toast, modeDisplayName(Mode.current(this))),
+                        Toast.LENGTH_LONG,
+                    ).show()
                 updateScreen()
             }
             // Backing out of a VOLUNTARY permission screen is the same as "Not now" -
@@ -6054,6 +6063,11 @@ private fun startWeekStrict() {
         })
         // The log is the thing you actually come here for while tuning, so it sits first.
         content.addView(homeCard("View log", "The full monitoring log.") { showLogPage() })
+        // ...and the word filter second, because the log is mostly read to answer "why did
+        // THAT get blocked", which is a question this page exists to answer properly.
+        content.addView(homeCard("Word filter",
+            "Every word group, what it scores, the cutoff, and the exact screens we watch " +
+                "for - all for the mode you are in right now.") { showFilterBreakdown() })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         content.addView(homeCard(getString(R.string.settings_language), getString(R.string.settings_language_subtitle)) { showLanguagePicker() })
         content.addView(homeCard(getString(R.string.settings_currency), getString(R.string.settings_currency_subtitle)) { showCurrencyPicker() })
@@ -7142,6 +7156,621 @@ private fun startWeekStrict() {
     }
 
     // Read-only snapshot of everything the app is currently doing.
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  WORD FILTER  (Developer tools → Word filter)
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  Everything the text filter does, for the mode the user is actually in, built FROM
+    //  the filter (FilterCatalogue) and the page rules (AppConfig.GUARDED_SCREENS) rather
+    //  than written alongside them - a hand-written version is wrong the first time
+    //  somebody edits a word list.
+    //
+    //  IT IS A REFERENCE PAGE, SO IT IS BUILT TO BE SCANNED, NOT READ. The numbers that
+    //  matter (the cutoff, what each word is worth) are large, coloured and near the top;
+    //  the prose is one line per idea and lives under the thing it explains. If you add to
+    //  this page, add a ROW or a CARD, not a paragraph.
+    //
+    //  Dev-tools pages are hardcoded English by convention here (see showDevConsole): they
+    //  are diagnostics, not product surface, and 80 dev-only keys in strings.xml would be a
+    //  translation bill for nobody's benefit.
+    // ═════════════════════════════════════════════════════════════════════════════════
+
+    /** Colour for a points badge: louder the more one hit is worth. */
+    private fun pointsTone(points: Int, active: Boolean): Pair<Int, Int> = when {
+        !active -> Palette.surfaceSunken to Palette.labelTertiary
+        points >= FilterTuning.EXPLICIT_WEIGHT -> Palette.dangerSoft to Palette.dangerText
+        points >= FilterTuning.STRONG_WEIGHT -> Palette.warningSoft to Palette.warningText
+        points > 0 -> Palette.tintSoft to Palette.tintDeep
+        else -> Palette.surfaceSunken to Palette.labelSecondary
+    }
+
+    private fun behaviourLabel(b: FilterCatalogue.Behaviour): String = when (b) {
+        FilterCatalogue.Behaviour.BLOCKS_ALONE -> "Blocks on its own"
+        FilterCatalogue.Behaviour.NEEDS_A_SECOND -> "Needs a second word"
+        FilterCatalogue.Behaviour.ONLY_IN_CONTEXT -> "Only counts in context"
+        FilterCatalogue.Behaviour.NO_SCORE -> "Never scores"
+    }
+
+    private fun behaviourTone(b: FilterCatalogue.Behaviour): Int = when (b) {
+        FilterCatalogue.Behaviour.BLOCKS_ALONE -> Palette.dangerText
+        FilterCatalogue.Behaviour.NEEDS_A_SECOND -> Palette.labelSecondary
+        FilterCatalogue.Behaviour.ONLY_IN_CONTEXT -> Palette.warningText
+        FilterCatalogue.Behaviour.NO_SCORE -> Palette.labelTertiary
+    }
+
+    private fun showFilterBreakdown() {
+        val settings = BorderlineScorer.Settings.of(this)
+        val relaxed = settings.relaxed
+        val superHardcore = settings.superHardcore
+        val modeName = AppConfig.modeName(Mode.current(this))
+
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Word filter"))
+        root.addView(TextView(this).apply {
+            text = "Everything below is what is live in $modeName, right now."
+            textSize = Type.callout; setTextColor(Palette.labelSecondary)
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        })
+
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            isFillViewport = true; addView(list)
+        })
+        setContentWithThumb(root) { setupMainScreen() }
+
+        // ── building blocks ──────────────────────────────────────────────────────────
+        /** A big section break. Rule, then the heading - reads as a new chapter. */
+        fun section(title: String, blurb: String? = null) {
+            list.addView(View(this).apply {
+                setBackgroundColor(Palette.tint)
+                layoutParams = LinearLayout.LayoutParams((34 * dp).toInt(), (3 * dp).toInt())
+                    .apply { topMargin = (30 * dp).toInt() }
+            })
+            list.addView(TextView(this).apply {
+                text = title
+                textSize = Type.title2; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Palette.label); letterSpacing = -0.02f
+                setPadding(0, (8 * dp).toInt(), 0, 0)
+            })
+            if (blurb != null) list.addView(TextView(this).apply {
+                text = blurb
+                textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+                setLineSpacing(0f, Type.lineSpacing)
+                setPadding(0, (4 * dp).toInt(), 0, 0)
+            })
+            list.addView(View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(1, (10 * dp).toInt())
+            })
+        }
+
+        /** label on the left, a strong value on the right. The page's workhorse row. */
+        fun statRow(parent: LinearLayout, label: String, value: String, tone: Int = Palette.label) {
+            parent.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, (7 * dp).toInt(), 0, (7 * dp).toInt())
+                addView(TextView(this@MainActivity).apply {
+                    text = label; textSize = Type.callout; setTextColor(Palette.labelSecondary)
+                    setLineSpacing(0f, Type.lineSpacing)
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = value; textSize = Type.callout
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(tone)
+                    gravity = Gravity.END
+                    setPadding((10 * dp).toInt(), 0, 0, 0)
+                })
+            })
+        }
+
+        fun note(t: String) = list.addView(TextView(this).apply {
+            text = t; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding((2 * dp).toInt(), (2 * dp).toInt(), (2 * dp).toInt(), (10 * dp).toInt())
+        })
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("The cutoff", "How many points it takes before anything is blocked.")
+        val cutoffs = glassCard(Space.md)
+        fun cutoffRow(number: String, title: String, sub: String, tone: Int, first: Boolean = false) {
+            if (!first) cutoffs.addView(separator())
+            cutoffs.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(this@MainActivity).apply {
+                    text = number; textSize = 30f
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(tone)
+                    gravity = Gravity.CENTER
+                    layoutParams = LinearLayout.LayoutParams((62 * dp).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                })
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    addView(TextView(this@MainActivity).apply {
+                        text = title; textSize = Type.headline
+                        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                    })
+                    addView(TextView(this@MainActivity).apply {
+                        text = sub; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+                        setLineSpacing(0f, Type.lineSpacing)
+                    })
+                })
+            })
+        }
+        val addonOn = BrowserSetup.extensionConfirmed(this)
+        cutoffRow("${BorderlineScorer.webBar()}", "A web page",
+            "points needed before the page is covered", Palette.dangerText, first = true)
+        cutoffRow("${BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER)}",
+            "A web page in Firefox",
+            if (addonOn) "IN FORCE - the image add-on is confirmed, so the bar is ×${FilterTuning.PLUGIN_COVERED_MULTIPLIER} higher here"
+            else "not in force - needs the image add-on confirmed. Firefox uses ${BorderlineScorer.webBar()} today.",
+            if (addonOn) Palette.warningText else Palette.labelTertiary)
+        cutoffRow("${FilterTuning.APP_THRESHOLD}", "An app screen",
+            "…AND at least ${FilterTuning.APP_MIN_FAMILIES} different words must have scored",
+            Palette.dangerText)
+        cutoffRow("${FilterTuning.SINGLE_WORD_MAX}", "Any ONE word, ever",
+            "the ceiling for a single word - one point under the web bar, on purpose",
+            Palette.tintDeep)
+        list.addView(cutoffs)
+        note("Because one word can never earn more than ${FilterTuning.SINGLE_WORD_MAX} and the " +
+            "web bar is ${BorderlineScorer.webBar()}, blocking a page ALWAYS takes at least two " +
+            "different words. Core words and Loud phrases are the deliberate exception - one of " +
+            "those is enough on its own.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("What each word is worth",
+            "One hit, before any multiplier. Tap a row for the full word list.")
+        for (g in FilterCatalogue.GROUPS) {
+            val on = g.activeIn(relaxed, superHardcore)
+            list.addView(filterGroupCard(g, on, modeName))
+        }
+        note("Grey rows are switched OFF in $modeName and score nothing at all right now.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Words that only count in context",
+            "Some words are ordinary English until something else on the page changes that. " +
+                "On their own they score ZERO - not a little, zero.")
+        val gated = FilterCatalogue.GROUPS.filter {
+            it.behaviour == FilterCatalogue.Behaviour.ONLY_IN_CONTEXT && it.activeIn(relaxed, superHardcore)
+        }
+        val ctx = glassCard(Space.md)
+        if (gated.isEmpty()) {
+            ctx.addView(bodyText("No context-gated groups are switched on in $modeName."))
+        } else {
+            for ((i, g) in gated.withIndex()) {
+                if (i > 0) ctx.addView(separator())
+                ctx.addView(TextView(this).apply {
+                    text = g.name; textSize = Type.headline
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                })
+                ctx.addView(TextView(this).apply {
+                    text = "scores ${g.points} pts, but ONLY with ${g.gate}"
+                    textSize = Type.footnote; setTextColor(Palette.warningText)
+                    setPadding(0, (2 * dp).toInt(), 0, 0)
+                })
+                if (g.examples.isNotBlank()) ctx.addView(TextView(this).apply {
+                    text = g.examples; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+                    setPadding(0, (2 * dp).toInt(), 0, 0)
+                })
+            }
+        }
+        list.addView(ctx)
+        list.addView(filterGroupCard(FilterCatalogue.PERSON_WORDS, true, modeName))
+        note("\"Person words\" is the TRIGGER list, which is why it is worth 0. It never adds a " +
+            "point of its own - it just sits next to an Ambiguous or Combo word and switches it on.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Exceptions",
+            "The sharpest tool in the filter, and the first place to look when something is " +
+                "blocking that shouldn't.")
+        val exCard = glassCard(Space.md)
+        exCard.addView(TextView(this).apply {
+            text = "An innocent neighbour DELETES the match"
+            textSize = Type.headline; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+        })
+        exCard.addView(TextView(this).apply {
+            text = "Not \"scores less\" - scores nothing at all."
+            textSize = Type.footnote; setTextColor(Palette.successText)
+            setPadding(0, (2 * dp).toInt(), 0, (8 * dp).toInt())
+        })
+        for (ex in listOf(
+            "\"naked mole rat\"  →  0",
+            "\"nude lipstick\"  →  0",
+            "\"vaginal health\"  →  0",
+            "\"summa cum laude\"  →  0",
+        )) exCard.addView(TextView(this).apply {
+            text = ex; textSize = Type.callout; setTextColor(Palette.labelSecondary)
+            setPadding(0, (3 * dp).toInt(), 0, (3 * dp).toInt())
+        })
+        list.addView(exCard)
+        list.addView(filterGroupCard(FilterCatalogue.EXCEPTIONS, true, modeName))
+        note("The neighbour has to be within ${FilterTuning.EXCEPTION_WINDOW} words. Looked up by " +
+            "the matched word AND its family head, so an entry for \"nude\" also covers \"nudes\".")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("What scales a score", "These multiply what everything above is worth.")
+        for (s in FilterCatalogue.SCALERS) list.addView(scalerCard(s))
+
+        section("The two caps", "Why one word can never block a page on its own.")
+        for (s in FilterCatalogue.CAPS) list.addView(scalerCard(s))
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Web pages vs apps", "The same words, judged against different bars.")
+        val cmp = glassCard(Space.md)
+        cmp.addView(TextView(this).apply {
+            text = "WEB PAGE, IN A BROWSER"; textSize = Type.caption
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary); letterSpacing = 0.06f
+        })
+        statRow(cmp, "Blocks at", "${BorderlineScorer.webBar()} points", Palette.dangerText)
+        statRow(cmp, "Different words needed", "1 is enough (if it's a Core word)")
+        statRow(cmp, "Reads", "the title, the URL and the page text")
+        statRow(cmp, "In Firefox with the add-on",
+            "${BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER)} points",
+            if (addonOn) Palette.warningText else Palette.labelTertiary)
+        cmp.addView(separator())
+        cmp.addView(TextView(this).apply {
+            text = "ANY OTHER APP SCREEN"; textSize = Type.caption
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary); letterSpacing = 0.06f
+        })
+        statRow(cmp, "Blocks at", "${FilterTuning.APP_THRESHOLD} points", Palette.dangerText)
+        statRow(cmp, "Different words needed", "${FilterTuning.APP_MIN_FAMILIES}, always")
+        statRow(cmp, "Reads", "the sampled on-screen text")
+        list.addView(cmp)
+        note("The app bar is LOWER because an app feed is the harder problem: no address bar to " +
+            "read, no domain to blocklist, no add-on to lean on, and the content arrives already " +
+            "personalised. A lower bar breaks the one-word arithmetic above, so in-app blocking " +
+            "demands ${FilterTuning.APP_MIN_FAMILIES} different words instead - same guarantee, " +
+            "enforced a different way.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Specific screens we watch for",
+            "Not words - these are recognised by the text ON them, and each one was added " +
+                "from a real log entry. If an OS update changes the wording, that is what " +
+                "breaks, and the matched text is listed so it can be fixed.")
+        for (g in AppConfig.GUARDED_SCREENS) list.addView(guardedScreenCard(g))
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Never scanned at all", "Nothing on this page applies to these.")
+        val skip = glassCard(Space.md)
+        statRow(skip, "Whitelisted apps\nno read, no scan, no log",
+            "${AppConfig.SAFE_APPS.size}", Palette.successText)
+        skip.addView(separator())
+        statRow(skip, "Trusted domains\nthe word scorer is skipped; the domain blocklist is not",
+            "${AppConfig.SAFE_DOMAINS.size}", Palette.successText)
+        skip.addView(separator())
+        statRow(skip, "The launcher, keyboards and this app", "always skipped", Palette.successText)
+        skip.addView(separator())
+        statRow(skip, "Browser chrome (tab switcher, settings)",
+            "no word scoring", Palette.successText)
+        list.addView(skip)
+        note("A whitelisted app has no public feed and no arbitrary adult content - maps, " +
+            "messaging, banking. Trusted domains are Wikipedia, the NHS, Mayo Clinic and friends: " +
+            "anatomy words are unavoidable there and nobody should be blocked from looking up a " +
+            "symptom. Browser chrome is skipped so you can always reach the tab switcher and " +
+            "close a bad tab - the watched screens above are the exception to that.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Blocked with no score at all",
+            "These never reach the word filter. No threshold, no multiplier, no appeal.")
+        val abs = glassCard(Space.md)
+        statRow(abs, "Known adult domains",
+            if (DomainBlocklist.isReady) "~550k hosts" else "not loaded in this process",
+            if (DomainBlocklist.isReady) Palette.dangerText else Palette.labelTertiary)
+        abs.addView(separator())
+        statRow(abs, "The hand-maintained ban list", "${AlwaysBlocklist.DOMAINS.size} hosts", Palette.dangerText)
+        abs.addView(separator())
+        statRow(abs, "Search engines other than Google", "${SearchEngineBlocklist.DOMAINS.size} hosts", Palette.dangerText)
+        abs.addView(separator())
+        statRow(abs, "Strict-only hosts", "${StrictOnlyBlocklist.DOMAINS.size} hosts",
+            if (relaxed) Palette.labelTertiary else Palette.dangerText)
+        abs.addView(separator())
+        statRow(abs, "Your own ban list", "${BlockRules.all().size} rules", Palette.dangerText)
+        abs.addView(separator())
+        statRow(abs, "Browsers other than Firefox", "all covered", Palette.dangerText)
+        list.addView(abs)
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("Try it", "Type anything and see exactly what it scores, and why, in $modeName.")
+        val input = EditText(this).apply {
+            hint = "a title, a URL, a line of page text…"
+            textSize = Type.callout; setTextColor(Palette.label); setHintTextColor(Palette.labelQuaternary)
+            setPadding((14 * dp).toInt(), (14 * dp).toInt(), (14 * dp).toInt(), (14 * dp).toInt())
+            background = surfaceBg(Palette.surface, Radius.control)
+        }
+        list.addView(input, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ))
+        val resultCard = glassCard(Space.md).apply {
+            layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
+                topMargin = (10 * dp).toInt(); bottomMargin = (40 * dp).toInt()
+            }
+        }
+        val result = TextView(this).apply {
+            textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            typeface = Typeface.MONOSPACE
+        }
+        resultCard.addView(result)
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(e: Editable?) {
+                result.text = scoreExplanation(e?.toString().orEmpty(), settings)
+            }
+        })
+        list.addView(resultCard)
+        result.text = scoreExplanation("", settings)
+    }
+
+    /**
+     * One row of the "what each word is worth" table: status, name, points badge, how it
+     * behaves, how many words, and a way in to the list.
+     */
+    private fun filterGroupCard(
+        g: FilterCatalogue.Group, active: Boolean, modeName: String,
+    ): View {
+        val dp = resources.displayMetrics.density
+        val (badgeFill, badgeText) = pointsTone(g.points, active)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = tappableBg(if (active) Palette.glass else Palette.surfaceSunken)
+            elevation = if (active) dpf(1f) else 0f
+            val p = dp(Space.md); setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(Space.xs) }
+            isClickable = true; isFocusable = true
+            setOnClickListener { showFilterGroup(g, active, modeName) }
+            pressable()
+        }
+        // line 1: name ......... [n pts] ›
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = g.name; textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(if (active) Palette.label else Palette.labelTertiary)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(badge(
+                if (g.points > 0) "${g.points} pts" else "no score",
+                badgeFill, badgeText,
+            ))
+            addView(TextView(this@MainActivity).apply {
+                text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
+                setPadding(dp(Space.xs), 0, 0, 0)
+            })
+        })
+        // line 2: what it is
+        card.addView(TextView(this).apply {
+            text = g.what; textSize = Type.footnote
+            setTextColor(if (active) Palette.labelSecondary else Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xxs), 0, 0)
+        })
+        // line 3: examples
+        if (g.examples.isNotBlank()) card.addView(TextView(this).apply {
+            text = g.examples; textSize = Type.footnote
+            setTextColor(Palette.labelTertiary)
+            setPadding(0, dp(Space.xxs) / 2, 0, 0)
+        })
+        // line 4: behaviour + count, or why it is off
+        card.addView(TextView(this).apply {
+            text = if (!active) "OFF in $modeName  ·  ${g.entries().size} entries"
+            else behaviourLabel(g.behaviour) +
+                (g.gate?.let { "  ·  needs $it" } ?: "") +
+                "  ·  ${g.entries().size} entries"
+            textSize = Type.caption
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(if (active) behaviourTone(g.behaviour) else Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xs), 0, 0)
+        })
+        return card
+    }
+
+    /** A multiplier / cap card: name, the effect as a badge, one line of what it does. */
+    private fun scalerCard(s: FilterCatalogue.Scaler): View {
+        val dp = resources.displayMetrics.density
+        val hasList = s.entries != null
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = if (hasList) tappableBg(Palette.glass) else glassBg()
+            elevation = dpf(1f)
+            val p = dp(Space.md); setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(Space.xs) }
+            if (hasList) {
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    showWordList(s.name, s.effect, s.what, s.note, s.entries!!())
+                }
+                pressable()
+            }
+        }
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = s.name; textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(badge(s.effect, Palette.tintSoft, Palette.tintDeep))
+            if (hasList) addView(TextView(this@MainActivity).apply {
+                text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
+                setPadding(dp(Space.xs), 0, 0, 0)
+            })
+        })
+        card.addView(TextView(this).apply {
+            text = s.what; textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xxs), 0, 0)
+        })
+        if (s.note.isNotBlank()) card.addView(TextView(this).apply {
+            text = s.note; textSize = Type.caption; setTextColor(Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xs), 0, 0)
+        })
+        return card
+    }
+
+    /** One watched SCREEN: where it is, when the guard is armed, and the text we match. */
+    private fun guardedScreenCard(g: AppConfig.GuardedScreen): View {
+        val dp = resources.displayMetrics.density
+        val bounce = g.action == AppConfig.GuardAction.BOUNCE
+        val card = glassCard(Space.md)
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = g.name; textSize = Type.headline
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(badge(
+                if (bounce) "SENT HOME" else "COVERED",
+                if (bounce) Palette.warningSoft else Palette.dangerSoft,
+                if (bounce) Palette.warningText else Palette.dangerText,
+            ))
+        })
+        card.addView(TextView(this).apply {
+            text = "in ${g.where}"; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+            setPadding(0, dp(Space.xxs), 0, 0)
+        })
+        card.addView(TextView(this).apply {
+            text = g.why; textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xs), 0, 0)
+        })
+        card.addView(TextView(this).apply {
+            text = "WHEN:  ${g.whenArmed}"; textSize = Type.caption
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.tintDeep)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xs), 0, 0)
+        })
+        card.addView(TextView(this).apply {
+            text = "MATCHED ON:\n" + g.matches.joinToString("\n") { "  $it" }
+            textSize = Type.caption; setTextColor(Palette.labelTertiary)
+            typeface = Typeface.MONOSPACE
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, dp(Space.xs), 0, 0)
+        })
+        return card
+    }
+
+    /**
+     * The "Try it" box's answer: the score, the verdict at each bar, and the full breakdown -
+     * including for text that does NOT block, which is usually the more interesting case when
+     * you are tuning ("why is this sitting on 12?").
+     *
+     * Two scoring passes, not one per verdict: explain() gives the score and the breakdown,
+     * and the two web verdicts fall out of comparing it to webBar(). Only the in-app verdict
+     * needs its own pass, because it also counts distinct families. This runs on every
+     * keystroke, so it is worth not doing five times over.
+     */
+    private fun scoreExplanation(text: String, settings: BorderlineScorer.Settings): String {
+        if (text.isBlank()) return "Nothing typed yet."
+        val ex = BorderlineScorer.explain(text, null, null, settings)
+            ?: return "Scores 0.\nNothing in there is on any list."
+        val web = ex.score >= BorderlineScorer.webBar()
+        val plugin = ex.score >= BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER)
+        val inApp = BorderlineScorer.evaluateInApp(text, null, null, settings) != null
+        val sb = StringBuilder()
+        sb.append("SCORE ${ex.score}   (read as a page title,\n")
+        sb.append("so hits count ×${FilterTuning.TITLE_URL_MULTIPLIER};\n")
+        sb.append("the same words in body text\nwould score about half this)\n\n")
+        fun verdict(blocks: Boolean, where: String, bar: Int) =
+            sb.append(if (blocks) "BLOCKED" else "allowed").append("  $where (bar $bar)\n")
+        verdict(web, "as a web page", BorderlineScorer.webBar())
+        verdict(plugin, "in Firefox + add-on",
+            BorderlineScorer.webBar(FilterTuning.PLUGIN_COVERED_MULTIPLIER))
+        verdict(inApp, "on an app screen", FilterTuning.APP_THRESHOLD)
+        if (ex.contributions.isNotEmpty()) {
+            sb.append("\nWHAT SCORED\n")
+            for (c in ex.contributions) {
+                sb.append("  \"${c.word}\"\n")
+                sb.append("    ${c.tier}, ${c.count}×, ${c.points} pts, ${c.pct}%")
+                if (c.capped) sb.append(", capped at ${FilterTuning.PER_WORD_CAP}")
+                sb.append('\n')
+            }
+            sb.append("\nThe block screen would name:\n  ")
+            sb.append(BorderlineScorer.topContributors(ex.contributions).joinToString(", ") { it.word })
+        }
+        return sb.toString().trimEnd()
+    }
+
+    /** The words inside one group. Back returns to the breakdown page. */
+    private fun showFilterGroup(group: FilterCatalogue.Group, active: Boolean, modeName: String) {
+        val head = buildString {
+            append(if (group.points > 0) "${group.points} points per hit" else "Scores nothing")
+            append("  ·  ")
+            append(behaviourLabel(group.behaviour))
+            group.gate?.let { append("\nOnly counts with $it.") }
+            append("\n")
+            append(if (active) "Switched ON in $modeName." else "Switched OFF in $modeName - scores nothing right now.")
+        }
+        showWordList(group.name, head, group.what, group.note, group.entries())
+    }
+
+    /**
+     * A list of words with its explanation above it. Shared by the word groups and by the
+     * multipliers that have a list behind them.
+     *
+     * The entries are ONE TextView, not one per word: some of these lists run to several
+     * hundred, and a view each makes the page crawl on the way in.
+     */
+    private fun showWordList(
+        title: String, head: String, what: String, note: String, entries: List<String>,
+    ) {
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText(title))
+
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            isFillViewport = true; addView(list)
+        })
+        setContentWithThumb(root) { showFilterBreakdown() }
+
+        val card = glassCard(Space.md)
+        card.addView(TextView(this).apply {
+            text = head; textSize = Type.callout
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+            setLineSpacing(0f, Type.lineSpacing)
+        })
+        card.addView(TextView(this).apply {
+            text = what; textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (8 * dp).toInt(), 0, 0)
+        })
+        if (note.isNotBlank()) {
+            card.addView(separator())
+            card.addView(TextView(this).apply {
+                text = note; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+                setLineSpacing(0f, Type.lineSpacing)
+            })
+        }
+        list.addView(card)
+
+        list.addView(TextView(this).apply {
+            text = "${entries.size} ENTRIES"; textSize = Type.caption
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
+            letterSpacing = 0.06f
+            setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
+        })
+        val words = glassCard(Space.md).apply {
+            layoutParams = (layoutParams as LinearLayout.LayoutParams)
+                .apply { bottomMargin = (40 * dp).toInt() }
+        }
+        words.addView(TextView(this).apply {
+            text = if (entries.isEmpty()) "(empty)" else entries.joinToString("\n")
+            textSize = Type.callout; setTextColor(Palette.label)
+            setLineSpacing(0f, Type.lineSpacing)
+        })
+        list.addView(words)
+    }
+
     private fun showDevConsole() {
         inSubPage = true
         val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
@@ -7172,7 +7801,8 @@ private fun startWeekStrict() {
         row("Breathing pause", if (spec?.breathingOn == true) "on" else "off", spec?.breathingOn == true)
         row("Page flag threshold", "${spec?.flagThreshold ?: "-"} (score \u2265 this is flagged)")
         row("Flag when lying down", if (spec?.flagLyingDown == true) "on" else "off", spec?.flagLyingDown == true)
-        row("Flag when light \u2264", (spec?.lightFlagBelow ?: AppConfig.LightLevel.DARK).name)
+        row("Night guard light trigger", spec?.nightGuardLuxBelow?.let { "\u2264 ${it.toInt()} lux" } ?: "off",
+            spec?.nightGuardLuxBelow != null)
 
         header("Blocking")
         row("Reels / shorts / feeds", if (ShortForm.enabled()) "blocked" else "allowed", ShortForm.enabled())
@@ -7273,6 +7903,13 @@ private fun startWeekStrict() {
                     } else {
                         Toast.makeText(this@MainActivity, getString(R.string.mode_on_toast, modeDisplayName(chosen)), Toast.LENGTH_SHORT).show()
                     }
+                } else if (chosen == Mode.OFF && Mode.everStrict(this@MainActivity) && !Mode.isLocked(this@MainActivity)) {
+                    // THE RATCHET refused it: they've been Strict at some point, so Off is
+                    // gone from this install for good. Still a "turn the blocking off"
+                    // attempt, so it is recorded like one.
+                    BypassWatch.record(this@MainActivity, BypassWatch.Reason.LEAVE_STRICT)
+                    Toast.makeText(this@MainActivity, getString(R.string.mode_ratchet_toast), Toast.LENGTH_LONG).show()
+                    sp.setSelection(curIdx())
                 } else {
                     // Refused: they're locked into strict and just tried to get out of it.
                     // That's a bypass attempt - see BypassWatch. The honest-exit offer

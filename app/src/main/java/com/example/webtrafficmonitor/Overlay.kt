@@ -111,6 +111,12 @@ class OverlayController(private val context: Context) {
      * lands somewhere fine. For everything else - a blocked app, the night guard's
      * lying-down/dark covers, a protected room - there is no "previous page" to go back
      * to, so the only way out is the big exit button.
+     *
+     * [details] is the block SHOWING ITS WORKING: for a scored block, the handful of words
+     * that actually carried the score. A cover that says only "blocked" is one the user can
+     * only read as arbitrary, and when the block IS wrong this is the line that says which
+     * word to go and fix. Null (and hidden) for blocks that are their own explanation - a
+     * banned domain, a screen guard, an app that is simply on the list.
      */
     fun show(
         reason: String,
@@ -118,9 +124,11 @@ class OverlayController(private val context: Context) {
         onLeave: () -> Unit,
         onReport: () -> Unit,
         showGoBack: Boolean = true,
+        details: String? = null,
     ) {
         view?.let { existing ->
             existing.findViewById<TextView>(R.id.block_reason).text = reason
+            setDetailsOn(existing, details)
             // The cover can be re-shown for a DIFFERENT kind of block (a page cover
             // upgraded to an app cover, say) - keep the link's visibility current.
             existing.findViewById<View>(R.id.btn_go_back).visibility =
@@ -130,6 +138,7 @@ class OverlayController(private val context: Context) {
 
         val overlay = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
         overlay.findViewById<TextView>(R.id.block_reason).text = reason
+        setDetailsOn(overlay, details)
         // Typed as View, not Button: "go back" and "report" are quiet TextView links now,
         // and only "leave" is still an actual Button.
         val goBack = overlay.findViewById<View>(R.id.btn_go_back)
@@ -188,6 +197,13 @@ class OverlayController(private val context: Context) {
     /** Update just the cover's reason text (used by the live block countdown). */
     fun setReason(reason: String) {
         view?.findViewById<TextView>(R.id.block_reason)?.text = reason
+    }
+
+    /** The breakdown line: filled in and shown, or emptied and taken out of the layout. */
+    private fun setDetailsOn(root: View, details: String?) {
+        val view = root.findViewById<TextView>(R.id.block_details) ?: return
+        view.text = details.orEmpty()
+        view.visibility = if (details.isNullOrBlank()) View.GONE else View.VISIBLE
     }
 
     /**

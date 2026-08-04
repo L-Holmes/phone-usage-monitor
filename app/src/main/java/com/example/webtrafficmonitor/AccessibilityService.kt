@@ -195,18 +195,43 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (delta in 1..GREY_MAX_DELTA) GreyUsage.addUsage(this, t, delta)
     }
 
+    /**
+     * Is the thing we are charging time to actually on screen RIGHT NOW?
+     *
+     * ⚠️ 2026-08-04 - THIS IS THE FIX FOR "the 2-minute message appears out of nowhere".
+     * updateGreyTracking is only ever reached from evaluateBlock, and a great many screens
+     * never get that far: a whitelisted app returns early, so do keyboards, ignored packages
+     * and a screen that is simply off. So the tick carried on charging time to an app the
+     * user had left ten minutes ago - and then, when that stale budget ran out, threw the
+     * cover over whatever they had ACTUALLY opened. Hence "random", and hence a message
+     * about an app that had nothing to do with the screen it landed on.
+     *
+     * So the tick now re-checks the real window state every time, exactly like the block
+     * recheck loop does, instead of trusting a variable nobody is guaranteed to update.
+     */
+    private fun greyTargetStillInFront(): Boolean {
+        val t = greyTarget ?: return false
+        if (keyguard.isKeyguardLocked) return false          // screen locked: nobody is using it
+        val front = currentForegroundPackage() ?: return false
+        // An app target must BE the app in front. A HOST target only has to still be in a
+        // browser - evaluateBlock re-reads the address bar and retargets or clears from there.
+        return if (greyIsApp) front.lowercase() == t else AppBlocklist.isBrowser(front)
+    }
+
     private val greyTick = object : Runnable {
         override fun run() {
+            if (!greyTargetStillInFront()) { updateGreyTracking(null, false); return }
             flushGrey()
-            val t = greyTarget
-            if (t != null) {
-                // Enforce even while the app sits idle with no events.
-                if (greyIsApp && GreyUsage.isOverLimit(this@PageMonitorAccessibilityService, t)) {
-                    showAppBlock(
-                        getString(R.string.br_grey_limit, GreyUsage.LIMIT_MIN), t)
-                }
-                mainHandler.postDelayed(this, GREY_TICK_MS)
+            val t = greyTarget ?: return
+            // Enforce even while the app sits idle with no events. Routed through
+            // coverForeground (i.e. appBlockReason) rather than raising the cover directly,
+            // so this obeys the same rules as every other block: never over the keyguard,
+            // never with monitoring off, never during a loosen window - and the reason text
+            // is built in ONE place instead of two that can drift apart.
+            if (greyIsApp && GreyUsage.isOverLimit(this@PageMonitorAccessibilityService, t)) {
+                coverForeground()
             }
+            mainHandler.postDelayed(this, GREY_TICK_MS)
         }
     }
 
@@ -261,8 +286,31 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val name = BrowserSetup.EXTENSION_NAME.lowercase()
         val onAddonPage = BrowserSetup.EXTENSION_SLUG in u ||
             (host != null && BrowserSetup.EXTENSION_HOST in host && name in t)
-        val onManagerPage = name in c && ("run in private browsing" in c || "remove" in c)
+        val onManagerPage = name in c && AppConfig.EXTENSION_MANAGER_KEYWORDS.any { it in c }
         return if (onAddonPage || onManagerPage) getString(R.string.br_extension_page) else null
+    }
+
+    /**
+     * Cover for one of the browser's OWN screens - the add-on manager, Firefox's history
+     * clearing. Not a web page and not a blocked app, so it gets neither treatment:
+     *
+     *  - no "go back one page instead": there is no page underneath, and Back inside browser
+     *    settings is unpredictable. Exit is the only offer, same as an app cover.
+     *  - NOT appBlockActive: an app cover is sticky and owned by the recheck loop, which would
+     *    keep it up over the whole browser. This one belongs to the SCREEN, so the ordinary
+     *    re-evaluation takes it straight back down when they navigate away.
+     */
+    private fun showScreenGuard(reason: String, pkg: String, controller: OverlayController) {
+        if (!controller.isShowing) BlockEventLog.recordWeb(this, pkg, null, null, reason, null)
+        shownBlockHost = null
+        shownBlockUrl = null
+        controller.show(
+            reason = reason,
+            onGoBack = {},
+            onLeave = { leaveBlockedPage(pkg, controller) },
+            onReport = {},
+            showGoBack = false,
+        )
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -372,6 +420,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     closeUsageSegment()
+                    // Stop charging greylist time to whatever was in front. A dark screen is
+                    // not two minutes of Instagram, and the tick has no other way to find out
+                    // the screen went off (no accessibility event fires for it).
+                    updateGreyTracking(null, false)
                     screenOffAt = System.currentTimeMillis()
                 }
                 Intent.ACTION_USER_PRESENT -> onUnlock()
@@ -405,6 +457,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         lastUnlockAt = now
         urgentOpenArmed = true          // the next app opened is a candidate "straight-in open"
         DopamineLog.update(this) { it.unlocks++ }
+        // Phone-checking friction (hardcore): too many unlocks this hour -> a short pause.
+        // Cover whatever is in front now; the launcher is on the essentials list, so in
+        // practice the pause lands on the first non-essential app they open.
+        if (CheckingGuard.recordUnlock(this)) coverForeground()
+    }
+
+    /**
+     * Evaluate the app in front and cover it if anything now blocks it. For triggers that
+     * fire OUTSIDE the accessibility-event stream (an unlock, a tap-rate pause) - mirror of
+     * updateNightGuard / updateRoomGuard, which do the same off their own signals.
+     */
+    private fun coverForeground() {
+        if (appBlockActive || leaving) return
+        val pkg = currentForegroundPackage() ?: return
+        val reason = appBlockReason(pkg) ?: return
+        showAppBlock(reason, pkg)
     }
 
     /** Called on every foreground app change: closes the last segment and opens a new one. */
@@ -461,7 +529,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val lateNight = isLateNight()
         val justWoke = now < justWokeUntil
         val lying = SensorContext.known && SensorContext.lyingDown
-        val dark = guardDark
+        // The light BAND, not guardDark: the guard's latch only updates in modes with a light
+        // trigger (super hardcore now), and the dopamine dark-seconds stat must not depend on
+        // which mode you happen to be in.
+        val dark = SensorContext.known && SensorContext.light == AppConfig.LightLevel.DARK
 
         DopamineLog.update(this) { d ->
             d.seconds[cat] = (d.seconds[cat] ?: 0L) + secs
@@ -562,7 +633,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (type == AccessibilityEvent.TYPE_VIEW_SCROLLED ||
             type == AccessibilityEvent.TYPE_VIEW_CLICKED
         ) {
-            if (event.packageName?.toString() != this.packageName) countInteraction()
+            if (event.packageName?.toString() != this.packageName) {
+                countInteraction()
+                // Phone-checking friction. CLICKS only, never scrolls - one swipe fires a
+                // burst of TYPE_VIEW_SCROLLED events, which would trip the rate instantly.
+                if (type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+                    val popup = CheckingGuard.recordTap(this)
+                    if (popup != null) Toast.makeText(this, popup, Toast.LENGTH_LONG).show()
+                    else if (CheckingGuard.pauseReason() != null) coverForeground()
+                }
+            }
             return
         }
 
@@ -809,9 +889,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (keyguard.isKeyguardLocked) return null
         if (Mode.isOff(this)) return null                     // monitoring off: nothing is covered
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
+        // Strict was chosen but the setup that enforces it never finished. Ahead of every
+        // other guard, because the others are the ones that aren't fully working yet.
+        setupGuardReason(pkg)?.let { return it }
         nightGuardReason(pkg)?.let { return it }
         roomGuardReason(pkg)?.let { return it }
         bluetoothGuardReason(pkg)?.let { return it }
+        checkingPauseReason(pkg)?.let { return it }
         if (Lockdown.isActive(this) && pkg != packageName && !Lockdown.isAllowed(pkg)) {
             return getString(R.string.br_lockdown)
         }
@@ -821,21 +905,42 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         when (AppRules.appTier(this, pkg)) {                   // user "Report an app" rules
             AppRules.BLOCK -> return getString(R.string.br_blocked_app)
             AppRules.GREY ->
+                // NAME THE APP. This cover used to say only "that's your 2 min for this
+                // hour", which reads as a message from nowhere - especially since it can
+                // land the moment you open the app rather than while you are in it.
                 if (pkg != null && GreyUsage.isOverLimit(this, pkg.lowercase()))
-                    return getString(R.string.br_grey_limit, GreyUsage.LIMIT_MIN)
+                    return getString(R.string.br_grey_limit, appLabelFor(pkg), GreyUsage.LIMIT_MIN)
         }
         AppBlocklist.blockedReason(pkg)?.let { return getString(R.string.br_blocked_app_pkg, it) }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
     }
 
     /**
-     * THE NIGHT GUARD. In strict (and super hardcore), while the phone says you are lying down
-     * or the room is dark, nothing but the essentials opens - WhatsApp included. That posture,
-     * in that light, is where this goes wrong, and the cheapest intervention is to make the
-     * phone useless there.
+     * STRICT MODE THAT ISN'T SET UP YET - see SetupGuard for the full reasoning.
      *
-     * The thresholds come from the mode spec (flagLyingDown / lightFlagBelow), so super
-     * hardcore trips in ordinary indoor light while strict waits for a genuinely dim room.
+     * Strict and above can be chosen and then walked away from: MainActivity's gate only
+     * holds the door inside our own app. Out here the mode would read "Strict" with the
+     * overlay permission off, or no Firefox, or no image add-on - protection the user thinks
+     * they have and doesn't. So everything non-essential is covered with a screen that says
+     * which step is outstanding, until it is done.
+     *
+     * Relaxed is left alone: it enforces what it promises off the service alone.
+     */
+    private fun setupGuardReason(pkg: String?): String? {
+        if (Mode.isRelaxed(this) || Mode.isOff(this)) return null
+        if (SetupGuard.isAllowed(this, pkg)) return null
+        val missing = SetupGuard.missingStep(this) ?: return null
+        return getString(R.string.br_setup_incomplete, missing)
+    }
+
+    /**
+     * THE NIGHT GUARD - Super hardcore ONLY now (2026-08-01; both triggers proved too harsh
+     * for Strict). While the phone says you are lying down, or the room is genuinely dark,
+     * nothing but the essentials opens, WhatsApp included. That posture, in that light, is
+     * where this goes wrong, and the cheapest intervention is to make the phone useless there.
+     *
+     * The triggers come from the mode spec (flagLyingDown / nightGuardLuxBelow); Strict has
+     * spec.nightGuard = false, so this returns null there without looking further.
      *
      * Fails OPEN on purpose. If the sensors haven't reported yet, or the phone has no light
      * sensor, we do NOT guess - locking someone out of their phone on a guess is far worse
@@ -859,14 +964,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Is it dark enough to trip the guard? Latching, with a deliberate gap between the level
-     * that turns it ON and the level that turns it OFF - see NIGHT_GUARD_LIGHT_RELEASE. A bare
-     * threshold makes the cover strobe when the reading sits right on the line.
+     * Is it dark enough to trip the guard? Only in modes that HAVE a light trigger at all
+     * (nightGuardLuxBelow is null everywhere but Super hardcore - lying-down is the only
+     * trigger in Strict). Latching, with a deliberate gap between the level that turns it ON
+     * and the level that turns it OFF - see NIGHT_GUARD_LIGHT_RELEASE. A bare threshold makes
+     * the cover strobe when the reading sits right on the line.
      */
     private fun darkEnoughForGuard(spec: AppConfig.ModeSpec): Boolean {
+        val enterAt = spec.nightGuardLuxBelow
+        if (enterAt == null) { guardDark = false; return false } // no light trigger in this mode
         val lux = SensorContext.lux
         if (lux < 0f) return false                               // no light sensor / no reading
-        val enterAt = AppConfig.lightBandMax(spec.lightFlagBelow)
         val releaseAt = enterAt * AppConfig.NIGHT_GUARD_LIGHT_RELEASE
         guardDark = when {
             lux <= enterAt -> true
@@ -959,6 +1067,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * THE CHECKING PAUSE - see CheckingGuard. A short cover after too many unlocks or
+     * rapid-fire tapping (hardcore checking measures only). Same essentials whitelist as
+     * the night guard, and the recheck loop drops the cover the moment the pause expires.
+     */
+    private fun checkingPauseReason(pkg: String?): String? {
+        if (pkg == null || pkg == packageName) return null       // never cover ourselves
+        val reason = CheckingGuard.pauseReason() ?: return null
+        if (isNightGuardAllowed(pkg)) return null
+        return reason
+    }
+
+    /**
      * Re-check when the RADIO moves, not just when the screen does. Toggling Bluetooth off
      * from the shade fires no accessibility event at all, so without this the cover would
      * only appear on the next app switch - and turning it back on would leave the cover
@@ -990,6 +1110,40 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /** The gender switches, read fresh each pass so a change takes effect on the next page. */
     private fun filterSettings() = BorderlineScorer.Settings.of(this)
+
+    /**
+     * How much to RAISE the heuristic's bar for this app - see the long note on
+     * FilterTuning.PLUGIN_COVERED_MULTIPLIER.
+     *
+     * Firefox with our image add-on confirmed is the one surface where a second filter is
+     * already reading the page from the inside, and it can see the images, which is the half
+     * we can't. Two filters at the same bar just doubles the false positives, so this one
+     * steps back a little there and nowhere else. Deliberately NOT every browser: the other
+     * browsers are funnelled away rather than supported, and the add-on only exists for
+     * Firefox, so "a plugin is covering this" simply isn't true anywhere else.
+     */
+    private fun pluginThresholdMultiplier(packageName: String): Float =
+        if (packageName in AppConfig.FIREFOX_PACKAGES && BrowserSetup.extensionConfirmed(this))
+            FilterTuning.PLUGIN_COVERED_MULTIPLIER
+        else
+            1f
+
+    /**
+     * The "here is WHY" block under a cover's reason: the handful of words that actually
+     * carried the score, biggest share first. A block with no working shown is a block the
+     * user can only read as arbitrary - and when it IS wrong, this is the line that tells
+     * them (and us) which word to go and fix.
+     *
+     * Null for anything that wasn't scored - a banned domain or a screen guard is its own
+     * explanation and doesn't need a word list under it.
+     */
+    private fun contributorText(verdict: BorderlineScorer.Result?): String? {
+        val top = BorderlineScorer.topContributors(verdict?.contributions ?: return null)
+        if (top.isEmpty()) return null
+        return top.joinToString("\n") { c ->
+            getString(R.string.block_contributor_line, c.word, c.count, c.pct)
+        }.let { getString(R.string.block_contributors_header) + "\n" + it }
+    }
 
     /**
      * Is the user in the middle of TYPING - i.e. is an editable field focused right now?
@@ -1160,7 +1314,24 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // we'd cover the tab grid - the one screen you need in order to CLOSE the bad tab, and
         // the only way out of a blocked private tab. So: no page blocking, no keyword blocking,
         // and any cover already up comes down. You must always be able to reach tab view.
+        //
+        // ⚠️ 2026-08-04 - WITH ONE EXCEPTION, AND IT IS THE WHOLE POINT OF THE SCREEN GUARDS.
+        // The browser's OWN dangerous screens are chrome too: the add-on manager, where our
+        // image add-on is switched off or removed, and Firefox's delete-browsing-data pages.
+        // Neither is a WebView, so bailing out here was quietly disabling BOTH guards - the
+        // add-on's own "Remove" page was reachable in every mode, which makes the add-on
+        // requirement in the setup gate worth nothing. Evaluate the guards first; only if
+        // none of them matches do we drop the cover and leave the chrome alone.
         if (AppBlocklist.isBrowser(packageName) && !hasWebView()) {
+            // No host, no URL: off the web by definition, and a stale URL from the last tab
+            // must never be what identifies one of these screens. They are recognised purely
+            // by what is ON them.
+            val chromeGuard = appScreenBlock(packageName, title, content)
+                ?: extensionPageBlock(packageName, null, null, title, content)
+            if (chromeGuard != null) {
+                showScreenGuard(chromeGuard, packageName, controller)
+                return
+            }
             if (!appBlockActive) {
                 controller.hide()
                 shownBlockHost = null
@@ -1203,19 +1374,25 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         } else null
 
-        // Mode-gated keyword block (Strict+ / Super-hardcore-only), matched off title + URL.
-        val modeKeyword = ModeKeywords.match(this, title, url)
+        // The scorer's own verdict, kept as a Result so the cover can show its working (the
+        // "main contributors" breakdown) rather than just a number. Null unless it blocks.
+        //
+        // The mode-gated fragments ("ling eri", "bik ini", "red dit") used to be checked here
+        // as a separate, unscored, outright block. They are now a TIER OF THE SCORER
+        // (ModeFragments), which is why there is nothing left to check at this level.
+        var verdict: BorderlineScorer.Result? = null
         val baseReason = when {
                appGuard != null -> appGuard
                extGuard != null -> extGuard
                host != null && DomainBlocklist.isBlocked(host) -> getString(R.string.br_adult_site, host)
                // Search engines: only Google is allowed, in every mode.
                host != null && SearchEngineBlocklist.isBlocked(host) -> getString(R.string.br_search_engine, host)
-               // Our hand-maintained hosts (reddit frontends, reddit, borderline shops):
-               // blocked in Strict / Super hardcore, allowed in Relaxed.
+               // The hand-maintained ban list (reddit + its frontends/mirrors, imageboards,
+               // borderline shops): banned in EVERY mode.
+               host != null && AlwaysBlocklist.isBlocked(host) -> getString(R.string.br_blocked_site, host)
+               // Strict+-only hosts (list currently empty - see StrictOnlyBlocklist).
                host != null && !Mode.isRelaxed(this) && StrictOnlyBlocklist.isBlocked(host) ->
                    getString(R.string.br_blocked_site, host)
-               modeKeyword != null -> getString(R.string.br_blocked_term, modeKeyword)
                rule != null -> describeRule(rule)
                host != null && AppRules.hostTier(this, host) == AppRules.GREY &&
                    GreyUsage.isOverLimit(this, host) ->
@@ -1224,7 +1401,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                // The heuristic - and ONLY the heuristic - waits for real page text.
                !contentReady -> null
                host != null || AppBlocklist.isBrowser(packageName) ->
-                   BorderlineScorer.evaluate(title, url, content, filterSettings())?.reason
+                   BorderlineScorer.evaluate(
+                       title, url, content, filterSettings(), pluginThresholdMultiplier(packageName),
+                   )?.also { verdict = it }?.reason
                // NON-BROWSER APPS. This used to be the hole in the whole design: the
                // heuristic ran on web pages and inside browsers, and nowhere else - so an
                // app feed got nothing but a keyword match against its screen TITLE, which
@@ -1234,7 +1413,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                // Now the same scorer runs on the sampled screen text, at the tighter
                // in-app bar (see FilterTuning.APP_THRESHOLD).
                isScannableApp(packageName) ->
-                   BorderlineScorer.evaluateInApp(title, url, content, filterSettings())?.reason
+                   BorderlineScorer.evaluateInApp(title, url, content, filterSettings())
+                       ?.also { verdict = it }?.reason
                else -> null
            }
 
@@ -1243,7 +1423,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (freshShow) {
                 // Scored for app screens too, not just web pages - an in-app block is now a
                 // thing that can happen, and a block event with no score is not reviewable.
-                val blockScore = BorderlineScorer.score(title, url, content, filterSettings())?.score
+                // Reuse the verdict when the scorer is what blocked; only a block that came
+                // from somewhere else (a banned domain, a screen guard) has to be scored here.
+                val blockScore = verdict?.score
+                    ?: BorderlineScorer.score(title, url, content, filterSettings())?.score
                 BlockEventLog.recordWeb(this, packageName, host, url, baseReason, blockScore)
             }
 
@@ -1284,6 +1467,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
             controller.show(
                 reason = reason,
+                // The words that actually carried the score, for a scored block. Null for a
+                // banned domain or a screen guard: those are their own explanation.
+                details = contributorText(verdict),
                 onGoBack = {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {

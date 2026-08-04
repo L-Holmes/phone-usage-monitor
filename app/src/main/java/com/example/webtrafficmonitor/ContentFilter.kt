@@ -247,54 +247,35 @@ object SearchEngineBlocklist {
 }
 
 
-// ── Strict+ blocklist: our own hand-maintained hosts, blocked when NOT in Relaxed ─────
-//  These aren't on the big adult blocklist (reddit frontends/mirrors, reddit itself, and a
-//  few "borderline" shopping/fashion sites). We don't want them blocked in Relaxed, so the
-//  service only consults this when the mode is Strict or Super hardcore. A bare domain also
-//  covers its subdomains. Mirrors StrictOnlyBlocklist in domains.js — keep the two in sync.
+// ── Always-banned hosts: blocked in EVERY mode the monitor runs in ────────────────────
+//  The whole hand-maintained ban list: reddit frontends/mirrors/viewers, reddit itself,
+//  borderline shopping/fashion and imageboards. Used to be Strict+ only (2026-08-01
+//  promotion): but a bypass surface that Relaxed lets through is a bypass surface, full
+//  stop - dropping to Relaxed must not be the way around the list. A bare domain also
+//  covers its subdomains. NB the extension's domains.js still holds these as strict-only -
+//  mirror the promotion there next time the plugin is touched.
+object AlwaysBlocklist {
+    val DOMAINS: Set<String> get() = FilterData.set("domains_banned.txt")
+    fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
+}
+
+
+// ── Strict+ blocklist: hosts blocked when NOT in Relaxed ──────────────────────────────
+//  EMPTY since 2026-08-01 - everything it held was promoted to AlwaysBlocklist above. The
+//  mechanism (and its file, domains_strict_only.txt) stays, so a host that genuinely should
+//  be allowed in Relaxed but not Strict+ has somewhere to go later.
 object StrictOnlyBlocklist {
     val DOMAINS: Set<String> get() = FilterData.set("domains_strict_only.txt")
     fun isBlocked(host: String): Boolean = hostOrParentIn(host, DOMAINS)
 }
 
 
-// ── Mode-gated keyword blocks (title / URL substring match) ───────────────────────────
-//  Unlike the adult text scorer, these are blunt substring matches on the page TITLE and URL
-//  — deliberately including spaced-out fragments ("red dit", "ling eri", "bik ini") to catch
-//  someone typing around a block. They are gated by mode, NOT scored:
-//    * SUPER_HARDCORE — only when the mode is Super hardcore.
-//    * STRICT_PLUS    — when the mode is Strict OR Super hardcore.
-//  Nothing here fires in Relaxed (or Off). Mirrors the mode-gated keyword tiers you keep in
-//  the extension. NOTE: short fragments like "lace" / "haul" WILL also match innocent words
-//  ("necklace", "overhaul") — that's the intended bluntness, but keep it in mind.
-object ModeKeywords {
-
-    // Very hardcore: Super-hardcore-only. Reddit and the ways it gets typed around a filter.
-    val SUPER_HARDCORE: List<String> = listOf(
-        "reddit", "redd", "red dit", "re ddit", "reddi t", "redd it",
-        "eddit", "e ddit", "r eddit",
-    )
-
-    // Hardcore: Strict and above.
-    val STRICT_PLUS: List<String> = listOf(
-        "scrolller", "scroller",
-        "lingerie", "lin gerie", "lin geri", "lingeri", "ling eri",
-        "lace",
-        "try on haul", "try on hau", "t ry on haul", "try n haul", "haul",
-        "sheer", "shee r", "sh eer",
-        "browser", "brow ser",
-        "bikini", "bik ini", "bi kini", "ikini",
-    )
-
-    /** The keyword that blocks this title/URL for the current mode, or null. */
-    fun match(context: Context, title: String?, url: String?): String? {
-        val active: List<String> = when {
-            Mode.isSuperHardcore(context) -> SUPER_HARDCORE + STRICT_PLUS
-            Mode.isStrict(context) -> STRICT_PLUS
-            else -> return null                       // Relaxed / Off: nothing
-        }
-        val haystack = ((title ?: "") + "  " + (url ?: "")).lowercase()
-        if (haystack.isBlank()) return null
-        return active.firstOrNull { it in haystack }
-    }
-}
+// ── Mode-gated keyword blocks: MOVED (2026-08-04) ─────────────────────────────────────
+//  The old `ModeKeywords` lived here and blocked a page OUTRIGHT on a blunt substring match
+//  against the title/URL, with no score behind it. That is what blocked ordinary apps for
+//  saying "browser", and "necklace" for containing "lace".
+//
+//  It is now `ModeFragments` in TextFilter.kt: the same spaced-out spellings, but each one
+//  carries a WEIGHT and is scored by BorderlineScorer with everything else, so a soft
+//  fragment can corroborate a block and can no longer be one. Words belong in the words
+//  file; this one is the domains file.
