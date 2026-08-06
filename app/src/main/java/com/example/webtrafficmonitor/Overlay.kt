@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
@@ -256,6 +257,10 @@ class BreathingOverlay(private val context: Context) {
     private var orbAnim: BreathOrbAnimator? = null
     private var controlsActive = false
     private var started = false
+    /** uptimeMillis the window went up. The tap escape arms off this, not off the breath. */
+    private var shownAt = 0L
+    /** uptimeMillis the breath actually began (first painted frame), or 0 if it hasn't. */
+    private var breathStartedAt = 0L
 
     val isShowing: Boolean get() = view != null
 
@@ -271,6 +276,7 @@ class BreathingOverlay(private val context: Context) {
         if (view != null) return
         controlsActive = false
         started = false
+        shownAt = SystemClock.uptimeMillis()
         val dm = context.resources.displayMetrics
         fun dp(v: Int) = (v * dm.density).toInt()
 
@@ -367,35 +373,109 @@ class BreathingOverlay(private val context: Context) {
             return
         }
 
+        // ── THE TAP ESCAPE  ─────────────────────────────────────────────────────────
+        // ⚠️ 2026-08-05 - armed HERE, on the way up, and it is unconditional.
+        //
+        // It used to be installed by the 1.5s watchdog and then guarded by `controlsActive`
+        // - which is false until the breath finishes. So for the eight seconds in between,
+        // the screen said "if nothing happens, tap to enter" and a tap did precisely
+        // nothing. That is the "it won't disappear for a while" bug: the user tapped, got
+        // no response, and sat there until the hard ceiling took the window down.
+        //
+        // The guard is now the OPPOSITE way round: tapping the background enters the app
+        // right up until the real buttons appear, and once they do the background stops
+        // being a hit target so a stray tap can't fling you into the app past a decision
+        // you were in the middle of making. TAP_ESCAPE_MS keeps a stray tap from the app
+        // launch itself out of it.
+        root.isClickable = true
+        root.setOnClickListener {
+            if (controlsActive) return@setOnClickListener      // the buttons are up; use them
+            if (SystemClock.uptimeMillis() - shownAt >= TAP_ESCAPE_MS) onContinue()
+        }
+
         // Brief "you can tap" flash, then out of the way.
         tapHint.animate().alpha(0.5f).setDuration(400)
             .withEndAction { tapHint.animate().alpha(0f).setStartDelay(900).setDuration(600).start() }
             .start()
 
-        // Two independent triggers, first one wins (startBreathing is idempotent). The
-        // global-layout listener alone was the whole start path, and if it never fired the
-        // overlay just sat there dead - which is the "breathing doesn't start" bug.
-        root.viewTreeObserver.addOnGlobalLayoutListener(
-            object : ViewTreeObserver.OnGlobalLayoutListener {
-                override fun onGlobalLayout() {
-                    root.viewTreeObserver.removeOnGlobalLayoutListener(this)
-                    startBreathing(orb, phase, controls, dontWant)
-                }
-            },
-        )
-        root.post { startBreathing(orb, phase, controls, dontWant) }
-
-        // Watchdog: if the orb still hasn't moved a moment later, treat the gate as broken,
-        // surface the hint and let a tap through rather than stranding the user.
+        // ── WHEN THE BREATH STARTS  ─────────────────────────────────────────────────
+        // ⚠️ 2026-08-05 - ON THE FIRST PAINTED FRAME, NOT ON LAYOUT. READ BEFORE CHANGING.
         //
-        // The TAP ESCAPE is now armed unconditionally, not only when the animation failed to
-        // start. The hint on screen says "if nothing happens, tap to enter", and that has to
-        // be TRUE whatever state the orb is in - a full-screen overlay that promises a way
-        // out and doesn't have one is the worst thing in this file.
+        // The clock used to start at addView (via a layout listener / root.post). Being
+        // laid out is not the same as being ON SCREEN: adding a window while the launching
+        // app is still animating in - the Play Store takes its time - means the cover can
+        // be several seconds late to composite. The breath meanwhile ran on wall time
+        // against a surface nobody could see, so by the time the cover DID appear the orb
+        // was frozen at whatever fraction it had reached, or back at zero having finished,
+        // and all you got was a dark screen with the word "Breathe in" on it.
+        //
+        // onFirstDraw fires from the orb's own onDraw, so the breath cannot begin before
+        // there is a frame to see it in. Show up late, still get a whole breath.
+        orb.onFirstDraw = { startBreathing(orb, phase, tapHint, controls, dontWant) }
+
+        // ...and a floor under that, in case the window never paints at all: nudge the
+        // window manager once to force a relayout, and if the next moment still hasn't
+        // produced a frame, run the gate anyway so it can time out and let the user in.
+        handler.postDelayed({
+            if (view !== root || started) return@postDelayed
+            try { windowManager.updateViewLayout(root, params) } catch (_: Throwable) {}
+            handler.postDelayed({
+                if (view === root) startBreathing(orb, phase, tapHint, controls, dontWant)
+            }, FIRST_DRAW_NUDGE_MS)
+        }, FIRST_DRAW_NUDGE_MS)
+
+        // ── HARD CEILING ON HOW LONG THIS CAN EXIST ─────────────────────────────────
+        // A full-screen overlay that outlives its reason is a bricked phone, and on
+        // 2026-08-04 that is exactly what happened: an early return in the service meant
+        // nothing ever called hide(), and the user sat looking at "Breathe in" unable to
+        // use the device at all.
+        //
+        // The service-side ordering is fixed, but this is a FULL-SCREEN OVERLAY - it does
+        // not get to depend on somebody else remembering. It comes down by itself after
+        // this whatever the rest of the app is doing.
+        //
+        // The one thing it will not do is fire while the user still hasn't HAD the thing
+        // they were made to wait for. If the window composited late the breath started late,
+        // and dumping them into the app mid-inhale is its own bug - so the ceiling slides
+        // out to leave a decent gap after the buttons are due, and no further.
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                if (view !== root) return
+                val now = SystemClock.uptimeMillis()
+                val floor = breathStartedAt + RELEASE_DEADLINE_MS + DECIDE_GRACE_MS
+                if (breathStartedAt > 0L && now < floor) {
+                    handler.postDelayed(this, floor - now)
+                    return
+                }
+                hide()
+            }
+        }, MAX_LIFETIME_MS)
+    }
+
+    private fun startBreathing(
+        orb: BreathOrbView, phase: TextView, tapHint: TextView, controls: View, dontWant: Button,
+    ) {
+        if (started) return
+        val root = view ?: return       // already taken down; nothing to breathe for
+        started = true
+        breathStartedAt = SystemClock.uptimeMillis()
+        orbAnim = BreathOrbAnimator(orb, phase).also { a ->
+            a.start(
+                cycles = 1,
+                onExhaleStart = {
+                    // controls fade in over the (long) exhale, exactly as before
+                    controls.visibility = View.VISIBLE
+                    controls.animate().alpha(0.55f).setDuration(3600).withLayer().start()
+                },
+                onComplete = { releaseControls(phase, controls, dontWant) },
+            )
+        }
+
+        // Watchdog: if the orb still hasn't moved a moment after the breath was supposed to
+        // begin, treat the gate as broken - bring the hint back for good and hand over the
+        // buttons rather than making the user wait out an animation that isn't running.
         handler.postDelayed({
             if (view !== root) return@postDelayed
-            root.setOnClickListener { if (controlsActive) onContinue() }
-            root.isClickable = true
             if (orbAnim?.hasAdvanced != true) {
                 tapHint.animate().cancel()
                 tapHint.alpha = 0.8f
@@ -413,47 +493,22 @@ class BreathingOverlay(private val context: Context) {
         // mid-breath, onComplete never fired, the controls stayed invisible, and the phone
         // was unusable behind a screen that said "Breathe in" and responded to nothing.
         //
-        // So the release is now on a DEADLINE rather than on an event. One breath is about
-        // ten seconds; after this the buttons light up whatever the animation is doing.
+        // So the release is on a DEADLINE rather than on an event. It is posted from HERE,
+        // when the breath actually starts, not from show(): a cover that composites late
+        // gets its full breath and then its buttons, instead of the deadline burning down
+        // while there was nothing on screen.
         handler.postDelayed({
             if (view === root) releaseControls(phase, controls, dontWant)
         }, RELEASE_DEADLINE_MS)
-
-        // ── HARD CEILING ON HOW LONG THIS CAN EXIST ─────────────────────────────────
-        // A full-screen overlay that outlives its reason is a bricked phone, and on
-        // 2026-08-04 that is exactly what happened: an early return in the service meant
-        // nothing ever called hide(), and the user sat looking at "Breathe in" unable to
-        // use the device at all.
-        //
-        // The service-side ordering is fixed, but this is a FULL-SCREEN OVERLAY - it does
-        // not get to depend on somebody else remembering. One breath is a few seconds; a
-        // minute is far longer than anyone needs, and after that it comes down by itself
-        // whatever the rest of the app is doing.
-        handler.postDelayed({ if (view === root) hide() }, MAX_LIFETIME_MS)
-    }
-
-    private fun startBreathing(
-        orb: BreathOrbView, phase: TextView, controls: View, dontWant: Button,
-    ) {
-        if (started) return
-        started = true
-        orbAnim = BreathOrbAnimator(orb, phase).also { a ->
-            a.start(
-                cycles = 1,
-                onExhaleStart = {
-                    // controls fade in over the (long) exhale, exactly as before
-                    controls.visibility = View.VISIBLE
-                    controls.animate().alpha(0.55f).setDuration(3600).start()
-                },
-                onComplete = { releaseControls(phase, controls, dontWant) },
-            )
-        }
     }
 
     /** The breath is done (or never ran): light up the buttons and let them be pressed. */
     private fun releaseControls(phase: TextView, controls: View, dontWant: Button) {
         if (controlsActive) return
         controlsActive = true
+        // Whatever released us, the breath is over. Stopping the animator here is what stops
+        // a stalled-but-still-running pulse from fighting the phase label back to visible.
+        orbAnim?.stop()
         phase.alpha = 0f
         controls.animate().cancel()
         controls.visibility = View.VISIBLE
@@ -466,16 +521,37 @@ class BreathingOverlay(private val context: Context) {
         orbAnim?.stop(); orbAnim = null
         controlsActive = false
         started = false
-        view?.let {
-            try { windowManager.removeView(it) } catch (_: Throwable) {}
+        shownAt = 0L
+        breathStartedAt = 0L
+        view?.let { gone ->
+            // removeView can throw if the window has already gone (the service was killed
+            // and restarted, say). Either way this instance must stop believing it owns a
+            // window - but use removeViewImmediate as a second try first, because a view we
+            // still think is up and ISN'T removed is a full-screen cover nobody can dismiss.
+            try {
+                windowManager.removeView(gone)
+            } catch (t: Throwable) {
+                try { windowManager.removeViewImmediate(gone) } catch (_: Throwable) {}
+                android.util.Log.e("BreathingOverlay", "could not remove", t)
+            }
             view = null
         }
     }
 
     private companion object {
+        /**
+         * How long after the cover appears a background tap starts letting you through.
+         * Short - the point is that the escape is real - but not zero, so the tap that
+         * opened the app can't carry through into the cover that lands on top of it.
+         */
+        const val TAP_ESCAPE_MS = 1200L
+        /** No painted frame by now: nudge the window manager, then run the gate regardless. */
+        const val FIRST_DRAW_NUDGE_MS = 700L
         const val WATCHDOG_MS = 1500L
         /** The buttons light up by this point no matter what the animation is doing. */
         const val RELEASE_DEADLINE_MS = 12_000L
+        /** Time to actually choose, once the buttons are due. Only used by a late breath. */
+        const val DECIDE_GRACE_MS = 8_000L
         /** Nothing this app draws over the whole screen may outlive this, for any reason. */
         const val MAX_LIFETIME_MS = 25_000L
     }

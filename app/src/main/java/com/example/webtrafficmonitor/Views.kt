@@ -109,59 +109,98 @@ class BreathOrbView(
     private val fillMode: OrbFill = OrbFill.INSCRIBE,
 ) : View(context) {
 
+    /**
+     * Fires once, on the first frame this view actually PAINTS - not when it is added,
+     * not when it is laid out. The breathing gate starts its clock from here, so a window
+     * the compositor puts up late still shows the breath from the beginning instead of
+     * appearing already half-finished (or finished) and looking frozen.
+     */
+    var onFirstDraw: (() -> Unit)? = null
+    private var drawnOnce = false
+
+    /**
+     * 0 = fully exhaled, 1 = fully inhaled.
+     *
+     * ⚠️ PERFORMANCE - the orb used to REDRAW on every step of the breath: `invalidate()`
+     * per frame, and a full-screen radial gradient re-rasterised ~30 times a second. On the
+     * app-open gate that is 2.6 million pixels of gradient per frame, and it is why the
+     * breathing felt laggy. The circle is now drawn ONCE at its full size and the breath is
+     * a plain view scale + alpha, which the render thread applies to the cached display list
+     * on the GPU. Nothing is re-rasterised while breathing. Do not put invalidate() back.
+     */
     var progress = 0f
-        set(value) { field = value; invalidate() }
+        set(value) { field = value; applyProgress() }
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 4f
         color = accent
+        alpha = 70
     }
 
-    // The radial gradient is rebuilt only when the view is resized, never per frame -
-    // allocating a RadialGradient (and its Skia shader) on every draw is what made the
-    // orb stutter on a phone. Each frame now only sets a scale matrix + a paint alpha.
-    private var shader: RadialGradient? = null
-    private val shaderMatrix = android.graphics.Matrix()
     private var maxR = 0f
-    private var minR = 0f
+
+    init {
+        applyProgress()
+    }
+
+    // Fill and ring overlap, but letting the view alpha be applied per-drawing-op is far
+    // cheaper than the offscreen layer the "correct" answer would allocate, and at these
+    // alphas the difference is invisible.
+    override fun hasOverlappingRendering() = false
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         maxR = when (fillMode) {
             OrbFill.INSCRIBE -> (kotlin.math.min(w, h) / 2f) - ring.strokeWidth
             OrbFill.COVER -> kotlin.math.hypot(w.toFloat(), h.toFloat()) / 2f
         }.coerceAtLeast(1f)
-        minR = maxR * 0.04f
-        shader = RadialGradient(
+        fill.shader = RadialGradient(
             w / 2f, h / 2f, maxR,
             intArrayOf(withAlpha(accent, 165), withAlpha(accent, 80), withAlpha(accent, 0)),
             floatArrayOf(0f, 0.62f, 1f),
             Shader.TileMode.CLAMP,
         )
-        fill.shader = shader
+        // The breath scales the view about its own centre.
+        pivotX = w / 2f
+        pivotY = h / 2f
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
-        val s = shader ?: return
+        if (maxR <= 0f) return
         val cx = width / 2f
         val cy = height / 2f
-        val r = minR + (maxR - minR) * progress
-        val a = (progress / 0.14f).coerceIn(0f, 1f)
+        canvas.drawCircle(cx, cy, maxR, fill)
+        canvas.drawCircle(cx, cy, maxR, ring)
 
-        // Scale the cached gradient down to the current radius instead of rebuilding it.
-        val scale = (r / maxR).coerceAtLeast(0.001f)
-        shaderMatrix.setScale(scale, scale, cx, cy)
-        s.setLocalMatrix(shaderMatrix)
+        if (!drawnOnce) {
+            drawnOnce = true
+            // Out of the draw pass before telling anyone: the listener starts an animation.
+            post { onFirstDraw?.invoke(); onFirstDraw = null }
+        }
+    }
 
-        fill.alpha = (255 * a).toInt()      // paint alpha modulates the shader's own alpha
-        canvas.drawCircle(cx, cy, r, fill)
-        ring.alpha = (70 * a).toInt()
-        canvas.drawCircle(cx, cy, r, ring)
+    private fun applyProgress() {
+        val p = progress.coerceIn(0f, 1f)
+        val s = MIN_SCALE + (1f - MIN_SCALE) * p
+        scaleX = s
+        scaleY = s
+        // REST_ALPHA rather than 0: a gate that opens on a pitch-black screen with one line
+        // of text on it reads as broken, and that is exactly what the user saw. Even fully
+        // exhaled there is now a small dim orb to look at.
+        alpha = REST_ALPHA + (1f - REST_ALPHA) * (p / 0.14f).coerceIn(0f, 1f)
     }
 
     private fun withAlpha(color: Int, alpha: Int) =
         (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
+
+    private companion object {
+        /** Fully-exhaled size, as a fraction of the full orb (was minR = maxR * 0.04). */
+        const val MIN_SCALE = 0.04f
+        /** Fully-exhaled opacity. Never 0 - the orb must always be SOMETHING on screen. */
+        const val REST_ALPHA = 0.2f
+    }
 }
 
 
@@ -219,7 +258,13 @@ class BreathOrbAnimator(
         inhaling = true
         phaseStart = SystemClock.uptimeMillis()
         lastDrawAt = 0L
-        phase?.let { it.text = it.context.getString(R.string.overlay_breathe_in) }
+        phase?.let {
+            it.text = it.context.getString(R.string.overlay_breathe_in)
+            // The label's alpha pulse runs every frame. On a plain TextView that re-rasterises
+            // the text each time; on a hardware layer it is a GPU alpha on a cached bitmap.
+            // Dropped again in stop(), so nothing holds a layer while the orb is idle.
+            it.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        }
 
         val ch = Choreographer.getInstance()
         choreographer = ch
@@ -296,6 +341,7 @@ class BreathOrbAnimator(
         frameCallback?.let { choreographer?.removeFrameCallback(it) }
         frameCallback = null
         choreographer = null
+        phase?.setLayerType(View.LAYER_TYPE_NONE, null)
     }
 
     private companion object {

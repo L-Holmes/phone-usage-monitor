@@ -115,6 +115,12 @@ import android.graphics.Path
 // Request code for the Bluetooth-scanning permissions (room-beacon debug page).
 private const val REQ_BEACON_PERMS = 71
 
+// Request codes for the location permissions (home-area debug page, see HomeArea.kt).
+// Two, because "while using" and "all the time" MUST be asked for separately - one
+// combined request and Android 11+ grants neither.
+private const val REQ_HOME_LOCATION = 72
+private const val REQ_HOME_BACKGROUND = 73
+
 class MainActivity : AppCompatActivity() {
 
     private val database by lazy { MonitorDatabase.get(this) }
@@ -391,12 +397,18 @@ class MainActivity : AppCompatActivity() {
             text = t; textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelSecondary)
             setPadding(0, (16 * dp).toInt(), 0, (4 * dp).toInt())
         }
-        fun row(label: String, onRemove: () -> Unit): LinearLayout = LinearLayout(this).apply {
+        // [sub] is the "why is this here" line - see BlockRules.whyLine. A block list you
+        // can't account for is one you can't safely prune.
+        fun row(label: String, sub: String? = null, onRemove: () -> Unit): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
-            addView(TextView(this@MainActivity).apply {
-                text = label; textSize = 15f
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                addView(TextView(this@MainActivity).apply { text = label; textSize = 15f })
+                if (sub != null) addView(TextView(this@MainActivity).apply {
+                    text = sub; textSize = 12f; setTextColor(Palette.labelTertiary)
+                })
             })
             addView(Button(this@MainActivity).apply { text = getString(R.string.common_remove); setOnClickListener { onRemove() } })
         }
@@ -421,7 +433,9 @@ class MainActivity : AppCompatActivity() {
             val siteRules = BlockRules.all()
             if (siteRules.isNotEmpty()) {
                 any = true; container.addView(header(getString(R.string.manage_blocked_sites)))
-                siteRules.forEach { r -> container.addView(row(r) { BlockRules.remove(this, r); reload() }) }
+                siteRules.forEach { r ->
+                    container.addView(row(r, BlockRules.whyLine(this, r)) { BlockRules.remove(this, r); reload() })
+                }
             }
             val greyHosts = AppRules.hosts(this)
             if (greyHosts.isNotEmpty()) {
@@ -2073,7 +2087,8 @@ private fun saveSiteRule(input: EditText, tier: String) {
     if (tier == AppRules.BLOCK) {
         val rule = ruleFromInput(input.text.toString())
         if (rule == null) { Toast.makeText(this, getString(R.string.appsite_bad_url), Toast.LENGTH_SHORT).show(); return }
-        BlockRules.add(this, rule)            // keeps the path -> blocks that page, not the whole site
+        // keeps the path -> blocks that page, not the whole site
+        BlockRules.add(this, rule, BlockRules.Note(BlockRules.Origin.MANUAL))
         appSiteSaved(rule, AppRules.BLOCK)
     } else {
         val host = hostOf(input.text.toString())
@@ -2168,10 +2183,13 @@ private fun showRecentBlocks() {
                 }
                 val target = e.url ?: e.host ?: e.packageName ?: "(unknown)"
                 val shortTarget = if (target.length > 40) target.take(40) + "\u2026" else target
-                val scoreTag = e.score?.let { "[score $it]  " } ?: ""
+                // The reason was being recorded and never shown, so this list answered
+                // "what got blocked" and never "why" - the one question you open it for.
+                val scoreTag = e.score?.let { "[score $it]  " } ?: "[no score]  "
+                val why = e.reason?.replace("\n", " \u00b7 ")?.ifBlank { null } ?: "(no reason recorded)"
                 val before = e.recentAppsList().joinToString(", ").ifBlank { "-" }
                 row.addView(TextView(this@MainActivity).apply {
-                    text = "${stamp.format(Date(e.timestamp))}\n$scoreTag$shortTarget\nbefore: $before"
+                    text = "${stamp.format(Date(e.timestamp))}\n$scoreTag$shortTarget\nwhy: $why\nbefore: $before"
                     textSize = 13f
                     layoutParams =
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -5581,12 +5599,17 @@ private fun startWeekStrict() {
         // IMMEDIATELY (start() skips ensureScanning's restart cool-down), or the page
         // shows "not heard" for up to ~12s and looks like the sensors dropped.
         beaconScanner?.start(); pressureMon?.start()
+        locationMonitor?.start()
         updateScreen()   // re-checks prerequisites every time the app is foregrounded
     }
 
     override fun onStop() {
         super.onStop()
         sensorMonitor?.stop(); sensorMonitor = null
+        // A GPS listener left running behind a dark screen is the most expensive thing
+        // this app could leak. Kept (not cleared) so onResume can restart it if the
+        // home-area page is still the one on screen - same handling as the beacons.
+        locationMonitor?.stop()
         // Don't scan for beacons (or read the barometer) with the screen off; the
         // debug page's tick restarts both on resume.
         beaconScanner?.stop(); pressureMon?.stop()
@@ -5773,11 +5796,15 @@ private fun startWeekStrict() {
     private var onDevScreen = false
     private var subBack: (() -> Unit)? = null
     private var sensorMonitor: SensorMonitor? = null
+    private var locationMonitor: LocationMonitor? = null
     private var beaconScanner: BeaconScanner? = null
     private var pressureMon: PressureMonitor? = null
     // The beacon pages' UI ticker. One shared handle so each page (and the wizard)
     // kills the previous page's ticker instead of leaking it across navigation.
     private var beaconUi: Handler? = null
+    // Same idea for the home-area page: its tick refreshes the fix's AGE, which changes
+    // even when no new fix arrives.
+    private var homeAreaUi: Handler? = null
     private var reportBackTarget: () -> Unit = { showTemptationsTab() }
 
     /** True when the user is walking the permission screens by choice (mode still Off). */
@@ -6082,6 +6109,9 @@ private fun startWeekStrict() {
         content.addView(homeCard(getString(R.string.settings_language), getString(R.string.settings_language_subtitle)) { showLanguagePicker() })
         content.addView(homeCard(getString(R.string.settings_currency), getString(R.string.settings_currency_subtitle)) { showCurrencyPicker() })
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
+        content.addView(homeCard("Home area (location)",
+            if (HomeArea.isSet(this)) "Home is saved. Live distance, accuracy and at-home / away verdict."
+            else "Not set up. Stand in the house and save it, then watch the live verdict.") { showHomeAreaDebug() })
         content.addView(homeCard("Grayscale setup", "Turn on the strict-mode grayscale filter.") { showGreyscaleSetup() })
         content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
@@ -6257,6 +6287,291 @@ private fun startWeekStrict() {
         monitor.start(); refresh()
 
         setContentWithThumb(root) { monitor.stop(); sensorMonitor = null; setupMainScreen() }
+    }
+
+    // ── Home area (GPS) ──────────────────────────────────────────────────────
+    // "Is the phone at the house, or out?" - the coarse counterpart to the room
+    // beacons below. Live readout plus the one manual set-up step: stand in the
+    // house and press the button. See HomeArea.kt for the rule (and for why a
+    // VPN cannot move any of this). NOTHING IS ENFORCED off the back of it yet -
+    // the verdict line says what WOULD happen, and that is deliberate.
+    /** This app's page in system Settings - the only route to "Allow all the time" on 11+. */
+    private fun openAppSettings() {
+        startActivity(Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null),
+        ))
+    }
+
+    private fun showHomeAreaDebug() {
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+        content.addView(titleText("Home area"))
+        content.addView(TextView(this).apply {
+            text = "Whether the phone is within ${Math.round(HomeArea.RADIUS_M)} m of the house. " +
+                "Set it up by standing in the house and pressing the button - that fix becomes home. " +
+                "Nothing is blocked off this yet; this page is a readout."
+            textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (12 * dp).toInt())
+        })
+
+        fun subLine() = TextView(this).apply { textSize = 14f; setTextColor(Palette.labelSecondary) }
+        fun tinyLine() = TextView(this).apply { textSize = 12f; setTextColor(Palette.labelTertiary) }
+
+        // ── Permissions live on this page (there is no other route to them) ──
+        // TWO grants, asked for in order: "while using" first, then "all the time" on its
+        // own. Asking for both together makes Android 11+ grant neither. See HomeArea.
+        content.addView(sectionTitle("Permissions"))
+        val permLine = subLine()
+        content.addView(permLine)
+        val permHint = TextView(this).apply {
+            textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, (8 * dp).toInt())
+        }
+        content.addView(permHint)
+        val grantBtn = bigChoice("1. Grant location (while using the app)", Palette.tint) {
+            requestPermissions(HomeArea.requiredPermissions(), REQ_HOME_LOCATION)
+        }
+        val bgBtn = bigChoice("2. Allow all the time", Palette.tint) {
+            // Android 10 can still do this through the dialog. From 11 the dialog has no
+            // "all the time" option at all, so the settings page IS the flow - dropping
+            // the user there with instructions beats a button that silently does nothing.
+            if (HomeArea.backgroundRequestable()) {
+                requestPermissions(HomeArea.backgroundPermission(), REQ_HOME_BACKGROUND)
+            } else {
+                Toast.makeText(this, "Permissions → Location → Allow all the time", Toast.LENGTH_LONG).show()
+                openAppSettings()
+            }
+        }
+        val appSettingsBtn = bigChoice("Open app permission settings", Palette.labelSecondary) { openAppSettings() }
+        content.addView(grantBtn); content.addView(bgBtn); content.addView(appSettingsBtn)
+
+        val locWarn = TextView(this).apply {
+            text = "Location is OFF system-wide - tap here to turn it on."
+            textSize = 14f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Palette.dangerText); setPadding(0, (8 * dp).toInt(), 0, 0)
+            visibility = View.GONE; isClickable = true; isFocusable = true
+            setOnClickListener { startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
+        }
+        content.addView(locWarn)
+
+        // ── The verdict ──────────────────────────────────────────────────────
+        content.addView(sectionTitle("Where you are"))
+        val pill = TextView(this).apply {
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+            setTextColor(Palette.onFill)
+            val p = (10 * dp).toInt(); setPadding(p * 2, p, p * 2, p)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = (6 * dp).toInt(); bottomMargin = (6 * dp).toInt()
+            }
+        }
+        content.addView(pill)
+        val ruleLine = TextView(this).apply {
+            textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+            setPadding(0, 0, 0, (2 * dp).toInt())
+        }
+        content.addView(ruleLine)
+        val wouldLine = tinyLine()
+        content.addView(wouldLine)
+        val bigDist = TextView(this).apply {
+            textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(Palette.label)
+            setPadding(0, (8 * dp).toInt(), 0, 0)
+        }
+        content.addView(bigDist)
+        val whyLine = subLine(); content.addView(whyLine)
+
+        content.addView(sectionTitle("Current fix"))
+        val fixLine = subLine(); val fixAgeLine = subLine(); val coordLine = tinyLine(); val mockLine = TextView(this).apply {
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.dangerText); visibility = View.GONE
+        }
+        content.addView(fixLine); content.addView(fixAgeLine); content.addView(coordLine); content.addView(mockLine)
+
+        // The section that answers "does it work with the app shut?": this is the
+        // accessibility service's own watch, not this page's monitor. Close the app, walk
+        // out of the radius, come back - the log below should already know.
+        content.addView(sectionTitle("Background watch (app closed)"))
+        val watchLine = TextView(this).apply { textSize = 15f; setTypeface(typeface, Typeface.BOLD) }
+        val watchMeta = subLine(); val watchHint = tinyLine()
+        content.addView(watchLine); content.addView(watchMeta); content.addView(watchHint)
+        val watchLog = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(0, (6 * dp).toInt(), 0, 0)
+        }
+        content.addView(watchLog)
+
+        content.addView(sectionTitle("Home point"))
+        val homeLine = subLine(); val homeMeta = tinyLine()
+        content.addView(homeLine); content.addView(homeMeta)
+
+        locationMonitor?.stop()
+        val monitor = LocationMonitor(this)
+        locationMonitor = monitor
+        homeAreaUi?.removeCallbacksAndMessages(null)
+        val ui = Handler(Looper.getMainLooper()); homeAreaUi = ui
+
+        val saveBtn = bigChoice("I'm in my house - save this as home", Palette.tint) {
+            val loc = monitor.last
+            when {
+                loc == null -> Toast.makeText(this, "No location fix yet - give it a moment (go near a window).", Toast.LENGTH_LONG).show()
+                HomeArea.ageMs(loc) > HomeArea.MAX_FIX_AGE_MS ->
+                    Toast.makeText(this, "That fix is stale - wait for a fresh one.", Toast.LENGTH_LONG).show()
+                else -> {
+                    HomeArea.setHome(this, loc)
+                    val acc = Math.round(HomeArea.usableAccuracy(loc))
+                    Toast.makeText(this, "Home saved (±$acc m from ${loc.provider}).", Toast.LENGTH_LONG).show()
+                    ui.removeCallbacksAndMessages(null); showHomeAreaDebug()
+                }
+            }
+        }
+        content.addView(saveBtn)
+        val clearBtn = bigChoice("Clear home point", Palette.dangerText) {
+            HomeArea.clearHome(this)
+            Toast.makeText(this, "Home point cleared", Toast.LENGTH_SHORT).show()
+            ui.removeCallbacksAndMessages(null); showHomeAreaDebug()
+        }
+        content.addView(clearBtn)
+
+        val stamp = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.UK)
+
+        fun refresh() {
+            val granted = HomeArea.hasPermissions(this)
+            val access = HomeArea.access(this)
+            permLine.text = when (access) {
+                HomeArea.Access.ALWAYS -> "Location: ALL THE TIME ✓"
+                HomeArea.Access.WHILE_USING -> "Location: only WHILE USING THE APP"
+                HomeArea.Access.NONE -> "Location: NOT GRANTED - nothing below will read."
+            }
+            permLine.setTextColor(when (access) {
+                HomeArea.Access.ALWAYS -> Palette.successText
+                HomeArea.Access.WHILE_USING -> Palette.warningText
+                HomeArea.Access.NONE -> Palette.dangerText
+            })
+            permHint.text = when (access) {
+                HomeArea.Access.ALWAYS ->
+                    if (HomeArea.backgroundIsSeparate()) "The watch keeps running with the app closed."
+                    else "This Android version has no separate background grant - fine location is all-the-time."
+                HomeArea.Access.WHILE_USING ->
+                    "This only reads while you're looking at the app. Step 2 is the one that matters" +
+                        (if (HomeArea.backgroundRequestable()) "." else
+                            " - and from Android 11 it can only be granted in Settings, not from a dialog.")
+                HomeArea.Access.NONE -> "Step 1 first: Android refuses \"all the time\" until \"while using\" is granted."
+            }
+            grantBtn.visibility = if (granted) View.GONE else View.VISIBLE
+            bgBtn.visibility = if (access == HomeArea.Access.WHILE_USING) View.VISIBLE else View.GONE
+            appSettingsBtn.visibility = if (access == HomeArea.Access.ALWAYS) View.GONE else View.VISIBLE
+            locWarn.visibility = if (granted && !HomeArea.locationEnabled(this)) View.VISIBLE else View.GONE
+
+            val loc = monitor.last
+            val verdict = HomeArea.verdict(this, loc)
+            val (pillText, colour) = when (verdict) {
+                HomeArea.Verdict.HOME -> "  AT HOME  " to Palette.success
+                HomeArea.Verdict.AWAY -> "  AWAY  " to Palette.tint
+                HomeArea.Verdict.MAYBE -> "  MAYBE - on the edge  " to Palette.warning
+                HomeArea.Verdict.UNKNOWN -> "  NO IDEA  " to Palette.labelQuaternary
+            }
+            pill.text = pillText
+            pill.background = GradientDrawable().apply { cornerRadius = Radius.card * dp; setColor(colour) }
+
+            // The sentence this page exists to show. It is a statement of the RULE, not
+            // of anything currently enforced - hence the line under it.
+            ruleLine.text = when (verdict) {
+                HomeArea.Verdict.HOME -> "You are close to your house, non-whitelisted apps are blocked."
+                HomeArea.Verdict.AWAY -> "You are away from your house, all apps are allowed."
+                HomeArea.Verdict.MAYBE -> "Too close to call - nothing would change."
+                HomeArea.Verdict.UNKNOWN -> "Can't tell where you are - nothing would change."
+            }
+            ruleLine.setTextColor(when (verdict) {
+                HomeArea.Verdict.HOME -> Palette.successText
+                HomeArea.Verdict.AWAY -> Palette.label
+                else -> Palette.warningText
+            })
+            wouldLine.text = "(Nothing is enforced yet - this is what the rule WOULD say.)"
+
+            val d = HomeArea.distanceFrom(this, loc)
+            bigDist.text = if (d == null) "-- m" else "${Math.round(d)} m"
+            whyLine.text = HomeArea.explain(this, loc)
+
+            if (loc == null) {
+                fixLine.text = if (granted) "Waiting for a fix…" else "No permission, so no fix."
+                fixAgeLine.text = "Providers: " +
+                    "GPS ${if (monitor.hasGps) "on" else "off"}, network ${if (monitor.hasNetwork) "on" else "off"}"
+                coordLine.text = ""
+                mockLine.visibility = View.GONE
+            } else {
+                val acc = HomeArea.usableAccuracy(loc)
+                fixLine.text = "${loc.provider ?: "?"} · ±${Math.round(acc)} m" +
+                    (if (loc.hasAccuracy() && loc.accuracy < HomeArea.MIN_ACCURACY_M)
+                        " (phone claimed ±${Math.round(loc.accuracy)} m; floored)" else "")
+                fixAgeLine.text = "Age ${HomeArea.ageMs(loc) / 1000}s · GPS ${if (monitor.hasGps) "on" else "off"}, " +
+                    "network ${if (monitor.hasNetwork) "on" else "off"}"
+                coordLine.text = String.format(java.util.Locale.UK, "%.5f, %.5f", loc.latitude, loc.longitude)
+                mockLine.visibility = if (HomeArea.isMock(loc)) View.VISIBLE else View.GONE
+                mockLine.text = "⚠ MOCK LOCATION - this fix came from a fake-GPS app, not the hardware."
+            }
+
+            // ── the service's watch ──
+            val watching = HomeAreaWatch.armed
+            watchLine.text = when {
+                watching && HomeAreaWatch.bursting -> "ARMED · GPS burst in progress"
+                watching -> "ARMED · network + passive (GPS only when it can't tell)"
+                !HomeArea.isSet(this) -> "Idle - no home point saved."
+                !granted -> "Idle - no location permission."
+                !HomeArea.locationEnabled(this) -> "Idle - location is switched off."
+                else -> "Idle - accessibility service not running?"
+            }
+            watchLine.setTextColor(if (watching) Palette.successText else Palette.labelTertiary)
+            val ctx = HomeAreaContext
+            watchMeta.text = if (ctx.updatedAt == 0L) "No reading published yet."
+                else "Last verdict: ${ctx.label().uppercase()}" +
+                    (if (ctx.distanceM >= 0f) " at ${Math.round(ctx.distanceM)} m" else "") +
+                    " · checked ${(System.currentTimeMillis() - ctx.updatedAt) / 1000}s ago"
+            watchHint.text = if (access == HomeArea.Access.ALWAYS)
+                "This is the one that runs when the app is shut. A change has to hold 60s before it counts."
+            else
+                "⚠ Without \"all the time\", Android starves this of fixes the moment the app isn't visible."
+            val changes = ctx.recent()
+            if (watchLog.childCount != changes.size.coerceAtLeast(1)) {
+                watchLog.removeAllViews()
+                if (changes.isEmpty()) watchLog.addView(tinyLine().apply { text = "No changes recorded yet." })
+                for (c in changes) watchLog.addView(tinyLine().apply {
+                    text = "${stamp.format(java.util.Date(c.at))}  →  ${c.verdict.name}" +
+                        (if (c.distanceM >= 0f) "  (${Math.round(c.distanceM)} m)" else "")
+                })
+            }
+
+            if (HomeArea.isSet(this)) {
+                homeLine.text = String.format(java.util.Locale.UK, "%.5f, %.5f  ·  radius %d m",
+                    HomeArea.homeLat(this), HomeArea.homeLon(this), Math.round(HomeArea.RADIUS_M))
+                val hAcc = HomeArea.homeAccuracy(this)
+                homeMeta.text = "Saved ${stamp.format(java.util.Date(HomeArea.homeSetAt(this)))} " +
+                    "from ${HomeArea.homeProvider(this).ifEmpty { "?" }}" +
+                    (if (hAcc >= 0f) " at ±${Math.round(hAcc)} m" else "") +
+                    (if (hAcc > HomeArea.RADIUS_M) "  ⚠ saved off a fix vaguer than the radius - redo it outdoors" else "")
+                clearBtn.visibility = View.VISIBLE
+                saveBtn.text = "I'm in my house - save this as home (replaces the old point)"
+            } else {
+                homeLine.text = "Not set."
+                homeMeta.text = "Stand in the house, wait for the accuracy to settle, then press the button."
+                clearBtn.visibility = View.GONE
+                saveBtn.text = "I'm in my house - save this as home"
+            }
+            saveBtn.visibility = if (granted) View.VISIBLE else View.GONE
+        }
+
+        // The fix's AGE keeps changing when nothing else does, so tick regardless of updates.
+        val tick = object : Runnable {
+            override fun run() { refresh(); ui.postDelayed(this, 1_000L) }
+        }
+        monitor.onUpdate = { runOnUiThread { refresh() } }
+        if (HomeArea.hasPermissions(this)) monitor.start()
+        refresh(); ui.postDelayed(tick, 1_000L)
+
+        val root = ScrollView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            isFillViewport = true; addView(content)
+        }
+        setContentWithThumb(root) {
+            ui.removeCallbacksAndMessages(null); homeAreaUi = null
+            monitor.stop(); locationMonitor = null
+            setupMainScreen()
+        }
     }
 
     // ── Room detection (KKM K11 beacons) ─────────────────────────────────────
@@ -7163,6 +7478,10 @@ private fun startWeekStrict() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         // Re-enter the page: it shows the readings if granted, the explainer again if not.
         if (requestCode == REQ_BEACON_PERMS) showRoomBeaconDebug()
+        // Step 1 granted: come straight back and offer step 2 ("all the time"), which has
+        // to be its own request. Step 2's result lands here too - on Android 11+ it will
+        // usually be a denial, and the page then points at Settings instead.
+        if (requestCode == REQ_HOME_LOCATION || requestCode == REQ_HOME_BACKGROUND) showHomeAreaDebug()
     }
 
     // Read-only snapshot of everything the app is currently doing.
@@ -8608,7 +8927,7 @@ private fun startWeekStrict() {
             ?: entry.domain
             ?: entry.packageName
             ?: return
-        BlockRules.add(this, rule)
+        BlockRules.add(this, rule, BlockRules.Note(BlockRules.Origin.MANUAL))
         Toast.makeText(this, getString(R.string.toast_blocking, rule), Toast.LENGTH_SHORT).show()
     }
 

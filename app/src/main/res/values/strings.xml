@@ -1060,6 +1060,18 @@
     <string name="block_contributors_header">WHAT SCORED</string>
     <string name="block_contributor_line">\"%1$s\" - %2$d×, %3$d%% of the score</string>
     <string name="br_blocked_keyword">Blocked keyword: \"%1$s\"</string>
+    <!-- A rule blocks; these say WHY it exists. %1$s is a relative time ("2 days ago"). -->
+    <string name="br_blocked_search">Blocked search: \"%1$s\" on %2$s</string>
+    <string name="br_blocked_page">Blocked page: %1$s</string>
+    <string name="br_why_auto_scored">Added %1$s, when this scored %2$d on: %3$s</string>
+    <string name="br_why_auto_score">Added %1$s, when this scored %2$d.</string>
+    <string name="br_why_auto">Added %1$s, after this page was blocked.</string>
+    <string name="br_why_strike">Added %1$s: too many blocks on this site.</string>
+    <string name="br_why_manual">You added this to your block list %1$s.</string>
+    <string name="br_why_preset">Part of a category you switched on.</string>
+    <!-- The score line under a block that came from a rule or a list rather than the scorer. -->
+    <string name="block_score_line">This page scores %1$d (a page blocks on score at %2$d)</string>
+    <string name="block_score_none">Nothing on this screen scored - what\'s above is the whole reason.</string>
     <string name="br_back_same">Still the SAME blocked page. Press Back again, or go home.</string>
     <string name="br_back_diff">That\'s a DIFFERENT page - but it\'s blocked too. Press Back again, or go home.</string>
     <string name="br_borderline_warn">%1$s keeps coming close.\n\nNothing here has crossed the line on its own - but the same borderline words have been on screen for a few minutes now, and that pattern is usually the feed, not you.\n\nKeep going and %1$s closes for %2$s. Leaving now costs you nothing.</string>

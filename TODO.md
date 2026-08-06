@@ -2,15 +2,6 @@
 
 
 
-
-
--------------
-
-
-
-
-add translations?
-
 =======================================================================
 =======================================================================
 =======================================================================
@@ -23,50 +14,35 @@ add translations?
 MANUAL TODO:
 - add the holiday stuff? / guideance?
    - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place).
-   - Coping-rehearsal scenarios can live here too.
-   - Need to keep themselves busy!
-   - No tracking needed on this — they'll know where they're at.
 
 ------------------------------
 
-TODO LATER:
-- FINISH THE PLUGIN + integrate plugin enforcement...
-- plugin: integrate, and search for the specific text that shows on screen when the plgin blocks a page- so we can detect plugin detections(!)
+- do the thing where we show a picture of a loved one before unlocking?
+    ==> Is this just too much? using shame?
+    ==> will it make a difference
+--> If we're on a non-whitelisted app, randomly popup that picture for a bit....
+    - (especially if we're at all suspicious)
+basically, in the adult content settings,
+    user uploads photo(s) of ideally close family members they're related to
+    (for motivation)
+
 
 ------------
 
-achievements:
-- like strava or duolingo
-    - have a page showing all the differnet achievements they can unlock...
-
-- then like short term ones:
-    - ike one for 'least phone usage this week',
-    - 'least usage week ever'
-    - 'says without relapse (for if they looked at adult content prevoiusly and had been using those features..)
-
-
-OOOH!
-Like Strava... And other mapping apps.. 
-Can we determine where they are on a map?
---> then if they're out of the house.. they can't doom scroll.. 
---> but more importantly.. if they're out of the house.. we don't have to worry about them with adult content. 
-(BUT! Will this be affected by VPNs??) 
-
--------
-
-do the thing where we show a picture of a loved one before unlocking?
-
--------
-
-====
 Add 'founder mode'
 - locks you out of non crucial apps in morning till you fill in the questionnaire..
+    - what would we ask them though?
+    - what progress they made yesterday?
 
-(Same with food tracking??? 
-- separate app?)
-(Same app for ease?)
+
+
+- is it too bias towards straight men?
+    (Do I add a mode for prectijg people attracted to males?)
+    (How about lesbians who are searching for underwear? Or scrolling through vinted?)
 
 ======
+
+# MONEY MAKING THINGS
 
 - Donors have no adds.
 - we give extra founder mode help to them...
@@ -77,45 +53,23 @@ Add 'founder mode'
     - have priority when unblockng a part of the phone?
 
 
-======
 
-Emergency apps
-Whitelist (don't even get monitored) 
-Grey list apps (like web browsers)
+- superhardcore users have to verify with us before downloading an app that we do not know about?
+    - so an app that isn't on the white/grey/black list...
 
-
-======================
-
-
------
-- Money, adverts
+- adverts
 - need some sort of feedback system
-- is it too bias towards straight men?
-(Do I add a mode for prectijg people attracted to males?)
-(How about lesbians who are searching for underwear? Or scrolling through vinted?)
 
+# Hmmmm
 - how do I solve the issue of people seeing sexual content in social media?
-- --> have some sort of "time on screen" of a sensual image?
-- or frequency / number of these sensual images in a short amount of time??
-
-^^^^^^^^^^^
-Perhaps the above could be "down the line" things to add later.... 
+    - --> have some sort of "time on screen" of a sensual image?
+    - or frequency / number of these sensual images in a short amount of time??
 
 
 =======================================================================
 
-????
-Then even perhaps a seperate config / file(s) for like preference things like all of the 
-    feeling positions and loctions and other things from the reports page (be extra careful with
-    this one as i know htey are linked to specific emojis as well!)
-
----------
-
-
-
 # way down the line:
 Add my guide pictures for setup.  (enabling things in the settings initially...)
-consider switching chrome as the main browser...
 
 beacons:
 - beacon in bedroom
@@ -128,6 +82,7 @@ beacons:
 =======================================================================
 =======================================================================
 =======================================================================
+UP TO HERE
 
 
 # =============
@@ -173,6 +128,20 @@ beacons:
     - social apps blocked at desk
     - YouTube disabled after entering bathroom too long
     - “focus mode” when sitting at work setup
+- home area (GPS, 50m radius) - DONE: HomeArea.kt + Developer tools -> "Home area (location)".
+  tracked all day by HomeAreaWatch inside the accessibility service (so it runs with the
+  app closed), published to HomeAreaContext. asks for "Allow all the time".
+  still to do:
+    - actually enforce it (in home = apps blocked). nothing reads HomeAreaContext yet.
+    - real setup flow for end users (not the dev button), + maybe more than one home point
+    - away = adult content is a much lower risk -> could relax those checks when out
+    - VERIFY ON DEVICE: background location is throttled to a few fixes/hour for apps
+      Android considers "background". an app bound as an accessibility service should
+      count as foreground, so we should be fine - but check the change log on the dev
+      page after a walk with the app shut. if it IS throttled, the fallback is a
+      foreground service with a location type (= permanent notification).
+    - (VPNs are a non-issue: a VPN changes the IP a website geolocates, not GPS/wifi.
+       a mock-location app IS an issue - HomeArea.isMock flags it, nothing acts on it yet)
 
 
 =======================================================================

@@ -116,6 +116,7 @@ object BlockRules {
     private const val PREFS = "block_rules"
     private const val KEY = "rules"
     private const val KEY_TIMED = "timed_rules"
+    private const val KEY_NOTES = "rule_notes"
 
     /** A keyword must appear this many times in on-screen TEXT to block (title/URL need only 1). */
     private const val TEXT_HITS_NEEDED = 2
@@ -123,6 +124,94 @@ object BlockRules {
     private val rules = linkedSetOf<String>()
     private val timedRules = HashMap<String, Long>()   // rule -> blocked-until (millis)
     private val sessionAllow = mutableSetOf<String>()
+
+    // ── WHY each rule exists ─────────────────────────────────────────────────────────
+    //
+    //  A rule on its own is not an explanation. "Blocked site: google.com/search?q=..."
+    //  says what happened and nothing about why - which reads as arbitrary, and when the
+    //  block IS wrong there is nothing there to argue with. The information exists at the
+    //  moment the rule is created (a score, the words behind it, a run of strikes, a
+    //  deliberate tap) and was being thrown away.
+    //
+    //  So every rule carries a note, and the block cover reads it back. Notes are
+    //  best-effort: an old rule from before this existed simply has none, and everything
+    //  degrades to the sentence we showed before.
+
+    enum class Origin { AUTO_BLOCK, DOMAIN_STRIKE, MANUAL, PRESET, UNKNOWN }
+
+    /** [words] are the top scoring words at the time, for an AUTO_BLOCK. */
+    data class Note(
+        val origin: Origin,
+        val at: Long = System.currentTimeMillis(),
+        val score: Int? = null,
+        val words: List<String> = emptyList(),
+    )
+
+    private val notes = HashMap<String, Note>()
+
+    fun note(rule: String): Note? = notes[rule.trim().lowercase()]
+
+    /**
+     * The headline sentence for a rule - what KIND of thing it blocks. A search-term rule
+     * is the one that mattered: "google.com/search?q=big+boobs" is a URL, not a sentence,
+     * and reading your own block cover should not require decoding a query string.
+     */
+    fun describe(context: Context, rule: String): String {
+        val r = rule.trim().lowercase()
+        searchTermOf(r)?.let { return context.getString(R.string.br_blocked_search, it, r.substringBefore('/')) }
+        return when (kindOf(r)) {
+            Kind.PAGE -> context.getString(R.string.br_blocked_page, r)
+            Kind.DOMAIN -> context.getString(R.string.br_blocked_site, r)
+            else -> context.getString(R.string.br_blocked_keyword, r)
+        }
+    }
+
+    enum class Kind { SEARCH, PAGE, DOMAIN, KEYWORD }
+
+    fun kindOf(rule: String): Kind {
+        val r = rule.trim().lowercase()
+        return when {
+            searchTermOf(r) != null -> Kind.SEARCH
+            '/' in r -> Kind.PAGE
+            '.' in r -> Kind.DOMAIN
+            else -> Kind.KEYWORD
+        }
+    }
+
+    /** The human-readable search term inside a search-term rule, or null if it isn't one. */
+    fun searchTermOf(rule: String): String? {
+        val r = rule.trim().lowercase()
+        val q = r.indexOf('?')
+        if (q <= 0) return null
+        val term = r.substring(q + 1).substringAfter('=', "")
+        if (term.isBlank()) return null
+        val readable = try {
+            java.net.URLDecoder.decode(term.replace('+', ' '), "UTF-8")
+        } catch (t: Throwable) { term }
+        return readable.ifBlank { null }
+    }
+
+    /** How this rule got on the list, or null for a rule from before notes existed. */
+    fun whyLine(context: Context, rule: String): String? {
+        val n = note(rule) ?: return null
+        // SECOND resolution, not MINUTE: a rule the user created ten seconds ago by tapping
+        // "go back" would otherwise be described as added "0 minutes ago".
+        val ago = if (n.at > 0) android.text.format.DateUtils.getRelativeTimeSpanString(
+            n.at, System.currentTimeMillis(), android.text.format.DateUtils.SECOND_IN_MILLIS,
+        ).toString() else return null
+        return when (n.origin) {
+            Origin.AUTO_BLOCK ->
+                if (n.score != null && n.words.isNotEmpty())
+                    context.getString(R.string.br_why_auto_scored, ago, n.score, n.words.joinToString(", "))
+                else if (n.score != null)
+                    context.getString(R.string.br_why_auto_score, ago, n.score)
+                else context.getString(R.string.br_why_auto, ago)
+            Origin.DOMAIN_STRIKE -> context.getString(R.string.br_why_strike, ago)
+            Origin.MANUAL -> context.getString(R.string.br_why_manual, ago)
+            Origin.PRESET -> context.getString(R.string.br_why_preset)
+            Origin.UNKNOWN -> null
+        }
+    }
 
     fun load(context: Context) {
         val prefs = prefs(context)
@@ -136,7 +225,44 @@ object BlockRules {
                 if (until > System.currentTimeMillis()) timedRules[raw.substring(0, i)] = until
             }
         }
+        loadNotes(prefs.getString(KEY_NOTES, null))
         pruneProtected(context)   // clears a search engine that was banned before the guard existed
+    }
+
+    private fun loadNotes(raw: String?) {
+        notes.clear()
+        if (raw.isNullOrBlank()) return
+        try {
+            val obj = org.json.JSONObject(raw)
+            for (key in obj.keys()) {
+                val o = obj.optJSONObject(key) ?: continue
+                val origin = try { Origin.valueOf(o.optString("o", "UNKNOWN")) } catch (_: Throwable) { Origin.UNKNOWN }
+                val words = o.optJSONArray("w")?.let { arr ->
+                    (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
+                } ?: emptyList()
+                notes[key] = Note(
+                    origin = origin,
+                    at = o.optLong("t", 0L),
+                    score = if (o.has("s")) o.optInt("s") else null,
+                    words = words,
+                )
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w("BlockRules", "could not read rule notes", t)
+        }
+    }
+
+    private fun notesJson(): String {
+        val obj = org.json.JSONObject()
+        for ((rule, n) in notes) {
+            obj.put(rule, org.json.JSONObject().apply {
+                put("o", n.origin.name)
+                put("t", n.at)
+                n.score?.let { put("s", it) }
+                if (n.words.isNotEmpty()) put("w", org.json.JSONArray(n.words))
+            })
+        }
+        return obj.toString()
     }
 
     fun all(): List<String> = rules.toList()
@@ -175,7 +301,7 @@ object BlockRules {
         return engineFor(host, path) != null
     }
 
-    fun add(context: Context, rule: String) {
+    fun add(context: Context, rule: String, note: Note? = null) {
         val cleaned = rule.trim().lowercase()
         if (cleaned.isEmpty()) return
         if (isProtected(cleaned)) {
@@ -183,6 +309,9 @@ object BlockRules {
             return
         }
         rules.add(cleaned)
+        // Never let a re-add with no note overwrite a good one: the first telling of why
+        // a rule exists is the true one.
+        if (note != null) notes[cleaned] = note
         persist(context)
     }
 
@@ -193,18 +322,20 @@ object BlockRules {
     private fun pruneProtected(context: Context) {
         val bad = rules.filter { isProtected(it) } + timedRules.keys.filter { isProtected(it) }
         if (bad.isEmpty()) return
-        bad.forEach { rules.remove(it); timedRules.remove(it) }
+        bad.forEach { rules.remove(it); timedRules.remove(it); notes.remove(it) }
         android.util.Log.w("BlockRules", "removed protected rule(s): $bad")
         persist(context)
     }
 
     fun remove(context: Context, rule: String) {
-        rules.remove(rule.trim().lowercase())
+        val cleaned = rule.trim().lowercase()
+        rules.remove(cleaned)
+        notes.remove(cleaned)
         persist(context)
     }
 
     /** Block [rule] for [durationMs] (e.g. a domain for an hour). Never shortens an existing timer. */
-    fun addTimed(context: Context, rule: String, durationMs: Long) {
+    fun addTimed(context: Context, rule: String, durationMs: Long, note: Note? = null) {
         val cleaned = rule.trim().lowercase()
         if (cleaned.isEmpty()) return
         if (isProtected(cleaned)) {
@@ -213,6 +344,7 @@ object BlockRules {
         }
         val until = System.currentTimeMillis() + durationMs
         timedRules[cleaned] = maxOf(timedRules[cleaned] ?: 0L, until)
+        if (note != null) notes[cleaned] = note
         persist(context)
     }
 
@@ -221,6 +353,7 @@ object BlockRules {
         BypassWatch.record(context, BypassWatch.Reason.WIPE_RULES)
         rules.clear()
         timedRules.clear()
+        notes.clear()
         persist(context)
     }
 
@@ -365,9 +498,13 @@ object BlockRules {
     }
 
     private fun persist(context: Context) {
+        // Notes for rules that no longer exist are dead weight (and would resurrect a
+        // stale "why" if the same rule came back for a different reason).
+        notes.keys.retainAll { it in rules || it in timedRules }
         prefs(context).edit()
             .putStringSet(KEY, HashSet(rules))
             .putStringSet(KEY_TIMED, timedRules.entries.mapTo(HashSet()) { "${it.key}|${it.value}" })
+            .putString(KEY_NOTES, notesJson())
             .apply()
     }
 
@@ -395,7 +532,7 @@ object ShortForm {
     val PATTERNS = AppConfig.SHORT_FORM_PATTERNS
     fun enabled(): Boolean = PATTERNS.all { it in BlockRules.all() }
     fun setEnabled(context: Context, on: Boolean) {
-        if (on) PATTERNS.forEach { BlockRules.add(context, it) }
+        if (on) PATTERNS.forEach { BlockRules.add(context, it, BlockRules.Note(BlockRules.Origin.PRESET)) }
         else PATTERNS.forEach { BlockRules.remove(context, it) }
     }
 }
@@ -427,7 +564,7 @@ object TemptationBlocks {
 
     fun setEnabled(context: Context, spec: AppConfig.TemptationSpec, on: Boolean) {
         if (on) {
-            spec.blockPatterns.forEach { BlockRules.add(context, it) }
+            spec.blockPatterns.forEach { BlockRules.add(context, it, BlockRules.Note(BlockRules.Origin.PRESET)) }
             spec.greyApps.forEach { AppRules.setApp(context, it, AppRules.GREY) }
             spec.blockApps.forEach { AppRules.setApp(context, it, AppRules.BLOCK) }
         } else {

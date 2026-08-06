@@ -14,8 +14,17 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- Location is also read directly (GPS/network) for the home-area check - "is the
+         phone within 50 m of the house?" - see HomeArea.kt. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- "Allow all the time". The home-area answer has to stay current with no activity
+         on screen (HomeAreaWatch runs inside the accessibility service), and from Android
+         10 that needs this separate grant. It must also be REQUESTED separately, after
+         fine location - asking for both in one call makes Android 11+ grant neither.
+         From Android 11 the runtime dialog no longer offers it at all, so the dev page
+         also deep-links to the app's location settings. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Lets us detect installed browsers at runtime (see AppBlocklist.refresh).
          This is a visibility declaration, not a permission. -->

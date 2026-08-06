@@ -867,6 +867,16 @@
     <string name="block_contributors_header">COSA HA PUNTEGGIATO</string>
     <string name="block_contributor_line">\"%1$s\" - %2$d×, %3$d%% del punteggio</string>
     <string name="br_blocked_keyword">Parola chiave bloccata: \"%1$s\"</string>
+    <string name="br_blocked_search">Ricerca bloccata: \"%1$s\" su %2$s</string>
+    <string name="br_blocked_page">Pagina bloccata: %1$s</string>
+    <string name="br_why_auto_scored">Aggiunta %1$s, quando ha totalizzato %2$d su: %3$s</string>
+    <string name="br_why_auto_score">Aggiunta %1$s, quando ha totalizzato %2$d.</string>
+    <string name="br_why_auto">Aggiunta %1$s, dopo che questa pagina è stata bloccata.</string>
+    <string name="br_why_strike">Aggiunta %1$s: troppi blocchi su questo sito.</string>
+    <string name="br_why_manual">Hai aggiunto tu questa regola alla lista di blocco %1$s.</string>
+    <string name="br_why_preset">Fa parte di una categoria che hai attivato.</string>
+    <string name="block_score_line">Questa pagina totalizza %1$d (una pagina si blocca a %2$d)</string>
+    <string name="block_score_none">Niente in questa schermata ha totalizzato punti: il motivo è tutto qui sopra.</string>
     <string name="br_back_same">È ancora LA STESSA pagina bloccata. Premi di nuovo Indietro, o vai alla Home.</string>
     <string name="br_back_diff">È una pagina DIVERSA - ma è bloccata anche questa. Premi di nuovo Indietro, o vai alla Home.</string>
     <string name="br_borderline_warn">%1$s continua ad andarci vicino.\n\nNiente qui ha superato il limite da solo - ma le stesse parole borderline sono sullo schermo da qualche minuto, e di solito quello schema è il feed, non tu.\n\nSe continui, %1$s si chiude per %2$s. Uscire adesso non ti costa nulla.</string>

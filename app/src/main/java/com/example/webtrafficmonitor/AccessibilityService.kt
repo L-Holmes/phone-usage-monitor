@@ -116,6 +116,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     private var breathing: BreathingOverlay? = null
     private var lastForegroundPkgForBreathing: String? = null
+    /** The app the orb currently on screen belongs to, or null when no orb is up. */
+    private var breathingPkg: String? = null
+    private var breathingAwayTicks = 0
 
     private var lastProcessedAt = 0L      // gates LOGGING (cheap to be slow)
     private var lastBlockEvalAt = 0L      // gates BLOCKING (must be quick)
@@ -132,6 +135,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     // "still blocked / different page" status lines and dismiss escalation).
     private var shownBlockHost: String? = null
     private var shownBlockUrl: String? = null
+    // What the page under the current cover scored, and the words that carried it. Kept so
+    // that when the user's own tap turns this page into a RULE (escalateWebBlock), the rule
+    // can record why it exists - which is what the next cover for it reads back.
+    private var shownBlockScore: Int? = null
+    private var shownBlockWords: List<String> = emptyList()
     private var armedAt = 0L   // when the current blocked page first armed; used to "settle" before banning
 
     private var lastPackage: String? = null
@@ -173,6 +181,62 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     mainHandler.postDelayed(this, RECHECK_MS)
                 }
             }
+        }
+    }
+
+    /**
+     * Raise the breathing orb for [pkg] and start watching for the moment it goes stale.
+     * The ONLY place the orb goes up, so the watch can never be forgotten.
+     */
+    private fun raiseBreath(pkg: String) {
+        val b = breathing ?: return
+        breathingPkg = pkg
+        breathingAwayTicks = 0
+        b.show(
+            appLabel = appLabelFor(pkg),
+            onContinue = { dropBreath() },
+            onDontWant = { dropBreath(); exitToHome(pkg) },
+        )
+        mainHandler.removeCallbacks(breathingWatch)
+        mainHandler.postDelayed(breathingWatch, BREATH_WATCH_FIRST_MS)
+    }
+
+    /** The ONLY place the orb comes down. Always leaves the watch disarmed. */
+    private fun dropBreath() {
+        mainHandler.removeCallbacks(breathingWatch)
+        breathingPkg = null
+        breathingAwayTicks = 0
+        breathing?.hide()
+    }
+
+    /**
+     * ⚠️ 2026-08-05 - the orb's own way of noticing it is stale. Do not delete it because
+     * "handleEvent already hides it".
+     *
+     * handleEvent DOES hide it when the foreground package changes - but only if the event
+     * reaches that line, and there are half a dozen early returns above it (systemui, the
+     * keyboard, every block path). Anything that leaves the breathing app WITHOUT producing
+     * a window-state-changed event that gets all the way down there left a full-screen cover
+     * sitting over an app it has nothing to do with, and the only thing that eventually took
+     * it away was the overlay's own 25-second ceiling. That is the "it won't disappear for a
+     * while" half of the bug.
+     *
+     * So the orb also checks for itself, off the real window state rather than off events.
+     * It runs only while an orb is actually up (a handful of ticks, then it stops), and it
+     * wants to see the foreground somewhere else TWICE before believing it - one tick mid
+     * app-launch transition is not evidence of anything.
+     */
+    private val breathingWatch = object : Runnable {
+        override fun run() {
+            val mine = breathingPkg
+            if (mine == null || breathing?.isShowing != true) { dropBreath(); return }
+            val front = currentForegroundPackage()
+            // null = can't tell (mid-transition, or the orb's own window is all there is).
+            // Our own app doesn't count either: the orb is drawn by us.
+            if (front != null && front != mine && front != packageName) breathingAwayTicks++
+            else breathingAwayTicks = 0
+            if (breathingAwayTicks >= BREATH_AWAY_TICKS) { dropBreath(); return }
+            mainHandler.postDelayed(this, BREATH_WATCH_MS)
         }
     }
 
@@ -397,6 +461,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // room fires no accessibility event, so it re-evaluates the foreground app
         // itself - same shape as the night guard's sensor callback.
         RoomGuard.start(this) { updateRoomGuard() }
+        // Home area (GPS): "at the house or out". Like RoomGuard it gates itself - it
+        // idles until a home point exists and location is granted - and it runs in every
+        // mode because the answer has to be current the moment anything wants to use it.
+        // Nothing is enforced off it yet; it publishes to HomeAreaContext.
+        HomeAreaWatch.start(this)
         startTamperWatch()
         startInstallWatch()
     }
@@ -479,7 +548,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     // A breath is over when the phone goes in your pocket. Leaving the orb
                     // up across a lock is how it came back on unlock, still frozen, with
                     // its animation long since stopped by the screen turning off.
-                    if (breathing?.isShowing == true) breathing?.hide()
+                    dropBreath()
                     closeUsageSegment()
                     // Stop charging greylist time to whatever was in front. A dark screen is
                     // not two minutes of Instagram, and the tick has no other way to find out
@@ -784,10 +853,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // screen with the phone unusable. It has no business being conditional on any of
         // them: the orb belongs to one app, and the moment the foreground is a different
         // app it is stale. (2026-08-04: this is the "stuck on Breathe in" bug.)
+        //
+        // It tests the orb's OWN package now, not lastForegroundPkgForBreathing. That field
+        // is set on every foreground change whether an orb went up or not, so it had already
+        // moved on in the case that matters most - the app under the orb pushing a window
+        // from a different package (Play Store handing over to the installer). The orb knows
+        // which app it belongs to; ask it. (2026-08-05.)
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            packageName != lastForegroundPkgForBreathing && breathing?.isShowing == true
+            breathingPkg != null && packageName != breathingPkg
         ) {
-            breathing?.hide()
+            dropBreath()
         }
 
         // ---- App-level block: FIRST, on every event, before any throttling. ----
@@ -822,14 +897,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         ) {
             lastForegroundPkgForBreathing = packageName   // the drop happens at the top now
             if (packageName in BREATHING_APPS && overlay?.isShowing != true &&
+                breathing?.isShowing != true &&
                 BreathingGate.shouldBreathe(this, packageName)) {
                 BreathingGate.markBreathed(this, packageName)
-                val label = appLabelFor(packageName)
-                breathing?.show(
-                    appLabel = label,
-                    onContinue = { breathing?.hide() },
-                    onDontWant = { breathing?.hide(); exitToHome(packageName) },
-                )
+                raiseBreath(packageName)
                 return
             }
         }
@@ -1006,7 +1077,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // the new install was blocked, and the orb was never taken down.)
         //
         // A block always wins over a breath. Kill it here, where every block path passes.
-        if (breathing?.isShowing == true) breathing?.hide()
+        dropBreath()
         val freshAppBlock = !appBlockActive          // ADD
         appBlockActive = true
         if (freshAppBlock) BlockEventLog.recordApp(this, blockedPackage, reason)   // ADD
@@ -1313,6 +1384,46 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }.let { getString(R.string.block_contributors_header) + "\n" + it }
     }
 
+    // One explain() pass per page, reused for every re-evaluation while the cover is up.
+    // Without this the scorer would run again on every accessibility event behind a cover.
+    private var explainKey: String? = null
+    private var explainResult: BorderlineScorer.Result? = null
+
+    /** The score + breakdown for a page the SCORER didn't block (so it was never asked). */
+    private fun explainPage(title: String?, url: String?, content: String?): BorderlineScorer.Result? {
+        val key = "${url.orEmpty()}|${title.orEmpty()}|${content?.length ?: 0}"
+        if (key != explainKey) {
+            explainKey = key
+            explainResult = BorderlineScorer.explain(title, url, content, filterSettings())
+        }
+        return explainResult
+    }
+
+    /**
+     * What goes UNDER the reason on a cover: the block showing its working.
+     *
+     * A scored block has its working already - the words that carried it. The gap this
+     * fills is every OTHER block: a rule, a banned domain, a category list. Those used to
+     * show nothing at all, so "Blocked site: google.com/search?q=..." was the entire
+     * explanation, with no score anywhere on screen - which is exactly the complaint. They
+     * now get the same treatment: what this page scores right now, the bar it would have
+     * had to clear, and the words behind it. A page that scores nothing says so, out loud,
+     * rather than leaving a blank space where the reason should be.
+     */
+    private fun coverDetails(
+        verdict: BorderlineScorer.Result?,
+        title: String?,
+        url: String?,
+        content: String?,
+    ): String? {
+        contributorText(verdict)?.let { return it }          // the scorer blocked: it explains itself
+        if (verdict != null) return null
+        val explained = explainPage(title, url, content)
+            ?: return getString(R.string.block_score_none)
+        val head = getString(R.string.block_score_line, explained.score, BorderlineScorer.webBar())
+        return contributorText(explained)?.let { "$head\n\n$it" } ?: head
+    }
+
     /**
      * Is the user in the middle of TYPING - i.e. is an editable field focused right now?
      *
@@ -1346,15 +1457,26 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun escalateWebBlock(host: String, pageUrl: String?) {
         val isSearch = BlockRules.isSearchEngineHost(host)
         val pageRule = BlockRules.pageRuleFor(pageUrl)
+        // Why this rule is being created, recorded now while we still know: the score the
+        // page was carrying and the words behind it. Next time it blocks, the cover can
+        // say so instead of just naming the URL.
+        val note = BlockRules.Note(
+            origin = BlockRules.Origin.AUTO_BLOCK,
+            score = shownBlockScore,
+            words = shownBlockWords,
+        )
         when {
-            pageRule != null -> BlockRules.add(this, pageRule)   // block this exact page / search term
-            !isSearch        -> BlockRules.add(this, host)       // non-search, no path -> block host
+            pageRule != null -> BlockRules.add(this, pageRule, note)   // this exact page / search term
+            !isSearch        -> BlockRules.add(this, host, note)       // non-search, no path -> block host
             // search engine with no term -> add nothing (never ban a whole search engine)
         }
         // Domain strikes never accrue for search engines.
         if (!isSearch) {
             BlockEscalation.recordWebBlock(this, host)?.let { domain ->
-                BlockRules.addTimed(this, domain, DOMAIN_BLOCK_MS)
+                BlockRules.addTimed(
+                    this, domain, DOMAIN_BLOCK_MS,
+                    BlockRules.Note(BlockRules.Origin.DOMAIN_STRIKE),
+                )
             }
         }
     }
@@ -1658,14 +1780,19 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         if (baseReason != null) {
             val freshShow = !controller.isShowing
+            // The cover's working-out, for EVERY kind of block (see coverDetails).
+            val details = coverDetails(verdict, title, url, content)
+            // Scored for app screens too, not just web pages - an in-app block is now a
+            // thing that can happen, and a block event with no score is not reviewable.
+            // Reuse the verdict when the scorer is what blocked; a block that came from
+            // somewhere else (a rule, a banned domain, a screen guard) is scored by the
+            // same cached pass the cover just used, so nothing is computed twice.
+            val scored = verdict ?: explainPage(title, url, content)
+            shownBlockScore = scored?.score
+            shownBlockWords = BorderlineScorer
+                .topContributors(scored?.contributions ?: emptyList()).map { it.word }
             if (freshShow) {
-                // Scored for app screens too, not just web pages - an in-app block is now a
-                // thing that can happen, and a block event with no score is not reviewable.
-                // Reuse the verdict when the scorer is what blocked; only a block that came
-                // from somewhere else (a banned domain, a screen guard) has to be scored here.
-                val blockScore = verdict?.score
-                    ?: BorderlineScorer.score(title, url, content, filterSettings())?.score
-                BlockEventLog.recordWeb(this, packageName, host, url, baseReason, blockScore)
+                BlockEventLog.recordWeb(this, packageName, host, url, baseReason, scored?.score)
             }
 
             // The "you went BACK..." line is a RESPONSE TO A TAP, never ambient commentary.
@@ -1705,9 +1832,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
             controller.show(
                 reason = reason,
-                // The words that actually carried the score, for a scored block. Null for a
-                // banned domain or a screen guard: those are their own explanation.
-                details = contributorText(verdict),
+                details = details,
                 onGoBack = {
                     val tapAt = System.currentTimeMillis()
                     if (tapAt - lastGoBackAt >= GO_BACK_DEBOUNCE_MS) {
@@ -1758,8 +1883,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         packageName !in NOT_LOGGED_PACKAGES
 
     /** Turn a raw block rule into readable wording: a dot means a site, otherwise a keyword. */
-    private fun describeRule(rule: String): String =
-        if ('.' in rule) getString(R.string.br_blocked_site, rule) else getString(R.string.br_blocked_keyword, rule)
+    /**
+     * The cover's headline for a rule block: WHAT it blocks, and - the part that was
+     * missing - HOW IT GOT THERE. A rule the user has never seen created ("blocked site:
+     * google.com/search?q=...") is indistinguishable from the app being arbitrary; the
+     * note recorded when the rule was added is the answer, so read it back.
+     */
+    private fun describeRule(rule: String): String {
+        val head = BlockRules.describe(this, rule)
+        val why = BlockRules.whyLine(this, rule)
+        return if (why == null) head else "$head\n$why"
+    }
 
     /** The package of the application window that is actually in front, or null. */
     private fun currentForegroundPackage(): String? {
@@ -2134,7 +2268,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(recheck)
+        dropBreath()        // a full-screen cover must never outlive the service that owns it
         RoomGuard.stop()
+        HomeAreaWatch.stop()
         greyscaleSensor?.stop(); greyscaleSensor = null
         if (greyscaleApplied) { Greyscale.setEnabled(this, false); greyscaleApplied = false }
         overlay?.hide()
@@ -2205,6 +2341,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         private const val MIN_INTERVAL_MS = 700L
         private const val RECHECK_MS = 400L
+        /** First stale-check on the orb: late enough to be past the app-launch transition. */
+        private const val BREATH_WATCH_FIRST_MS = 2_500L
+        private const val BREATH_WATCH_MS = 1_500L
+        /** Consecutive ticks showing a different app in front before the orb is dropped. */
+        private const val BREATH_AWAY_TICKS = 2
         private const val MAX_TEXT_CHARS = 1000
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40
