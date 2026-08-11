@@ -212,6 +212,9 @@
     <string name="always_on_12">C\'È ancora, ma ti viene offerto solo se punti al pulsante di disinstallazione, al blocco amministratore del dispositivo, all\'interruttore del monitoraggio, o provi a uscire da una modalità rigida bloccata. Punta all\'opzione distruttiva e ti verrà offerta invece quella onesta - un\'attesa, un impegno scritto, una finestra fissa, e tutto resta in piedi dopo.</string>
     <string name="always_on_16">Scriverlo in modo diverso non serve a passare. Numeri al posto di lettere, lettere allungate, lettere sosia di altri alfabeti e parole spezzate dagli spazi vengono tutte ricomposte prima di qualsiasi controllo.</string>
     <string name="always_on_17">Dentro un\'APP, una parola inequivocabile basta su una schermata breve - ma la stessa parola sepolta in una lunga pagina di testo ne richiede una seconda, perché una menzione non è una pagina che parla di quello.</string>
+    <string name="always_on_18">…e anche allora, un solo rilevamento non chiude un\'app. Dentro un\'app apre invece un caso: per %1$d secondi tutto viene ignorato, poi serve un secondo rilevamento, poi altri %2$d secondi ignorati, poi un terzo - %3$d osservazioni distinte prima che l\'app si chiuda. Le attese sono il punto: una domanda che hai scritto tu, o un messaggio che ti ha mandato qualcuno, non possono mai superarle.</string>
+    <string name="always_on_19">La lunghezza di quella scala dipende da quanto conosciamo l\'app. Un\'app NUOVA - sul telefono da meno di %1$d giorni e non ancora usata in %2$d giorni distinti - si chiude al PRIMO rilevamento: una nuova installazione è esattamente l\'aspetto che ha la ricerca di una scorciatoia attorno a un blocco. Un\'app che abbiamo già dovuto chiudere per i contenuti ne ha %3$d. Tutto il resto ha i %4$d pieni.</string>
+    <string name="always_on_20">Niente ti resta addosso per sempre. %1$d minuti senza altri rilevamenti in un\'app e il suo caso viene chiuso senza conferma; %2$d minuti senza alcun rilevamento in NESSUNA app e ogni conteggio, ovunque, torna a zero.</string>
     <string name="always_on_13">L\'app non preme mai Indietro al posto tuo. Il blocco copre lo schermo e ti offre la via d\'uscita; non naviga mai nel tuo browser alle tue spalle.</string>
     <string name="always_on_14">Un blocco basato sul punteggio delle parole mostra come ci è arrivato: la schermata di blocco elenca le parole che hanno davvero pesato, così vedi il perché - e puoi dirci quando abbiamo sbagliato.</string>
     <string name="always_on_15">Una pagina web richiede un punteggio più alto di una schermata di app prima di essere bloccata, perché nel browser l\'estensione immagini legge la stessa pagina dall\'interno. Una parola inequivocabile blocca comunque entrambe, da sola.</string>
@@ -793,7 +796,55 @@
     <string name="status_unlock_window">Finestra di sblocco - %1$s rimasti</string>
     <string name="status_unlock_wait">Attesa di sblocco - %1$s rimasti</string>
     <string name="status_week_strict">Rigida settimanale - ancora %1$s</string>
-    <string name="sensors_console_header">SENSORI CONNESSI</string>
+    <string name="sensors_console_header">DOVE TI TROVI</string>
+    <string name="house_row">●  Casa tua - %1$s</string>
+    <string name="house_state_notset">non configurata</string>
+    <string name="house_state_nolocation">posizione spenta o non autorizzata</string>
+    <string name="house_state_foreground">legge solo con l\'app aperta</string>
+    <string name="house_state_home">sei a casa</string>
+    <string name="house_state_away">sei fuori</string>
+    <string name="house_state_unsure">al momento non si capisce</string>
+    <string name="house_state_checking">attivo - sto capendo dove sei</string>
+    <string name="house_sub_unset">Tocca per salvare dov\'è casa. Oggi non cambia nulla - è l\'interruttore che la Super rigida userà dopo.</string>
+    <string name="house_sub_super_unset">La Super rigida usa questo: a casa, una parola chiude un\'app. Non può, finché non lo configuri. Tocca per sistemare.</string>
+    <string name="house_sub_super_active">A casa in Super rigida: un rilevamento chiude l\'app, senza seconde occhiate.</string>
+    <string name="house_sub_super_idle">Fuori casa: le app hanno la normale scala a tre rilevamenti.</string>
+    <string name="house_sub_other_modes">Configurato e attivo: tiene traccia di quando sei a casa. Solo la Super rigida agisce su questo; in ogni altra modalità è solo un\'indicazione.</string>
+
+    <string name="house_title">Casa tua</string>
+    <string name="house_intro">Se il telefono si trova entro %1$d m da casa. Configuralo stando in casa e premendo il pulsante in fondo: quella posizione diventa casa. Sono GPS e Wi-Fi vicini, solo su questo dispositivo: non viene inviato nulla da nessuna parte, e una VPN non può spostarlo.</string>
+    <string name="house_rule_unset">Non ancora configurata, quindi non la usa nessuno.</string>
+    <string name="house_rule_other_modes">Salvata. Solo la Super rigida ci agisce sopra - in questa modalità è solo un\'indicazione.</string>
+    <string name="house_rule_home">A casa, in Super rigida: una parola rilevata in un\'app la chiude, senza seconde occhiate.</string>
+    <string name="house_rule_away">Fuori casa: le app hanno la scala normale - tre rilevamenti, a minuti di distanza.</string>
+    <string name="house_rule_unsure">Non si capisce dove sei, quindi non cambia nulla. L\'incertezza non rende mai le cose più severe.</string>
+    <string name="house_rule_note">Nient\'altro viene bloccato per via di dove ti trovi - questo accorcia la scala dei rilevamenti, e solo in Super rigida.</string>
+    <string name="house_sec_permissions">Autorizzazioni</string>
+    <string name="house_sec_where">Dove ti trovi</string>
+    <string name="house_sec_point">Il punto di casa tua</string>
+    <string name="house_save_ready">Rilevamento buono (±%1$d m): premi il pulsante mentre sei in casa.</string>
+    <string name="house_save_waiting">In attesa di un rilevamento… dai qualche secondo e avvicinati a una finestra se non arriva.</string>
+    <string name="house_grant_1">1. Concedi la posizione (mentre usi l\'app)</string>
+    <string name="house_grant_2">2. Consenti sempre</string>
+    <string name="house_grant_settings_hint">Autorizzazioni → Posizione → Consenti sempre</string>
+    <string name="house_open_settings">Apri le autorizzazioni dell\'app</string>
+    <string name="house_location_off">La posizione è SPENTA a livello di sistema - tocca qui per accenderla.</string>
+    <string name="house_save">Sono a casa mia - salva questa come casa</string>
+    <string name="house_save_replace">Sono a casa mia - salva questa come casa (sostituisce la precedente)</string>
+    <string name="house_clear">Cancella il punto di casa</string>
+    <string name="house_saved_toast">Casa salvata (±%1$d m da %2$s).</string>
+    <string name="house_cleared_toast">Punto di casa cancellato</string>
+    <string name="house_no_fix">Ancora nessuna posizione - dai un attimo di tempo (avvicinati a una finestra).</string>
+    <string name="house_stale_fix">Quella posizione è vecchia - aspetta che se ne prenda una fresca.</string>
+    <string name="house_notset">Non impostata.</string>
+    <string name="house_hint_notset">Mettiti in casa, aspetta che la precisione si stabilizzi, poi premi il pulsante.</string>
+
+    <string name="house_ask_title">Dov\'è casa?</string>
+    <string name="house_ask_body">%1$s può usare dove ti trovi.\n\nCasa è dove succede: il divano, la camera, le ore dopo che tutti gli altri sono andati a letto. Un telefono che sa di essere lì può essere severo nell\'unico posto in cui vale la pena esserlo, e starti fuori dai piedi ovunque altro.\n\nConfiguralo una volta, stando in casa, e dopo non costa nulla: usa la posizione economica e ricorre al GPS solo quando davvero non riesce a capire. Tutto resta su questo dispositivo.</string>
+    <string name="house_ask_strict">In Rigida oggi non cambia nulla - lo stai configurando perché ci sia quando lo vorrai. In Super rigida, essere a casa significa che una parola rilevata in un\'app la chiude, invece delle solite tre.</string>
+    <string name="house_ask_super">In Super rigida questa è la regola della modalità stessa: a casa, una parola rilevata in un\'app la chiude, invece delle solite tre. Finché non è configurata, quella regola non può scattare.</string>
+    <string name="house_ask_set">Configura ora</string>
+    <string name="house_ask_later">Non ora</string>
     <string name="sensors_none">Nessun sensore connesso\nTocca qui per configurare i sensori delle stanze.</string>
     <string name="sensors_no_rooms">Ancora nessuna stanza\nTocca qui per aggiungere la tua prima stanza.</string>
     <string name="sensors_status_notsetup">Non configurato</string>
@@ -884,6 +935,9 @@
     <string name="br_notification_flagged">Una notifica da %1$s è stata valutata come contenuto per adulti</string>
     <string name="br_app_too_many">App bloccata per %1$s (troppi blocchi)</string>
     <string name="br_app_blocked">App bloccata</string>
+    <string name="br_repeat_block">%1$s\n\nFanno %2$d rilevamenti distinti in questa app in %3$d minuti. Uno da solo viene sempre lasciato passare - questo ha continuato a tornare.</string>
+    <string name="br_new_app_block">%1$s\n\nQuesta app è nuova qui - sul tuo telefono da %2$d giorno/i - quindi basta un solo rilevamento. Un\'app che usi da mesi avrebbe avuto altre due possibilità prima di questa schermata.</string>
+    <string name="br_home_block">%1$s\n\nSei a casa tua, in Super rigida. Qui non c\'è una seconda occhiata: la prima cosa rilevata chiude l\'app. In qualsiasi altro posto questa sarebbe stata lasciata passare.</string>
 
     <string name="overlay_breathe_in">Inspira</string>
     <string name="overlay_breathe_out">Espira</string>
@@ -924,6 +978,8 @@
         <item>Gli interruttori \"per chi è il filtro\" sono BLOCCATI al massimo. Puoi cambiarli solo in Rilassata.</item>
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
+        <item>DOVE ABITI: la Rigida ti chiede, una volta sola, di salvare dov\'è casa. In Rigida non ci agisce nulla - lo configuri perché sia pronto se un giorno passi alla Super rigida, dove essere a casa è ciò che rende una sola parola sufficiente a chiudere un\'app. Sono GPS e Wi-Fi vicini, solo su questo dispositivo; non esce nulla dal telefono e una VPN non può spostarlo. Puoi configurarlo quando vuoi da Panoramica → Dove ti trovi.</item>
+        <item>UNA PAROLA CONTINUA A NON CHIUDERE UN\'APP. La Rigida cambia che cosa conta come rilevamento - più liste di parole attive e un\'asticella più bassa - non quanti ne servono. È la stessa scala di ogni altra modalità: tre rilevamenti distinti per un\'app che hai da un po\', due per una che abbiamo già chiuso, uno per un\'app appena installata.</item>
         <item>Il blocco rigido di 7 giorni (se lo avvii) ti impedisce di tornare a Rilassata per una settimana. Puoi comunque salire a Super rigida.</item>
     </string-array>
     <string-array name="mode_superhardcore_rules">
@@ -933,6 +989,10 @@
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato, come in Rigida.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
         <item>La regola dello schema borderline della Rigida vale anche qui.</item>
+        <item>A CASA BASTA UNA PAROLA - solo in questa modalità. Quando il telefono vede di essere a casa tua, la scala dei rilevamenti si riduce a uno: la prima parola sessuale rilevata in un\'app la chiude, senza seconde occhiate e senza aspettare di vedere se torna. Casa è dove succede, e questa è la modalità che lo dice.</item>
+        <item>Fuori casa - o se non riesce a capire dove ti trovi - vale la scala normale: tre rilevamenti distinti, a minuti di distanza. L\'incertezza non rende MAI le cose più severe, quindi una posizione vaga al supermercato non può portarti via un\'app.</item>
+        <item>Quella regola richiede prima di aver salvato casa (Panoramica → Dove ti trovi). Finché non lo fai, la Super rigida usa ovunque la scala normale.</item>
+        <item>Fuori casa la scala dei rilevamenti è la stessa di ovunque: una parola in un\'app apre un caso invece di chiudere l\'app. Quello che questa modalità cambia in più è che cosa conta come rilevamento - le liste di frammenti (reddit e i suoi errori di scrittura) sono attive solo qui.</item>
         <item>La configurazione viene imposta fuori da questa app esattamente come in Rigida: se manca qualcosa, si aprono solo gli elementi essenziali.</item>
         <item>Questa è Rigida senza il pass giornaliero.</item>
     </string-array>

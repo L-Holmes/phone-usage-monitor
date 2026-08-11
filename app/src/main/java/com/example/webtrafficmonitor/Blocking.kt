@@ -965,6 +965,335 @@ object BorderlineWatch {
 }
 
 
+// =====================================================================================
+// AppTrust  —  how well do we know this app?
+// =====================================================================================
+/**
+ * The same word on screen is not the same evidence in every app.
+ *
+ * An app that has been on the phone for months, that you open most days, has earned some
+ * benefit of the doubt: nearly everything it has ever shown you was fine, and one sexual
+ * word in it is far more likely to be a message, a headline, or a question you typed once
+ * than a feed turning on you.
+ *
+ * An app installed on Tuesday has earned nothing. A run of installs during Strict is what
+ * looking for a way round a blocker actually looks like from the outside (it is why
+ * InstallLog exists), and the app that arrived in the middle of that run is exactly the one
+ * to be strict with. So a new app gets no second chance: one detection is the whole ladder.
+ *
+ * Three answers, in the order they are asked - and the order matters, because each one is a
+ * SHORTER ladder than the last and the shortest applicable ladder has to win. An app we
+ * have already had to close for content has spent its benefit of the doubt however old it
+ * is; a new install has none to spend, and being closed once must never buy it more:
+ *
+ *   NEW      recently installed and not yet used across many days.  → asked first
+ *   REPEAT   established, but we have blocked it for content before.
+ *   KNOWN    established, and it has never done this.
+ *
+ * WHAT "USED A LOT" IS MEASURED IN. Not opens, and not minutes: DISTINCT DAYS. Android's
+ * real usage figures need the PACKAGE_USAGE_STATS special permission - one more thing to
+ * grant, and one more thing that can be revoked behind our back - and we do not need it,
+ * because the accessibility service watches the foreground all day and can simply count.
+ * Days are the honest unit here anyway: opens and minutes can be manufactured in an
+ * afternoon by the very app that wants to look established, and days cannot.
+ *
+ * HOW OLD THE APP IS comes from the package manager (no permission), taken together with
+ * how long we have been seeing it ourselves, EARLIEST WINS. A phone-to-phone restore
+ * rewrites every firstInstallTime to the day of the restore, and an app we have been
+ * watching for three months is not new whatever the package manager says afterwards.
+ */
+object AppTrust {
+
+    enum class Tier { NEW, KNOWN, REPEAT }
+
+    /** On the phone this long and it is not a new app any more. */
+    const val ESTABLISHED_DAYS = 30
+    /** ...or seen in the foreground on this many separate days. */
+    const val ESTABLISHED_DAYS_SEEN = 10
+
+    private const val PREFS = "app_trust"
+    private const val DAY_MS = 24 * 60 * 60 * 1000L
+
+    // One prefs write per app per day, not one per foreground change: the day we have
+    // already counted for an app is remembered here, in the process that does the counting.
+    private val countedToday = HashSet<String>()
+    private var countedDay: String? = null
+
+    /**
+     * The foreground moved to [pkg]. Cheap on purpose - this is called on every window
+     * change, and on all but the first sighting of an app each day it does nothing at all.
+     */
+    @Synchronized
+    fun onForeground(ctx: Context, pkg: String?) {
+        if (pkg.isNullOrBlank()) return
+        val key = pkg.lowercase()
+        val today = today()
+        if (today != countedDay) { countedToday.clear(); countedDay = today }
+        if (!countedToday.add(key)) return
+        val p = prefs(ctx)
+        val edit = p.edit()
+        if (p.getLong("first:$key", 0L) == 0L) edit.putLong("first:$key", System.currentTimeMillis())
+        if (p.getString("day:$key", null) != today) {
+            edit.putString("day:$key", today).putInt("days:$key", daysSeen(ctx, key) + 1)
+        }
+        edit.apply()
+    }
+
+    /** How well we know [pkg]. Unknown packages are treated as KNOWN: see below. */
+    fun tier(ctx: Context, pkg: String?): Tier {
+        // No package name is not evidence of anything, and the strict end of this ladder
+        // takes an app away on ONE word. Anything we cannot identify gets the lenient tier.
+        if (pkg.isNullOrBlank()) return Tier.KNOWN
+        val key = pkg.lowercase()
+        val established = installedDays(ctx, key) >= ESTABLISHED_DAYS ||
+            daysSeen(ctx, key) >= ESTABLISHED_DAYS_SEEN
+        // NEW is asked FIRST, and that is not cosmetic: it is the shortest ladder there is,
+        // so a new app that has already been closed once must not come back as REPEAT and
+        // find itself owed a second detection it never had in the first place.
+        if (!established) return Tier.NEW
+        if (blockCount(ctx, key) > 0) return Tier.REPEAT
+        return Tier.KNOWN
+    }
+
+    /** Days since the app arrived, by the earliest account we have of it. */
+    fun installedDays(ctx: Context, pkg: String): Int {
+        val key = pkg.lowercase()
+        val installed = try {
+            ctx.packageManager.getPackageInfo(key, 0).firstInstallTime
+        } catch (_: Throwable) {
+            0L      // not installed, or the manager would not say: fall back to our own record
+        }
+        val firstSeen = prefs(ctx).getLong("first:$key", 0L)
+        val since = when {
+            installed > 0L && firstSeen > 0L -> minOf(installed, firstSeen)
+            installed > 0L -> installed
+            firstSeen > 0L -> firstSeen
+            else -> return 0
+        }
+        return ((System.currentTimeMillis() - since) / DAY_MS).toInt().coerceAtLeast(0)
+    }
+
+    /** Separate days we have seen this app in the foreground. */
+    fun daysSeen(ctx: Context, pkg: String): Int =
+        prefs(ctx).getInt("days:${pkg.lowercase()}", 0)
+
+    /** Times we have closed this app for what was on its screen. */
+    fun blockCount(ctx: Context, pkg: String): Int =
+        prefs(ctx).getInt("blocks:${pkg.lowercase()}", 0)
+
+    /**
+     * Record a CONTENT block against [pkg] - the thing that makes it a repeat offender.
+     *
+     * Only for blocks we worked out ourselves. A blacklisted app, or one the user banned by
+     * hand, is blocked on sight anyway; counting those would fill the store with apps whose
+     * tier can never matter and would say "we caught this app at it" about an app we never
+     * caught at anything.
+     */
+    @Synchronized
+    fun noteBlocked(ctx: Context, pkg: String?) {
+        if (pkg.isNullOrBlank()) return
+        val key = pkg.lowercase()
+        prefs(ctx).edit().putInt("blocks:$key", blockCount(ctx, key) + 1).apply()
+    }
+
+    /** "package - tier, N days on the phone, seen on N days, N block(s)" for the ban list. */
+    fun summary(ctx: Context): List<String> {
+        val p = prefs(ctx)
+        val pkgs = p.all.keys.mapNotNull { k -> k.substringAfter(':', "").takeIf { it.isNotEmpty() } }
+            .toSortedSet()
+        return pkgs.map { pkg ->
+            "$pkg  -  ${tier(ctx, pkg)}, ${installedDays(ctx, pkg)}d on the phone, " +
+                "seen on ${daysSeen(ctx, pkg)} day(s), ${blockCount(ctx, pkg)} block(s)"
+        }
+    }
+
+    @Synchronized
+    fun clear(ctx: Context) {
+        prefs(ctx).edit().clear().apply()
+        countedToday.clear(); countedDay = null
+    }
+
+    private fun today() = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// RepeatGate  —  one word is a question, not an answer
+// =====================================================================================
+/**
+ * ONE word is enough to make us look. It is not enough to take the app away.
+ *
+ * Inside an ordinary app, a single sexual word is usually a message somebody sent you, a
+ * headline, a lyric, or a question you typed once and got an answer to. Blocking on it is
+ * how a filter teaches you it is stupid, and a filter you have decided is stupid does not
+ * get obeyed - it gets removed. The thing that separates that one word from a feed is
+ * whether it comes BACK: same app, minutes later, again.
+ *
+ * So a word detection inside an app opens a CASE instead of closing the app, and the case
+ * has to be confirmed before anything happens:
+ *
+ *   KNOWN app   hit → ignore everything for 20s → hit → ignore everything for 10s → hit
+ *               → blocked. Three separate looks, spread over at least half a minute.
+ *   REPEAT app  hit → ignore everything for 10s → hit → blocked.
+ *   NEW app     hit → blocked. (See AppTrust for why a new app is treated this way.)
+ *
+ * THE WAITS ARE THE POINT, and they are waits, not windows: anything detected inside one is
+ * ignored completely - not counted, not held against the app, not even remembered. One
+ * screen carrying a bad word fires dozens of accessibility events, and a question you asked
+ * once stays on screen while you read the answer. Counting those would turn "three separate
+ * detections" into "one detection, three times", which is the exact mistake this exists to
+ * stop. What has to happen is that you are STILL somewhere that scores, after the wait -
+ * either because you are still on it, or because it came round again.
+ *
+ * TWO WAYS A CASE ENDS WITHOUT A BLOCK:
+ *   • CASE_MS with no counted hit on that app - the repeat never came, so the first word
+ *     was what it looked like: one word.
+ *   • QUIET_RESET_MS with no detection in ANY app - a whole hour in which nothing anywhere
+ *     scored. Whatever was going on is over, and nobody should be walking around on the
+ *     second rung of a ladder they started before lunch.
+ * The first is the one that fires in practice: a case cannot survive twenty quiet minutes,
+ * so it can never see the quiet hour. The hour is kept because it is the promise the rule
+ * makes ("an hour clean and you start fresh"), and because it is what keeps the whole thing
+ * honest if CASE_MS is ever raised.
+ *
+ * The cases are in memory, like BorderlineWatch's and CheckingGuard's: they live in the
+ * accessibility service's process, which runs all day, and losing them to a restart costs
+ * one lenient window - the right way round for a rule that acts on a suspicion. What must
+ * NOT be forgotten is which apps have been blocked before, and that is AppTrust's job, in
+ * SharedPreferences.
+ *
+ * MODE MAKES NO DIFFERENCE HERE. What counts as a detection in the first place is already
+ * far stricter in Strict and above (more word tiers live, lower bars, the fragment lists);
+ * this is the question of what to DO with a detection, and the answer - look twice before
+ * taking someone's app away - is not one that should get worse under pressure.
+ */
+object RepeatGate {
+
+    /** Hits needed to block, per tier. */
+    const val HITS_NEW = 1
+    const val HITS_REPEAT = 2
+    const val HITS_KNOWN = 3
+
+    /** After the first counted hit on a known app: ignore everything for this long. */
+    const val WAIT_FIRST_MS = 20_000L
+    /** After the second - and the only wait a repeat offender gets. */
+    const val WAIT_SECOND_MS = 10_000L
+
+    /** A case with no counted hit for this long is closed, unconfirmed. */
+    const val CASE_MS = 20 * 60 * 1000L
+    /** No detection in ANY app for this long and every open case is dropped. */
+    const val QUIET_RESET_MS = 60 * 60 * 1000L
+
+    /**
+     * How long a CONFIRMED block keeps standing on its own.
+     *
+     * A confirmed case is closed the moment it fires, and without this the very next event
+     * from the same screen would open a fresh one, come back HOLD, and take down the cover
+     * that had just gone up - a block that lasts a fraction of a second. So once an app is
+     * blocked it STAYS blocked: every further detection answers HELD straight away and
+     * pushes this out again, so the cover holds for as long as the app keeps producing
+     * detections, and for this long after the last one.
+     */
+    const val BLOCK_HOLD_MS = 5 * 60 * 1000L
+
+    enum class Verdict {
+        /** Noted. Nothing is shown, nothing is taken away. */
+        HOLD,
+        /** The case is confirmed: block the app. Happens ONCE per block. */
+        BLOCK,
+        /** A block already confirmed is still standing - keep the cover exactly as it is. */
+        HELD,
+    }
+
+    private class Case(var hits: Int, var lastAt: Long, var ignoreUntil: Long)
+
+    private val cases = HashMap<String, Case>()
+    private val blockedUntil = HashMap<String, Long>()
+    private var lastAnywhere = 0L
+
+    fun hitsNeeded(tier: AppTrust.Tier): Int = when (tier) {
+        AppTrust.Tier.NEW -> HITS_NEW
+        AppTrust.Tier.REPEAT -> HITS_REPEAT
+        AppTrust.Tier.KNOWN -> HITS_KNOWN
+    }
+
+    /** How long detections are ignored after the [hits]-th counted hit on a [tier] app. */
+    fun waitAfter(tier: AppTrust.Tier, hits: Int): Long = when {
+        tier == AppTrust.Tier.REPEAT -> WAIT_SECOND_MS      // its one wait is the short one
+        hits <= 1 -> WAIT_FIRST_MS
+        else -> WAIT_SECOND_MS
+    }
+
+    /** A word detection landed on [pkg]. Say whether that is enough to block it. */
+    fun record(pkg: String, tier: AppTrust.Tier): Verdict =
+        recordAt(pkg, tier, System.currentTimeMillis())
+
+    /**
+     * [record] with the clock passed in. Everything here is about elapsed time, so the tests
+     * drive it through a fake clock rather than sitting through twenty real minutes.
+     */
+    @Synchronized
+    internal fun recordAt(pkg: String, tier: AppTrust.Tier, now: Long): Verdict {
+        // The hour of quiet is measured from the last DETECTION anywhere, ignored ones
+        // included: an ignored detection still says something was on screen.
+        if (lastAnywhere > 0L && now - lastAnywhere > QUIET_RESET_MS) { cases.clear(); blockedUntil.clear() }
+        lastAnywhere = now
+
+        val key = pkg.lowercase()
+        // Already blocked, and still showing us the content it was blocked for: the block
+        // stands, and stands longer for having been tested. (See BLOCK_HOLD_MS.)
+        if (now < (blockedUntil[key] ?: 0L)) {
+            blockedUntil[key] = now + BLOCK_HOLD_MS
+            return Verdict.HELD
+        }
+        val open = cases[key]?.takeIf { now - it.lastAt <= CASE_MS }
+        if (open == null) cases.remove(key)
+        // Inside a wait: this detection never happened. NOT counted, and deliberately not
+        // allowed to extend the case either - see the class note.
+        if (open != null && now < open.ignoreUntil) return Verdict.HOLD
+
+        val hits = (open?.hits ?: 0) + 1
+        if (hits >= hitsNeeded(tier)) {
+            cases.remove(key)
+            blockedUntil[key] = now + BLOCK_HOLD_MS
+            return Verdict.BLOCK
+        }
+        cases[key] = Case(hits, now, now + waitAfter(tier, hits))
+        return Verdict.HOLD
+    }
+
+    /** Counted hits standing against [pkg] right now. */
+    @Synchronized
+    fun hits(pkg: String): Int = cases[pkg.lowercase()]?.hits ?: 0
+
+    /** "package - N hit(s), waiting" lines for the ban-list screen. */
+    @Synchronized
+    fun summary(): List<String> {
+        val now = System.currentTimeMillis()
+        val open = cases.entries.sortedBy { it.key }.map { (pkg, c) ->
+            val waiting = if (now < c.ignoreUntil) ", ignoring detections for " +
+                "${(c.ignoreUntil - now) / 1000}s" else ""
+            "$pkg  -  ${c.hits} hit(s)$waiting"
+        }
+        val held = blockedUntil.entries.filter { now < it.value }.sortedBy { it.key }
+            .map { "${it.key}  -  BLOCKED, holding for ${(it.value - now) / 1000}s more" }
+        return held + open
+    }
+
+    @Synchronized
+    fun clear(pkg: String?) {
+        if (pkg == null) return
+        cases.remove(pkg.lowercase()); blockedUntil.remove(pkg.lowercase())
+    }
+
+    @Synchronized
+    fun clearAll() { cases.clear(); blockedUntil.clear(); lastAnywhere = 0L }
+}
+
+
 object RapidBlockMonitor {
 
     /**

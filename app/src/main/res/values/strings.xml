@@ -242,7 +242,7 @@
     <string name="moderules_lock">Strict lock is running: %1$s left. You cannot go back to Relaxed until it ends. You can still go up to Super hardcore.</string>
     <string name="moderules_watched">\"Watched apps\" are the ones that get the breathing pause: %1$s.</string>
 
-    <!-- Always-on rules (shown in every mode). 8/9/10 take a numeric arg. -->
+    <!-- Always-on rules (shown in every mode). 8/9/10 and 18/19/20 take numeric args. -->
     <string name="always_on_01">One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.</string>
     <string name="always_on_02">Known adult sites are blocked outright. Beyond Off, mode makes no difference.</string>
     <string name="always_on_03">Pages are scanned for sexual words. Every word carries a weight and they add up to a score - enough of them and the page is blocked, in every mode including Relaxed. No single word ever does it alone.</string>
@@ -260,6 +260,9 @@
     <string name="always_on_15">A web page needs a higher word score than an app screen before it is blocked, because in a browser the image add-on is reading the same page from the inside. One unmistakable word still blocks either, on its own.</string>
     <string name="always_on_16">Spelling it differently does not get past it. Numbers for letters, stretched letters, lookalike letters from other alphabets, and words split across spaces are all put back together before anything is checked.</string>
     <string name="always_on_17">Inside an APP, one unmistakable word is enough on a short screen - but the same word buried in a long page of text needs a second one, because a mention is not the same as a page about it.</string>
+    <string name="always_on_18">…and even then, one detection does not close an app. Inside an app it opens a case instead: everything is then ignored for %1$d seconds, it takes a second detection after that, then another %2$d seconds ignored, then a third - %3$d separate looks before the app closes. The waits are the point. One question you typed, or one message somebody sent you, can never get past them.</string>
+    <string name="always_on_19">How long that ladder is depends on how well the app is known. A NEW app - under %1$d days on the phone and not yet used on %2$d separate days - closes on the FIRST detection: a new install is exactly what looking for a way round a blocker looks like. An app we have already had to close for content gets %3$d. Everything else gets the full %4$d.</string>
+    <string name="always_on_20">Nothing is held against you forever. %1$d minutes with no further detection in an app and its case is dropped unconfirmed; %2$d minutes with nothing detected in ANY app and every count everywhere goes back to zero.</string>
 
     <!-- Per-mode rule bullets (shown on the mode-rules screen). Keep in step with the mode
          behaviour flags in AppConfig.MODES. -->
@@ -285,6 +288,8 @@
         <item>NIGHT GUARD: none in Strict. Lying down or sitting in the dark never blocks anything here - that only happens in Super hardcore.</item>
         <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
         <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
+        <item>WHERE YOU LIVE: Strict asks you, once, to save where home is. Nothing in Strict acts on it - you are setting it up so it is ready if you ever go to Super hardcore, where being at home is what makes one word enough to close an app. It is GPS and nearby Wi-Fi, on this device only; nothing leaves the phone, and a VPN cannot move it. Set it up any time from Overview → Where you are.</item>
+        <item>ONE WORD STILL DOESN\'T CLOSE AN APP. Strict changes what counts as a detection - more word lists are live and the bar is lower - not how many it takes. It is the same ladder as every other mode: three separate detections for an app you have had a while, two for one we have closed before, one for a newly installed app.</item>
         <item>THE SETUP IS ENFORCED, not just asked for: while anything is still missing - the \"appear on top\" permission, Firefox, or its add-on - everything except the essentials is covered with a screen naming the step you still owe. Calls, texts, alarms, maps, Settings, Firefox and this app all stay open, so you can always finish it (or drop back to Relaxed).</item>
         <item>The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.</item>
         <item>Greyscale: your screen turns grey while you are lying down.</item>
@@ -298,6 +303,10 @@
         <item>Greyscale: your screen turns grey while you are lying down, same as Strict.</item>
         <item>Everything in \"Always on\" above still applies.</item>
         <item>The borderline-pattern rule from Strict applies here too.</item>
+        <item>AT HOME, ONE WORD IS ENOUGH - only in this mode. When the phone can see it is at your house, the detection ladder collapses to one: the first sexual word detected in an app closes it, with no second look and no waiting to see whether it comes back. The house is where it happens, and this is the mode that says so.</item>
+        <item>Out of the house - or if it cannot tell where you are - the ordinary ladder applies: three separate detections, minutes apart. Being unsure NEVER makes anything stricter, so a vague fix in a supermarket cannot take an app away.</item>
+        <item>That rule needs the house saved first (Overview → Where you are). Until it is, Super hardcore uses the ordinary ladder everywhere.</item>
+        <item>Away from home the detection ladder is the same as everywhere else: one word in an app opens a case rather than closing the app. What this mode changes on top of that is what counts as a detection - the fragment lists (reddit and its misspellings) are only live here.</item>
         <item>The setup is enforced outside this app exactly as it is in Strict: anything still missing and only the essentials open.</item>
         <item>This is Strict with the daily pass taken away.</item>
     </string-array>
@@ -980,7 +989,59 @@
     <string name="status_unlock_window">Unlock window - %1$s left</string>
     <string name="status_unlock_wait">Unlock wait - %1$s left</string>
     <string name="status_week_strict">Week-long strict - %1$s left</string>
-    <string name="sensors_console_header">CONNECTED SENSORS</string>
+    <string name="sensors_console_header">WHERE YOU ARE</string>
+    <!-- The house row (GPS). %1$s is one of the house_state_* strings. -->
+    <string name="house_row">●  Your house - %1$s</string>
+    <string name="house_state_notset">not set up</string>
+    <string name="house_state_nolocation">location off or not allowed</string>
+    <string name="house_state_foreground">only reads while the app is open</string>
+    <string name="house_state_home">you\'re at home</string>
+    <string name="house_state_away">you\'re out</string>
+    <string name="house_state_unsure">can\'t tell right now</string>
+    <!-- Set up and watching, but between fixes. Working, not broken - so it reads green. -->
+    <string name="house_state_checking">on - working out where you are</string>
+    <string name="house_sub_unset">Tap to save where home is. Nothing changes today - it\'s the switch Super hardcore uses later.</string>
+    <string name="house_sub_super_unset">Super hardcore uses this: at home, one word closes an app. It can\'t, until you set it up. Tap to fix.</string>
+    <string name="house_sub_super_active">At home in Super hardcore: one detection closes an app, with no second look.</string>
+    <string name="house_sub_super_idle">Out of the house: apps get the ordinary three-detection ladder.</string>
+    <string name="house_sub_other_modes">Set up and running - it keeps track of whether you\'re home. Only Super hardcore acts on it; in every other mode it is a readout.</string>
+
+    <!-- ── The house page (Main.kt: showHouseArea) ───────────────────────────────────── -->
+    <string name="house_title">Your house</string>
+    <string name="house_intro">Whether the phone is within %1$d m of home. Set it up by standing in the house and pressing the button near the bottom - that fix becomes home. It is GPS and nearby Wi-Fi, on this device only: nothing is sent anywhere, and a VPN cannot move it.</string>
+    <string name="house_rule_unset">Not set up yet, so nothing uses it.</string>
+    <string name="house_rule_other_modes">Saved. Only Super hardcore acts on it - in this mode it is a readout.</string>
+    <string name="house_rule_home">At home, in Super hardcore: one word detected in an app closes it, with no second look.</string>
+    <string name="house_rule_away">Out of the house: apps get the ordinary ladder - three detections, minutes apart.</string>
+    <string name="house_rule_unsure">Can\'t tell where you are, so nothing changes. Being unsure never makes anything stricter.</string>
+    <string name="house_rule_note">Nothing else is blocked because of where you are - this shortens the word-detection ladder, and only in Super hardcore.</string>
+    <string name="house_sec_permissions">Permissions</string>
+    <string name="house_sec_where">Where you are</string>
+    <string name="house_sec_point">Your home point</string>
+    <string name="house_save_ready">Fix is good (±%1$d m) - press the button while you\'re in the house.</string>
+    <string name="house_save_waiting">Waiting for a location fix… give it a few seconds, and go near a window if it doesn\'t come.</string>
+    <string name="house_grant_1">1. Grant location (while using the app)</string>
+    <string name="house_grant_2">2. Allow all the time</string>
+    <string name="house_grant_settings_hint">Permissions → Location → Allow all the time</string>
+    <string name="house_open_settings">Open app permission settings</string>
+    <string name="house_location_off">Location is OFF system-wide - tap here to turn it on.</string>
+    <string name="house_save">I\'m in my house - save this as home</string>
+    <string name="house_save_replace">I\'m in my house - save this as home (replaces the old point)</string>
+    <string name="house_clear">Clear home point</string>
+    <string name="house_saved_toast">Home saved (±%1$d m from %2$s).</string>
+    <string name="house_cleared_toast">Home point cleared</string>
+    <string name="house_no_fix">No location fix yet - give it a moment (go near a window).</string>
+    <string name="house_stale_fix">That fix is stale - wait for a fresh one.</string>
+    <string name="house_notset">Not set.</string>
+    <string name="house_hint_notset">Stand in the house, wait for the accuracy to settle, then press the button.</string>
+
+    <!-- ── "Set your house up" offer, shown on entering Strict / Super hardcore ──────── -->
+    <string name="house_ask_title">Where is home?</string>
+    <string name="house_ask_body">%1$s can use where you are.\n\nThe house is where it happens - the sofa, the bedroom, the hours after everyone else has gone to bed. A phone that knows it is there can be strict in the one place strictness is worth having, and stay out of your way everywhere else.\n\nSet it up once, standing in the house, and it costs nothing after that: it runs on cheap location and only reaches for GPS when it genuinely cannot tell. Everything stays on this device.</string>
+    <string name="house_ask_strict">In Strict nothing changes today - you are setting it up so it is there when you want it. In Super hardcore, being at home means one word detected in an app closes it, instead of the usual three.</string>
+    <string name="house_ask_super">In Super hardcore this is the mode\'s own rule: at home, one word detected in an app closes it, instead of the usual three. Until it is set up, that rule cannot fire.</string>
+    <string name="house_ask_set">Set it up now</string>
+    <string name="house_ask_later">Not now</string>
     <string name="sensors_none">No sensors connected\nTap here to set up room sensors.</string>
     <string name="sensors_no_rooms">No rooms yet\nTap here to add your first room.</string>
     <string name="sensors_status_notsetup">Not set up</string>
@@ -1079,6 +1140,10 @@
     <string name="br_notification_flagged">Notification from %1$s scored as adult content</string>
     <string name="br_app_too_many">App blocked for %1$s (too many blocks)</string>
     <string name="br_app_blocked">App blocked</string>
+    <!-- Confirmed word detections inside an app (RepeatGate). 1 = the scorer's own reason. -->
+    <string name="br_repeat_block">%1$s\n\nThat makes %2$d separate detections in this app inside %3$d minutes. One on its own is always let go - this one kept coming back.</string>
+    <string name="br_new_app_block">%1$s\n\nThis app is new here - on your phone %2$d day(s) - so one detection is enough. An app you had used for months would have had two more chances before this screen.</string>
+    <string name="br_home_block">%1$s\n\nYou are at your house, in Super hardcore. Here there is no second look: the first thing detected closes the app. Anywhere else, this one would have been let go.</string>
 
     <!-- ── Breathing gate overlay (Overlay.kt) ─────────────────────────────────────── -->
     <string name="overlay_breathe_in">Breathe in</string>

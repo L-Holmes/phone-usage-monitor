@@ -22,9 +22,11 @@ import android.os.Looper
 //  phone is in doom-scrolling territory or out doing something.
 //
 //  The verdict is tracked WITH THE APP CLOSED (that is the whole point - see
-//  HomeAreaWatch). What is still deliberately absent is ENFORCEMENT: nothing blocks an
-//  app off the back of the verdict yet. Set-up is also still manual and developer-only:
-//  stand in the house, press the button, and the current fix becomes home.
+//  HomeAreaWatch). What it is USED for lives in [HomeRule]: in Super hardcore, being at
+//  the house shortens the word-detection ladder to one. Set-up is still one manual step -
+//  stand in the house, press the button, and the current fix becomes home - but it is no
+//  longer developer-only: the house row on the dashboard opens it, and Strict and above
+//  ask for it (see HomeRule.shouldAsk).
 //
 //  ON VPNs: a VPN cannot move this. Android's location comes from GPS satellites, plus
 //  nearby Wi-Fi/cell fingerprints - none of which travel over the tunnel. A VPN changes
@@ -223,6 +225,68 @@ object HomeArea {
 
 
 // =====================================================================================
+//  HomeRule  -  what the home/away answer is actually FOR.
+// =====================================================================================
+/**
+ * THE HOUSE IS WHERE IT HAPPENS. Nobody's problem is the bus into work; it is the sofa,
+ * the bedroom, the two hours after everyone else has gone to bed - the place where there
+ * is no one to walk in, nothing to be late for, and every excuse already used up. A rule
+ * that knows where the phone is can be strict in the one place strictness is worth having
+ * and stay out of the way everywhere else, which is a far better trade than being equally
+ * strict everywhere and equally resented.
+ *
+ * So, in SUPER HARDCORE ONLY, at the house: [RepeatGate]'s ladder collapses to one. The
+ * first word detected in an app closes it, with no second look and no waiting to see
+ * whether it comes back. That is the bargain super hardcore already makes everywhere else
+ * (every open interrupted, the night guard, no daily pass) applied to the word filter -
+ * and it is the mode you have to deliberately choose, with the uninstall lock already on.
+ *
+ * IT NEVER GUESSES. Only a settled HOME verdict counts: MAYBE and UNKNOWN leave the
+ * ordinary ladder exactly as it is, the same rule SensorContext and RoomGuard follow.
+ * Being wrong in the strict direction here means someone loses an app in a supermarket
+ * because the fix was vague, and one of those costs more trust than the rule earns.
+ *
+ * Strict is deliberately NOT included. Strict is the mode you can live in indefinitely,
+ * and one word taking an app away is not something to live with indefinitely - it is what
+ * you choose when you have decided the ordinary rules are not holding. Strict is asked to
+ * SET THE HOUSE UP (see [shouldAsk]) so that the rule is there the day it is wanted.
+ */
+object HomeRule {
+
+    private const val PREFS = "home_rule"
+    private const val KEY_ASKED_FOR = "asked_for_mode"
+
+    /** True only when the settled verdict actually says the phone is at the house. */
+    fun atHome(): Boolean = HomeAreaContext.verdict == HomeArea.Verdict.HOME
+
+    /** Super hardcore, at the house, home point set: one detection is the whole ladder. */
+    fun oneDetectionIsEnough(ctx: Context): Boolean =
+        Mode.isSuperHardcore(ctx) && HomeArea.isSet(ctx) && atHome()
+
+    /**
+     * Should we ask the user to set the house up, now that they have chosen [mode]?
+     *
+     * Once per mode, and never twice for the same one: an offer that reappears every time
+     * the picker is touched is nagging, and nagging is how a good idea gets refused on
+     * reflex. Strict asks because the rule should be in place before it is needed; Super
+     * hardcore asks again because there it is not a preference, it is the mode's own rule
+     * sitting switched off.
+     */
+    fun shouldAsk(ctx: Context, mode: String): Boolean {
+        if (HomeArea.isSet(ctx)) return false
+        if (mode != Mode.STRICT && mode != Mode.SUPERHARDCORE) return false
+        return prefs(ctx).getString(KEY_ASKED_FOR, null) != mode
+    }
+
+    fun markAsked(ctx: Context, mode: String) =
+        prefs(ctx).edit().putString(KEY_ASKED_FOR, mode).apply()
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
 //  LocationMonitor  -  a live fix, at whatever cadence the caller can afford.
 // =====================================================================================
 /**
@@ -289,13 +353,41 @@ class LocationMonitor(context: Context) : LocationListener {
         val lm = lm ?: return
         try { lm.removeUpdates(this) } catch (_: SecurityException) { }
         gpsEngaged = gps
-        val wanted = mutableListOf(LocationManager.PASSIVE_PROVIDER, LocationManager.NETWORK_PROVIDER)
-        if (gps) wanted.add(LocationManager.GPS_PROVIDER)
-        for (p in wanted) {
+        for (p in listOf(LocationManager.PASSIVE_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
             try {
                 if (lm.isProviderEnabled(p)) lm.requestLocationUpdates(p, intervalMs, minDistanceM, this)
             } catch (_: SecurityException) { } catch (_: IllegalArgumentException) { }
         }
+        // ⚠️ GPS IS NOT SUBSCRIBED AT THE CALLER'S CADENCE, and that is not an oversight.
+        //
+        // GPS is only ever switched on to ANSWER something (see HomeAreaWatch's bursts): the
+        // cheap providers couldn't tell, so we are paying for the radio for a few seconds to
+        // settle it. Handing that subscription the standing minute-long interval - or worse,
+        // a minimum distance - means a phone sitting still on a sofa gets NO callbacks at
+        // all, so the burst costs its battery and answers nothing, and the verdict stays
+        // UNKNOWN for as long as you don't move. Which is the sofa. Which is the entire
+        // point of the feature. A burst runs flat out for as long as it is on.
+        if (gps) {
+            try {
+                if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, GPS_BURST_INTERVAL_MS, 0f, this)
+                }
+            } catch (_: SecurityException) { } catch (_: IllegalArgumentException) { }
+        }
+    }
+
+    /**
+     * Hand the monitor a fix somebody else already paid for. Same acceptance test as a fix
+     * that arrived through our own subscription - it is kept only if it beats what we hold.
+     *
+     * This is how the foreground house page (which runs GPS while the user is looking at
+     * it) tops up the background watch, instead of the two of them holding different
+     * answers and the dashboard disagreeing with the page the dashboard links to.
+     */
+    fun offer(candidate: Location) {
+        val before = last
+        accept(candidate)
+        if (last !== before) onUpdate?.invoke()
     }
 
     /**
@@ -337,6 +429,9 @@ class LocationMonitor(context: Context) : LocationListener {
 
         /** A held fix older than this is superseded by anything newer, however sloppy. */
         const val STALE_MS = 30_000L
+
+        /** What a GPS burst asks for while it is engaged. See [register]. */
+        const val GPS_BURST_INTERVAL_MS = 1_000L
     }
 }
 
@@ -426,11 +521,27 @@ object HomeAreaWatch {
     private const val EVAL_MS = 20_000L          // how often we re-read the held fix
     private const val GATE_MS = 60_000L          // how often we re-check "should this run"
     private const val COARSE_INTERVAL_MS = 60_000L
-    private const val COARSE_DISTANCE_M = 20f
+    /**
+     * ⚠️ ZERO, AND IT MUST STAY ZERO. This used to be 20 m, on the reasoning that a phone
+     * that hasn't moved has nothing new to say. It does: LocationManager's minimum-distance
+     * filter suppresses the CALLBACK, not just the news, so a phone lying still delivered
+     * nothing at all, the held fix aged past MAX_FIX_AGE_MS, and the verdict fell to UNKNOWN
+     * and stayed there. Sitting still at home is the exact state this feature exists to
+     * recognise, and it was the one state it could not see. Battery is bought with the
+     * interval instead - a minute-cadence network fix is a Wi-Fi lookup, not a radio.
+     */
+    private const val COARSE_DISTANCE_M = 0f
     private const val BURST_MS = 45_000L         // GPS engaged for this long
     private const val BURST_COOLDOWN_MS = 5 * 60_000L
     /** A new verdict must survive this long before it's believed. */
     private const val HOLD_MS = 60_000L
+    /**
+     * ...except when we currently know NOTHING. UNKNOWN is not a verdict anything acts on
+     * (nothing ever gets stricter because we can't tell), so there is no answer to protect
+     * from flapping and no reason to make the user watch a dashboard say "can't tell right
+     * now" for a minute after the fix has plainly settled.
+     */
+    private const val FIRST_HOLD_MS = 10_000L
 
     /** True while the watch is actually subscribed to location (for debug UIs). */
     @Volatile var armed: Boolean = false; private set
@@ -439,6 +550,7 @@ object HomeAreaWatch {
 
     private var monitor: LocationMonitor? = null
     private var handler: Handler? = null
+    private var onChange: (() -> Unit)? = null
     private var gateOpen = false
     private var lastGateCheck = 0L
     private var burstStarted = 0L
@@ -452,6 +564,7 @@ object HomeAreaWatch {
         val app = context.applicationContext
         val h = Handler(Looper.getMainLooper())
         handler = h
+        this.onChange = onChange
         h.post(object : Runnable {
             override fun run() {
                 tick(app, onChange)
@@ -463,12 +576,31 @@ object HomeAreaWatch {
     fun stop() {
         handler?.removeCallbacksAndMessages(null); handler = null
         monitor?.stop(); monitor = null
+        onChange = null
         armed = false; bursting = false; gateOpen = false; lastGateCheck = 0L
         candidate = null; candidateSince = 0L
         HomeAreaContext.clear()
     }
 
-    private fun tick(app: Context, onChange: (() -> Unit)?) {
+    /**
+     * Take a fix the FOREGROUND app has already paid for and re-evaluate straight away.
+     *
+     * The house page runs its own monitor with GPS engaged the whole time it is open, so
+     * while the user is looking at it there is a far better fix in the building than
+     * anything this watch's cheap subscription will see. Without this, the page could read
+     * "AT HOME" off a 6 m GPS fix while the dashboard behind it still said "can't tell right
+     * now" off a stale network one - two screens, one phone, two answers, and no way for the
+     * user to work out which of them to believe. Costs nothing: the fix already exists.
+     */
+    fun offer(context: Context, loc: Location?) {
+        if (loc == null || handler == null) return
+        // Straight into a tick rather than at the monitor: the gate is re-checked in there,
+        // and "the home point has only just been saved" is precisely the case where the
+        // gate is still shut and the offered fix would otherwise have nowhere to land.
+        tick(context.applicationContext, onChange, extraFix = loc)
+    }
+
+    private fun tick(app: Context, onChange: (() -> Unit)?, extraFix: Location? = null) {
         val now = System.currentTimeMillis()
 
         // Gate: a home point, foreground permission, and location switched on. Background
@@ -491,6 +623,7 @@ object HomeAreaWatch {
             it.start(COARSE_INTERVAL_MS, COARSE_DISTANCE_M, gps = false)
         }
         armed = true
+        if (extraFix != null) m.offer(extraFix)
 
         val loc = m.last
         val raw = HomeArea.verdict(app, loc)
@@ -506,11 +639,13 @@ object HomeAreaWatch {
             m.setGps(true); bursting = true; burstStarted = now
         }
 
-        // Debounce: a change has to hold before anyone hears about it.
+        // Debounce: a change has to hold before anyone hears about it - except when there
+        // is no answer yet to protect (see FIRST_HOLD_MS).
         val settled = HomeAreaContext.verdict
         if (raw != settled) {
             if (candidate != raw) { candidate = raw; candidateSince = now }
-            if (now - candidateSince < HOLD_MS) {
+            val hold = if (settled == HomeArea.Verdict.UNKNOWN) FIRST_HOLD_MS else HOLD_MS
+            if (now - candidateSince < hold) {
                 // Not yet - refresh the readout's numbers, leave the verdict alone.
                 HomeAreaContext.publish(settled, loc, HomeArea.distanceFrom(app, loc), HomeArea.isMock(loc))
                 return

@@ -95,11 +95,17 @@ import android.graphics.Path
 /**
  * A soft dim orb that grows on the in-breath and shrinks on the out-breath.
  *
- * [fill] decides how big the orb is allowed to get at full inhale:
+ * [fill] decides how big the orb is allowed to get at full inhale. BOTH modes are a
+ * circle - the difference is only how much of its parent it is allowed to claim:
  *  - [OrbFill.INSCRIBE] keeps it inside the box it sits in (the in-app pages put the
  *    orb in a bounded card, and it must not spill past it);
- *  - [OrbFill.COVER] lets it reach the corners, so a full-screen parent (the app-open
- *    breathing overlay) is filled edge to edge at peak inhale.
+ *  - [OrbFill.COVER] lets a full-screen parent (the app-open breathing gate) be nearly
+ *    spanned by it, edge to edge across the SHORT side.
+ *
+ * ⚠️ 2026-08-11 - COVER used to size itself off the parent's DIAGONAL, which meant the
+ * gradient ran past all four corners at peak inhale and the user watched a rectangle
+ * brighten rather than a circle grow. There was no edge on screen to breathe with. Size
+ * this off the short side, never the diagonal.
  */
 enum class OrbFill { INSCRIBE, COVER }
 
@@ -134,9 +140,11 @@ class BreathOrbView(
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 4f
+        // Density-scaled, not raw pixels: this is the line that tells the eye where the
+        // circle ENDS, and a 4px rim is invisible on a 3x screen.
+        strokeWidth = 2f * context.resources.displayMetrics.density
         color = accent
-        alpha = 70
+        alpha = 110
     }
 
     private var maxR = 0f
@@ -151,14 +159,19 @@ class BreathOrbView(
     override fun hasOverlappingRendering() = false
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        val short = kotlin.math.min(w, h) / 2f
         maxR = when (fillMode) {
-            OrbFill.INSCRIBE -> (kotlin.math.min(w, h) / 2f) - ring.strokeWidth
-            OrbFill.COVER -> kotlin.math.hypot(w.toFloat(), h.toFloat()) / 2f
+            OrbFill.INSCRIBE -> short - ring.strokeWidth
+            // Just inside the short edge: big enough to feel like the screen is breathing,
+            // with enough margin that the rim is never clipped away by the edge itself.
+            OrbFill.COVER -> short * 0.92f
         }.coerceAtLeast(1f)
         fill.shader = RadialGradient(
             w / 2f, h / 2f, maxR,
-            intArrayOf(withAlpha(accent, 165), withAlpha(accent, 80), withAlpha(accent, 0)),
-            floatArrayOf(0f, 0.62f, 1f),
+            intArrayOf(withAlpha(accent, 175), withAlpha(accent, 105), withAlpha(accent, 0)),
+            // The soft falloff is held back to the outer fifth so the disc reads as a body
+            // with an edge rather than as a haze - the rim is what you breathe with.
+            floatArrayOf(0f, 0.8f, 1f),
             Shader.TileMode.CLAMP,
         )
         // The breath scales the view about its own centre.

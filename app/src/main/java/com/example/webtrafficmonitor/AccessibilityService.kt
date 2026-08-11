@@ -141,6 +141,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var shownBlockScore: Int? = null
     private var shownBlockWords: List<String> = emptyList()
     private var armedAt = 0L   // when the current blocked page first armed; used to "settle" before banning
+    // The app whose word-detection case RepeatGate confirmed, and the exact sentence that
+    // cover went up with, kept for as long as that block stands (see repeatGateReason).
+    private var gateBlockPkg: String? = null
+    private var gateBlockText: String? = null
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
@@ -464,7 +468,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // Home area (GPS): "at the house or out". Like RoomGuard it gates itself - it
         // idles until a home point exists and location is granted - and it runs in every
         // mode because the answer has to be current the moment anything wants to use it.
-        // Nothing is enforced off it yet; it publishes to HomeAreaContext.
+        // It publishes to HomeAreaContext; HomeRule is what reads it (in Super hardcore,
+        // being at the house is what collapses RepeatGate's ladder to one detection).
         HomeAreaWatch.start(this)
         startTamperWatch()
         startInstallWatch()
@@ -844,6 +849,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             RecentAppsTracker.onForeground(packageName)
+            // How well we know an app decides how many detections it takes to close it
+            // (AppTrust / RepeatGate), and "how well we know it" is counted here - one
+            // sighting a day, from the same event that already tells us the app is in front.
+            AppTrust.onForeground(this, packageName)
             if (packageName != segPkg) onForegroundChanged(packageName)
         }
 
@@ -1059,6 +1068,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // Strict and above only, same as every other BorderlineWatch path.
         if (Mode.isRelaxed(this) || !reading.borderline) return
         if (BorderlineWatch.record(packageName, true) == BorderlineWatch.Action.BLOCK) {
+            AppTrust.noteBlocked(this, packageName)
             AppTimedBlock.blockFor(
                 this, packageName, BorderlineWatch.PENALTY_MS,
                 getString(R.string.br_borderline_block, BorderlineWatch.PENALTY_LABEL),
@@ -1744,17 +1754,45 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                else -> null
            }
 
+        // ── ONE WORD IS A QUESTION, NOT AN ANSWER (see RepeatGate) ──────────────────
+        // A word detection on an APP SCREEN no longer closes the app by itself. It opens a
+        // case, and the case has to be confirmed by the word coming back - minutes later,
+        // in the same app - before anything is taken away. How many confirmations, and how
+        // long the waits between them are, depends on how well we know the app (AppTrust):
+        // a new install is closed on the first one, an app you have had for a year is not.
+        //
+        // ONLY THE SCORER'S VERDICT GOES THROUGH THIS. A banned domain, a blacklisted app,
+        // your own ban rule, a watched screen - none of those are evidence to be weighed a
+        // second time, they are decisions already made, and they still land on sight. That
+        // is also why the gate is skipped for web pages: this is about a word appearing in
+        // an app you use for something else, not about the page you just opened.
+        val gatedReason = if (
+            baseReason != null && verdict != null && host == null &&
+            !AppBlocklist.isBrowser(packageName)
+        ) {
+            repeatGateReason(packageName, baseReason)
+        } else {
+            baseReason
+        }
+
         // ── THE APP THAT KEEPS ALMOST BLOCKING (see BorderlineWatch) ─────────────────
         // Nothing here has crossed the line, which is exactly why one screen can't be acted
         // on. A RUN of them, in one app, over minutes, is a different fact - and the only
         // place it can be noticed is here, where the readings arrive.
-        if (baseReason == null && !Mode.isRelaxed(this) && !Mode.isOff(this)) {
+        //
+        // A screen the gate is HOLDING lands here too, and should: it scored, so it is at
+        // the very least borderline, and a session full of held detections is precisely the
+        // pattern BorderlineWatch exists to catch.
+        if (gatedReason == null && !Mode.isRelaxed(this) && !Mode.isOff(this)) {
             val reading = appReading
             if (reading != null) {
                 // Clean screens are reported too - they drain the bucket. Only feeding it the
                 // bad ones would make it a counter of "how long has this app been open".
                 when (BorderlineWatch.record(packageName, reading.borderline)) {
                     BorderlineWatch.Action.BLOCK -> {
+                        // A content block we worked out ourselves, so it counts against the
+                        // app's standing exactly like a confirmed word detection does.
+                        AppTrust.noteBlocked(this, packageName)
                         AppTimedBlock.blockFor(
                             this, packageName, BorderlineWatch.PENALTY_MS,
                             getString(R.string.br_borderline_block, BorderlineWatch.PENALTY_LABEL),
@@ -1778,7 +1816,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
         }
 
-        if (baseReason != null) {
+        if (gatedReason != null) {
             val freshShow = !controller.isShowing
             // The cover's working-out, for EVERY kind of block (see coverDetails).
             val details = coverDetails(verdict, title, url, content)
@@ -1792,7 +1830,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             shownBlockWords = BorderlineScorer
                 .topContributors(scored?.contributions ?: emptyList()).map { it.word }
             if (freshShow) {
-                BlockEventLog.recordWeb(this, packageName, host, url, baseReason, scored?.score)
+                BlockEventLog.recordWeb(this, packageName, host, url, gatedReason, scored?.score)
             }
 
             // The "you went BACK..." line is a RESPONSE TO A TAP, never ambient commentary.
@@ -1812,7 +1850,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (url != shownBlockUrl) armedAt = System.currentTimeMillis()
             shownBlockHost = host
             shownBlockUrl = url
-            val reason = baseReason
+            val reason = gatedReason
 
             if (freshShow) {
                 // Every NEW block screen (page rules included, not just images) now
@@ -1867,6 +1905,49 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 controller.hide()
                 shownBlockHost = null
                 shownBlockUrl = null        // ADD
+            }
+        }
+    }
+
+    /**
+     * Put a word detection on an app screen through [RepeatGate].
+     *
+     * Returns the reason to show if THIS detection is the one that confirms the case, or
+     * null while it is still only a detection - in which case nothing at all is shown. The
+     * confirmed reason keeps the scorer's own wording and adds the sentence that makes the
+     * block make sense: that it took more than one look, and how many.
+     */
+    private fun repeatGateReason(pkg: String, reason: String): String? {
+        // SUPER HARDCORE, AT THE HOUSE: no ladder at all - the first detection is the last
+        // one. Every app is treated exactly like a brand new install, because in the place
+        // and the mode where this fires, "it was probably nothing" has stopped being the
+        // more likely explanation. See HomeRule for why it is this mode and this place.
+        val atHome = HomeRule.oneDetectionIsEnough(this)
+        val tier = if (atHome) AppTrust.Tier.NEW else AppTrust.tier(this, pkg)
+        return when (RepeatGate.record(pkg, tier)) {
+            RepeatGate.Verdict.HOLD -> null
+            // The same block, still standing. Show the sentence it was raised with rather
+            // than rebuilding it: the app's tier has changed underneath us (it has now been
+            // blocked once), so a rebuilt sentence would quietly rewrite itself on screen.
+            RepeatGate.Verdict.HELD ->
+                gateBlockText?.takeIf { gateBlockPkg == pkg } ?: reason
+            RepeatGate.Verdict.BLOCK -> {
+                // From here on this app has form: a shorter ladder next time.
+                AppTrust.noteBlocked(this, pkg)
+                val text = when {
+                    // Say WHERE the rule came from. "One detection was enough" is baffling
+                    // in an app you have had for years unless the screen says why.
+                    atHome -> getString(R.string.br_home_block, reason)
+                    tier == AppTrust.Tier.NEW -> getString(
+                        R.string.br_new_app_block, reason, AppTrust.installedDays(this, pkg),
+                    )
+                    else -> getString(
+                        R.string.br_repeat_block, reason,
+                        RepeatGate.hitsNeeded(tier), RepeatGate.CASE_MS / 60_000,
+                    )
+                }
+                gateBlockPkg = pkg; gateBlockText = text
+                text
             }
         }
     }

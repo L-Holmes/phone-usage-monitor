@@ -2,6 +2,15 @@
 
 
 
+
+
+
+
+
+
+
+
+
 =======================================================================
 =======================================================================
 =======================================================================
@@ -14,27 +23,9 @@
 MANUAL TODO:
 - add the holiday stuff? / guideance?
    - The holiday plan: go away → flip on "lock strict for a week" (#2) → when back, out-of-the-house, see-people, social-club stuff (loneliness is a real driver, so this earns its place).
+has the above already been done?
 
 ------------------------------
-
-- do the thing where we show a picture of a loved one before unlocking?
-    ==> Is this just too much? using shame?
-    ==> will it make a difference
---> If we're on a non-whitelisted app, randomly popup that picture for a bit....
-    - (especially if we're at all suspicious)
-basically, in the adult content settings,
-    user uploads photo(s) of ideally close family members they're related to
-    (for motivation)
-
-
-------------
-
-Add 'founder mode'
-- locks you out of non crucial apps in morning till you fill in the questionnaire..
-    - what would we ask them though?
-    - what progress they made yesterday?
-
-
 
 - is it too bias towards straight men?
     (Do I add a mode for prectijg people attracted to males?)
@@ -44,8 +35,6 @@ Add 'founder mode'
 
 # MONEY MAKING THINGS
 
-- Donors have no adds.
-- we give extra founder mode help to them...
 - Pay to..
     - remove search history(?)
     - remove search history... anonymously (without going through us..)?
@@ -59,12 +48,6 @@ Add 'founder mode'
 
 - adverts
 - need some sort of feedback system
-
-# Hmmmm
-- how do I solve the issue of people seeing sexual content in social media?
-    - --> have some sort of "time on screen" of a sensual image?
-    - or frequency / number of these sensual images in a short amount of time??
-
 
 =======================================================================
 
@@ -111,10 +94,6 @@ UP TO HERE
             - give 5 mins if its desperate? surely that's enough for most things?!?!?
             - (and as a one off- they'll have to contact us...
             - OOH! or make them pay us to have a one off?
-- physical device lockbox??
-- no access until micro goal (like 2000 steps... etc?)
-- randomly show popup of something that they wouldnt want to look at whilst... _distracted_...
-    - siblings.. same gender people... etc?
 - perhaps we can lock down if we detect they're using a vpn?
 - monitor for activities like downloading new apps...
     (??? but then what do we do?)
@@ -144,6 +123,13 @@ UP TO HERE
        a mock-location app IS an issue - HomeArea.isMock flags it, nothing acts on it yet)
 
 
+
+
+---------
+cost for premium:
+$20 or $30
+
+
 =======================================================================
 =======================================================================
 =======================================================================
@@ -152,11 +138,3 @@ UP TO HERE
 
 Defo down theline;
 - the 'pay myself back' system.
-
-
-====================================================================================
-====================================================================================
-====================================================================================
-====================================================================================
-====================================================================================
-====================================================================================

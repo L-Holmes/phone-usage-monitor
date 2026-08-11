@@ -176,6 +176,12 @@ class MainActivity : AppCompatActivity() {
             append("\nAPP STRIKES / TIMED APP BLOCKS\n")
             val apps = AppTimedBlock.summary(this@MainActivity)
             append(if (apps.isEmpty()) "(none)\n" else apps.joinToString("\n") + "\n")
+            append("\nOPEN DETECTION CASES (word hits waiting on a repeat)\n")
+            val cases = RepeatGate.summary()
+            append(if (cases.isEmpty()) "(none)\n" else cases.joinToString("\n") + "\n")
+            append("\nWHAT WE KNOW ABOUT EACH APP (decides how many hits it takes)\n")
+            val trust = AppTrust.summary(this@MainActivity)
+            append(if (trust.isEmpty()) "(none)\n" else trust.joinToString("\n") + "\n")
         }
         val pad = (16 * resources.displayMetrics.density).toInt()
         val tv = TextView(this).apply {
@@ -521,6 +527,14 @@ private fun alwaysOnRules(): List<String> = listOf(
     getString(R.string.always_on_15),
     getString(R.string.always_on_16),
     getString(R.string.always_on_17),
+    getString(R.string.always_on_18,
+        (RepeatGate.WAIT_FIRST_MS / 1000).toInt(), (RepeatGate.WAIT_SECOND_MS / 1000).toInt(),
+        RepeatGate.HITS_KNOWN),
+    getString(R.string.always_on_19,
+        AppTrust.ESTABLISHED_DAYS, AppTrust.ESTABLISHED_DAYS_SEEN,
+        RepeatGate.HITS_REPEAT, RepeatGate.HITS_KNOWN),
+    getString(R.string.always_on_20,
+        (RepeatGate.CASE_MS / 60_000).toInt(), (RepeatGate.QUIET_RESET_MS / 60_000).toInt()),
 )
 
 /**
@@ -635,6 +649,9 @@ private fun smallLink(label: String, dp: Float, onClick: () -> Unit): TextView =
 private var aboutYouBack: () -> Unit = { setupHomeScreen() }
 private var dopamineBack: () -> Unit = { showProductivity() }
 private var lifeInputsBack: () -> Unit = { showProductivity() }
+/** The house page is reached from the dashboard AND from Developer tools; back goes home
+ *  by default, and the dev card sets it to the tools page it was opened from. */
+private var houseBack: () -> Unit = { setupHomeScreen() }
 
 private fun showAboutYou() {
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
@@ -5859,8 +5876,20 @@ private fun startWeekStrict() {
         if (pending != null && setupComplete()) {
             pendingMode = null
             inPermissionFlow = false
-            if (Mode.setMode(this, pending))
+            if (Mode.setMode(this, pending)) {
                 Toast.makeText(this, getString(R.string.mode_on_toast, modeDisplayName(pending)), Toast.LENGTH_SHORT).show()
+                // The mode the user picked has only just landed, so the house offer that
+                // belongs to it lands here too (see modeSpinner). It takes the screen, so
+                // there is nothing left for the rest of this pass to draw.
+                //
+                // `shownStep` is recorded on the way out, and that is load-bearing: this
+                // return skips the line further down that normally does it, so the NEXT
+                // updateScreen (the one that comes with onResume, straight after the
+                // location dialog the house offer sent the user to) saw a stale step, took
+                // itself to be a fresh arrival at READY, and rebuilt the dashboard on top
+                // of the house page the user was halfway through.
+                if (maybeAskAboutHouse(pending)) { shownStep = Step.READY; return }
+            }
         }
         // Finishing the voluntary flow turns monitoring on at its lowest level. From here
         // every setup step is mandatory (currentStep) until the mode is set back to Off.
@@ -5872,6 +5901,25 @@ private fun startWeekStrict() {
             }
         }
         val step = currentStep()
+        // ⚠️ 2026-08-11 - DO NOT STOMP A SUB-PAGE. This is the "it closes and I have to tap
+        // it again" bug.
+        //
+        // updateScreen runs on every onResume, which includes returning from a system
+        // permission dialog or from Settings - i.e. exactly the moment a set-up page has
+        // just got what it sent the user away for. The READY branch below rebuilds the
+        // dashboard, and it fires whenever `shownStep` happens not to be READY yet: the
+        // house offer (maybeAskAboutHouse) returns early without ever recording the step, so
+        // granting location from the house page threw the page away and dropped the user
+        // back on the dashboard, one tap from where they already were.
+        //
+        // Nothing is lost by staying put: `step == READY` means every mandatory permission
+        // is in place, so there is no gate to show. If one has genuinely been revoked, step
+        // is NOT READY and the gate below still takes the screen, sub-page or no sub-page -
+        // which is the one case where interrupting the user is the correct thing to do.
+        if (step == Step.READY && inSubPage) {
+            shownStep = step
+            return
+        }
         if (step == Step.READY && shownStep == Step.READY) {
             // The nudge banner can become DUE while Overview is already built (resumed
             // from recents past the 30-min mark, say). Rebuild once so it appears.
@@ -5883,6 +5931,11 @@ private fun startWeekStrict() {
             return
         }
         shownStep = step
+        // The gate is about to take the whole screen, so whatever sub-page was open is gone.
+        // Saying so keeps the guard above honest: a stale `inSubPage` would otherwise make
+        // the pass AFTER this one (the user has just granted the thing and come back) return
+        // early and leave them looking at the gate they had already satisfied.
+        inSubPage = false
         // "Not now" only exists while the flow is voluntary - above Off there's no way past.
         val voluntary = Mode.isOff(this)
         val notNow: (() -> Unit)? =
@@ -6007,6 +6060,38 @@ private fun startWeekStrict() {
         }
     }
 
+    /**
+     * The house offer, shown once when Strict or Super hardcore is chosen and no home
+     * point exists yet (see HomeRule.shouldAsk for the once-per-mode rule).
+     *
+     * An OFFER, not a gate. It is deliberately not part of SetupGuard: the setup steps
+     * that ARE enforced (overlay, Firefox, the add-on) are the ones without which the mode
+     * does not work at all, and Strict works perfectly well with no idea where you live.
+     * Locking someone's phone until they hand over background location would also be the
+     * single most suspicious thing this app could do, and it would be doing it for a
+     * feature that is a refinement rather than the point.
+     *
+     * Returns true if the offer took the screen.
+     */
+    private fun maybeAskAboutHouse(mode: String): Boolean {
+        if (!HomeRule.shouldAsk(this, mode)) return false
+        HomeRule.markAsked(this, mode)
+        val back = { showReportScreen() }
+        showPrereq(
+            getString(R.string.house_ask_title),
+            getString(R.string.house_ask_body, modeDisplayName(mode)) + "\n\n" +
+                getString(
+                    if (mode == Mode.SUPERHARDCORE) R.string.house_ask_super
+                    else R.string.house_ask_strict,
+                ),
+            getString(R.string.house_ask_set),
+            { houseBack = back; showHouseArea() },
+            getString(R.string.house_ask_later),
+            back,
+        )
+        return true
+    }
+
     private fun showPrereq(
         title: String,
         body: String,
@@ -6111,7 +6196,9 @@ private fun startWeekStrict() {
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
         content.addView(homeCard("Home area (location)",
             if (HomeArea.isSet(this)) "Home is saved. Live distance, accuracy and at-home / away verdict."
-            else "Not set up. Stand in the house and save it, then watch the live verdict.") { showHomeAreaDebug() })
+            else "Not set up. Stand in the house and save it, then watch the live verdict.") {
+            houseBack = { setupMainScreen() }; showHouseArea()
+        })
         content.addView(homeCard("Grayscale setup", "Turn on the strict-mode grayscale filter.") { showGreyscaleSetup() })
         content.addView(homeCard("Preview uninstall prompt", "See the lock prompt (it's hidden in dev mode).") { showLockPrompt { setupMainScreen() } })
         content.addView(homeCard("Recent blocks", "What's been blocked lately.") { showRecentBlocks() })
@@ -6133,8 +6220,13 @@ private fun startWeekStrict() {
             Toast.makeText(this, "Bypass watch armed for 30 min", Toast.LENGTH_SHORT).show()
             setupMainScreen()
         })
-        content.addView(homeCard("Clear block rules", "Wipe all block rules and strikes.") {
+        content.addView(homeCard("Clear block rules",
+            "Wipe all block rules, strikes and what we know about each app.") {
             BlockRules.clear(this); BlockEscalation.clear(this); AppTimedBlock.clear(this)
+            // Everything an app's standing is built from: how long we have seen it, and how
+            // often we have had to close it. Leaving it behind would keep apps on the short
+            // ladder after a wipe that says it wiped everything.
+            AppTrust.clear(this); RepeatGate.clearAll()
             Toast.makeText(this, "Block rules cleared", Toast.LENGTH_SHORT).show()
         })
 
@@ -6293,8 +6385,14 @@ private fun startWeekStrict() {
     // "Is the phone at the house, or out?" - the coarse counterpart to the room
     // beacons below. Live readout plus the one manual set-up step: stand in the
     // house and press the button. See HomeArea.kt for the rule (and for why a
-    // VPN cannot move any of this). NOTHING IS ENFORCED off the back of it yet -
-    // the verdict line says what WOULD happen, and that is deliberate.
+    // VPN cannot move any of this), and HomeRule for what it now DOES: in Super
+    // hardcore, at the house, one word detection closes an app outright.
+    //
+    // Reachable two ways since it started enforcing something: the house row on
+    // the dashboard (sensorsConsole) and Developer tools. The page is written for
+    // the first of those - a user setting their house up - with the diagnostics
+    // kept underneath, because when this goes wrong it goes wrong quietly and the
+    // numbers are the only way to see it.
     /** This app's page in system Settings - the only route to "Allow all the time" on 11+. */
     private fun openAppSettings() {
         startActivity(Intent(
@@ -6303,14 +6401,19 @@ private fun startWeekStrict() {
         ))
     }
 
-    private fun showHomeAreaDebug() {
+    /**
+     * [focusSave] - the user has just come back from granting a permission, so the page is
+     * re-entered on the step they are now ON rather than at the top of the one they have
+     * finished. Without it, granting location dropped them back at a page header and left
+     * them to work out for themselves that the next thing to do was several screens down.
+     */
+    private fun showHouseArea(focusSave: Boolean = false) {
+        inSubPage = true
         val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        content.addView(titleText("Home area"))
+        content.addView(titleText(getString(R.string.house_title)))
         content.addView(TextView(this).apply {
-            text = "Whether the phone is within ${Math.round(HomeArea.RADIUS_M)} m of the house. " +
-                "Set it up by standing in the house and pressing the button - that fix becomes home. " +
-                "Nothing is blocked off this yet; this page is a readout."
+            text = getString(R.string.house_intro, Math.round(HomeArea.RADIUS_M))
             textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (12 * dp).toInt())
         })
 
@@ -6320,32 +6423,32 @@ private fun startWeekStrict() {
         // ── Permissions live on this page (there is no other route to them) ──
         // TWO grants, asked for in order: "while using" first, then "all the time" on its
         // own. Asking for both together makes Android 11+ grant neither. See HomeArea.
-        content.addView(sectionTitle("Permissions"))
+        content.addView(sectionTitle(getString(R.string.house_sec_permissions)))
         val permLine = subLine()
         content.addView(permLine)
         val permHint = TextView(this).apply {
             textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, (8 * dp).toInt())
         }
         content.addView(permHint)
-        val grantBtn = bigChoice("1. Grant location (while using the app)", Palette.tint) {
+        val grantBtn = bigChoice(getString(R.string.house_grant_1), Palette.tint) {
             requestPermissions(HomeArea.requiredPermissions(), REQ_HOME_LOCATION)
         }
-        val bgBtn = bigChoice("2. Allow all the time", Palette.tint) {
+        val bgBtn = bigChoice(getString(R.string.house_grant_2), Palette.tint) {
             // Android 10 can still do this through the dialog. From 11 the dialog has no
             // "all the time" option at all, so the settings page IS the flow - dropping
             // the user there with instructions beats a button that silently does nothing.
             if (HomeArea.backgroundRequestable()) {
                 requestPermissions(HomeArea.backgroundPermission(), REQ_HOME_BACKGROUND)
             } else {
-                Toast.makeText(this, "Permissions → Location → Allow all the time", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.house_grant_settings_hint), Toast.LENGTH_LONG).show()
                 openAppSettings()
             }
         }
-        val appSettingsBtn = bigChoice("Open app permission settings", Palette.labelSecondary) { openAppSettings() }
+        val appSettingsBtn = bigChoice(getString(R.string.house_open_settings), Palette.labelSecondary) { openAppSettings() }
         content.addView(grantBtn); content.addView(bgBtn); content.addView(appSettingsBtn)
 
         val locWarn = TextView(this).apply {
-            text = "Location is OFF system-wide - tap here to turn it on."
+            text = getString(R.string.house_location_off)
             textSize = 14f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(Palette.dangerText); setPadding(0, (8 * dp).toInt(), 0, 0)
             visibility = View.GONE; isClickable = true; isFocusable = true
@@ -6353,8 +6456,12 @@ private fun startWeekStrict() {
         }
         content.addView(locWarn)
 
-        // ── The verdict ──────────────────────────────────────────────────────
-        content.addView(sectionTitle("Where you are"))
+        // ⚠️ SECTION ORDER IS THE ONBOARDING. Everything below is built first and ADDED
+        // afterwards, in the order a user meets it: permissions (above), then the one thing
+        // they are actually here to do, then the readouts. The save button used to sit at
+        // the very bottom under three sections of diagnostics, so the page's whole purpose
+        // was off-screen and someone who had just granted location had no idea there was a
+        // step left. Keep the action above the numbers.
         val pill = TextView(this).apply {
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setTextColor(Palette.onFill)
@@ -6363,42 +6470,26 @@ private fun startWeekStrict() {
                 topMargin = (6 * dp).toInt(); bottomMargin = (6 * dp).toInt()
             }
         }
-        content.addView(pill)
         val ruleLine = TextView(this).apply {
             textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
             setPadding(0, 0, 0, (2 * dp).toInt())
         }
-        content.addView(ruleLine)
         val wouldLine = tinyLine()
-        content.addView(wouldLine)
         val bigDist = TextView(this).apply {
             textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(Palette.label)
             setPadding(0, (8 * dp).toInt(), 0, 0)
         }
-        content.addView(bigDist)
-        val whyLine = subLine(); content.addView(whyLine)
-
-        content.addView(sectionTitle("Current fix"))
-        val fixLine = subLine(); val fixAgeLine = subLine(); val coordLine = tinyLine(); val mockLine = TextView(this).apply {
+        val whyLine = subLine()
+        val fixLine = subLine(); val fixAgeLine = subLine(); val coordLine = tinyLine()
+        val mockLine = TextView(this).apply {
             textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.dangerText); visibility = View.GONE
         }
-        content.addView(fixLine); content.addView(fixAgeLine); content.addView(coordLine); content.addView(mockLine)
-
-        // The section that answers "does it work with the app shut?": this is the
-        // accessibility service's own watch, not this page's monitor. Close the app, walk
-        // out of the radius, come back - the log below should already know.
-        content.addView(sectionTitle("Background watch (app closed)"))
         val watchLine = TextView(this).apply { textSize = 15f; setTypeface(typeface, Typeface.BOLD) }
         val watchMeta = subLine(); val watchHint = tinyLine()
-        content.addView(watchLine); content.addView(watchMeta); content.addView(watchHint)
         val watchLog = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(0, (6 * dp).toInt(), 0, 0)
         }
-        content.addView(watchLog)
-
-        content.addView(sectionTitle("Home point"))
         val homeLine = subLine(); val homeMeta = tinyLine()
-        content.addView(homeLine); content.addView(homeMeta)
 
         locationMonitor?.stop()
         val monitor = LocationMonitor(this)
@@ -6406,27 +6497,50 @@ private fun startWeekStrict() {
         homeAreaUi?.removeCallbacksAndMessages(null)
         val ui = Handler(Looper.getMainLooper()); homeAreaUi = ui
 
-        val saveBtn = bigChoice("I'm in my house - save this as home", Palette.tint) {
+        val saveBtn = bigChoice(getString(R.string.house_save), Palette.tint) {
             val loc = monitor.last
             when {
-                loc == null -> Toast.makeText(this, "No location fix yet - give it a moment (go near a window).", Toast.LENGTH_LONG).show()
+                loc == null -> Toast.makeText(this, getString(R.string.house_no_fix), Toast.LENGTH_LONG).show()
                 HomeArea.ageMs(loc) > HomeArea.MAX_FIX_AGE_MS ->
-                    Toast.makeText(this, "That fix is stale - wait for a fresh one.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, getString(R.string.house_stale_fix), Toast.LENGTH_LONG).show()
                 else -> {
                     HomeArea.setHome(this, loc)
                     val acc = Math.round(HomeArea.usableAccuracy(loc))
-                    Toast.makeText(this, "Home saved (±$acc m from ${loc.provider}).", Toast.LENGTH_LONG).show()
-                    ui.removeCallbacksAndMessages(null); showHomeAreaDebug()
+                    Toast.makeText(this, getString(R.string.house_saved_toast, acc, loc.provider ?: "?"), Toast.LENGTH_LONG).show()
+                    // The watch's gate opens on a home point existing, so hand it the fix
+                    // that just became home - otherwise the dashboard says "not set up" for
+                    // up to a minute after the user has plainly set it up.
+                    HomeAreaWatch.offer(this, loc)
+                    ui.removeCallbacksAndMessages(null); showHouseArea()
                 }
             }
         }
-        content.addView(saveBtn)
-        val clearBtn = bigChoice("Clear home point", Palette.dangerText) {
+        val clearBtn = bigChoice(getString(R.string.house_clear), Palette.dangerText) {
             HomeArea.clearHome(this)
-            Toast.makeText(this, "Home point cleared", Toast.LENGTH_SHORT).show()
-            ui.removeCallbacksAndMessages(null); showHomeAreaDebug()
+            Toast.makeText(this, getString(R.string.house_cleared_toast), Toast.LENGTH_SHORT).show()
+            ui.removeCallbacksAndMessages(null); showHouseArea()
         }
-        content.addView(clearBtn)
+        /** Live "is there anything worth saving yet?" line, sat right under the button. */
+        val saveReady = tinyLine()
+
+        // ── added in onboarding order ──
+        content.addView(sectionTitle(getString(R.string.house_sec_point)))
+        content.addView(homeLine); content.addView(homeMeta)
+        content.addView(saveBtn); content.addView(saveReady); content.addView(clearBtn)
+
+        content.addView(sectionTitle(getString(R.string.house_sec_where)))
+        content.addView(pill); content.addView(ruleLine); content.addView(wouldLine)
+        content.addView(bigDist); content.addView(whyLine)
+
+        content.addView(sectionTitle("Current fix"))
+        content.addView(fixLine); content.addView(fixAgeLine); content.addView(coordLine); content.addView(mockLine)
+
+        // The section that answers "does it work with the app shut?": this is the
+        // accessibility service's own watch, not this page's monitor. Close the app, walk
+        // out of the radius, come back - the log below should already know.
+        content.addView(sectionTitle("Background watch (app closed)"))
+        content.addView(watchLine); content.addView(watchMeta); content.addView(watchHint)
+        content.addView(watchLog)
 
         val stamp = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.UK)
 
@@ -6469,20 +6583,24 @@ private fun startWeekStrict() {
             pill.text = pillText
             pill.background = GradientDrawable().apply { cornerRadius = Radius.card * dp; setColor(colour) }
 
-            // The sentence this page exists to show. It is a statement of the RULE, not
-            // of anything currently enforced - hence the line under it.
-            ruleLine.text = when (verdict) {
-                HomeArea.Verdict.HOME -> "You are close to your house, non-whitelisted apps are blocked."
-                HomeArea.Verdict.AWAY -> "You are away from your house, all apps are allowed."
-                HomeArea.Verdict.MAYBE -> "Too close to call - nothing would change."
-                HomeArea.Verdict.UNKNOWN -> "Can't tell where you are - nothing would change."
+            // The sentence this page exists to show: what the verdict MEANS, in the mode
+            // the user is actually in. Only Super hardcore acts on it, so in every other
+            // mode this says so plainly rather than implying something is happening.
+            val superHardcore = Mode.isSuperHardcore(this)
+            ruleLine.text = when {
+                !HomeArea.isSet(this) -> getString(R.string.house_rule_unset)
+                !superHardcore -> getString(R.string.house_rule_other_modes)
+                verdict == HomeArea.Verdict.HOME -> getString(R.string.house_rule_home)
+                verdict == HomeArea.Verdict.AWAY -> getString(R.string.house_rule_away)
+                else -> getString(R.string.house_rule_unsure)
             }
-            ruleLine.setTextColor(when (verdict) {
-                HomeArea.Verdict.HOME -> Palette.successText
-                HomeArea.Verdict.AWAY -> Palette.label
+            ruleLine.setTextColor(when {
+                !HomeArea.isSet(this) || !superHardcore -> Palette.labelSecondary
+                verdict == HomeArea.Verdict.HOME -> Palette.successText
+                verdict == HomeArea.Verdict.AWAY -> Palette.label
                 else -> Palette.warningText
             })
-            wouldLine.text = "(Nothing is enforced yet - this is what the rule WOULD say.)"
+            wouldLine.text = getString(R.string.house_rule_note)
 
             val d = HomeArea.distanceFrom(this, loc)
             bigDist.text = if (d == null) "-- m" else "${Math.round(d)} m"
@@ -6545,21 +6663,41 @@ private fun startWeekStrict() {
                     (if (hAcc >= 0f) " at ±${Math.round(hAcc)} m" else "") +
                     (if (hAcc > HomeArea.RADIUS_M) "  ⚠ saved off a fix vaguer than the radius - redo it outdoors" else "")
                 clearBtn.visibility = View.VISIBLE
-                saveBtn.text = "I'm in my house - save this as home (replaces the old point)"
+                saveBtn.text = getString(R.string.house_save_replace)
             } else {
-                homeLine.text = "Not set."
-                homeMeta.text = "Stand in the house, wait for the accuracy to settle, then press the button."
+                homeLine.text = getString(R.string.house_notset)
+                homeMeta.text = getString(R.string.house_hint_notset)
                 clearBtn.visibility = View.GONE
-                saveBtn.text = "I'm in my house - save this as home"
+                saveBtn.text = getString(R.string.house_save)
             }
             saveBtn.visibility = if (granted) View.VISIBLE else View.GONE
+            // Say whether pressing it will work BEFORE it is pressed. The button used to
+            // answer that with a toast telling you to go and stand near a window, which is
+            // a poor moment to find out - especially right after granting the permission,
+            // when there is genuinely no fix yet and the page looked broken.
+            saveReady.visibility = if (granted) View.VISIBLE else View.GONE
+            val usable = loc != null && HomeArea.ageMs(loc) <= HomeArea.MAX_FIX_AGE_MS
+            saveReady.text = when {
+                !granted -> ""
+                usable -> getString(R.string.house_save_ready, Math.round(HomeArea.usableAccuracy(loc)))
+                else -> getString(R.string.house_save_waiting)
+            }
+            saveReady.setTextColor(if (usable) Palette.successText else Palette.labelTertiary)
         }
 
         // The fix's AGE keeps changing when nothing else does, so tick regardless of updates.
         val tick = object : Runnable {
             override fun run() { refresh(); ui.postDelayed(this, 1_000L) }
         }
-        monitor.onUpdate = { runOnUiThread { refresh() } }
+        monitor.onUpdate = {
+            runOnUiThread {
+                // This page runs GPS the whole time it is open, so it holds a far better fix
+                // than the background watch's cheap subscription ever sees. Pass it on, or
+                // the dashboard row behind this page goes on disagreeing with the page.
+                HomeAreaWatch.offer(this, monitor.last)
+                refresh()
+            }
+        }
         if (HomeArea.hasPermissions(this)) monitor.start()
         refresh(); ui.postDelayed(tick, 1_000L)
 
@@ -6567,10 +6705,26 @@ private fun startWeekStrict() {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             isFillViewport = true; addView(content)
         }
+        // Came back from a permission dialog: land on the step that is now current instead
+        // of at the top of the one just finished. One-shot - it must not fight the user's
+        // own scrolling on every layout pass.
+        if (focusSave && HomeArea.hasPermissions(this)) {
+            root.viewTreeObserver.addOnGlobalLayoutListener(
+                object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        root.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                        root.smoothScrollTo(0, (saveBtn.top - pad).coerceAtLeast(0))
+                        saveBtn.animate().scaleX(1.04f).scaleY(1.04f).setDuration(220)
+                            .withEndAction {
+                                saveBtn.animate().scaleX(1f).scaleY(1f).setDuration(220).start()
+                            }.start()
+                    }
+                })
+        }
         setContentWithThumb(root) {
             ui.removeCallbacksAndMessages(null); homeAreaUi = null
             monitor.stop(); locationMonitor = null
-            setupMainScreen()
+            houseBack()
         }
     }
 
@@ -7481,7 +7635,12 @@ private fun startWeekStrict() {
         // Step 1 granted: come straight back and offer step 2 ("all the time"), which has
         // to be its own request. Step 2's result lands here too - on Android 11+ it will
         // usually be a denial, and the page then points at Settings instead.
-        if (requestCode == REQ_HOME_LOCATION || requestCode == REQ_HOME_BACKGROUND) showHomeAreaDebug()
+        // ...and once "while using" is in, come back ON the next step (saving the home
+        // point) rather than at the top of the page. Being bounced back to a header you
+        // have already dealt with is what made this feel like the app had closed on you.
+        if (requestCode == REQ_HOME_LOCATION || requestCode == REQ_HOME_BACKGROUND) {
+            showHouseArea(focusSave = HomeArea.hasPermissions(this) && !HomeArea.isSet(this))
+        }
     }
 
     // Read-only snapshot of everything the app is currently doing.
@@ -7745,7 +7904,95 @@ private fun startWeekStrict() {
         for (s in FilterCatalogue.EVASION) list.addView(scalerCard(s))
 
         // ═════════════════════════════════════════════════════════════════════════════
-        //  6. THE APP THAT KEEPS ALMOST BLOCKING
+        //  6. ONE WORD IS A QUESTION, NOT AN ANSWER  (RepeatGate / AppTrust)
+        // ═════════════════════════════════════════════════════════════════════════════
+        section("One word is a question, not an answer",
+            "Everything above decides whether a screen COUNTS. This decides whether counting " +
+                "once is enough to take the app away. Inside an app, it never is.")
+        val gate = glassCard(Space.md)
+        gate.addView(ruleHeading("INSIDE AN APP", Palette.warningText))
+        gate.addView(bodyText(
+            "A detection opens a case instead of closing the app. Everything is then ignored " +
+                "for a fixed wait - not counted, not remembered - and it takes a FRESH " +
+                "detection after the wait to move up a rung. One screen fires dozens of " +
+                "events and a question you typed stays on screen while you read the answer; " +
+                "the waits are what stop those counting as separate looks.",
+        ))
+        gate.addView(separator())
+        gate.addView(smallRule("an app you have had a while:  detection  →  " +
+            "${RepeatGate.WAIT_FIRST_MS / 1000}s ignored  →  detection  →  " +
+            "${RepeatGate.WAIT_SECOND_MS / 1000}s ignored  →  detection  →  blocked " +
+            "(${RepeatGate.HITS_KNOWN} in all)", true))
+        gate.addView(smallRule("an app we have closed for content before:  detection  →  " +
+            "${RepeatGate.WAIT_SECOND_MS / 1000}s ignored  →  detection  →  blocked " +
+            "(${RepeatGate.HITS_REPEAT})", true))
+        gate.addView(smallRule("a NEW app:  blocked on the first one", true))
+        gate.addView(smallRule("${RepeatGate.CASE_MS / 60_000} minutes with no further " +
+            "detection in that app  →  the case is dropped, unconfirmed", true))
+        gate.addView(smallRule("${RepeatGate.QUIET_RESET_MS / 60_000} minutes with nothing " +
+            "detected in ANY app  →  every count everywhere goes back to zero", true))
+        list.addView(gate)
+
+        val trust = glassCard(Space.md)
+        trust.addView(ruleHeading("WHAT MAKES AN APP \"NEW\"", Palette.dangerText))
+        trust.addView(bodyText(
+            "An app you have had for months has earned some benefit of the doubt: nearly " +
+                "everything it has ever shown you was fine. An app installed on Tuesday has " +
+                "earned nothing - a run of fresh installs is what looking for a way round a " +
+                "blocker looks like from the outside.",
+        ))
+        trust.addView(separator())
+        trust.addView(smallRule("KNOWN:  on the phone ${AppTrust.ESTABLISHED_DAYS}+ days, OR " +
+            "seen in the foreground on ${AppTrust.ESTABLISHED_DAYS_SEEN}+ separate days", true))
+        trust.addView(smallRule("NEW:  neither of those yet", true))
+        trust.addView(smallRule("counted in DAYS, never in opens or minutes - days cannot be " +
+            "manufactured in an afternoon by an app that wants to look established", true))
+        trust.addView(smallRule("install date comes from Android, but if we have been watching " +
+            "the app for longer than that, the longer one wins - a phone-to-phone restore " +
+            "makes every app on the device look new", true))
+        trust.addView(smallRule("nothing here needs the usage-access permission: the guard is " +
+            "already watching the foreground, so it just counts", true))
+        list.addView(trust)
+
+        // The one thing that DOES change the ladder: where the phone is, in one mode.
+        val houseOn = superHardcore
+        val house = glassCard(Space.md)
+        house.addView(ruleHeading(
+            if (houseOn) "ON IN $modeName - WHEN YOU ARE AT HOME".uppercase()
+            else "SUPER HARDCORE ONLY - OFF IN $modeName".uppercase(),
+            if (houseOn) Palette.dangerText else Palette.labelTertiary))
+        house.addView(bodyText(
+            "The house is where it happens - the sofa, the bedroom, the hours after everyone " +
+                "else has gone to bed. So in Super hardcore, and only there, being at home " +
+                "collapses the whole ladder above to ONE: the first detection closes the app, " +
+                "with no second look. Everywhere else the ordinary ladder applies.",
+        ))
+        house.addView(separator())
+        house.addView(smallRule(
+            when {
+                !HomeArea.isSet(this) ->
+                    "your house is NOT saved yet, so this cannot fire - set it up in " +
+                        "Overview → Where you are"
+                !houseOn -> "your house is saved; this mode does not act on it"
+                HomeRule.atHome() -> "the phone says you are AT HOME: one detection is enough " +
+                    "right now"
+                else -> "the phone says you are out (or cannot tell): the ordinary ladder is " +
+                    "in force"
+            },
+            HomeArea.isSet(this)))
+        house.addView(smallRule("only a settled \"at home\" counts - \"maybe\" and \"can't " +
+            "tell\" leave the ordinary ladder exactly as it is, because being unsure must " +
+            "never make anything stricter", true))
+        house.addView(smallRule("GPS and nearby Wi-Fi, on this device, nothing sent anywhere - " +
+            "and a VPN cannot move it: it is satellites and radios, not an IP address", true))
+        list.addView(house)
+
+        note("Apart from that one rule, mode does not change any of this. What Strict and Super " +
+            "hardcore change is what counts as a detection in the first place - more word lists " +
+            "live, a lower bar, the fragment lists - not how many it takes to close an app.")
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  6b. THE APP THAT KEEPS ALMOST BLOCKING
         // ═════════════════════════════════════════════════════════════════════════════
         section("The app that keeps almost blocking",
             if (relaxed) "Strict and above only - off in $modeName."
@@ -8617,6 +8864,26 @@ private fun startWeekStrict() {
         row("Safe apps (skip scan)", "${AppConfig.SAFE_APPS.size}")
         row("Greylisted apps (time-limited)", "${AppConfig.GREYLIST_APPS.size}")
         row("Trusted domains (skip heuristic)", "${AppConfig.SAFE_DOMAINS.size}")
+        row("Detections to close an app",
+            "${RepeatGate.HITS_KNOWN} known / ${RepeatGate.HITS_REPEAT} blocked before / " +
+                "${RepeatGate.HITS_NEW} new")
+        row("Waits between detections",
+            "${RepeatGate.WAIT_FIRST_MS / 1000}s then ${RepeatGate.WAIT_SECOND_MS / 1000}s " +
+                "(ignored, not counted)")
+        row("Open detection cases", "${RepeatGate.summary().size}")
+
+        header("Where you are")
+        row("Home point", if (HomeArea.isSet(this)) "saved" else "not set", HomeArea.isSet(this))
+        row("Location access", when (HomeArea.access(this)) {
+            HomeArea.Access.ALWAYS -> "all the time"
+            HomeArea.Access.WHILE_USING -> "only while the app is open"
+            HomeArea.Access.NONE -> "not granted"
+        }, HomeArea.access(this) == HomeArea.Access.ALWAYS)
+        row("Verdict", HomeAreaContext.label() +
+            (if (HomeAreaContext.distanceM >= 0f) " (${Math.round(HomeAreaContext.distanceM)} m)" else ""))
+        row("One detection is enough here",
+            if (HomeRule.oneDetectionIsEnough(this)) "YES - super hardcore, at home" else "no",
+            HomeRule.oneDetectionIsEnough(this))
 
         header("Permissions")
         row("Page monitoring", if (isAccessibilityEnabled()) "on" else "off", isAccessibilityEnabled())
@@ -8716,6 +8983,10 @@ private fun startWeekStrict() {
                     } else {
                         Toast.makeText(this@MainActivity, getString(R.string.mode_on_toast, modeDisplayName(chosen)), Toast.LENGTH_SHORT).show()
                     }
+                    // Strict and above can use where you are, and this is the moment to ask
+                    // - the user has just decided to be serious, which is exactly when
+                    // setting the house up sounds like a good idea rather than an intrusion.
+                    maybeAskAboutHouse(chosen)
                 } else if (chosen == Mode.OFF && Mode.everStrict(this@MainActivity) && !Mode.isLocked(this@MainActivity)) {
                     // THE RATCHET refused it: they've been Strict at some point, so Off is
                     // gone from this install for good. Still a "turn the blocking off"
@@ -8739,10 +9010,17 @@ private fun startWeekStrict() {
     }
 
     /**
-     * The "Connected sensors" console on the home page, just above STATUS. Before the
-     * user has sensors it's the door into the purchase/set-up flow; afterwards it's one
-     * dot per room: green = set up and able to receive, amber = set up but we can't
-     * receive right now (Bluetooth off / permission revoked), grey = not set up yet.
+     * The "Where you are" console on the home page, just above STATUS.
+     *
+     * Two kinds of row, coarse first: the HOUSE (GPS - at the house or out), then one row
+     * per ROOM (beacons). Before the user has beacons the room half is the door into the
+     * purchase/set-up flow; afterwards it is one dot per room: green = set up and able to
+     * receive, amber = set up but we can't receive right now (Bluetooth off / permission
+     * revoked), grey = not set up yet.
+     *
+     * The house row is ALWAYS here, beacons or not - it needs no hardware, it is the only
+     * place outside Developer tools that the house is set up from, and in Super hardcore it
+     * is the thing deciding whether one word closes an app (HomeRule).
      */
     private fun sensorsConsole(): View {
         val dp = resources.displayMetrics.density
@@ -8756,6 +9034,7 @@ private fun startWeekStrict() {
             text = getString(R.string.sensors_console_header); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
             setPadding((2 * dp).toInt(), 0, 0, (6 * dp).toInt())
         })
+        box.addView(houseRow())
         if (!RoomBeacons.ownsSensors(this)) {
             box.addView(TextView(this).apply {
                 text = getString(R.string.sensors_none)
@@ -8796,6 +9075,68 @@ private fun startWeekStrict() {
             })
         }
         return box
+    }
+
+    /**
+     * The house row: whether the phone knows where home is, and - once it does - where it
+     * currently thinks it is.
+     *
+     * Two lines, because two different things can be wrong and they need different fixes:
+     * the STATE (not set up / set up but starved of location / live) and, under it, what
+     * that means for blocking in the mode the user is actually in. A row that only said
+     * "At home" would be a readout; this one is the rule.
+     */
+    private fun houseRow(): View {
+        val dp = resources.displayMetrics.density
+        val set = HomeArea.isSet(this)
+        val access = HomeArea.access(this)
+        val verdict = HomeAreaContext.verdict
+        val colour: Int; val state: String
+        when {
+            !set -> { colour = Palette.labelTertiary; state = getString(R.string.house_state_notset) }
+            access == HomeArea.Access.NONE || !HomeArea.locationEnabled(this) ->
+                { colour = Palette.warning; state = getString(R.string.house_state_nolocation) }
+            // Granted only "while using": it reads on this screen and goes dark the moment
+            // the user leaves, which is precisely when it was supposed to be watching.
+            access == HomeArea.Access.WHILE_USING ->
+                { colour = Palette.warning; state = getString(R.string.house_state_foreground) }
+            verdict == HomeArea.Verdict.HOME ->
+                { colour = Palette.success; state = getString(R.string.house_state_home) }
+            verdict == HomeArea.Verdict.AWAY ->
+                { colour = Palette.success; state = getString(R.string.house_state_away) }
+            // Set up, permitted, and the watch is subscribed: this is WORKING, and it says
+            // so in green, whatever the current mode does or doesn't do with the answer. A
+            // grey row for a feature that is running reads as "broken" or "off", and the
+            // gap between the reading and the next reading is not either of those. (The
+            // verdict falls back to unknown between fixes; the state does not.)
+            HomeAreaWatch.armed ->
+                { colour = Palette.success; state = getString(R.string.house_state_checking) }
+            else -> { colour = Palette.labelTertiary; state = getString(R.string.house_state_unsure) }
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isClickable = true; isFocusable = true
+            setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+            setOnClickListener { houseBack = { setupHomeScreen() }; showHouseArea() }
+        }
+        row.addView(TextView(this).apply {
+            text = getString(R.string.house_row, state)
+            textSize = 14f; setTextColor(colour)
+        })
+        row.addView(TextView(this).apply {
+            text = when {
+                !set && Mode.isSuperHardcore(this@MainActivity) -> getString(R.string.house_sub_super_unset)
+                !set -> getString(R.string.house_sub_unset)
+                Mode.isSuperHardcore(this@MainActivity) ->
+                    if (HomeRule.atHome()) getString(R.string.house_sub_super_active)
+                    else getString(R.string.house_sub_super_idle)
+                else -> getString(R.string.house_sub_other_modes)
+            }
+            textSize = 12f; setTextColor(Palette.labelTertiary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (2 * dp).toInt(), 0, 0)
+        })
+        return row
     }
 
     // The gate in front of the room-detection set-up: do they actually have beacons yet?
