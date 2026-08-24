@@ -174,7 +174,6 @@
     <string name="mode_superhardcore_name">Super rigida</string>
     <string name="mode_on_toast">Modalità %1$s attivata</string>
     <string name="mode_ratchet_toast">Off non esiste più - hai scelto Rigida una volta. Rilassata è il massimo di permissività ora.</string>
-    <string name="mode_off_gone">Off non è più nell\'elenco. A un certo punto hai scelto Rigida, e da allora disattivare del tutto il monitoraggio ha smesso di essere un\'opzione. Rilassata è l\'impostazione più permissiva da qui in avanti: blocca comunque i siti per adulti, l\'elenco di host vietati e tutti i motori di ricerca tranne Google.</string>
     <string name="mode_off_toast">Monitoraggio disattivato: niente è controllato o bloccato</string>
     <string name="mode_needs_lock_toast">La modalità Super rigida richiede prima il blocco della disinstallazione</string>
     <string name="mode_reverted_toast">Il monitoraggio richiede tutta la configurazione: la modalità è tornata su %1$s.</string>
@@ -542,7 +541,7 @@
     <string name="dop_guid_h6">Rallenta.</string>
     <string name="dop_guid_b6">Un\'alta frequenza di interazione significa scorrere un feed con il pollice. Una bassa significa leggere qualcosa. La stessa ora può essere l\'una o l\'altra.</string>
     <string name="dop_guid_h7">Alzati dal letto e accendi una luce.</string>
-    <string name="dop_guid_b7">Sdraiato al buio con un telefono è la situazione più affidabile per una brutta serata. La guardia notturna della modalità rigida esiste proprio per questo.</string>
+    <string name="dop_guid_b7">Sdraiato al buio con un telefono è la situazione più affidabile per una brutta serata. La guardia notturna della Super rigida esiste proprio per questo - agisce sulla metà «sdraiato».</string>
     <string name="dop_guid_honest">\nE la parte onesta: si recupera lentamente. Le anti-regole nel punteggio sono deboli di proposito, perché una passeggiata non annulla un\'abbuffata di quattro ore e un numero che fingesse il contrario ti sarebbe inutile.</string>
     <string name="dop_adv_adult">Questa è quella attorno a cui è costruita tutta l\'app. Tutto nella pagina Contenuti per adulti - modalità rigida, lista di blocco, guardia notturna - punta proprio a questo.</string>
     <string name="dop_adv_fastvideo">Il video a formato breve è la dose più concentrata a tua disposizione. Attiva il blocco del formato breve (Tentazioni → Scrolling infinito) e i feed muoiono mentre il resto dell\'app continua a funzionare.</string>
@@ -556,7 +555,7 @@
     <string name="dop_adv_straightin">Hai sbloccato ed eri in un feed prima di averci pensato. È il pilota automatico più puro che ci sia. Spostare l\'app dalla schermata Home spezza il riflesso più della forza di volontà.</string>
     <string name="dop_adv_checking">Aprire la stessa app in continuazione in un\'ora è un tic, non un uso. Il livello grigio (pochi minuti all\'ora, poi si chiude) è fatto apposta.</string>
     <string name="dop_adv_scrolling">Un\'alta frequenza significa che stai scorrendo, non leggendo. Rallentare È l\'intervento.</string>
-    <string name="dop_adv_lyingdark">La guardia notturna della modalità rigida blocca le app non essenziali proprio in questo stato. È l\'interruttore col maggior effetto che hai.</string>
+    <string name="dop_adv_lyingdark">La guardia notturna della Super rigida blocca le app non essenziali mentre sei sdraiato. È l\'interruttore col maggior effetto che hai.</string>
     <string name="dop_adv_default">Taglia prima il tempo. Pesa più di tutto il resto nel punteggio.</string>
     <string name="dop_life_title">La tua stima delle abitudini</string>
     <string name="dop_life_banner">Questo NON influisce sul tuo livello di base della dopamina.\n\nÈ auto-riportato, quindi non può - altrimenti potresti spuntare qualche casella e guardare scendere il numero che sei venuto ad affrontare. Questa è una stima separata del lato rigenerante della tua vita, e va nel verso opposto: PIÙ ALTO È MEGLIO.</string>
@@ -648,7 +647,6 @@
     <string name="prod_value_reclaimed">valore recuperato</string>
     <string name="prod_by_sunday">entro domenica</string>
     <string name="prod_worth">Il tuo tempo recuperato vale…</string>
-    <string name="prod_week_example">ESEMPIO - resisti agli impulsi e il tuo tempo recuperato reale compare qui</string>
     <string name="prod_dopamine_title">Il tuo livello di base della dopamina</string>
     <string name="prod_still_measuring">Ancora in misurazione</string>
     <string name="prod_out_of_100">su 100 oggi · più alto è più fritto</string>
@@ -861,7 +859,7 @@
     <string name="sensors_order_body">In arrivo.</string>
 
     <string name="home_productivity_title">Il tuo punteggio di produttività</string>
-    <string name="home_productivity_sub">riepilogo settimanale</string>
+    <string name="home_productivity_sub">giornaliero e settimanale</string>
     <string name="home_usage_title">Uso del telefono</string>
     <string name="home_usage_week_sub">Questa settimana</string>
     <string name="home_usage_month_sub">Per mese</string>
@@ -869,15 +867,15 @@
     <string name="home_usage_year_sub">Quest\'anno</string>
     <string name="home_time_wasted">tempo sprecato</string>
     <string name="home_money_wasted">denaro sprecato</string>
-    <string name="home_example">ESEMPIO - il tuo uso reale sostituisce questo dopo un giorno o due</string>
     <string name="home_this_year">quest\'anno</string>
     <string name="home_of_your_time">del tuo tempo</string>
     <string name="home_evenings">serate</string>
     <string name="home_worth">Il tuo uso del telefono vale…</string>
     <string name="home_legend_week">— questa settimana</string>
-    <string name="home_example_data">\n[Dati di esempio]</string>
+    <string name="home_prod_daily">Giornaliero · %1$s</string>
+    <string name="home_prod_weekly">Settimanale · %1$s</string>
+    <string name="chart_example">DATI DI ESEMPIO</string>
     <string name="home_projected"> · proiettato</string>
-    <string name="home_readout_by">Al %1$s · </string>
     <string name="home_prod_title">Produttività</string>
     <string name="home_prod_sub">i tuoi numeri e strumenti</string>
     <string name="home_prod_card_title">Apri Produttività</string>
@@ -971,7 +969,7 @@
     <string-array name="mode_strict_rules">
         <item>Pausa di respiro: la PRIMA volta che apri un\'app monitorata ogni giorno. Riaprila più tardi lo stesso giorno e va dritta - così codici 2FA e controlli rapidi non vengono interrotti.</item>
         <item>Il pass giornaliero si ripristina a mezzanotte.</item>
-        <item>GUARDIA NOTTURNA: nessuna in Rigida. Essere sdraiato o al buio non blocca mai nulla qui - succede solo in Super rigida.</item>
+        <item>GUARDIA NOTTURNA: nessuna in Rigida. Essere sdraiato non blocca mai nulla qui - succede solo in Super rigida. Il buio non blocca nulla in nessuna modalità.</item>
         <item>PORTA A SENSO UNICO: scegliere Rigida una volta rimuove Off per sempre da questa installazione. Potrai tornare a Rilassata - mai a Off.</item>
         <item>L\'APP CHE CI VA SEMPRE VICINO: se in un\'app continuano a comparire parole borderline per qualche minuto, compare una schermata di avviso - e se la cosa prosegue, quell\'app si chiude per un\'ora. Niente qui ha superato il limite da solo; è lo schema il punto. Un tratto pulito annulla tutto.</item>
         <item>LA CONFIGURAZIONE VIENE IMPOSTA, non solo richiesta: finché manca qualcosa - il permesso \"mostra sopra le altre app\", Firefox o la sua estensione - tutto tranne gli elementi essenziali viene coperto da una schermata che indica il passo che ti resta. Chiamate, messaggi, sveglie, mappe, Impostazioni, Firefox e questa app restano aperti, così puoi sempre finire (o tornare a Rilassata).</item>
@@ -985,7 +983,7 @@
     <string-array name="mode_superhardcore_rules">
         <item>Pausa di respiro: OGNI singola volta che apri un\'app monitorata. Non c\'è nessun pass giornaliero.</item>
         <item>Attenzione: questo TI interromperà quando salti a un\'app di autenticazione per un codice 2FA. È il compromesso che stai scegliendo.</item>
-        <item>GUARDIA NOTTURNA - solo in questa modalità: mentre sei SDRAIATO, o la stanza è davvero al buio (luci spente, tende tirate), si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, contatti, fotocamera, mappe. Tutto il resto, WhatsApp compreso, è bloccato finché non ti siedi o accendi una luce.</item>
+        <item>GUARDIA NOTTURNA - solo in questa modalità: mentre sei SDRAIATO, si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, contatti, fotocamera, mappe. Tutto il resto, WhatsApp compreso, è bloccato finché non ti siedi. Una stanza al buio da sola non blocca più niente: il sensore di luce è sul davanti del telefono, quindi una mano sopra o una stanza in penombra in cui hai tutto il diritto di stare risultano uguali a luci spente. È la postura che conta in questa modalità.</item>
         <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato, come in Rigida.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
         <item>La regola dello schema borderline della Rigida vale anche qui.</item>

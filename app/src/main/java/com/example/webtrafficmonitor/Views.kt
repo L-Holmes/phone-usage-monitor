@@ -1041,6 +1041,16 @@ class DopamineScaleView(context: Context, private val score: Int) : View(context
  * anywhere and the nearest point is selected (marker + vertical guide drawn), with the
  * index reported so the caller can show the values IN the page (never a toast). The
  * selection sticks after the finger lifts.
+ *
+ * BARS: [bars] swaps the line for one bar per slot, sitting side by side. Used for the
+ * charts that plot a value PER DAY, where a line implies a continuity between days that
+ * isn't there - Monday's screen time doesn't flow into Tuesday's. Cumulative charts (the
+ * year total, the reclaimed-time week) keep the line, because there the slope IS the story.
+ *
+ * EXAMPLE DATA: [watermark] writes one grey word across the middle of the plot. Charts fall
+ * back to made-up numbers until there is enough real data, and this is how they say so -
+ * one quiet mark ON the graph, rather than an amber caption under it and a "[Example data]"
+ * tag glued onto every readout.
  */
 class StatLineChartView(
     context: Context,
@@ -1059,6 +1069,10 @@ class StatLineChartView(
     // One colour per point: each segment/dot takes its point's colour (the dopamine
     // trend uses the gauge's band colours, so a bad stretch literally goes red).
     private val segmentColours: IntArray? = null,
+    // Bars side by side instead of a line - for per-day values. See the note above.
+    private val bars: Boolean = false,
+    // One grey word over the plot, for charts showing example data.
+    private val watermark: String? = null,
 ) : View(context) {
 
     /** Fired with the selected slot index while touching/dragging. Whole view = hitbox. */
@@ -1076,8 +1090,14 @@ class StatLineChartView(
                 val dp = resources.displayMetrics.density
                 val xL = 30f * dp; val xR = width - 8f * dp
                 val n = values.size + dotted.size
-                if (n > 1 && xR > xL) {
-                    val i = Math.round((event.x - xL) / (xR - xL) * (n - 1)).coerceIn(0, n - 1)
+                if (n > 0 && xR > xL) {
+                    // Bars own a slot each, so the hitbox is the slot the finger is over;
+                    // a line's points sit ON the edges, so it is the nearest point.
+                    val i = when {
+                        bars -> ((event.x - xL) / (xR - xL) * n).toInt().coerceIn(0, n - 1)
+                        n > 1 -> Math.round((event.x - xL) / (xR - xL) * (n - 1)).coerceIn(0, n - 1)
+                        else -> 0
+                    }
                     if (i != selIndex) { selIndex = i; invalidate(); scrub(i) }
                 }
             }
@@ -1096,6 +1116,8 @@ class StatLineChartView(
         style = Paint.Style.STROKE; color = Palette.successText
     }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+    private val barEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = accent }
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFFFFFFFF.toInt() }
     private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x3D000000; strokeCap = Paint.Cap.ROUND }
     private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x18000000 }
@@ -1132,7 +1154,12 @@ class StatLineChartView(
         val all = (values + dotted).filter { !it.isNaN() }
         val goalTop = if (goalPerSlot != null) goalPerSlot * n else (goal ?: 0f)
         val mx = maxOf(all.maxOrNull() ?: 1f, goalTop, 0.5f) * 1.12f
-        fun px(i: Int) = if (n == 1) (xL + xR) / 2f else xL + (xR - xL) * i / (n - 1)
+        // Bars are centred in their own slot; line points sit on the edges of the plot.
+        fun px(i: Int) = when {
+            bars -> xL + (xR - xL) * (i + 0.5f) / n
+            n == 1 -> (xL + xR) / 2f
+            else -> xL + (xR - xL) * i / (n - 1)
+        }
         fun py(v: Float) = yB - (yB - yT) * (v / mx)
         line.strokeWidth = 2.5f * dp; axis.strokeWidth = 1f * dp
         dashed.strokeWidth = 2.5f * dp
@@ -1170,10 +1197,35 @@ class StatLineChartView(
             canvas.drawText(context.getString(R.string.chart_goal_val, fmtVal(goal)), xR, py(goal) - 3f * dp, text)
         }
 
+        // BARS: one per slot, sitting side by side. A day's usage is its own quantity, not a
+        // point on a curve, so the bar starts at zero and its height IS the value - no fill,
+        // no dots, nothing implying Monday runs into Tuesday.
+        if (bars) {
+            val slot = (xR - xL) / n
+            val bw = minOf(slot * 0.66f, 30f * dp)
+            val r = minOf(bw * 0.3f, 5f * dp)
+            for (i in 0 until n) {
+                val vv = if (i < values.size) values[i] else dotted.getOrElse(i - values.size) { Float.NaN }
+                if (vv.isNaN() || vv <= 0f) continue
+                bar.color = when {
+                    i >= values.size -> dottedColour ?: accent
+                    segmentColours != null -> segmentColours.getOrElse(i) { accent }
+                    else -> accent
+                }
+                // A hairline of height on a nearly-zero day, so "barely any" still reads as a bar.
+                val top = minOf(py(vv), yB - 1.5f * dp)
+                canvas.drawRoundRect(px(i) - bw / 2f, top, px(i) + bw / 2f, yB, r, r, bar)
+                if (i == selIndex) {
+                    barEdge.strokeWidth = 2f * dp; barEdge.color = Palette.label
+                    canvas.drawRoundRect(px(i) - bw / 2f, top, px(i) + bw / 2f, yB, r, r, barEdge)
+                }
+            }
+        }
+
         // the real line (skipping NaN gaps), filled underneath
         val path = Path(); val fill = Path()
         var started = false; var lastX = 0f
-        for (i in values.indices) {
+        if (!bars) for (i in values.indices) {
             val vv = values[i]; if (vv.isNaN()) continue
             val xx = px(i); val yy = py(vv)
             if (!started) { path.moveTo(xx, yy); fill.moveTo(xx, yB); fill.lineTo(xx, yy); started = true }
@@ -1226,8 +1278,9 @@ class StatLineChartView(
             canvas.drawPath(proj, dashed)
         }
 
-        // scrub selection: vertical guide + ring on the selected point
-        if (selIndex in 0 until n) {
+        // scrub selection: vertical guide + ring on the selected point (line charts only -
+        // a bar marks itself with an outline, drawn with the bars above)
+        if (selIndex in 0 until n && !bars) {
             val sv = if (selIndex < values.size) values[selIndex] else dotted[selIndex - values.size]
             if (!sv.isNaN()) {
                 guide.strokeWidth = 1.5f * dp
@@ -1249,6 +1302,21 @@ class StatLineChartView(
         for (i in 0 until minOf(n, labels.size)) {
             val l = labels[i]
             if (l.isNotEmpty()) canvas.drawText(l, px(i), height - 4f * dp, text)
+        }
+
+        // EXAMPLE DATA: one grey word straight across the plot, drawn last so it sits over
+        // everything. Shrunk to fit rather than clipped - a cut-off watermark reads as a bug.
+        val wm = watermark
+        if (!wm.isNullOrEmpty()) {
+            text.typeface = Typeface.DEFAULT_BOLD
+            text.textAlign = Paint.Align.CENTER
+            text.color = (Palette.labelTertiary and 0x00FFFFFF) or (0x8C shl 24)
+            text.textSize = 16f * dp
+            val maxW = (xR - xL) * 0.86f
+            val w = text.measureText(wm)
+            if (w > maxW && w > 0f) text.textSize = 16f * dp * (maxW / w)
+            canvas.drawText(wm, (xL + xR) / 2f, (yT + yB) / 2f + text.textSize / 3f, text)
+            text.typeface = Typeface.DEFAULT
         }
     }
 }

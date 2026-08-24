@@ -126,3 +126,60 @@ object UninstallGuard {
         if (dpm(ctx).isAdminActive(admin(ctx))) dpm(ctx).removeActiveAdmin(admin(ctx))
     }
 }
+
+
+// #####################################################################################
+// #                                                                                   #
+// #   GrantWindow  —  THE LOCK HAS TO LET GO OF THE PAGE THE PERMISSIONS LIVE ON      #
+// #                                                                                   #
+// #####################################################################################
+//
+//  THE BUG THIS EXISTS FOR (2026-08-24). Super hardcore is set up in a fixed order: the
+//  uninstall lock has to be on before the mode can be chosen (Mode.setMode refuses
+//  otherwise). The moment that lock is on, the accessibility service bounces this app's
+//  App-info page in Settings straight to the home screen - it is where Uninstall and
+//  Force stop are.
+//
+//  But it is ALSO the only place on Android 11+ where "Allow all the time" location can
+//  be granted, and the only way back for any permission that has been denied twice. So
+//  the setup order left people locked out of finishing the setup: the house rule cannot
+//  be turned on because the lock that Super hardcore demanded is guarding the switch.
+//
+//  THE RULE, and it is the same one the Colour-correction page has always had: a guard
+//  that would stop you turning something ON is not armed until it IS on. While a grant
+//  we run on is still outstanding, the App-info page is left alone. The moment the last
+//  one lands, the bounce is back, permanently.
+//
+//  WHAT THIS COSTS, stated plainly rather than buried: while the window is open, that
+//  page is reachable, and Force stop is on it. Uninstall is not a way out either way -
+//  device admin refuses it, which is the whole point of the lock - and the VISIT is
+//  still recorded as a bypass attempt exactly as before, so nothing goes unseen. The
+//  window is also Settings-only: the Play Store's listing for us matches the same page
+//  text and has a real Uninstall button on it, and no permission was ever granted from
+//  there, so it is never let through (see AppConfig.GRANT_WINDOW_PACKAGES).
+//
+//  NOT A TIMER ON PURPOSE. "You have five minutes from tapping the button" would close
+//  the hole tighter and would also strand anyone who took a phone call on the way, or
+//  who walked into Settings themselves rather than through our button. The permission
+//  state is the honest condition: it is exactly the thing that decides whether the page
+//  still has a job to do for the user.
+object GrantWindow {
+    /**
+     * The grants that can only be finished from this app's own page in Settings, and are
+     * still missing. Short user-facing names - the dev console shows them, so the answer to
+     * "why is my App-info page not bouncing?" is on screen rather than in this file.
+     *
+     * Location is here because of ACCESS_BACKGROUND_LOCATION ("Allow all the time"), which
+     * from Android 11 has no runtime dialog at all; fine/coarse and the beacon scan
+     * permission are here because once they have been refused twice, Settings is the only
+     * road back for them too.
+     */
+    fun outstanding(ctx: Context): List<String> = buildList {
+        if (!HomeArea.hasPermissions(ctx)) add("Location (while using)")
+        else if (!HomeArea.hasBackground(ctx)) add("Location (all the time)")
+        if (!RoomBeacons.hasPermissions(ctx)) add("Nearby devices (beacon scan)")
+    }
+
+    /** True while the App-info bounce should stand down. See the note above. */
+    fun isOpen(ctx: Context): Boolean = outstanding(ctx).isNotEmpty()
+}

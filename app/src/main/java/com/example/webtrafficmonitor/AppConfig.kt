@@ -118,7 +118,8 @@ object AppConfig {
         val greyscale: Boolean,        // let the greyscale watcher grey the screen in this mode
         /**
          * The NIGHT GUARD: block every non-essential app while the phone says you are lying
-         * down, or the room is dark. [flagLyingDown] and [nightGuardLuxBelow] are its triggers.
+         * down. [flagLyingDown] and [nightGuardLuxBelow] are its triggers - though as of
+         * 2026-08-24 no mode sets the light one any more, so lying down is the whole guard.
          */
         val nightGuard: Boolean = false,
         // NOT WIRED INTO THE SCORER. flagThreshold is dev-console display only - the live
@@ -128,12 +129,24 @@ object AppConfig {
         // These two ARE live, but only as the night-guard's triggers (see nightGuard above).
         val flagLyingDown: Boolean = false,
         /** Lux at or below which the guard's DARK trigger fires - null means light NEVER
-         *  trips the guard in this mode (2026-08-01: light now only blocks in Super hardcore,
-         *  and only in genuine darkness - the light trigger was too harsh everywhere else). */
+         *  trips the guard in this mode.
+         *
+         *  IT IS NULL IN EVERY MODE NOW (2026-08-24). The retreat went: DULL -> DARK
+         *  (2026-07-15), then out of Strict (2026-08-01), and now out of Super hardcore too.
+         *  "Not in the dark" was the wrong rule even at 15 lux: the sensor is on the front of
+         *  the phone, so a hand over it, a pocket, a face close to the screen or a dim room
+         *  someone is entitled to be in all read as darkness, and the punishment for a bad
+         *  reading is a phone that will not open. Lying down is the trigger that actually
+         *  describes the behaviour we are aiming at, and it survives on its own.
+         *
+         *  To bring it back for a mode: nightGuardLuxBelow = NIGHT_GUARD_LUX below. Nothing
+         *  else needs changing - the block reason strings (br_night_dark) and the dev-console
+         *  row are still wired up and go live again with it. */
         val nightGuardLuxBelow: Float? = null,
     )
-    // The one lux level the night guard's DARK trigger uses (Super hardcore only). 15 lux is
-    // genuinely dark - lights off, curtains drawn - so an ordinary lamp-lit room never trips it.
+    // The lux level the night guard's DARK trigger USED to fire at, kept as the value to
+    // restore with (see nightGuardLuxBelow - no mode sets it now). 15 lux is genuinely dark -
+    // lights off, curtains drawn - so an ordinary lamp-lit room never tripped it.
     const val NIGHT_GUARD_LUX = 15f
 
     val MODES: List<ModeSpec> = listOf(
@@ -156,8 +169,11 @@ object AppConfig {
             flagThreshold = 45, flagLyingDown = false),
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
+            // Night guard: LYING DOWN ONLY. The light trigger ("Not in the dark") came out
+            // here too on 2026-08-24 - see nightGuardLuxBelow for why. This was the last mode
+            // that had it, so the DARK half of the guard is now off everywhere.
             nightGuard = true,
-            flagThreshold = 30, flagLyingDown = true,  nightGuardLuxBelow = NIGHT_GUARD_LUX),
+            flagThreshold = 30, flagLyingDown = true),
     )
 
     // === Night guard: what still opens while lying down / in the dark =================
@@ -168,10 +184,11 @@ object AppConfig {
     // Data now in assets/filter/apps_night_guard.txt (FilterData).
     val NIGHT_GUARD_ALLOWED_SUBSTRINGS: List<String> get() = FilterData.lines("apps_night_guard.txt")
 
-    // Hysteresis for the night guard's DARK trigger. It blocks at or below NIGHT_GUARD_LUX,
-    // but does not release until the light is comfortably past it (threshold x this). Without
-    // the gap, a reading hovering on the threshold - which is exactly what happens when the
-    // cover's own glow hits the sensor - makes the block flicker on and off.
+    // Hysteresis for the night guard's DARK trigger. Dormant with the trigger itself (no mode
+    // sets nightGuardLuxBelow now), and kept for the same reason the threshold is: it blocks at
+    // or below NIGHT_GUARD_LUX, but does not release until the light is comfortably past it
+    // (threshold x this). Without the gap, a reading hovering on the threshold - which is
+    // exactly what happens when the cover's own glow hits the sensor - makes the block flicker.
     const val NIGHT_GUARD_LIGHT_RELEASE = 1.6f
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
 
@@ -496,16 +513,44 @@ object AppConfig {
     // (2) & (3) Settings pages matched by text. A page matches when EVERY string in
     // `mustContain` is present on screen (case-insensitive substring). Strings copied
     // verbatim from this app's monitor on a Samsung device.
-    data class PageMatch(val label: String, val mustContain: List<String>)
+    data class PageMatch(
+        val label: String,
+        val mustContain: List<String>,
+        /**
+         * When the BOUNCE is armed. Default: always. A page that is also the only route to
+         * switching something ON must go unarmed until it IS on - otherwise the guard stops
+         * the setup it exists to protect. (The match itself, and the recording that goes with
+         * it, happen either way; this only decides whether we send the user home.)
+         */
+        val armedWhen: (Context) -> Boolean = { true },
+        /** The condition above in plain words, for the watched-screens page. */
+        val armedNote: String? = null,
+    )
 
     // Bounced to Home while the uninstall lock is ON - the "escape routes" that would
     // let someone unlock or kill the guard.
+    //
+    // TWO of them carry an armedWhen, and for the same reason the Colour-correction page
+    // does: they are ALSO the page you finish the setup on. App info is the only place
+    // Android 11+ grants "Allow all the time" location (GrantWindow), and "Appear on top"
+    // is where the overlay permission is granted. Bouncing someone off those before they
+    // have granted anything is how the lock ends up guarding its own front door - see the
+    // long note on GrantWindow.
     val UNINSTALL_GUARD_PAGES: List<PageMatch> = listOf(
         PageMatch("Device admin", listOf("Web Traffic Monitor", "admin app")),
-        PageMatch("App info - uninstall", listOf("Web Traffic Monitor", "uninstall")),
-        PageMatch("App info - force stop", listOf("Web Traffic Monitor", "force stop")),
+        PageMatch("App info - uninstall", listOf("Web Traffic Monitor", "uninstall"),
+            armedWhen = { !GrantWindow.isOpen(it) },
+            armedNote = "and only once every permission we run on is granted - " +
+                "this page is the only way to grant them"),
+        PageMatch("App info - force stop", listOf("Web Traffic Monitor", "force stop"),
+            armedWhen = { !GrantWindow.isOpen(it) },
+            armedNote = "and only once every permission we run on is granted - " +
+                "this page is the only way to grant them"),
         PageMatch("Page monitoring (accessibility)", listOf("page monitoring")),
-        PageMatch("Overlay - Appear on top", listOf("Appear on top")),
+        PageMatch("Overlay - Appear on top", listOf("Appear on top"),
+            armedWhen = { Settings.canDrawOverlays(it) },
+            armedNote = "and only once the overlay permission is granted - " +
+                "this page is where it is granted"),
     )
 
     // Settings packages these pages are matched in. It was hardcoded to com.android.settings,
@@ -517,6 +562,14 @@ object AppConfig {
         "com.android.vending",              // Play Store: our app page has Uninstall on it
         "com.samsung.android.settings",     // some Samsung builds
     )
+
+    // Where an unarmed guard page (PageMatch.armedWhen) is actually let through: SETTINGS
+    // ONLY. Derived from the list above rather than retyped, so a new OEM settings package
+    // gets it automatically - but any STORE added up there has to be subtracted here too.
+    // The Play Store's listing for us matches the App-info text ("Web Traffic Monitor" +
+    // "uninstall") and carries a live Uninstall button rather than a permission switch: no
+    // grant was ever completed there, so it is bounced exactly as it always was.
+    val GRANT_WINDOW_PACKAGES: Set<String> = GUARDED_SETTINGS_PACKAGES - "com.android.vending"
 
     // ═══════════════════════════════════════════════════════════════════════════════
     //  (2b) THE OTHER WAYS OUT  -  bounced and recorded like the uninstall pages
@@ -623,7 +676,8 @@ object AppConfig {
         for (page in UNINSTALL_GUARD_PAGES) {
             add(GuardedScreen(
                 page.label, "Android Settings",
-                "While the uninstall lock is on. The VISIT is recorded either way.",
+                "While the uninstall lock is on" + (page.armedNote?.let { ", $it" } ?: "") +
+                    ". The VISIT is recorded either way.",
                 GuardAction.BOUNCE,
                 "One of the four ways to take the guard down: uninstall it, force-stop it, " +
                     "deactivate its admin, or revoke a permission it runs on.",

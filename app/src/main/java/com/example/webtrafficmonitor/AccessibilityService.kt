@@ -425,6 +425,23 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun isOurUninstallScreen(): Boolean = ourUninstallScreen() != null
 
     /**
+     * Is this page's bounce armed right now?
+     *
+     * Most are always armed. The two that are not are the pages you FINISH THE SETUP on -
+     * App info (the only route to "Allow all the time" location on Android 11+) and "Appear
+     * on top" (the overlay permission). Bouncing someone off those while the permission is
+     * still missing is the lock guarding its own front door: Super hardcore demands the
+     * uninstall lock first, and the lock was then blocking the page the mode's own house
+     * rule is switched on from. Same principle as the Colour-correction page - a guard that
+     * would stop you turning something ON is not armed until it is on. See GrantWindow.
+     *
+     * The relaxation is Settings-only. The Play Store listing matches the same App-info text
+     * and has a real Uninstall button on it, so it is bounced whatever is outstanding.
+     */
+    private fun guardArmed(page: AppConfig.PageMatch, pkg: String): Boolean =
+        page.armedWhen(this) || pkg !in AppConfig.GRANT_WINDOW_PACKAGES
+
+    /**
      * Landing on one of these screens is not an accident - you do not open "Device admin" by
      * mistake. We bounce them home as before, but we also REMEMBER it, because that is what
      * puts the supervised "look anyway" exit on the table for the next half hour. See the big
@@ -812,7 +829,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             val guardPage = ourUninstallScreen()
             if (guardPage != null) {
                 recordBypassAttempt(guardPage)
-                if (UninstallGuard.isAdminActive(this)) {
+                if (UninstallGuard.isAdminActive(this) && guardArmed(guardPage, packageName)) {
                     performGlobalAction(GLOBAL_ACTION_HOME)
                     return
                 }
@@ -1201,9 +1218,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     /**
      * THE NIGHT GUARD - Super hardcore ONLY now (2026-08-01; both triggers proved too harsh
-     * for Strict). While the phone says you are lying down, or the room is genuinely dark,
-     * nothing but the essentials opens, WhatsApp included. That posture, in that light, is
-     * where this goes wrong, and the cheapest intervention is to make the phone useless there.
+     * for Strict). While the phone says you are lying down, nothing but the essentials opens,
+     * WhatsApp included. That posture is where this goes wrong, and the cheapest intervention
+     * is to make the phone useless there.
+     *
+     * LIGHT NO LONGER TRIGGERS IT ANYWHERE (2026-08-24): nightGuardLuxBelow is null in every
+     * mode, so darkEnoughForGuard is permanently false and the dark-only branch below cannot
+     * be reached. The branch stays because the trigger is data, not code - see AppConfig.
      *
      * The triggers come from the mode spec (flagLyingDown / nightGuardLuxBelow); Strict has
      * spec.nightGuard = false, so this returns null there without looking further.
@@ -1230,9 +1251,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Is it dark enough to trip the guard? Only in modes that HAVE a light trigger at all
-     * (nightGuardLuxBelow is null everywhere but Super hardcore - lying-down is the only
-     * trigger in Strict). Latching, with a deliberate gap between the level that turns it ON
+     * Is it dark enough to trip the guard? Only in modes that HAVE a light trigger at all -
+     * and since 2026-08-24 that is NO mode: nightGuardLuxBelow is null everywhere, so this
+     * returns false on the first line and lying-down is the guard's only trigger. The rest is
+     * kept working for the day a mode sets the lux level again.
+     * Latching, with a deliberate gap between the level that turns it ON
      * and the level that turns it OFF - see NIGHT_GUARD_LIGHT_RELEASE. A bare threshold makes
      * the cover strobe when the reading sits right on the line.
      */

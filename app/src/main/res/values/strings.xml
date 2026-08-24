@@ -216,7 +216,6 @@
     <string name="mode_superhardcore_name">Super hardcore</string>
     <string name="mode_on_toast">%1$s mode on</string>
     <string name="mode_ratchet_toast">Off is gone for good - you chose Strict once. Relaxed is as loose as it gets now.</string>
-    <string name="mode_off_gone">Off is no longer on the list. You chose Strict at some point, and turning monitoring off entirely stopped being an option from then on. Relaxed is the loosest setting from here - it still blocks adult sites, the banned host list and every search engine but Google.</string>
     <string name="mode_off_toast">Monitoring off - nothing is watched or blocked</string>
     <string name="mode_needs_lock_toast">Super hardcore needs the uninstall lock on first</string>
     <string name="mode_reverted_toast">Monitoring needs the whole setup - the mode is back to %1$s.</string>
@@ -285,7 +284,7 @@
     <string-array name="mode_strict_rules">
         <item>Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.</item>
         <item>The daily pass resets at midnight.</item>
-        <item>NIGHT GUARD: none in Strict. Lying down or sitting in the dark never blocks anything here - that only happens in Super hardcore.</item>
+        <item>NIGHT GUARD: none in Strict. Lying down never blocks anything here - that only happens in Super hardcore. A dark room blocks nothing in any mode.</item>
         <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
         <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
         <item>WHERE YOU LIVE: Strict asks you, once, to save where home is. Nothing in Strict acts on it - you are setting it up so it is ready if you ever go to Super hardcore, where being at home is what makes one word enough to close an app. It is GPS and nearby Wi-Fi, on this device only; nothing leaves the phone, and a VPN cannot move it. Set it up any time from Overview → Where you are.</item>
@@ -299,7 +298,7 @@
     <string-array name="mode_superhardcore_rules">
         <item>Breathing pause: EVERY single time you open a watched app. There is no daily pass.</item>
         <item>Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.</item>
-        <item>NIGHT GUARD - only in this mode: while you are LYING DOWN, or the room is genuinely dark (lights off, curtains drawn), only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up or turn a light on.</item>
+        <item>NIGHT GUARD - only in this mode: while you are LYING DOWN, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up. A dark room on its own no longer blocks anything: the light sensor is on the front of the phone, so a hand over it or a dim room you are entitled to be in read the same as lights-out. It is the posture this mode acts on.</item>
         <item>Greyscale: your screen turns grey while you are lying down, same as Strict.</item>
         <item>Everything in \"Always on\" above still applies.</item>
         <item>The borderline-pattern rule from Strict applies here too.</item>
@@ -664,7 +663,7 @@
     <string name="dop_guid_h6">Slow down.</string>
     <string name="dop_guid_b6">A high interaction rate means thumbing a feed. A low one means reading something. The same hour can be either.</string>
     <string name="dop_guid_h7">Get out of bed, and turn a light on.</string>
-    <string name="dop_guid_b7">Lying down in the dark with a phone is the single most reliable setup for a bad night. Strict mode\'s night guard exists for exactly this.</string>
+    <string name="dop_guid_b7">Lying down in the dark with a phone is the single most reliable setup for a bad night. Super hardcore\'s night guard exists for exactly this - it acts on the lying down half.</string>
     <string name="dop_guid_honest">\nAnd the honest bit: this recovers slowly. The anti-rules in the score are weak on purpose, because a walk does not undo a four-hour binge and a number that pretended otherwise would be useless to you.</string>
     <string name="dop_adv_adult">This is the one this whole app is built around. Everything on the Adult Content page - strict mode, the ban list, the night guard - is aimed at exactly this.</string>
     <string name="dop_adv_fastvideo">Short-form video is the most concentrated dose available to you. Turn on the short-form block (Temptations → Endless Scrolling) and the feeds die while the rest of the app still works.</string>
@@ -678,7 +677,7 @@
     <string name="dop_adv_straightin">You unlocked and were in a feed before you\'d thought about it. That\'s the purest autopilot there is. Moving the app off your home screen breaks the reflex more than willpower does.</string>
     <string name="dop_adv_checking">Opening the same app over and over in an hour is a tic, not a use. The grey tier (a few minutes an hour, then it closes) is built for it.</string>
     <string name="dop_adv_scrolling">A high rate means you\'re thumbing, not reading. Slowing down IS the intervention.</string>
-    <string name="dop_adv_lyingdark">Strict mode\'s night guard blocks non-essential apps in exactly this state. It\'s the single highest-leverage switch you have.</string>
+    <string name="dop_adv_lyingdark">Super hardcore\'s night guard blocks non-essential apps while you are lying down. It\'s the single highest-leverage switch you have.</string>
     <string name="dop_adv_default">Cut the time first. It outweighs everything else in the score.</string>
     <string name="dop_life_title">Your habits estimate</string>
     <string name="dop_life_banner">This does NOT affect your dopamine baseline.\n\nIt\'s self-reported, so it can\'t - otherwise you could tick a few boxes and watch the number you came here to face go down. This is a separate estimate of the restorative side of your life, and it runs the other way: HIGHER IS BETTER.</string>
@@ -782,7 +781,6 @@
     <string name="prod_value_reclaimed">value reclaimed</string>
     <string name="prod_by_sunday">by Sunday</string>
     <string name="prod_worth">Your reclaimed time is worth…</string>
-    <string name="prod_week_example">EXAMPLE - ride out urges and your real reclaimed time shows here</string>
     <string name="prod_dopamine_title">Your dopamine baseline</string>
     <string name="prod_still_measuring">Still measuring</string>
     <string name="prod_out_of_100">out of 100 today · higher is more fried</string>
@@ -1059,7 +1057,7 @@
 
     <!-- ── Home / overview screen (Main.kt) ──────────────────────────────────────────── -->
     <string name="home_productivity_title">Your productivity score</string>
-    <string name="home_productivity_sub">weekly overview</string>
+    <string name="home_productivity_sub">daily &amp; weekly</string>
     <string name="home_usage_title">Phone usage</string>
     <string name="home_usage_week_sub">This week</string>
     <string name="home_usage_month_sub">By month</string>
@@ -1067,15 +1065,18 @@
     <string name="home_usage_year_sub">This year</string>
     <string name="home_time_wasted">time wasted</string>
     <string name="home_money_wasted">money wasted</string>
-    <string name="home_example">EXAMPLE - your real usage replaces this after a day or two</string>
     <string name="home_this_year">this year</string>
     <string name="home_of_your_time">of your time</string>
     <string name="home_evenings">evenings</string>
     <string name="home_worth">Your phone usage is worth…</string>
     <string name="home_legend_week">— this week</string>
-    <string name="home_example_data">\n[Example data]</string>
+    <!-- The productivity-score card: today's score, then the 7-day average. -->
+    <string name="home_prod_daily">Daily · %1$s</string>
+    <string name="home_prod_weekly">Weekly · %1$s</string>
+    <!-- Written in grey across any chart still showing made-up numbers. Short: it is drawn
+         ON the plot, not under it. -->
+    <string name="chart_example">EXAMPLE DATA</string>
     <string name="home_projected"> · projected</string>
-    <string name="home_readout_by">By %1$s · </string>
     <!-- The Productivity door. This section replaced the old bottom-bar tab, so it has to do
          the job the tab label used to: say what is behind it AND that the user's own figures
          go in there. Keep the three bullets concrete - they are the whole pitch. -->

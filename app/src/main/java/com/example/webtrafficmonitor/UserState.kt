@@ -781,6 +781,32 @@ object UsageGoal {
 
 
 // =====================================================================================
+// Premium  (the paid tier - nothing is gated on it YET)
+// =====================================================================================
+/**
+ * One switch saying "treat this install as paid". It exists ahead of the paid tier itself
+ * so the premium-only features can be built and demoed behind a real flag from day one
+ * rather than being wired up to a hardcoded true and untangled later.
+ *
+ * TODAY IT GATES NOTHING. Turning it on changes nothing on screen until a feature asks it
+ * to. It is set from Developer tools only - there is no purchase flow, no receipt, no
+ * server check, and this pref is trivially editable on a rooted phone. When there IS
+ * something to sell, the entitlement check belongs with the store, and this becomes the
+ * developer override for it, not the source of truth.
+ */
+object Premium {
+    private const val PREFS = "premium"
+    private const val KEY = "enabled"
+
+    fun isOn(c: Context): Boolean = prefs(c).getBoolean(KEY, false)
+    fun setOn(c: Context, on: Boolean) = prefs(c).edit().putBoolean(KEY, on).apply()
+
+    private fun prefs(c: Context) =
+        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
 // BrowserSetup  (the browser half of the setup gate: Firefox + the content add-on)
 // =====================================================================================
 /**

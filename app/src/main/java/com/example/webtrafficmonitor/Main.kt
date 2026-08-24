@@ -2310,22 +2310,22 @@ private fun setupHomeScreen() {
     markTabSeen("overview")
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-    val teal = Palette.tint
 
     // Quiet amber nudge: the permissions are optional in Off mode, but they're the point.
     homeBuiltWithNudge = shouldNudgePermissions()
     if (homeBuiltWithNudge) content.addView(permissionNudgeBanner())
 
-    // ── 1. Productivity score: gauge + score + full rank name + the 14-day trend.
-    //    The trend line wears the gauge's band colours (a bad stretch goes red), and
-    //    scrubbing it updates the readout line - in the page, never a toast.
+    // ── 1. Productivity score: today's score and the seven-day average, then 14 days of
+    //    daily bars wearing the score's band colours - so a bad stretch is a run of red.
+    //    Two numbers and a graph; everything else this card used to carry said the same
+    //    thing again in a different shape.
     val today = DopamineScore.of(this, DopamineLog.today(this))
-    val rank = DopamineRank.of(this)
+    // The seven-day average, shown beside today's score. Null when no day in the week scored.
+    val weekAvgScore = DopamineLog.history(this, 7)
+        .map { DopamineScore.of(this@MainActivity, it) }.filter { it.hasData }
+        .takeIf { it.isNotEmpty() }?.map { it.score }?.average()?.let { Math.round(it).toInt() }
     val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.UK)
     val weekdayFmt = SimpleDateFormat("EEE", Locale.getDefault())
-    val niceDateFmt = SimpleDateFormat("EEE d MMM", Locale.getDefault())
-    fun niceDate(iso: String): String =
-        try { niceDateFmt.format(dayFmt.parse(iso)!!) } catch (_: Throwable) { iso }
     content.addView(homeHeading(getString(R.string.home_productivity_title), getString(R.string.home_productivity_sub)))
     val dopCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -2335,23 +2335,22 @@ private fun setupHomeScreen() {
         isClickable = true; isFocusable = true
         setOnClickListener { dopamineBack = { setupHomeScreen() }; showDopamine() }
     }
-    dopCard.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        addView(DopamineScaleView(this@MainActivity, today.score), LinearLayout.LayoutParams((46 * dp).toInt(), (150 * dp).toInt()))
-        addView(LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((14 * dp).toInt(), 0, 0, 0)
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(TextView(this@MainActivity).apply {
-                text = if (today.hasData) "${today.score}" else "-"
-                textSize = 44f; setTypeface(typeface, Typeface.BOLD); includeFontPadding = false
-                setTextColor(if (today.hasData) today.colour else Palette.labelTertiary)
-            })
-            addView(TextView(this@MainActivity).apply {
-                text = rank.longTitle; textSize = 17f
-                setTypeface(typeface, Typeface.BOLD); setTextColor(rank.colour)
-            })
-        })
+    // Two lines and the graph, and that is the whole card. What used to be here - the
+    // vertical band gauge, a 44sp copy of today's score, and the rank's flavour name -
+    // was three ways of saying one number before the chart underneath said it again. The
+    // section heading above names the card, exactly like every other section on this page;
+    // the gauge and the rank still live on the score page the card opens.
+    dopCard.addView(TextView(this).apply {
+        text = getString(R.string.home_prod_daily,
+            if (today.hasData) Units.number(this@MainActivity, today.score) else "-")
+        textSize = 15f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (today.hasData) today.colour else Palette.labelTertiary)
+    })
+    dopCard.addView(TextView(this).apply {
+        text = getString(R.string.home_prod_weekly,
+            weekAvgScore?.let { Units.number(this@MainActivity, it) } ?: "-")
+        textSize = 15f; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(Palette.labelSecondary)
     })
     val history14 = DopamineLog.history(this, 14)
     val realScores = history14.map { DopamineScore.of(this@MainActivity, it).let { r -> if (r.hasData) r.score.toFloat() else Float.NaN } }
@@ -2373,25 +2372,15 @@ private fun setupHomeScreen() {
         if (trendScores[i].isNaN()) Palette.labelTertiary
         else DopamineTuning.bandColour(Math.round(trendScores[i]))
     }
+    // ONE BAR PER DAY. A score is a day's own quantity - it doesn't flow into the next
+    // day - so bars say what a line only implied, and each keeps its band colour, so a bad
+    // stretch is a run of red bars. Nothing under it: the axis is labelled, and a readout
+    // naming the bar the finger is already on adds a line of text and no information.
     val trendChart = StatLineChartView(this, trendScores, trendLabels, hoursUnit = false,
-        gridStep = 25f, segmentColours = trendColours)
-    val trendInfo = scrubLabel()
-    trendChart.onScrub = { i ->
-        val d = history14.getOrNull(i)
-        if (d != null) trendInfo.text = when {
-            !haveTrend -> readoutText("${niceDate(d.date)} · ",
-                "${Math.round(trendScores[i])}", "\n[Example data]", trendColours[i])
-            else -> {
-                val r = DopamineScore.of(this@MainActivity, d)
-                if (r.hasData) readoutText("${niceDate(d.date)} · ", "${r.score} (${r.band})", "", r.colour)
-                else readoutText("${niceDate(d.date)} · ", "no data that day", "", Palette.labelTertiary)
-            }
-        }
-    }
+        gridStep = 25f, segmentColours = trendColours, bars = true,
+        watermark = if (haveTrend) null else getString(R.string.chart_example))
     dopCard.addView(trendChart, LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, (120 * dp).toInt()).apply { topMargin = (6 * dp).toInt() })
-    dopCard.addView(trendInfo)
-    if (!haveTrend) dopCard.addView(exampleTag())
+        LinearLayout.LayoutParams.MATCH_PARENT, (120 * dp).toInt()).apply { topMargin = (10 * dp).toInt() })
     content.addView(dopCard)
 
     // ── 2. Usage, strava-style. Metric: screen-on time. EVERY chart falls back to
@@ -2405,7 +2394,7 @@ private fun setupHomeScreen() {
     val goalHours = UsageGoal.hoursPerDay(this) ?: 1f
     val rate = AboutYou.effectiveHourly(this)
 
-    // This week: same card treatment as the year chart - legend, readout, stat row.
+    // This week: ONE BAR PER DAY - legend, stat row, no readout (see the call below).
     val week = history90.takeLast(7)
     val realWeek = week.map { hoursOf(it) }.toFloatArray()
     val weekIsReal = realWeek.count { !it.isNaN() } >= 2 && realWeek.filter { !it.isNaN() }.sum() >= 0.5f
@@ -2423,18 +2412,12 @@ private fun setupHomeScreen() {
         ),
         goal = goalHours, gridStep = 1f, minorStep = 0.5f,
         legendMain = getString(R.string.home_legend_week),
-        exampleMsg = if (weekIsReal) null else getString(R.string.home_example),
-        pointInfo = { i, v, _ ->
-            val d = week.getOrNull(i)
-            when {
-                d == null -> ""
-                !weekIsReal -> readoutText("${niceDate(d.date)} · ",
-                    hoursAndMoney(v, rate), "\n[Example data]", teal)
-                v.isNaN() -> readoutText("${niceDate(d.date)} · ", "no data", "", Palette.labelTertiary)
-                else -> readoutText("${niceDate(d.date)} · ",
-                    hoursAndMoney(v, rate), "", teal)
-            }
-        },
+        // ONE BAR PER DAY, and no scrub readout. Each bar is a day's screen time on an axis
+        // labelled in hours with the goal line across it, which is the whole question this
+        // chart answers - the "Sun 23 Aug · 5m (£1)" line under it only restated the bar the
+        // finger was already on, and the total and cost are in the stat row underneath.
+        bars = true,
+        example = !weekIsReal,
     ))
 
     // By month - only once there's more than two months of real data (or as the example).
@@ -2453,19 +2436,10 @@ private fun setupHomeScreen() {
             monthly = floatArrayOf(136f, 104f, 121f)
             monthLabels = (2 downTo 0).map { monthNames[(thisMonth - it + 12) % 12] }
         }
-        val monthChart = StatLineChartView(this, monthly, monthLabels, goal = goalHours * 30)
-        val monthInfo = scrubLabel()
-        monthChart.onScrub = { i ->
-            val v = monthly.getOrNull(i)
-            if (v != null) monthInfo.text = readoutText(
-                "${monthLabels.getOrNull(i) ?: ""} · ",
-                hoursAndMoney(v, rate),
-                if (hasUsage) "" else getString(R.string.home_example_data), teal)
-        }
+        val monthChart = StatLineChartView(this, monthly, monthLabels, goal = goalHours * 30,
+            watermark = if (hasUsage) null else getString(R.string.chart_example))
         content.addView(monthChart,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (130 * dp).toInt()))
-        content.addView(monthInfo)
-        if (!hasUsage) content.addView(exampleTag())
     }
 
     // This year: ONE line, climbing organically day by day, that turns grey and dotted
@@ -2500,8 +2474,6 @@ private fun setupHomeScreen() {
         val m = monthFirstDays.indexOfLast { d >= it }
         if (d == monthFirstDays[m] && m % 2 == 0) monthNames[m] else ""
     }
-    val yearStartMs = try { dayFmt.parse("$yearNow-01-01")!!.time } catch (_: Throwable) { 0L }
-    val niceDoyFmt = SimpleDateFormat("d MMM", Locale.getDefault())
     val yearHours = toCome.lastOrNull() ?: soFar.last()
     content.addView(chartStatCard(
         soFar, yearLabels,
@@ -2512,15 +2484,8 @@ private fun setupHomeScreen() {
         ),
         dotted = toCome, goalPerSlot = goalHours,
         worth = getString(R.string.home_worth),
-        exampleMsg = if (yearIsReal) null else getString(R.string.home_example),
+        example = !yearIsReal,
         onStatsClick = { aboutYouBack = { setupHomeScreen() }; showAboutYou() },
-        pointInfo = { i, v, projected ->
-            val date = niceDoyFmt.format(Date(yearStartMs + i * 24L * 60 * 60 * 1000))
-            readoutText(getString(R.string.home_readout_by, date),
-                hoursAndMoney(v, rate, whole = true),
-                (if (projected) getString(R.string.home_projected) else "") + (if (yearIsReal) "" else getString(R.string.home_example_data)),
-                if (projected) Palette.labelTertiary else teal)
-        },
     ))
 
     // ── 3. Productivity: the door to their own numbers ───────────────────────
@@ -2629,13 +2594,6 @@ private fun hoursAndMoney(hours: Float, rate: Int, whole: Boolean = false): Stri
         if (whole) Units.hours(this, Math.round(hours)) else fmtHours(hours),
         Units.money(this, Math.round(hours * rate)))
 
-/** The amber "this is fake data" tag under example charts. */
-private fun exampleTag(msg: String? = null) =
-    TextView(this).apply {
-        text = msg ?: getString(R.string.home_example); textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.warningText)
-        setPadding(0, (2 * resources.displayMetrics.density).toInt(), 0, 0)
-    }
-
 /** A strava-style stat row: big bold values with small grey labels, evenly spread.
  *  One shared builder so home and Productivity arrange their numbers identically. */
 private fun statRow(stats: List<Pair<String, String>>, colour: Int, onClick: (() -> Unit)? = null): View {
@@ -2655,13 +2613,20 @@ private fun statRow(stats: List<Pair<String, String>>, colour: Int, onClick: (()
     }
 }
 
-/** The bigger, two-tone home-page heading: "Phone usage · This week". */
+/** The two-tone home-page heading: the name, then its qualifier on a SECOND line -
+ *  smaller, grey and unbolded ("Phone usage" / "This week"). It used to run them together
+ *  on one line with a "·" between, which made the qualifier compete with the name at the
+ *  same size and left the row long enough to wrap on a narrow phone. */
 private fun homeHeading(primary: String, secondary: String): TextView {
     val dp = resources.displayMetrics.density
-    val s = android.text.SpannableString("$primary · $secondary")
-    s.setSpan(android.text.style.ForegroundColorSpan(Palette.labelTertiary), primary.length, s.length, 0)
+    val s = android.text.SpannableString("$primary\n$secondary")
+    val cut = primary.length
+    s.setSpan(android.text.style.StyleSpan(Typeface.BOLD), 0, cut, 0)
+    s.setSpan(android.text.style.ForegroundColorSpan(Palette.labelTertiary), cut, s.length, 0)
+    s.setSpan(android.text.style.RelativeSizeSpan(0.68f), cut, s.length, 0)
     return TextView(this).apply {
-        text = s; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+        text = s; textSize = 18f; setTextColor(Palette.label)
+        setLineSpacing(1.5f * dp, 1f)
         setPadding(0, (20 * dp).toInt(), 0, (8 * dp).toInt())
     }
 }
@@ -2705,7 +2670,12 @@ private fun chartStatCard(
     gridStep: Float? = null, minorStep: Float? = null,
     legendMain: String? = null,
     worth: String? = null,
-    exampleMsg: String? = null,
+    // Bars side by side instead of a line - for the per-day charts. See StatLineChartView.
+    bars: Boolean = false,
+    // The numbers are made up until there is enough real data. Says so ON the graph, in grey,
+    // and nowhere else: the amber caption under the card and the "[Example data]" tag on every
+    // readout said the same thing three times over.
+    example: Boolean = false,
     onStatsClick: (() -> Unit)? = null,
     pointInfo: ((Int, Float, Boolean) -> CharSequence)? = null,
 ): View {
@@ -2718,7 +2688,8 @@ private fun chartStatCard(
     }
     val chart = StatLineChartView(this, values, labels,
         goal = goal, dotted = dotted, dottedColour = Palette.labelTertiary,
-        goalPerSlot = goalPerSlot, accent = accent, gridStep = gridStep, minorStep = minorStep)
+        goalPerSlot = goalPerSlot, accent = accent, gridStep = gridStep, minorStep = minorStep,
+        bars = bars, watermark = if (example) getString(R.string.chart_example) else null)
     card.addView(chart, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (150 * dp).toInt()))
 
     // Legend: name every line on the chart.
@@ -2746,7 +2717,6 @@ private fun chartStatCard(
         text = worth; textSize = 14f; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, 0)
     })
     if (stats.isNotEmpty()) card.addView(statRow(stats, accent, onStatsClick))
-    if (exampleMsg != null) card.addView(exampleTag(exampleMsg))
     return card
 }
 
@@ -3015,11 +2985,11 @@ private fun showProductivity() {
             accent = Palette.successText,
             dotted = toCome,
             worth = getString(R.string.prod_worth),
-            exampleMsg = if (hasWins) null else getString(R.string.prod_week_example),
+            example = !hasWins,
             pointInfo = { i, v, projected ->
                 readoutText("${weekDays.getOrNull(i) ?: ""} · ",
                     hoursAndMoney(v, rate),
-                    (if (projected) getString(R.string.home_projected) else "") + (if (hasWins) "" else getString(R.string.home_example_data)),
+                    if (projected) getString(R.string.home_projected) else "",
                     if (projected) Palette.labelTertiary else Palette.successText)
             },
         ))
@@ -3954,14 +3924,9 @@ private fun showReportScreen(offerLock: Boolean = false) {
             setOnClickListener { showModeRules() }
         })
     })
-    // Say WHY Off vanished, once, right under the picker. A choice that quietly disappears
-    // is unsettling; a choice that disappears with a reason is the ratchet working.
-    if (Mode.everStrict(this)) content.addView(TextView(this).apply {
-        text = getString(R.string.mode_off_gone)
-        textSize = Type.caption; setTextColor(Palette.labelTertiary)
-        setLineSpacing(0f, Type.lineSpacing)
-        setPadding(dp(Space.xs), 0, dp(Space.xs), dp(Space.sm))
-    })
+    // (The "Off is no longer on the list" paragraph used to sit here, under the picker. It
+    // was a wall of small print on the page people open when they are already struggling; the
+    // ratchet is still explained in the mode rules behind the (i) above.)
 
     // The protocol is the one thing on this page that gets the accent, because it is the
     // one thing here that fixes the problem rather than reacting to it.
@@ -6191,6 +6156,28 @@ private fun startWeekStrict() {
             "Every word group, what it scores, the cutoff, and the exact screens we watch " +
                 "for - all for the mode you are in right now.") { showFilterBreakdown() })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
+        // Premium override: pretend this install has paid. Gates nothing yet - see Premium.
+        content.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (8 * dp).toInt(), 0, (4 * dp).toInt())
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                addView(TextView(this@MainActivity).apply {
+                    text = "Premium mode"; textSize = 15f
+                    setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = "Act as if this install has paid. Nothing is gated on it yet - it is here so " +
+                        "the premium features can be built behind a real flag."
+                    textSize = 12f; setTextColor(Palette.labelTertiary)
+                })
+            })
+            addView(android.widget.Switch(this@MainActivity).apply {
+                isChecked = Premium.isOn(this@MainActivity)
+                setOnCheckedChangeListener { _, on -> Premium.setOn(this@MainActivity, on) }
+            })
+        })
         content.addView(homeCard(getString(R.string.settings_language), getString(R.string.settings_language_subtitle)) { showLanguagePicker() })
         content.addView(homeCard(getString(R.string.settings_currency), getString(R.string.settings_currency_subtitle)) { showCurrencyPicker() })
         content.addView(homeCard("Sensor debug", "Live tilt / lying-down and ambient light readings.") { showSensorDebug() })
@@ -8890,6 +8877,14 @@ private fun startWeekStrict() {
         row("Block overlay", if (Settings.canDrawOverlays(this)) "on" else "off", Settings.canDrawOverlays(this))
         val lock = UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)
         row("Uninstall lock", if (lock) "on" else "off", lock)
+        // Why the App-info page may not be bouncing: something on it is still ungranted, and
+        // that page is the only place left to grant it. Named rather than just flagged - see
+        // GrantWindow.
+        val pending = GrantWindow.outstanding(this)
+        row("App-info page bounce",
+            if (pending.isEmpty()) "armed"
+            else "STOOD DOWN - still to grant: ${pending.joinToString(", ")}",
+            pending.isEmpty())
 
         header("Active timers")
         row("App lockdown", if (Lockdown.isActive(this)) "${minLeft(Lockdown.remaining(this))} left" else "none", Lockdown.isActive(this))
@@ -8899,6 +8894,7 @@ private fun startWeekStrict() {
 
         header("Build")
         row("Dev mode", if (AppConfig.DEV_MODE) "on" else "off", AppConfig.DEV_MODE)
+        row("Premium mode", if (Premium.isOn(this)) "on (dev override)" else "off", Premium.isOn(this))
     }
 
     private fun renderStatus() {

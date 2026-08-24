@@ -1,15 +1,20 @@
 
 
+just simplify pages in general- strip out anything we don't need. reduce complexity...
 
 
 
 
 
+=======================================================================
+=======================================================================
+=======================================================================
+=======================================================================
 
 
-
-
-
+hmmm use sensors to also determine if youre in the house?
+then could have things that aren't allowed in house...
+then somethings just not allowed in bedroom....
 
 =======================================================================
 =======================================================================
@@ -40,7 +45,7 @@ has the above already been done?
     - remove search history... anonymously (without going through us..)?
     - ????
     - have priority when unblockng a part of the phone?
-
+    - super hardcore mode?
 
 
 - superhardcore users have to verify with us before downloading an app that we do not know about?
@@ -123,18 +128,17 @@ UP TO HERE
        a mock-location app IS an issue - HomeArea.isMock flags it, nothing acts on it yet)
 
 
-
-
 ---------
 cost for premium:
 $20 or $30
 
+---------
+
 
 =======================================================================
 =======================================================================
 =======================================================================
 =======================================================================
-
 
 Defo down theline;
 - the 'pay myself back' system.
