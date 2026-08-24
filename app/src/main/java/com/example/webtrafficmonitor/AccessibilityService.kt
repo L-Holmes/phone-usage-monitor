@@ -148,6 +148,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     private var lastPackage: String? = null
     private var lastHost: String? = null
+    // When lastHost was last actually READ off a bar, and the app it was read from. The
+    // timestamp bounds the fallback below (a host nobody has seen for a while is not
+    // evidence about the page in front of you); the package is what tells the "leave"
+    // button which browser is still parked on the blocked page.
+    private var lastHostAt = 0L
+    private var lastHostPkg: String? = null
     private var lastUrl: String? = null
     private var lastFullUrl: String? = null
 
@@ -976,7 +982,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // The bar text is the full address (URL or search), as a screen reader sees
         // it. The host is derived from it purely for blocking.
-        val barText = readAddressBarText()
+        val barText = readAddressBarText(packageName)
         // An app's OWN in-app browser has no toolbar we recognise, so fall back to reading
         // the domain out of its chrome (§2.5). Only when there is genuinely a web page on
         // screen and this is not a real browser - in a browser the address bar is the truth.
@@ -987,12 +993,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (packageName != lastPackage) {
             lastPackage = packageName
             lastHost = null
+            lastHostAt = 0L
+            lastHostPkg = null
             lastUrl = null
             lastFullUrl = null
         }
         // A host change makes any captured full URL stale.
         if (host != null && host != lastHost) lastFullUrl = null
-        if (host != null) lastHost = host
+        if (host != null) {
+            lastHost = host
+            lastHostAt = now
+            lastHostPkg = packageName
+        }
         if (barText != null) lastUrl = barText
         // A host change inside the same app is a new dopamine segment: browsing reddit.com
         // then youtube.com is two different categories, not one long "browser" blur.
@@ -1554,11 +1566,23 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun leaveBlockedPage(pkg: String, controller: OverlayController) {
         leaving = true
         if (AppBlocklist.isBrowser(pkg)) sendBrowserHome(pkg)
+        // The blocked host is not always the front app's. It can have been read from a
+        // browser sharing the screen, or carried in by the lastHost fallback above. Parking
+        // only `pkg` leaves THAT browser sitting on the blocked page, so the next evaluation
+        // re-reads it and the cover comes straight back - the button "does nothing".
+        lastHostPkg
+            ?.takeIf { it != pkg && AppBlocklist.isBrowser(it) }
+            ?.let { sendBrowserHome(it) }
         mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, LEAVE_REDIRECT_MS)
         mainHandler.postDelayed({
             controller.hide()
             shownBlockHost = null
             shownBlockUrl = null
+            // Drop the remembered host too. Leaving it set means the fallback can re-arm the
+            // very cover this button just took down, off a page the user has already left.
+            lastHost = null
+            lastHostAt = 0L
+            lastHostPkg = null
             leaving = false
         }, LEAVE_HIDE_MS)
     }
@@ -1667,7 +1691,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // page they haven't left yet. An existing cover is left exactly where it is.
         if (!controller.isShowing && isTypingInField()) return
 
-        val host = rawHost ?: lastHost.takeIf { AppBlocklist.isBrowser(packageName) }
+        // The fallback exists because a browser's bar is not readable on every single
+        // event (mid-navigation, bar scrolled away, chrome redrawing). It is NOT a licence
+        // to keep asserting a host indefinitely: unbounded, it pinned "reddit.com" onto a
+        // Tesco page minutes later and kept a cover up over it. If nothing has re-read the
+        // bar within HOST_FALLBACK_MS, we no longer claim to know what page this is.
+        val host = rawHost ?: lastHost.takeIf {
+            AppBlocklist.isBrowser(packageName) &&
+                System.currentTimeMillis() - lastHostAt <= HOST_FALLBACK_MS
+        }
 
         // The heuristic scorer needs real page text to judge. Explicit matches (your ban list,
         // the adult-domain blocklist) do not - they go off the URL, so a page you already
@@ -2115,12 +2147,39 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * ("https://en.wikipedia.org/wiki/Dog"). A plain depth-first walk hits the
      * host-only one first, which is why we were logging just the domain. So gather
      * ALL candidates and keep the richest.
+     *
+     * ⚠️ 2026-08-24 - AND ONLY FROM WINDOWS THAT ARE ACTUALLY IN FRONT, AND ACTUALLY THEIRS.
+     * This used to walk every entry in `windows` unfiltered. The window list keeps entries
+     * for apps that are merely still ALIVE, so the bar of a backgrounded browser was read
+     * and attributed to whatever app was really on screen: a Firefox tab sitting on
+     * "reddit.com" raised a banned-domain cover over the PLAY STORE. Nothing the cover
+     * offered could clear it either - Back and Home move the FOREGROUND, and the string
+     * holding the block up was in a window they do not touch - so every button looked dead
+     * and the phone was unusable. Same failure isReallyOnScreen was written for; see the
+     * warning on it. Do not drop either test.
      */
-    private fun readAddressBarText(): String? {
+    private fun readAddressBarText(forPackage: String?): String? {
         val candidates = mutableListOf<String>()
-        rootInActiveWindow?.let { collectAddressCandidates(it, depth = 0, out = candidates) }
-        for (window in windows) {
-            window.root?.let { collectAddressCandidates(it, depth = 0, out = candidates) }
+
+        // A window's bar only counts if the window belongs to the app this evaluation is
+        // ABOUT. Without that test the richest string on the whole device wins, whoever it
+        // belongs to - which is exactly how a background Firefox tab got attributed to the
+        // Play Store (see the note above).
+        fun collectFrom(root: AccessibilityNodeInfo?) {
+            if (root == null) return
+            if (forPackage != null && root.packageName?.toString() != forPackage) return
+            collectAddressCandidates(root, depth = 0, out = candidates)
+        }
+
+        collectFrom(rootInActiveWindow)
+        try {
+            for (window in windows) {
+                if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                if (!isReallyOnScreen(window)) continue
+                collectFrom(window.root)
+            }
+        } catch (_: Throwable) {
+            // windows can throw mid-transition; whatever the active window gave us stands.
         }
         return candidates.distinct().maxByOrNull { urlRichness(it) }?.take(MAX_URL_CHARS)
     }
@@ -2468,6 +2527,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         // Leaving a blocked page. The cover must outlive the Home animation, or the page it
         // is covering flashes back into view on the way out - see leaveBlockedPage.
+        // How long a host read off an address bar stays usable as a fallback once the bar
+        // has stopped being readable. Long enough to ride out a navigation, far short of
+        // "still the page you are on" minutes later.
+        private const val HOST_FALLBACK_MS = 10_000L
         private const val LEAVE_REDIRECT_MS = 220L   // let the browser take the new-tab intent
         private const val LEAVE_HIDE_MS = 900L       // cover comes off only once Home is in front
 
