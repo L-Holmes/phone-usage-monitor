@@ -9,6 +9,8 @@ import android.content.res.ColorStateList
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.Interpolator
 import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -106,6 +108,12 @@ object Palette {
     /** Cover screens and other "this is a wall" surfaces - see the note at the top. */
     const val cover = 0xFF171C22.toInt()
     const val coverText = 0xFFF4F6F8.toInt()
+    /**
+     * The pause sweep's panel. A deep blue: it has to read as a solid object moving over
+     * the near-black [cover], without the brand teal's glow - this is the one surface in
+     * the app whose whole job is to be looked at for several seconds.
+     */
+    const val sweep = 0xFF17335E.toInt()
 
     // ── Data / charts ───────────────────────────────────────────────────────────────
     // Ordered so adjacent series stay distinguishable. Use in order; don't cherry-pick.
@@ -180,6 +188,20 @@ object Motion {
     val easeOut: PathInterpolator get() = PathInterpolator(0.32f, 0.72f, 0f, 1f)
     /** Symmetric ease, for things that move and come back (press in / press out). */
     val standard: PathInterpolator get() = PathInterpolator(0.4f, 0f, 0.2f, 1f)
+
+    // ── The pause sweep ─────────────────────────────────────────────────────────────
+    // The one exception to "never above [slow]": the pause gate's panel is not a
+    // transition, it is the thing you are meant to watch, and it runs for seconds. Its
+    // two curves live here so the gate and the in-app pages move identically.
+
+    /** Up: away at once, easing off as it reaches the top. */
+    val sweepUp: Interpolator get() = DecelerateInterpolator(1.6f)
+    /**
+     * Down: starts slow, drifts through the middle, and settles with only a slight
+     * deceleration into the bottom. Deliberately NOT the mirror of [sweepUp] - coming
+     * down is the part you are waiting out, and it should feel unhurried.
+     */
+    val sweepDown: Interpolator get() = PathInterpolator(0.45f, 0f, 0.75f, 1f)
 }
 
 // ── Unit helpers ────────────────────────────────────────────────────────────────────

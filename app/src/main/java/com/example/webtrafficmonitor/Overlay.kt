@@ -78,8 +78,6 @@ import android.view.Gravity
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.LinearLayout
 import android.graphics.Typeface
-import android.view.ViewTreeObserver
-import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.graphics.Path
 
@@ -245,133 +243,84 @@ class OverlayController(private val context: Context) {
 
 
 // =====================================================================================
-// BreathingOverlay - a calming "take a breath" gate shown before chosen apps open
+// PauseOverlay - the pause gate shown before a chosen app opens
 // -------------------------------------------------------------------------------------
-// ⚠️ 2026-08-11 - REWRITTEN FROM SCRATCH. Read this before touching anything below.
+// ⚠️ 2026-08-24 - REWRITTEN, and the second rewrite of the day. What is on screen is:
 //
-// The old version had no single description of what was on screen. The breath could start
-// from a first-draw hook, a window-manager nudge, or a timed fallback; the buttons could be
-// handed over by an animation-completed callback, or a "has the orb moved yet?" watchdog,
-// or a deadline; and the window came down on a ceiling that rescheduled ITSELF depending on
-// which of those had happened. Every one of those paths was a guess about what had already
-// gone wrong, and when two of them disagreed you got the bug that matters: a full-screen
-// cover reading "Breathe in", frozen, with a phone behind it that could not be used.
+//   dark cover  ->  a solid panel rises from the bottom and covers it  ->  the panel
+//   comes back down, uncovering the buttons underneath  ->  the buttons go live.
 //
-// So there is now ONE clock and ONE function. [frame] derives the ENTIRE screen - orb size,
-// phase label, controls, whether the buttons are live - from milliseconds elapsed since the
-// breath began, and from nothing else. It keeps no state between calls, so no call can
-// leave the screen half-updated: a tick that arrives late (screen off, animator duration
-// scale 0, render thread stalled) just computes the state for the time it actually is now.
-// A tick that never arrives at all is covered by absolute deadlines posted up front, which
-// is the whole reason they are absolute and posted up front.
+// That is the whole thing. No orb, no phase label, no "tap if nothing happens" hint, and
+// no per-frame work of our own: the panel is ONE view moved by [SweepAnimator], the same
+// driver the in-app pages use.
 //
-// The rules, each of which is a bug that already happened - do not drop one without reading
-// the comment attached to it:
-//   • the escape tap is live from TAP_ESCAPE_MS onwards, and the hint that says so STAYS on
-//     screen until the real buttons replace it;
-//   • the window has an unconditional lifetime measured from the moment it went up, and
-//     nothing may slide it;
-//   • the clock starts on the first PAINTED frame - but capped, because waiting on a frame
-//     that never comes is how you end up staring at a static word.
+// THE TWO BUGS THE FIRST SWEEP REWRITE HAD - do not reintroduce either:
+//
+//  1. NO FLAG_HARDWARE_ACCELERATED. A window added by a SERVICE does not get hardware
+//     acceleration by default the way an Activity's does, so every frame re-rasterised a
+//     full-screen panel in software on the service's main thread. That is what made the
+//     phone feel frozen with a blank cover on it. The flag below is not an optimisation,
+//     it is the difference between a translationY the GPU applies to a cached display
+//     list and a full-screen software redraw thirty times a second.
+//
+//  2. IT WAITED TO START. The sweep hung off a first-draw hook on the panel - which, at
+//     rest, sits entirely below the screen, gets clipped away, and never draws - so the
+//     start always fell through to a 600ms timer. There is no hook and no timer now: the
+//     sweep starts on the same line that puts the window up.
+//
+//  3. THE ANIMATOR'S "still attached?" GUARD FIRED BEFORE THE FIRST ATTACH. See
+//     SweepAnimator - a view is not attached until its window's first traversal, so a
+//     sweep started this early saw "detached" on frame one and stopped itself for good.
+//     That was "sometimes it never starts at all".
+//
+// The buttons must become live and the window must come down even if the animation never
+// runs a single frame, so both of those are absolute Handler deadlines posted up front -
+// they know nothing about the sweep and nothing may slide them.
 // =====================================================================================
 
-class BreathingOverlay(private val context: Context) {
+class PauseOverlay(private val context: Context) {
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val handler = Handler(Looper.getMainLooper())
 
     private var view: View? = null
-    private var orb: BreathOrbView? = null
-    private var phaseLabel: TextView? = null
-    private var tapHint: TextView? = null
+    private var panel: SweepPanelView? = null
+    private var sweep: SweepAnimator? = null
     private var controls: View? = null
     private var dontWantBtn: Button? = null
 
-    /** uptimeMillis the window went up. The escape tap and the lifetime arm off this. */
+    /** uptimeMillis the window went up. The escape tap arms off this. */
     private var shownAt = 0L
-    /** uptimeMillis the breath's clock started, or 0 while we're still waiting for a frame. */
-    private var startedAt = 0L
-    /** True once the buttons are live. The screen stops changing after this. */
+    /** True once the buttons are live. Nothing on screen changes after this. */
     private var released = false
-    /** What the phase label currently says, so [frame] isn't re-setting text 60 times a second. */
-    private var phaseShown: Boolean? = null
 
     val isShowing: Boolean get() = view != null
 
-    // The breathing gate is a full-screen cover, so it uses the cover palette rather than
-    // the page palette - the same dark surface as a block, for the same reason: it has to
-    // read as "stop", and it has to work over whatever app is underneath it.
+    // A full-screen cover, so it uses the cover palette rather than the page palette - the
+    // same dark surface as a block, for the same reason: it has to read as "stop", and it
+    // has to work over whatever app is underneath it.
     private val accent = Palette.tint
     private val accentMuted = Palette.tintDeep
     private val bg = Palette.cover
-    private val softText = Palette.tintSoft
-
-    private val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
-    private val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
 
     fun show(appLabel: String, onContinue: () -> Unit, onDontWant: () -> Unit) {
         if (view != null) return
         released = false
-        startedAt = 0L
-        phaseShown = null
         shownAt = SystemClock.uptimeMillis()
         val dm = context.resources.displayMetrics
         fun dp(v: Int) = (v * dm.density).toInt()
 
         val root = FrameLayout(context).apply { setBackgroundColor(bg) }
 
-        // A CIRCLE. The orb used to be sized off the screen's DIAGONAL, so at full inhale
-        // its gradient ran past all four corners and what you actually watched was the
-        // rectangle brightening - there was no edge anywhere on screen. Sized off the short
-        // edge (see OrbFill.COVER) it stays a disc with a visible rim, which is the only
-        // reason breathing WITH something works: you need to see where it is going.
-        val orbView = BreathOrbView(context, accent, OrbFill.COVER)
-        root.addView(orbView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
-        val phase = TextView(context).apply {
-            textSize = 16f
-            setTextColor(softText)
-            alpha = 0.55f
-            gravity = Gravity.CENTER
-            text = context.getString(R.string.overlay_breathe_in)
-        }
-        root.addView(phase, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
-                topMargin = (dm.heightPixels * 0.17f).toInt()
-            })
-
-        // THE HINT STAYS UP. It used to flash for a moment and fade to nothing, so for the
-        // rest of the breath the screen offered no way out and no sign that there was one -
-        // which is what being trapped behind this thing feels like even on the runs where it
-        // is working perfectly. It is quiet, and it leaves when the real buttons arrive.
-        val hint = TextView(context).apply {
-            text = context.getString(R.string.overlay_tap_hint)
-            textSize = 13f
-            setTextColor(softText)
-            alpha = 0f
-            gravity = Gravity.CENTER
-        }
-        root.addView(hint, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
-                topMargin = (dm.heightPixels * 0.17f).toInt() + dp(30)
-            })
-
-        // Bottom block: lifted ~14% off the bottom (was ~20%, now down ~6vh).
-        //
-        // hasOverlappingRendering is refused deliberately. [frame] fades this in over the
-        // whole exhale, and a ViewGroup at alpha < 1 that admits to overlapping children
-        // gets an offscreen buffer allocated and thrown away EVERY FRAME. Its two children
-        // are stacked, not overlapping, so per-child alpha is both correct and free.
-        val controlBlock = object : LinearLayout(context) {
-            override fun hasOverlappingRendering() = false
-        }.apply {
+        // ── THE BUTTONS, UNDERNEATH ─────────────────────────────────────────────────
+        // Added BEFORE the panel, so the panel covers them and the way down uncovers
+        // them. They are INVISIBLE until the panel is over the top of them - otherwise
+        // the gate opens with its exit already on screen, which is the one thing it must
+        // not do. Not pressable until [released] either way.
+        val controlBlock = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            alpha = 0f
             visibility = View.INVISIBLE
             setPadding(dp(20), 0, dp(20), (dm.heightPixels * 0.14f).toInt())
         }
@@ -397,7 +346,6 @@ class BreathingOverlay(private val context: Context) {
             textSize = 14f
             setTextColor(Palette.tint)
             gravity = Gravity.CENTER
-            // More gap above the "continue" line so it sits a bit lower.
             setPadding(dp(16), dp(28), dp(16), dp(4))
             setOnClickListener { if (released) onContinue() }
         }
@@ -408,148 +356,112 @@ class BreathingOverlay(private val context: Context) {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM))
 
+        // ── THE PANEL, ON TOP ───────────────────────────────────────────────────────
+        // Palette.sweep, not the brand accent: this panel is a solid object crossing the
+        // screen for ten seconds, and the teal glowed.
+        val sweepPanel = SweepPanelView(context, Palette.sweep)
+        root.addView(sweepPanel, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-            overlayType(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.OPAQUE)
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                // See bug 1 in the header. Without this the whole cover is drawn in
+                // software, on the service's main thread, every single frame.
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.OPAQUE)
 
         try {
             windowManager.addView(root, params)
         } catch (t: Throwable) {
-            android.util.Log.e("BreathingOverlay", "could not show", t)
+            android.util.Log.e("PauseOverlay", "could not show", t)
             return                                  // nothing was adopted; nothing to undo
         }
         view = root
-        orb = orbView
-        phaseLabel = phase
-        tapHint = hint
+        panel = sweepPanel
         controls = controlBlock
         dontWantBtn = dontWant
 
         // ── THE ESCAPE ──────────────────────────────────────────────────────────────
-        // Armed here, on the way up, and never conditional on the breath: whatever the
-        // animation is or isn't doing, a tap goes through. Once the real buttons are live
-        // the background stops being a target, so a stray tap can't fling you into the app
-        // past a decision you were halfway through making. TAP_ESCAPE_MS keeps the tap that
-        // launched the app in the first place from carrying into the cover on top of it.
+        // Silent, and never conditional on the animation: whatever the panel is or isn't
+        // doing, a tap after TAP_ESCAPE_MS goes through. (The gap keeps the tap that
+        // launched the app from carrying into the cover that lands on top of it.) There
+        // is no label for it any more - it is a safety valve, not an instruction.
         root.isClickable = true
         root.setOnClickListener {
             if (released) return@setOnClickListener            // the buttons are up; use them
             if (SystemClock.uptimeMillis() - shownAt >= TAP_ESCAPE_MS) onContinue()
         }
-        hint.animate().alpha(0.45f).setStartDelay(TAP_ESCAPE_MS).setDuration(500).start()
 
-        // ── THE CLOCK ───────────────────────────────────────────────────────────────
-        // First PAINTED frame, or CLOCK_CAP_MS, whichever comes first.
+        // ── THE START ───────────────────────────────────────────────────────────────
+        // Now. Not on the first painted frame, not after a safety cap - the sweep starts
+        // in the same breath as the window goes up, because every millisecond between
+        // opening an app and something moving on screen reads as the gate being broken.
         //
-        // Being laid out is not the same as being on screen: adding a window while the
-        // launching app is still animating in means the cover can composite late, and a
-        // breath timed from addView would then be half over (or wholly over) by the time
-        // anyone could see it. So the clock waits for a real frame - but only briefly,
-        // because "wait for a frame that never comes" is the other half of the same bug,
-        // and it is the half that leaves a word sitting motionless on a dark screen.
-        orbView.onFirstDraw = { begin() }
-        handler.postDelayed({ begin() }, CLOCK_CAP_MS)
+        // The old first-frame hook was there so a late-compositing window would not show
+        // a sweep that was already part-way through. The trade was wrong: it bought a
+        // fraction of a second of correctness at the top of the rise and paid for it with
+        // a blank screen every single time. The panel handles being started before layout
+        // (see SweepPanelView.applyProgress).
+        begin(root, sweepPanel)
 
         // ── THE TWO DEADLINES ───────────────────────────────────────────────────────
         // Absolute, posted now, and deliberately ignorant of everything above. If the
-        // ticker never runs a single frame, THESE are what hand the phone back.
+        // sweep never runs a frame, THESE are what hand the phone back.
         handler.postDelayed(
             { if (view === root) release() },
-            CLOCK_CAP_MS + BREATH_MS + RELEASE_SLACK_MS,
+            UP_MS + DOWN_MS + RELEASE_SLACK_MS,
         )
         handler.postDelayed({
             if (view !== root) return@postDelayed
-            // The window comes down FIRST and by our own hand, then the service is told, so
-            // that a caller who mishandles onContinue still cannot leave a cover on screen.
+            // The window comes down FIRST and by our own hand, then the service is told,
+            // so a caller who mishandles onContinue still cannot leave a cover on screen.
             hide()
             onContinue()
         }, MAX_LIFETIME_MS)
     }
 
-    /** Start the breath's clock. Idempotent - both of its callers race deliberately. */
-    private fun begin() {
-        if (view == null || startedAt != 0L) return
-        startedAt = SystemClock.uptimeMillis()
-        handler.removeCallbacks(tick)
-        handler.post(tick)
-    }
-
-    private val tick = object : Runnable {
-        override fun run() {
-            if (view == null || released) return
-            frame(SystemClock.uptimeMillis() - startedAt)
-            if (view != null && !released) handler.postDelayed(this, FRAME_MS)
+    /** Run the one sweep. Idempotent - its two callers race deliberately. */
+    private fun begin(root: View, sweepPanel: SweepPanelView) {
+        if (view !== root || sweep != null || released) return
+        sweep = SweepAnimator(sweepPanel, UP_MS, DOWN_MS).also {
+            it.start(cycles = 1, onComplete = { release() })
         }
+        // The buttons appear UNDER the panel at the top of the sweep, so the way down is
+        // what uncovers them. One posted message, no per-frame work.
+        handler.postDelayed({ controls?.visibility = View.VISIBLE }, UP_MS)
     }
 
     /**
-     * The whole screen, as a pure function of [elapsed] milliseconds of breath.
+     * The sweep is over, or was never going to happen: hand the phone back.
      *
-     * Call it at any moment, out of order, twice with the same value: the result is the
-     * same. That is the property the old version lacked and the reason it could get stuck -
-     * there is no "we already did the exhale" state to be wrong about.
+     * The panel is PUT BACK DOWN by hand rather than left wherever the animation got to.
+     * A sweep that stalled while covering the screen would otherwise sit on top of the
+     * buttons this just made live - a cover with no way out is the one failure this
+     * screen must never produce, and it is not allowed to depend on the animation.
      */
-    private fun frame(elapsed: Long) {
-        val orbView = orb ?: return
-        val controlBlock = controls ?: return
-        when {
-            elapsed < INHALE_MS -> {
-                orbView.progress = inhaleEase.getInterpolation(elapsed.toFloat() / INHALE_MS)
-                setPhase(inhaling = true)
-            }
-            elapsed < BREATH_MS -> {
-                val t = (elapsed - INHALE_MS).toFloat() / EXHALE_MS
-                orbView.progress = 1f - exhaleEase.getInterpolation(t)
-                setPhase(inhaling = false)
-                // The choice arrives WITH the exhale rather than after it, so the last
-                // seconds are spent looking at a way out instead of at a screen that might
-                // as well be broken. It is not pressable yet - see [released].
-                controlBlock.visibility = View.VISIBLE
-                controlBlock.alpha = 0.25f + 0.55f * t
-            }
-            else -> { release(); return }
-        }
-        // The label breathes with the orb, off the same clock. The old one had its own
-        // second animator for this, which is one more thing that could be left running.
-        phaseLabel?.alpha = 0.55f + 0.45f * orbView.progress
-    }
-
-    private fun setPhase(inhaling: Boolean) {
-        if (phaseShown == inhaling) return
-        phaseShown = inhaling
-        phaseLabel?.setText(
-            if (inhaling) R.string.overlay_breathe_in else R.string.overlay_breathe_out
-        )
-    }
-
-    /** The breath is over, or was never going to happen: hand the phone back. */
     private fun release() {
         if (released || view == null) return
         released = true
-        handler.removeCallbacks(tick)
-        orb?.progress = 0f
-        phaseLabel?.animate()?.alpha(0f)?.setDuration(300)?.start()
-        tapHint?.let { it.animate().cancel(); it.animate().alpha(0f).setDuration(300).start() }
-        controls?.let {
-            it.animate().cancel()
-            it.visibility = View.VISIBLE
-            it.alpha = 1f
-        }
+        sweep?.stop()
+        panel?.progress = 0f
+        controls?.visibility = View.VISIBLE
         (dontWantBtn?.background as? GradientDrawable)?.setColor(accent)
     }
 
     fun hide() {
         handler.removeCallbacksAndMessages(null)
+        sweep?.stop()
+        sweep = null
         val gone = view
         // Dropped BEFORE the removeView, so anything re-entering through a listener (the
         // lifetime deadline calls hide() and then the service, which calls hide() again)
         // sees a controller that already owns nothing.
         view = null
-        orb = null; phaseLabel = null; tapHint = null; controls = null; dontWantBtn = null
+        panel = null; controls = null; dontWantBtn = null
         released = false
-        startedAt = 0L
         shownAt = 0L
-        phaseShown = null
         if (gone != null) {
             // removeView can throw if the window has already gone (the service was killed
             // and restarted, say) - but try removeViewImmediate as a second attempt first,
@@ -559,7 +471,7 @@ class BreathingOverlay(private val context: Context) {
                 windowManager.removeView(gone)
             } catch (t: Throwable) {
                 try { windowManager.removeViewImmediate(gone) } catch (_: Throwable) {}
-                android.util.Log.e("BreathingOverlay", "could not remove", t)
+                android.util.Log.e("PauseOverlay", "could not remove", t)
             }
         }
     }
@@ -567,19 +479,19 @@ class BreathingOverlay(private val context: Context) {
     private companion object {
         /**
          * How long after the cover appears a background tap starts letting you through.
-         * Short - the point is that the escape is real - but not zero, so the tap that
-         * opened the app can't carry through into the cover that lands on top of it.
+         * Short - the escape is real - but not zero, so the tap that opened the app can't
+         * carry through into the cover that lands on top of it.
          */
         const val TAP_ESCAPE_MS = 900L
-        /** No painted frame by this point: start the breath anyway rather than wait on one. */
-        const val CLOCK_CAP_MS = 600L
-        const val INHALE_MS = 3_500L
-        const val EXHALE_MS = 4_500L
-        const val BREATH_MS = INHALE_MS + EXHALE_MS
-        /** Slop the deadline release allows on top of a whole breath before it steps in. */
+        const val UP_MS = 3_500L
+        /**
+         * Longer than the way up, on purpose: coming down is what you sit through while
+         * the buttons are uncovered, and hurrying it makes the gate feel like a loading
+         * screen. See Motion.sweepDown for the curve.
+         */
+        const val DOWN_MS = 6_200L
+        /** Slop the deadline release allows on top of a whole sweep before it steps in. */
         const val RELEASE_SLACK_MS = 1_500L
-        /** ~60fps of view-property sets. Nothing is re-rasterised, so this is cheap. */
-        const val FRAME_MS = 16L
         /** Nothing this app draws over the whole screen may outlive this, for any reason. */
         const val MAX_LIFETIME_MS = 20_000L
     }

@@ -346,7 +346,77 @@ object BypassWatch {
 
 
 // =====================================================================================
-// BreathingGate  (how often the app-open breathing pause is allowed to fire)
+// PauseApps  (WHICH apps get the app-open pause screen)
+// =====================================================================================
+/**
+ * The list the pause gate works from: [AppConfig.BREATHING_APPS] as shipped, plus
+ * whatever the user has added on Phone Checking → the pause-screen apps page, minus any
+ * shipped one they have turned off.
+ *
+ * Stored as two package sets rather than one list of "the current apps", so a default
+ * added in a later version turns up for everyone who has not explicitly said no to it -
+ * a saved list would freeze the shipped set at whatever it was on the day they first
+ * opened the page.
+ *
+ * WHICH apps is all this decides. HOW OFTEN the pause may then fire is [BreathingGate]'s
+ * call, and whether it fires at all is the mode's - an app added here still never pauses
+ * anything in Off or Relaxed.
+ */
+object PauseApps {
+
+    private const val PREFS = "pause_apps"
+    private const val KEY_ADDED = "added"
+    private const val KEY_OFF = "off"
+
+    // Resolved once and held, because [contains] is called on the app-launch path - the
+    // one place in this app where a few milliseconds are visible to the user. Both writers
+    // below drop it, and they are the only way the sets can change.
+    @Volatile private var cached: Set<String>? = null
+
+    /** Every package that currently gets the pause screen. */
+    fun all(ctx: Context): Set<String> = cached ?: run {
+        val resolved = (AppConfig.BREATHING_APPS - off(ctx)) + added(ctx)
+        cached = resolved
+        resolved
+    }
+
+    fun contains(ctx: Context, pkg: String): Boolean = pkg in all(ctx)
+
+    /** Turn the pause screen on for [pkg]. Undoes a turn-off of a shipped app. */
+    fun add(ctx: Context, pkg: String) {
+        prefs(ctx).edit()
+            .putStringSet(KEY_OFF, off(ctx) - pkg)
+            .putStringSet(KEY_ADDED, if (pkg in AppConfig.BREATHING_APPS) added(ctx) else added(ctx) + pkg)
+            .apply()
+        // AFTER the write, never before: apply() updates the in-memory map synchronously,
+        // so dropping the cache first leaves a window where a read re-caches the old sets.
+        cached = null
+    }
+
+    /** Turn it off for [pkg], whether it was one of ours or one of theirs. */
+    fun remove(ctx: Context, pkg: String) {
+        prefs(ctx).edit()
+            .putStringSet(KEY_ADDED, added(ctx) - pkg)
+            .putStringSet(KEY_OFF, if (pkg in AppConfig.BREATHING_APPS) off(ctx) + pkg else off(ctx))
+            .apply()
+        cached = null
+    }
+
+    // getStringSet hands back the live stored set, and mutating it is undefined - so every
+    // read copies before anything downstream can touch it.
+    private fun added(ctx: Context): Set<String> =
+        prefs(ctx).getStringSet(KEY_ADDED, emptySet())!!.toSet()
+
+    private fun off(ctx: Context): Set<String> =
+        prefs(ctx).getStringSet(KEY_OFF, emptySet())!!.toSet()
+
+    private fun prefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+
+// =====================================================================================
+// BreathingGate  (how often the app-open pause screen is allowed to fire)
 // =====================================================================================
 /**
  * Decides whether opening a watched app earns a breathing pause right now.
@@ -395,7 +465,10 @@ object BreathingGate {
 
     fun resetAll(ctx: Context) = prefs(ctx).edit().clear().apply()
 
-    private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    // One formatter, not one per call: this is read on every open of a gated app.
+    private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    private fun today(): String = dayFormat.format(Date())
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

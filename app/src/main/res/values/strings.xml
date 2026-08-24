@@ -135,7 +135,7 @@
     <string name="ride_peak_body">An urge peaks within the first 30 seconds or so - and you just rode straight through it. From here it only fades. You can get through this.</string>
     <string name="ride_success_stats">%1$d ridden out  ·  %2$d this week</string>
     <string name="ride_lock_apps">or lock apps for 30 minutes</string>
-    <string name="ride_follow_orb">Follow the orb - %1$d slow breaths</string>
+    <string name="ride_follow_sweep">Follow the sweep - %1$d slow rounds</string>
     <string name="ride_ms_10">10 minutes in - it\'s faded. You did this.</string>
     <string name="ride_ms_2">2 minutes in - you\'re riding it out.</string>
     <string name="ride_ms_1">1 minute in - the peak has passed.</string>
@@ -239,7 +239,7 @@
     <string name="moderules_section_modes">THE MODES - WHAT CHANGES</string>
     <string name="moderules_current">You are in this mode right now</string>
     <string name="moderules_lock">Strict lock is running: %1$s left. You cannot go back to Relaxed until it ends. You can still go up to Super hardcore.</string>
-    <string name="moderules_watched">\"Watched apps\" are the ones that get the breathing pause: %1$s.</string>
+    <string name="moderules_watched">\"Watched apps\" are the ones that get the pause screen: %1$s.</string>
 
     <!-- Always-on rules (shown in every mode). 8/9/10 and 18/19/20 take numeric args. -->
     <string name="always_on_01">One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.</string>
@@ -274,17 +274,17 @@
         <item>The Productivity page and its screen-time stats keep working either way.</item>
     </string-array>
     <string-array name="mode_relaxed_rules">
-        <item>Breathing pause: NEVER. Watched apps open straight away.</item>
+        <item>Pause screen: NEVER. Watched apps open straight away.</item>
         <item>Greyscale: off. Your screen stays in colour.</item>
-        <item>Lying down or sitting in the dark changes nothing. Every app still opens.</item>
+        <item>Lying down or sitting in the dark changes nothing. Every app still opens - and no mode blocks on posture any more.</item>
         <item>The \"who is the filter for\" switches (Adult content -&gt; Settings) can be changed here (and in Off). In any stricter mode they are forced fully on.</item>
         <item>Everything in \"Always on\" above still applies - blocking does not stop in Relaxed. Known adult sites, reddit (and every mirror/frontend of it), imageboards, a hand-picked borderline list and non-Google search engines are all still blocked here.</item>
         <item>You can switch out of this mode whenever you like, unless the 7-day strict lock is running - but if you have ever been Strict, Off is no longer one of the choices.</item>
     </string-array>
     <string-array name="mode_strict_rules">
-        <item>Breathing pause: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.</item>
+        <item>Pause screen: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.</item>
         <item>The daily pass resets at midnight.</item>
-        <item>NIGHT GUARD: none in Strict. Lying down never blocks anything here - that only happens in Super hardcore. A dark room blocks nothing in any mode.</item>
+        <item>NIGHT GUARD: gone, in every mode. Lying down never blocks an app any more - not here, and not in Super hardcore. A dark room blocks nothing either.</item>
         <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
         <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
         <item>WHERE YOU LIVE: Strict asks you, once, to save where home is. Nothing in Strict acts on it - you are setting it up so it is ready if you ever go to Super hardcore, where being at home is what makes one word enough to close an app. It is GPS and nearby Wi-Fi, on this device only; nothing leaves the phone, and a VPN cannot move it. Set it up any time from Overview → Where you are.</item>
@@ -296,10 +296,10 @@
         <item>The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.</item>
     </string-array>
     <string-array name="mode_superhardcore_rules">
-        <item>Breathing pause: EVERY single time you open a watched app. There is no daily pass.</item>
+        <item>Pause screen: EVERY single time you open a watched app. There is no daily pass.</item>
         <item>Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.</item>
-        <item>NIGHT GUARD - only in this mode: while you are LYING DOWN, only the essentials open - calls, texts, alarms, contacts, camera, maps. Everything else, WhatsApp included, is blocked until you sit up. A dark room on its own no longer blocks anything: the light sensor is on the front of the phone, so a hand over it or a dim room you are entitled to be in read the same as lights-out. It is the posture this mode acts on.</item>
-        <item>Greyscale: your screen turns grey while you are lying down, same as Strict.</item>
+        <item>NIGHT GUARD: gone. Lying down used to block everything but the essentials here - it no longer blocks anything, in any mode. A dark room does not block anything either.</item>
+        <item>Greyscale: your screen still turns grey while you are lying down, same as Strict. That is now the only thing posture changes.</item>
         <item>Everything in \"Always on\" above still applies.</item>
         <item>The borderline-pattern rule from Strict applies here too.</item>
         <item>AT HOME, ONE WORD IS ENOUGH - only in this mode. When the phone can see it is at your house, the detection ladder collapses to one: the first sexual word detected in an app closes it, with no second look and no waiting to see whether it comes back. The house is where it happens, and this is the mode that says so.</item>
@@ -495,7 +495,7 @@
     <string name="loosen_min">%1$d min</string>
     <string name="loosen_unlock_for">Unlock for %1$d min</string>
     <string name="loosen_unlocked_title">Unlocked for %1$d min</string>
-    <string name="loosen_unlocked_body">The breathing orb and image friction stay on. It re-locks itself when the timer ends.</string>
+    <string name="loosen_unlocked_body">The pause screen and image friction stay on. It re-locks itself when the timer ends.</string>
     <string name="loosen_go">Go</string>
     <string name="loosen_relocked">Re-locked</string>
     <string name="loosen_continue_now">you can continue now</string>
@@ -663,7 +663,7 @@
     <string name="dop_guid_h6">Slow down.</string>
     <string name="dop_guid_b6">A high interaction rate means thumbing a feed. A low one means reading something. The same hour can be either.</string>
     <string name="dop_guid_h7">Get out of bed, and turn a light on.</string>
-    <string name="dop_guid_b7">Lying down in the dark with a phone is the single most reliable setup for a bad night. Super hardcore\'s night guard exists for exactly this - it acts on the lying down half.</string>
+    <string name="dop_guid_b7">Lying down in the dark with a phone is the single most reliable setup for a bad night. Nothing blocks on posture any more, so this one is on you - but it still costs you points here.</string>
     <string name="dop_guid_honest">\nAnd the honest bit: this recovers slowly. The anti-rules in the score are weak on purpose, because a walk does not undo a four-hour binge and a number that pretended otherwise would be useless to you.</string>
     <string name="dop_adv_adult">This is the one this whole app is built around. Everything on the Adult Content page - strict mode, the ban list, the night guard - is aimed at exactly this.</string>
     <string name="dop_adv_fastvideo">Short-form video is the most concentrated dose available to you. Turn on the short-form block (Temptations → Endless Scrolling) and the feeds die while the rest of the app still works.</string>
@@ -677,7 +677,7 @@
     <string name="dop_adv_straightin">You unlocked and were in a feed before you\'d thought about it. That\'s the purest autopilot there is. Moving the app off your home screen breaks the reflex more than willpower does.</string>
     <string name="dop_adv_checking">Opening the same app over and over in an hour is a tic, not a use. The grey tier (a few minutes an hour, then it closes) is built for it.</string>
     <string name="dop_adv_scrolling">A high rate means you\'re thumbing, not reading. Slowing down IS the intervention.</string>
-    <string name="dop_adv_lyingdark">Super hardcore\'s night guard blocks non-essential apps while you are lying down. It\'s the single highest-leverage switch you have.</string>
+    <string name="dop_adv_lyingdark">Phone use lying down is what costs you most here. No mode blocks it for you now - but Strict and Super hardcore both grey the screen while you are lying down, which takes most of the pull out of it.</string>
     <string name="dop_adv_default">Cut the time first. It outweighs everything else in the score.</string>
     <string name="dop_life_title">Your habits estimate</string>
     <string name="dop_life_banner">This does NOT affect your dopamine baseline.\n\nIt\'s self-reported, so it can\'t - otherwise you could tick a few boxes and watch the number you came here to face go down. This is a separate estimate of the restorative side of your life, and it runs the other way: HIGHER IS BETTER.</string>
@@ -950,7 +950,7 @@
     <string name="temp_block_sub_on">Blocking %1$d site(s)%2$s.  Tap to turn off.</string>
     <string name="temp_block_sub_off">Blocks %1$d site(s)%2$s.  Tap to turn on.</string>
     <string name="temp_ride_title">Ride it out</string>
-    <string name="temp_ride_body">The pull peaks fast, then fades. Follow the orb - %1$d slow breaths.</string>
+    <string name="temp_ride_body">The pull peaks fast, then fades. Follow the sweep - %1$d slow rounds.</string>
     <string name="temp_ride_done_btn">I\'ve got through it</string>
     <string name="temp_ride_paced">Done - nicely paced</string>
     <string name="temp_ride_counter">%1$d of %2$d done</string>
@@ -959,6 +959,16 @@
     <string name="temp_ridden_out">%1$d ridden out</string>
     <string name="temp_put_down">Put the phone down</string>
     <string name="temp_put_down_sub">closes the app</string>
+
+    <!-- ── Pause-screen apps (Main.showPauseApps) ───────────────────────────────────── -->
+    <string name="pauseapps_open_title">Which apps pause first</string>
+    <string name="pauseapps_open_sub">%1$d app(s) stop for a moment before they open. Add your own.</string>
+    <string name="pauseapps_title">Pause screen apps</string>
+    <string name="pauseapps_sub">These apps stop for a moment before they open. How often is your mode\'s call: never in Off or Relaxed, the first open of the day in Strict, every single open in Super hardcore.</string>
+    <string name="pauseapps_on_header">STOPS FOR THESE</string>
+    <string name="pauseapps_add_header">TAP AN APP TO ADD IT</string>
+    <string name="pauseapps_none">Nothing pauses right now.</string>
+    <string name="pauseapps_tag">On</string>
 
     <!-- ── Phone-checking measures (CheckingGuard, rendered by Main.checkingCard) ────── -->
     <string name="checking_master_on">●  Checking measures on</string>
@@ -1146,10 +1156,7 @@
     <string name="br_new_app_block">%1$s\n\nThis app is new here - on your phone %2$d day(s) - so one detection is enough. An app you had used for months would have had two more chances before this screen.</string>
     <string name="br_home_block">%1$s\n\nYou are at your house, in Super hardcore. Here there is no second look: the first thing detected closes the app. Anywhere else, this one would have been let go.</string>
 
-    <!-- ── Breathing gate overlay (Overlay.kt) ─────────────────────────────────────── -->
-    <string name="overlay_breathe_in">Breathe in</string>
-    <string name="overlay_breathe_out">Breathe out</string>
+    <!-- ── Pause gate overlay (Overlay.kt) ─────────────────────────────────────────── -->
     <string name="overlay_dont_want">I don\'t want to access %1$s</string>
     <string name="overlay_continue_open">Continue to open %1$s</string>
-    <string name="overlay_tap_hint">If nothing happens, tap to enter</string>
 </resources>

@@ -114,7 +114,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var overlay: OverlayController? = null
     private val keyguard by lazy { getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
 
-    private var breathing: BreathingOverlay? = null
+    private var breathing: PauseOverlay? = null
     private var lastForegroundPkgForBreathing: String? = null
     /** The app the orb currently on screen belongs to, or null when no orb is up. */
     private var breathingPkg: String? = null
@@ -195,7 +195,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Raise the breathing orb for [pkg] and start watching for the moment it goes stale.
+     * Raise the pause gate for [pkg] and start watching for the moment it goes stale.
      * The ONLY place the orb goes up, so the watch can never be forgotten.
      */
     private fun raiseBreath(pkg: String) {
@@ -474,7 +474,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // (Accessibility is on by definition here - only the overlay needs checking.)
         Mode.migrateIfUnset(this, Settings.canDrawOverlays(this))
         overlay = OverlayController(this)
-        breathing = BreathingOverlay(this)
+        breathing = PauseOverlay(this)
+        // Warm the pause-app list here rather than on the first app open: the first read
+        // of a prefs file blocks on disk, and the hot path for that read is the moment an
+        // app is being launched.
+        PauseApps.all(this)
         FilterData.init(this)          // load word/app/domain lists from assets/filter/
         BlockRules.load(this)
         AppBlocklist.refresh(this)
@@ -897,6 +901,23 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             dropBreath()
         }
 
+        // ---- While the pause gate is up, do NOTHING with content events. ----
+        // ⚠️ 2026-08-24 - this is what made the sweep freeze mid-rise and then jump.
+        // The gate's panel animates on the accessibility service's MAIN THREAD, and the
+        // page path below walks the whole node tree on that same thread - readAddressBar,
+        // hasWebView, the in-app-browser host read, the text scan. On a heavy page
+        // (Firefox Nightly is the reliable case) one of those walks is tens of
+        // milliseconds, they arrive in bursts while a page loads, and the panel simply
+        // stops until they let go of the thread.
+        //
+        // None of that work is worth anything here: the app underneath is covered and
+        // cannot be touched, so there is no new page to read and nothing the user could
+        // have navigated to. Window CHANGES still go through - that is how the gate finds
+        // out it is stale, and how a block still lands the moment the gate comes down.
+        if (breathing?.isShowing == true &&
+            type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        ) return
+
         // ---- App-level block: FIRST, on every event, before any throttling. ----
         // A plain set lookup is effectively free, and running it on the very first
         // window event of an app launch is what makes the cover appear instantly
@@ -906,6 +927,36 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             showAppBlock(blockedApp, packageName)
             return // No point reading or logging pages inside a blocked app.
         }
+        // ---- The pause gate: a pause when a chosen app opens ----
+        // Fire only when the foreground app actually changes, so it triggers on a fresh
+        // open but never while you're already inside the app. How OFTEN it may fire is
+        // BreathingGate's call: every open in super hardcore, otherwise only the first
+        // open of that app each day (which is what keeps it out of the way of 2FA codes).
+        //
+        // POSITION MATTERS. This sits directly after the app-block lookup (a set lookup,
+        // effectively free) and BEFORE the window-list walk below, which is a binder call
+        // into the system on every window change. This is a race against the app you just
+        // launched painting its first frame, and anything between the event and the cover
+        // is time you spend looking at the app you were trying not to open.
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            packageName != lastForegroundPkgForBreathing &&
+            // Another cover already owns the screen. Note this leaves the marker ALONE:
+            // consuming it here spent the app's one "you just opened it" moment on an
+            // event that could never have raised the gate, and the pause was then skipped
+            // entirely for that visit. That is the "sometimes it doesn't even trigger".
+            overlay?.isShowing != true && breathing?.isShowing != true
+        ) {
+            lastForegroundPkgForBreathing = packageName   // the drop happens at the top now
+            if (PauseApps.contains(this, packageName) &&
+                BreathingGate.shouldBreathe(this, packageName)) {
+                // Cover first, bookkeeping after: the write is a prefs edit and the cover
+                // is the thing racing the app's first frame.
+                raiseBreath(packageName)
+                BreathingGate.markBreathed(this, packageName)
+                return
+            }
+        }
+
         // The event's package is only ONE of the apps on screen. A window change is exactly
         // when a second split-screen pane or a picture-in-picture window appears, so that is
         // the moment to look at all of them (§2.6). Only on state changes - doing this on
@@ -914,25 +965,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             val alsoBlocked = blockedVisibleApp()
             if (alsoBlocked != null) {
                 showAppBlock(alsoBlocked.second, alsoBlocked.first)
-                return
-            }
-        }
-
-        // ---- Breathing gate: a calming pause when a chosen app opens ----
-        // Fire only when the foreground app actually changes, so it triggers on a
-        // fresh open but never while you're already inside the app. How OFTEN it may
-        // fire is BreathingGate's call: every open in super hardcore, otherwise only
-        // the first open of that app each day (which is what keeps it out of the way
-        // of 2FA codes).
-        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            packageName != lastForegroundPkgForBreathing
-        ) {
-            lastForegroundPkgForBreathing = packageName   // the drop happens at the top now
-            if (packageName in BREATHING_APPS && overlay?.isShowing != true &&
-                breathing?.isShowing != true &&
-                BreathingGate.shouldBreathe(this, packageName)) {
-                BreathingGate.markBreathed(this, packageName)
-                raiseBreath(packageName)
                 return
             }
         }
@@ -1526,12 +1558,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun appLabelFor(pkg: String): String =
+    // Two binder calls into PackageManager, and getApplicationInfo can hit disk on a cold
+    // cache. That is fine once - it is not fine on the app-launch path, which is exactly
+    // where the pause gate asks for it. Labels do not change while an app is installed.
+    private val appLabels = HashMap<String, String>()
+
+    private fun appLabelFor(pkg: String): String = appLabels.getOrPut(pkg) {
         try {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
         } catch (t: Throwable) {
             pkg
         }
+    }
 
     /**
      * The "Leave" / exit-all button.
@@ -2551,9 +2589,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private val DOMAIN_BLOCK_MS = AppConfig.DOMAIN_BLOCK_MS   // whole-domain block length
 
         private val IGNORED_PACKAGES = AppConfig.IGNORED_PACKAGES
-
-        // Apps that get a calming breathing pause each time they're opened.
-        private val BREATHING_APPS = AppConfig.BREATHING_APPS
 
         // Still allowed while the night guard is up (lying down / in the dark).
         private val NIGHT_GUARD_ALLOWED get() = AppConfig.NIGHT_GUARD_ALLOWED_SUBSTRINGS

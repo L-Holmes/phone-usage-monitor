@@ -118,8 +118,12 @@ object AppConfig {
         val greyscale: Boolean,        // let the greyscale watcher grey the screen in this mode
         /**
          * The NIGHT GUARD: block every non-essential app while the phone says you are lying
-         * down. [flagLyingDown] and [nightGuardLuxBelow] are its triggers - though as of
-         * 2026-08-24 no mode sets the light one any more, so lying down is the whole guard.
+         * down. [flagLyingDown] and [nightGuardLuxBelow] are its triggers.
+         *
+         * ⚠️ NO MODE TURNS IT ON ANY MORE (2026-08-24). The light trigger went first, and
+         * the lying-down one went the same day - see the ModeSpec for superhardcore. The
+         * whole guard is dormant; the code below it still works and goes live again the
+         * moment a mode sets nightGuard = true with a trigger.
          */
         val nightGuard: Boolean = false,
         // NOT WIRED INTO THE SCORER. flagThreshold is dev-console display only - the live
@@ -169,18 +173,21 @@ object AppConfig {
             flagThreshold = 45, flagLyingDown = false),
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
             breathingOn = true,  breathEveryOpen = true, greyscale = true,
-            // Night guard: LYING DOWN ONLY. The light trigger ("Not in the dark") came out
-            // here too on 2026-08-24 - see nightGuardLuxBelow for why. This was the last mode
-            // that had it, so the DARK half of the guard is now off everywhere.
-            nightGuard = true,
-            flagThreshold = 30, flagLyingDown = true),
+            // NO night guard here either, as of 2026-08-24. The dark trigger came out first
+            // (see nightGuardLuxBelow), and the lying-down one followed the same day: this
+            // was the last mode that had it, so nothing blocks on posture anywhere now.
+            // Lying down in Super hardcore still greys the screen (greyscale above, and
+            // GREYSCALE_ONLY_WHEN_LYING) - it just never BLOCKS.
+            nightGuard = false,
+            flagThreshold = 30, flagLyingDown = false),
     )
 
     // === Night guard: what still opens while lying down / in the dark =================
-    // Matched as SUBSTRINGS of the package name. Keep this to genuine essentials - the guard
-    // is worthless if the thing you actually reach for is on it. WhatsApp is deliberately NOT
-    // here (it is a scroll surface like any other); the dialer and SMS are, so you can still
-    // be contacted in an emergency.
+    // Dormant with the guard itself (no mode sets nightGuard now) and kept for the day one
+    // does. Matched as SUBSTRINGS of the package name. Keep this to genuine essentials - the
+    // guard is worthless if the thing you actually reach for is on it. WhatsApp is
+    // deliberately NOT here (it is a scroll surface like any other); the dialer and SMS are,
+    // so you can still be contacted in an emergency.
     // Data now in assets/filter/apps_night_guard.txt (FilterData).
     val NIGHT_GUARD_ALLOWED_SUBSTRINGS: List<String> get() = FilterData.lines("apps_night_guard.txt")
 
@@ -706,8 +713,13 @@ object AppConfig {
         Search("ebay.", "/sch", listOf("_nkw")),
     )
 
-    // === Apps the monitor ignores / never logs / breathing-gates =====================
+    // === Apps the monitor ignores / never logs / pause-gates =========================
     val IGNORED_PACKAGES: Set<String> = setOf("com.android.systemui")
+    // The apps that get the pause screen AS SHIPPED. Not the live list - the user adds and
+    // removes their own on Phone Checking -> the pause-screen apps page, and PauseApps
+    // (UserState.kt) is what the service actually reads. Adding one here still reaches
+    // everyone who has not turned it off by hand, which is why the store keeps the two
+    // sets rather than a copy of this one.
     val BREATHING_APPS: Set<String> = setOf(
         "org.mozilla.firefox", "org.mozilla.fenix", "com.google.android.youtube", "com.android.vending",
     )

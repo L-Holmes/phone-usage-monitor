@@ -72,226 +72,131 @@ import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.LinearLayout
 import android.graphics.Typeface
 import android.view.ViewTreeObserver
-import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.graphics.Path
 
 
 // =====================================================================================
-// BreathOrb  (reusable breathing-orb widget + its animation driver)
+// SweepPanel  (the rising panel + its driver)
 // -------------------------------------------------------------------------------------
-// Shared by the app-open gate (BreathingOverlay) and the in-app "ride the wave" /
-// report breathing. In the un-merged source this is its own file; keep it that way.
+// ⚠️ 2026-08-24 - REPLACED THE BREATHING ORB, and this is now the ONLY animation the
+// pause gate and the in-app "ride it out" pages have. Keep it that way, and keep it dumb.
+//
+// The orb was a full-screen radial gradient whose size, alpha and phase label all moved
+// together, with a second animator pulsing the label. It was fiddly, it was expensive on
+// mid-range phones, and every bug the app-open gate ever had was a bug about it.
+//
+// The whole thing now: a solid panel starts below the bottom edge, slides up until it
+// covers its parent (easing off as it reaches the top), then slides back down. One view,
+// one clock, one number. Nothing is re-rasterised while it moves - the panel is drawn
+// ONCE and every position after that is a translationY. Do not add invalidate() to the
+// movement, and do not give it a label to keep in step.
 // =====================================================================================
 
 /**
- * A soft dim orb that grows on the in-breath and shrinks on the out-breath.
+ * The panel: a solid slab of [accent] that fills its parent, moved with [progress] -
+ * 0 = entirely below the parent's bottom edge, 1 = covering it. Whatever it is drawn over
+ * is hidden while it is up and uncovered as it comes back down.
  *
- * [fill] decides how big the orb is allowed to get at full inhale. BOTH modes are a
- * circle - the difference is only how much of its parent it is allowed to claim:
- *  - [OrbFill.INSCRIBE] keeps it inside the box it sits in (the in-app pages put the
- *    orb in a bounded card, and it must not spill past it);
- *  - [OrbFill.COVER] lets a full-screen parent (the app-open breathing gate) be nearly
- *    spanned by it, edge to edge across the SHORT side.
+ * It is deliberately dumb. It draws ONE rounded rectangle, once; every position after that
+ * is a translationY, which is a transform on a display list the GPU already has. Nothing
+ * here re-rasterises, and nothing here keeps time - see [SweepAnimator] for the clock.
  *
- * ⚠️ 2026-08-11 - COVER used to size itself off the parent's DIAGONAL, which meant the
- * gradient ran past all four corners at peak inhale and the user watched a rectangle
- * brighten rather than a circle grow. There was no edge on screen to breathe with. Size
- * this off the short side, never the diagonal.
+ * ⚠️ It draws nothing at all while it is off-screen, so do NOT hang a first-frame hook on
+ * it: the parent clips it away at rest and its onDraw is never called.
  */
-enum class OrbFill { INSCRIBE, COVER }
+class SweepPanelView(context: Context, accent: Int) : View(context) {
 
-class BreathOrbView(
-    context: Context,
-    private val accent: Int,
-    private val fillMode: OrbFill = OrbFill.INSCRIBE,
-) : View(context) {
-
-    /**
-     * Fires once, on the first frame this view actually PAINTS - not when it is added,
-     * not when it is laid out. The breathing gate starts its clock from here, so a window
-     * the compositor puts up late still shows the breath from the beginning instead of
-     * appearing already half-finished (or finished) and looking frozen.
-     */
-    var onFirstDraw: (() -> Unit)? = null
-    private var drawnOnce = false
-
-    /**
-     * 0 = fully exhaled, 1 = fully inhaled.
-     *
-     * ⚠️ PERFORMANCE - the orb used to REDRAW on every step of the breath: `invalidate()`
-     * per frame, and a full-screen radial gradient re-rasterised ~30 times a second. On the
-     * app-open gate that is 2.6 million pixels of gradient per frame, and it is why the
-     * breathing felt laggy. The circle is now drawn ONCE at its full size and the breath is
-     * a plain view scale + alpha, which the render thread applies to the cached display list
-     * on the GPU. Nothing is re-rasterised while breathing. Do not put invalidate() back.
-     */
+    /** 0 = out of sight below, 1 = covering the parent. */
     var progress = 0f
-        set(value) { field = value; applyProgress() }
+        set(value) { field = value.coerceIn(0f, 1f); applyProgress() }
 
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        // Density-scaled, not raw pixels: this is the line that tells the eye where the
-        // circle ENDS, and a 4px rim is invisible on a 3x screen.
-        strokeWidth = 2f * context.resources.displayMetrics.density
-        color = accent
-        alpha = 110
-    }
+    private val fill = Paint().apply { color = accent }
 
-    private var maxR = 0f
-
-    init {
-        applyProgress()
-    }
-
-    // Fill and ring overlap, but letting the view alpha be applied per-drawing-op is far
-    // cheaper than the offscreen layer the "correct" answer would allocate, and at these
-    // alphas the difference is invisible.
     override fun hasOverlappingRendering() = false
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        val short = kotlin.math.min(w, h) / 2f
-        maxR = when (fillMode) {
-            OrbFill.INSCRIBE -> short - ring.strokeWidth
-            // Just inside the short edge: big enough to feel like the screen is breathing,
-            // with enough margin that the rim is never clipped away by the edge itself.
-            OrbFill.COVER -> short * 0.92f
-        }.coerceAtLeast(1f)
-        fill.shader = RadialGradient(
-            w / 2f, h / 2f, maxR,
-            intArrayOf(withAlpha(accent, 175), withAlpha(accent, 105), withAlpha(accent, 0)),
-            // The soft falloff is held back to the outer fifth so the disc reads as a body
-            // with an edge rather than as a haze - the rim is what you breathe with.
-            floatArrayOf(0f, 0.8f, 1f),
-            Shader.TileMode.CLAMP,
-        )
-        // The breath scales the view about its own centre.
-        pivotX = w / 2f
-        pivotY = h / 2f
-        invalidate()
-    }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = applyProgress()
 
     override fun onDraw(canvas: Canvas) {
-        if (maxR <= 0f) return
-        val cx = width / 2f
-        val cy = height / 2f
-        canvas.drawCircle(cx, cy, maxR, fill)
-        canvas.drawCircle(cx, cy, maxR, ring)
-
-        if (!drawnOnce) {
-            drawnOnce = true
-            // Out of the draw pass before telling anyone: the listener starts an animation.
-            post { onFirstDraw?.invoke(); onFirstDraw = null }
-        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
     }
 
+    /**
+     * ⚠️ The travel distance falls back to the SCREEN height while this view has no size
+     * of its own. The sweep can be started before the window's first layout, and
+     * `height * (1 - progress)` is 0 in that window - which would park a panel that is
+     * meant to be out of sight squarely over the screen. It draws nothing at zero size,
+     * so the fallback simply keeps it off-screen until the real height arrives (and
+     * onSizeChanged re-applies the current position the moment it does).
+     */
     private fun applyProgress() {
-        val p = progress.coerceIn(0f, 1f)
-        val s = MIN_SCALE + (1f - MIN_SCALE) * p
-        scaleX = s
-        scaleY = s
-        // REST_ALPHA rather than 0: a gate that opens on a pitch-black screen with one line
-        // of text on it reads as broken, and that is exactly what the user saw. Even fully
-        // exhaled there is now a small dim orb to look at.
-        alpha = REST_ALPHA + (1f - REST_ALPHA) * (p / 0.14f).coerceIn(0f, 1f)
-    }
-
-    private fun withAlpha(color: Int, alpha: Int) =
-        (color and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
-
-    private companion object {
-        /** Fully-exhaled size, as a fraction of the full orb (was minR = maxR * 0.04). */
-        const val MIN_SCALE = 0.04f
-        /** Fully-exhaled opacity. Never 0 - the orb must always be SOMETHING on screen. */
-        const val REST_ALPHA = 0.2f
+        val travel = if (height > 0) height.toFloat()
+                     else resources.displayMetrics.heightPixels.toFloat()
+        translationY = travel * (1f - progress)
     }
 }
 
 
 /**
- * Drives the inhale/exhale breathing on a [BreathOrbView] (plus an optional phase
- * label). One place, two callers:
- *
- *  - the app-open gate runs a single cycle, then reveals its controls;
- *  - the report "breathe with the circle" screen runs a fixed number of cycles with a
- *    "1 of 3 done" counter and then lets the user continue.
- *
- * [cycles] = null breathes forever (until [stop]); otherwise it runs that many
- * inhale+exhale cycles. [onCycle] fires after each completed breath as (done, total);
- * [onExhaleStart] fires at the start of every exhale; [onComplete] fires once, after
- * the final exhale.
+ * Drives one [SweepPanelView]: up, then down, repeat. [cycles] = null sweeps until
+ * [stop]; otherwise it runs that many up+down rounds. [onCycle] fires after each
+ * completed round as (done, total); [onComplete] fires once, after the last one.
  */
-class BreathOrbAnimator(
-    private val orb: BreathOrbView,
-    private val phase: TextView?,
-    private val inhaleMs: Long = 3000,
-    private val exhaleMs: Long = 6300,
+class SweepAnimator(
+    private val panel: SweepPanelView,
+    private val upMs: Long = 3_200,
+    private val downMs: Long = 3_600,
 ) {
-    private val inhaleEase = PathInterpolator(0.4f, 0f, 0.5f, 1f)
-    private val exhaleEase = PathInterpolator(0.2f, 0f, 0.45f, 1f)
-    private val pulseEase = AccelerateDecelerateInterpolator()
-
-    // Driven off Choreographer + our own clock rather than ValueAnimator, because a
+    // Driven off Choreographer and our own clock rather than ValueAnimator, because a
     // ValueAnimator finishes INSTANTLY when the system animator duration scale is 0 -
-    // which battery saver, "Remove animations" and Developer Options all do. That is
-    // what made the breathing silently not start on some opens. Our own clock always
-    // runs. It also gives us one frame callback instead of two competing animators.
+    // which battery saver, "Remove animations" and Developer Options all do. That is what
+    // made the old breathing silently not start on some opens. Our own clock always runs.
     private var choreographer: Choreographer? = null
     private var frameCallback: Choreographer.FrameCallback? = null
     private var running = false
 
-    /** True once at least one frame has actually moved the orb (the overlay's watchdog reads it). */
-    @Volatile var hasAdvanced = false
-        private set
-
-    private var inhaling = true
-    private var phaseStart = 0L
-    private var lastDrawAt = 0L
+    private var cycleStart = 0L
     private var done = 0
+    private var wasAttached = false
 
     fun start(
         cycles: Int? = null,
         onCycle: (done: Int, total: Int) -> Unit = { _, _ -> },
-        onExhaleStart: () -> Unit = {},
         onComplete: () -> Unit = {},
     ) {
         stop()
         running = true
-        hasAdvanced = false
         done = 0
-        inhaling = true
-        phaseStart = SystemClock.uptimeMillis()
-        lastDrawAt = 0L
-        phase?.let {
-            it.text = it.context.getString(R.string.overlay_breathe_in)
-            // The label's alpha pulse runs every frame. On a plain TextView that re-rasterises
-            // the text each time; on a hardware layer it is a GPU alpha on a cached bitmap.
-            // Dropped again in stop(), so nothing holds a layer while the orb is idle.
-            it.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        }
+        wasAttached = false
+        cycleStart = SystemClock.uptimeMillis()
 
         val ch = Choreographer.getInstance()
         choreographer = ch
         val cb = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
                 if (!running) return
-                val now = SystemClock.uptimeMillis()
-
-                // ~30fps is plenty for a slow breath and halves the redraw work of a
-                // full-screen orb on a mid-range phone.
-                if (now - lastDrawAt >= FRAME_MS) {
-                    lastDrawAt = now
-                    tick(now, cycles, onCycle, onExhaleStart, onComplete)
-                }
+                // A screen that went away without calling stop() must not keep a frame
+                // callback alive for the rest of the process.
+                //
+                // ⚠️ Only AFTER it has been attached once. A view added to a window is not
+                // attached until that window's first traversal, so a sweep started in the
+                // same breath as addView sees false here on its first frame - and the
+                // version of this check that did not wait killed the sweep outright.
+                // That is the "sometimes it just never starts" bug.
+                if (panel.isAttachedToWindow) wasAttached = true
+                else if (wasAttached) { stop(); return }
+                // EVERY frame, not a throttled subset. The old ~30fps cap was there to
+                // save work back when a frame re-rasterised a gradient; a frame is now a
+                // table lookup and one translationY, and moving 30 times a second on a
+                // 120Hz screen is what "slightly laggy" looks like - the panel lands on
+                // some vsyncs and not others, so the motion beats. Ride the display.
+                tick(SystemClock.uptimeMillis(), cycles, onCycle, onComplete)
                 if (running) ch.postFrameCallback(this)
             }
         }
@@ -299,54 +204,22 @@ class BreathOrbAnimator(
         ch.postFrameCallback(cb)
     }
 
-    private fun tick(
-        now: Long,
-        cycles: Int?,
-        onCycle: (Int, Int) -> Unit,
-        onExhaleStart: () -> Unit,
-        onComplete: () -> Unit,
-    ) {
-        val duration = if (inhaling) inhaleMs else exhaleMs
-        val t = ((now - phaseStart).toFloat() / duration).coerceIn(0f, 1f)
+    private fun tick(now: Long, cycles: Int?, onCycle: (Int, Int) -> Unit, onComplete: () -> Unit) {
+        val elapsed = now - cycleStart
+        panel.progress = SweepCurve.progress(elapsed, upMs, downMs)
 
-        orb.progress =
-            if (inhaling) inhaleEase.getInterpolation(t)
-            else 1f - exhaleEase.getInterpolation(t)
-        if (orb.progress > 0.02f) hasAdvanced = true
+        if (elapsed < upMs + downMs) return
 
-        // The phase label's slow pulse, on the same clock (was a second ValueAnimator).
-        phase?.let { p ->
-            val cycle = ((now % (PULSE_MS * 2)).toFloat() / PULSE_MS)
-            val tri = if (cycle <= 1f) cycle else 2f - cycle
-            p.alpha = 0.95f - 0.35f * pulseEase.getInterpolation(tri)
-        }
-
-        if (t < 1f) return
-
-        // Phase boundary.
-        if (inhaling) {
-            inhaling = false
-            phaseStart = now
-            phase?.let { it.text = it.context.getString(R.string.overlay_breathe_out) }
-            onExhaleStart()
+        // Round finished.
+        done++
+        onCycle(done, cycles ?: done)
+        if (cycles != null && done >= cycles) {
+            stop()
+            panel.progress = 0f
+            onComplete()
         } else {
-            done++
-            onCycle(done, cycles ?: done)
-            if (cycles != null && done >= cycles) {
-                finish(onComplete)
-            } else {
-                inhaling = true
-                phaseStart = now
-                phase?.let { it.text = it.context.getString(R.string.overlay_breathe_in) }
-            }
+            cycleStart = now
         }
-    }
-
-    private fun finish(onComplete: () -> Unit) {
-        stop()
-        phase?.alpha = 1f
-        orb.progress = 0f
-        onComplete()
     }
 
     fun stop() {
@@ -354,12 +227,43 @@ class BreathOrbAnimator(
         frameCallback?.let { choreographer?.removeFrameCallback(it) }
         frameCallback = null
         choreographer = null
-        phase?.setLayerType(View.LAYER_TYPE_NONE, null)
+    }
+}
+
+/**
+ * The sweep's shape, SAMPLED ONCE for the life of the process.
+ *
+ * Both curves are evaluated into a table here and never again: a PathInterpolator does a
+ * binary search plus a lerp per call, and a DecelerateInterpolator does a pow(). Neither
+ * is expensive on its own, but this runs on the accessibility service's main thread while
+ * an app is launching, and the whole point is that nothing in the frame path does work it
+ * could have done earlier. A frame is now an integer index and one array read.
+ *
+ * Indexing is integer maths on purpose (no float division, no allocation). `elapsed <
+ * upMs` guarantees `(elapsed * N) / upMs < N`, so the index can never run off the end.
+ */
+object SweepCurve {
+
+    private const val N = 256
+    private val up = FloatArray(N + 1)
+    private val down = FloatArray(N + 1)
+
+    init {
+        val u = Motion.sweepUp
+        val d = Motion.sweepDown
+        for (i in 0..N) {
+            val t = i.toFloat() / N
+            up[i] = u.getInterpolation(t)
+            down[i] = d.getInterpolation(t)
+        }
     }
 
-    private companion object {
-        const val FRAME_MS = 28L     // ~30fps
-        const val PULSE_MS = 1300L
+    /** Where the panel is at [elapsed] ms of a round: 0 = below the screen, 1 = covering. */
+    fun progress(elapsed: Long, upMs: Long, downMs: Long): Float = when {
+        elapsed <= 0L -> 0f
+        elapsed < upMs -> up[((elapsed * N) / upMs).toInt()]
+        elapsed < upMs + downMs -> 1f - down[(((elapsed - upMs) * N) / downMs).toInt()]
+        else -> 0f
     }
 }
 

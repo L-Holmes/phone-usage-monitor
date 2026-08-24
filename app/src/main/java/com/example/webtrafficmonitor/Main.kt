@@ -1704,7 +1704,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
 private fun waveBreatheScreen(title: String, side: String, continueLabel: String, onContinue: () -> Unit) {
     val dp = resources.displayMetrics.density
     val pad = (Space.page * dp).toInt()
-    val totalBreaths = 3
+    val totalRounds = 3
     val root = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
         gravity = Gravity.CENTER_HORIZONTAL
@@ -1717,21 +1717,16 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
         setPadding(0, 0, 0, (4 * dp).toInt())
     })
 
-    // Big orb, straight on the page (no dark card), filling the free space.
-    val orb = BreathOrbView(this, Palette.tint)
-    val orbBox = FrameLayout(this).apply {
+    // The sweep, straight on the page (no dark card), filling the free space.
+    val sweep = SweepPanelView(this, Palette.sweep)
+    root.addView(FrameLayout(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        addView(orb, FrameLayout.LayoutParams(
+        addView(sweep, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-    }
-    root.addView(orbBox)
+    })
 
-    val breatheLabel = TextView(this).apply {
-        text = getString(R.string.overlay_breathe_in); textSize = 18f; gravity = Gravity.CENTER; setPadding(0, (10 * dp).toInt(), 0, 0)
-    }
-    root.addView(breatheLabel)
     val counter = TextView(this).apply {
-        text = getString(R.string.ride_follow_orb, totalBreaths)
+        text = getString(R.string.ride_follow_sweep, totalRounds)
         textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setPadding(0, (6 * dp).toInt(), 0, 0)
     }
@@ -1745,14 +1740,13 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
     root.addView(continueBtn)
     setContentView(root)
 
-    stopRideTimer()   // cancels any orb/timer left over from a previous wave screen
-    waveOrb = BreathOrbAnimator(orb, breatheLabel).also { a ->
+    stopRideTimer()   // cancels any sweep/timer left over from a previous wave screen
+    waveSweep = SweepAnimator(sweep).also { a ->
         a.start(
-            cycles = totalBreaths,
+            cycles = totalRounds,
             onCycle = { done, total ->
                 if (done >= total) {
                     counter.text = getString(R.string.temp_ride_paced)
-                    breatheLabel.text = ""
                     tuneContinue(continueBtn, true)
                 } else {
                     counter.text = getString(R.string.temp_ride_counter, done, total)
@@ -3162,10 +3156,10 @@ private fun showTemptationsTab() {
 //  category-specific belongs in the AppConfig spec, never in an `if (spec.id == ...)`.
 // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-private var habitOrb: BreathOrbAnimator? = null
+private var habitSweep: SweepAnimator? = null
 
 private fun showTemptation(spec: AppConfig.TemptationSpec) {
-    habitOrb?.stop(); habitOrb = null
+    habitSweep?.stop(); habitSweep = null
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad)
     root.addView(titleText(temptTitle(spec)))
@@ -3208,6 +3202,14 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
     })
 
     if (TemptationBlocks.hasBlocks(spec)) list.addView(blockSwitch(spec))
+
+    // Phone Checking has nothing to block - the pull is the phone itself - so the pause
+    // screen IS its measure, and this is where you say which apps it stops.
+    if (spec.checkingMeasures) list.addView(captionedButton(
+        getString(R.string.pauseapps_open_title),
+        getString(R.string.pauseapps_open_sub, PauseApps.all(this).size), Palette.tint) {
+            showPauseApps(spec)
+        })
 
     // RESTORED-FROM-HEAD 2026-08-04 — the "I slipped" button and the "try this instead" line
     // are gone here because their strings (temp_slipped_*, temp_try_instead) and the
@@ -3284,6 +3286,110 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
     return row
 }
 
+/**
+ * WHICH apps get the pause screen, as a page you can edit.
+ *
+ * Same shape as the adult-content block list (showBlockApps / blockAppRow): the installed
+ * apps are loaded off the main thread, drawn as icon rows, and a tap flips that one. The
+ * apps that already pause are pulled to the top, so the page opens on the answer to the
+ * question the button asked. Order is fixed at load - a row that jumped to another section
+ * the moment you tapped it would lose your place in a list this long.
+ *
+ * This page only decides WHICH apps. How often the pause may then fire is the mode's call
+ * (never in Off/Relaxed, first open of the day in Strict, every open in Super hardcore),
+ * which is what the subtitle says.
+ */
+private fun showPauseApps(spec: AppConfig.TemptationSpec) {
+    inSubPage = true
+    val dp = resources.displayMetrics.density
+    val pad = (Space.page * dp).toInt()
+    val root = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+    root.addView(titleText(getString(R.string.pauseapps_title)))
+    root.addView(TextView(this).apply {
+        text = getString(R.string.pauseapps_sub)
+        textSize = 13f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, Type.lineSpacing)
+        setPadding(0, 0, 0, (10 * dp).toInt())
+    })
+    val loading = TextView(this).apply { text = getString(R.string.appsite_loading); textSize = 14f }
+    root.addView(loading)
+    val listLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    root.addView(ScrollView(this).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        addView(listLayout)
+    })
+    setContentWithThumb(root) { showTemptation(spec) }
+
+    lifecycleScope.launch(Dispatchers.IO) {
+        val installed = loadLaunchableApps()
+        val on = PauseApps.all(this@MainActivity)
+        // An app that pauses and has since been uninstalled (or has no launcher icon)
+        // still has to be listed, or there is no way to take it back off.
+        val listed = installed.map { it.pkg }.toSet()
+        val paused = (installed.filter { it.pkg in on } +
+            (on - listed).map { AppRow(appLabelOrPackage(it), it, null) })
+            .sortedBy { it.label.lowercase() }
+        val rest = installed.filter { it.pkg !in on }
+        runOnUiThread {
+            loading.visibility = View.GONE
+            fun header(text: String) = listLayout.addView(TextView(this@MainActivity).apply {
+                this.text = text; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Palette.labelTertiary)
+                setPadding(0, (14 * dp).toInt(), 0, (2 * dp).toInt())
+            })
+            header(getString(R.string.pauseapps_on_header))
+            if (paused.isEmpty()) listLayout.addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.pauseapps_none)
+                textSize = 14f; setTextColor(Palette.labelSecondary)
+                setPadding(0, (6 * dp).toInt(), 0, 0)
+            })
+            paused.forEach { listLayout.addView(pauseAppRow(it)) }
+            header(getString(R.string.pauseapps_add_header))
+            rest.forEach { listLayout.addView(pauseAppRow(it)) }
+        }
+    }
+}
+
+/** One app: tap to give it the pause screen, tap again to take it away. */
+private fun pauseAppRow(a: AppRow): LinearLayout {
+    val dp = resources.displayMetrics.density
+    val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding((8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt())
+        isClickable = true; isFocusable = true
+    }
+    val icon = ImageView(this).apply {
+        layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (36 * dp).toInt())
+        if (a.icon != null) setImageDrawable(a.icon)
+    }
+    val name = TextView(this).apply {
+        text = a.label; textSize = 16f; setPadding((12 * dp).toInt(), 0, 0, 0)
+        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    val tag = TextView(this).apply {
+        text = getString(R.string.pauseapps_tag); textSize = 13f
+        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.successText)
+    }
+    row.addView(icon); row.addView(name); row.addView(tag)
+
+    fun render() {
+        val on = PauseApps.contains(this, a.pkg)
+        tag.visibility = if (on) View.VISIBLE else View.GONE
+        icon.alpha = if (on) 1f else 0.55f
+    }
+    render()
+
+    row.setOnClickListener {
+        if (PauseApps.contains(this, a.pkg)) PauseApps.remove(this, a.pkg)
+        else PauseApps.add(this, a.pkg)
+        render()
+    }
+    return row
+}
+
 // ⚠️⚠️⚠️ RESTORED FROM THE LAST COMMIT — 2026-08-04. READ BEFORE TRUSTING THIS REGION. ⚠️⚠️⚠️
 //
 //  On 2026-08-04 a bad edit truncated Main.kt and destroyed roughly 4,600 lines of the
@@ -3305,53 +3411,49 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
 //  is why. Delete this banner once the region has been reviewed.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-/** Ride the urge out: a few slow breaths, then the button that says you beat it. */
+/** Ride the urge out: a few slow sweeps, then the button that says you beat it. */
 private fun habitRide(spec: AppConfig.TemptationSpec) {
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val totalBreaths = 3
+    val totalRounds = 3
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
     root.addView(titleText(getString(R.string.temp_ride_title)))
     root.addView(TextView(this).apply {
-        text = getString(R.string.temp_ride_body, totalBreaths)
+        text = getString(R.string.temp_ride_body, totalRounds)
         textSize = 15f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
     })
 
-    val orb = BreathOrbView(this, Palette.tint)     // INSCRIBE: it sits in a box here
+    val sweep = SweepPanelView(this, Palette.sweep)   // it sits in a box here, and fills it
     root.addView(FrameLayout(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        addView(orb, FrameLayout.LayoutParams(
+        addView(sweep, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     })
 
-    val label = TextView(this).apply {
-        text = getString(R.string.overlay_breathe_in); textSize = 18f; gravity = Gravity.CENTER
-    }
-    root.addView(label)
     val counter = TextView(this).apply {
         textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.successText)
         setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
     }
     root.addView(counter)
 
-    // Only unlocks once the breaths are actually done - otherwise it's just a tap-through.
+    // Only unlocks once the sweeps are actually done - otherwise it's just a tap-through.
     val done = bigChoice(getString(R.string.temp_ride_done_btn), Palette.successText) { habitRideDone(spec) }
     done.isEnabled = false
     done.alpha = 0.5f
     root.addView(done)
 
-    habitOrb?.stop()
-    habitOrb = BreathOrbAnimator(orb, label).also { a ->
+    habitSweep?.stop()
+    habitSweep = SweepAnimator(sweep).also { a ->
         a.start(
-            cycles = totalBreaths,
+            cycles = totalRounds,
             onCycle = { d, t -> counter.text = if (d >= t) getString(R.string.temp_ride_paced) else getString(R.string.temp_ride_counter, d, t) },
-            onComplete = { label.text = ""; done.isEnabled = true; done.alpha = 1f },
+            onComplete = { done.isEnabled = true; done.alpha = 1f },
         )
     }
-    setContentWithThumb(root) { habitOrb?.stop(); habitOrb = null; showTemptation(spec) }
+    setContentWithThumb(root) { habitSweep?.stop(); habitSweep = null; showTemptation(spec) }
 }
 
 private fun habitRideDone(spec: AppConfig.TemptationSpec) {
-    habitOrb?.stop(); habitOrb = null
+    habitSweep?.stop(); habitSweep = null
     HabitLog.record(this, spec.id, HabitLog.RIDE)
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val root = vbox(pad).apply { gravity = Gravity.CENTER_HORIZONTAL }
@@ -4200,7 +4302,7 @@ private fun showModeRules() {
 
     list.addView(TextView(this).apply {
         text = getString(R.string.moderules_watched,
-            AppConfig.BREATHING_APPS.joinToString(", ") { appLabelOrPackage(it) })
+            PauseApps.all(this@MainActivity).joinToString(", ") { appLabelOrPackage(it) })
         textSize = 13f; setTextColor(Palette.labelTertiary)
         setPadding(0, (6 * dp).toInt(), 0, (16 * dp).toInt())
     })
@@ -4351,7 +4453,7 @@ private var inTemptationFlow = false
 private var rideHandler: Handler? = null
 private var rideRunnable: Runnable? = null
 private var rideEndAt = 0L
-private var waveOrb: BreathOrbAnimator? = null
+private var waveSweep: SweepAnimator? = null
 
 // ========================
 // ── "I'm going to look anyway" (supervised loosen) flow ─────────────────────
@@ -4360,7 +4462,7 @@ private var inLoosenFlow = false
 
 private var loosenHandler: Handler? = null
 private var loosenRunnable: Runnable? = null
-private var loosenOrb: BreathOrbAnimator? = null
+private var loosenSweep: SweepAnimator? = null
 
 // ── "I'm going to look anyway" (supervised loosen) - rebuilt ────────────────
 private var loosenBackAction: (() -> Unit)? = null
@@ -4635,20 +4737,16 @@ private fun loosenWaitScreen() {
         setTextColor(Palette.labelSecondary); setPadding(0, (4 * dp).toInt(), 0, (8 * dp).toInt())
     }
     content.addView(sub)
-    // big orb on the page (no dark card), matching the temptation breathing
-    val orb = BreathOrbView(this, Palette.tint)
-    val orbBox = FrameLayout(this).apply {
+    // the sweep on the page (no dark card), matching the temptation pages
+    val sweep = SweepPanelView(this, Palette.sweep)
+    content.addView(FrameLayout(this).apply {
         layoutParams = LinearLayout.LayoutParams((230 * dp).toInt(), (230 * dp).toInt()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = (12 * dp).toInt()
         }
-        addView(orb, FrameLayout.LayoutParams(
+        addView(sweep, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-    }
-    content.addView(orbBox)
-    val breatheLabel = TextView(this).apply {
-        text = getString(R.string.overlay_breathe_in); textSize = 16f; gravity = Gravity.CENTER; setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt())
-    }
-    content.addView(breatheLabel)
+    })
 
     // the enticing primary; tapping it groups the "give it longer" options
     content.addView(GlowButton(this, getString(R.string.loosen_lock5)) { showLoosenLongerDialog() }.apply {
@@ -4675,7 +4773,7 @@ private fun loosenWaitScreen() {
     runLoosenMinuteCountdown(sub, endAt) {
         enableLink(doneContinue); sub.setTextColor(Palette.successText); sub.setTypeface(sub.typeface, Typeface.BOLD)
     }
-    loosenOrb = BreathOrbAnimator(orb, breatheLabel).also { it.start(cycles = null) }
+    loosenSweep = SweepAnimator(sweep).also { it.start(cycles = null) }
 }
 
 private fun showLoosenLongerDialog() {
@@ -5035,7 +5133,7 @@ private fun stopLoosenTimer() {
     loosenRunnable?.let { loosenHandler?.removeCallbacks(it) }
     loosenRunnable = null; loosenHandler = null
     breatheOn = false
-    loosenOrb?.stop(); loosenOrb = null
+    loosenSweep?.stop(); loosenSweep = null
 }
 
 
@@ -5133,7 +5231,7 @@ private fun stopRideTimer() {
     rideRunnable = null
     rideHandler = null
     breatheOn = false
-    waveOrb?.stop(); waveOrb = null
+    waveSweep?.stop(); waveSweep = null
 }
 
 
@@ -5596,7 +5694,7 @@ private fun startWeekStrict() {
         // debug page's tick restarts both on resume.
         beaconScanner?.stop(); pressureMon?.stop()
         // Don't leave a breathing orb posting frame callbacks at a screen nobody is looking at.
-        habitOrb?.stop(); habitOrb = null
+        habitSweep?.stop(); habitSweep = null
     }
 
     @Suppress("DEPRECATION")
