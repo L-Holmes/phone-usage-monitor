@@ -1,0 +1,9 @@
+<!-- A bathroom: a droplet  ·  minimal stroke glyph, 24dp grid, tinted at runtime. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M12,3.4 C12,3.4 6.4,9.6 6.4,13.6 A5.6,5.6 0 0 0 17.6,13.6 C17.6,9.6 12,3.4 12,3.4 Z"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" android:strokeLineJoin="round"/>
+</vector>

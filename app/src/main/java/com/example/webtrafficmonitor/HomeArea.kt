@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import org.json.JSONArray
+import org.json.JSONObject
 
 // =====================================================================================
 //  HOME AREA  -  "is the phone at the house, or out?" from GPS / network location.
@@ -27,6 +29,10 @@ import android.os.Looper
 //  stand in the house, press the button, and the current fix becomes home - but it is no
 //  longer developer-only: the house row on the dashboard opens it, and Strict and above
 //  ask for it (see HomeRule.shouldAsk).
+//
+//  THERE CAN BE MORE THAN ONE HOUSE, and none of them can be edited: you add where you
+//  are, and in Strict and above removing one takes a month's wait nobody is told the end
+//  of. See [HouseLock] for why, and [HomeArea.houses] for the list.
 //
 //  ON VPNs: a VPN cannot move this. Android's location comes from GPS satellites, plus
 //  nearby Wi-Fi/cell fingerprints - none of which travel over the tunnel. A VPN changes
@@ -56,50 +62,200 @@ object HomeArea {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences("home_area", Context.MODE_PRIVATE)
 
-    // ── Where home is ────────────────────────────────────────────────────────────────
-    // One point, captured by hand from the dev page while standing in the house. Stored
-    // with the accuracy and provider of the fix it came from, because a home point
-    // captured off a 500 m network fix is worth knowing about before trusting anything
-    // downstream of it.
+    // ── Where home is ──────────────────────────────────────────────────────────
+    //
+    //  A LIST of points, oldest first, captured by hand while standing in each one. It was
+    //  a single point until [HouseLock] made moving it expensive: once you cannot simply
+    //  edit the house, the honest answer for someone with two real homes - or one home and
+    //  a parents' house every weekend - has to be a SECOND HOUSE rather than a rewrite of
+    //  the first. Adding one is free and instant, and safely so: at home only ever makes
+    //  the rules STRICTER (see [HomeRule]), so another house can only ever cost the user
+    //  more, never less. A saved house cannot be moved at all - removing one is the only
+    //  way back out, and that is the direction [HouseLock] slows down.
+    //
+    //  Every question this file answers - distance, verdict - is asked of the NEAREST
+    //  house, so nothing downstream has to know there is more than one.
+    //
+    //  Each point keeps the accuracy and provider of the fix it came from, because a house
+    //  captured off a 500 m network fix is worth knowing about before trusting anything
+    //  built on top of it.
 
-    fun isSet(context: Context): Boolean = prefs(context).contains("lat")
+    /** How many houses one person may have. Four is already a generous reading of "home". */
+    const val MAX_HOUSES = 4
 
-    fun homeLat(context: Context): Double = prefs(context).getFloat("lat", 0f).toDouble()
-    fun homeLon(context: Context): Double = prefs(context).getFloat("lon", 0f).toDouble()
+    /**
+     * One saved house.
+     *
+     * [deleteRequestedAt] is non-zero once removal has been ASKED FOR and the month has
+     * started running (see [HouseLock.DELETE_DELAY_MS]). A house waiting to go still counts
+     * for everything in the meantime: it is home right up until the day it isn't.
+     */
+    data class House(
+        val id: String,
+        val lat: Double,
+        val lon: Double,
+        val accuracy: Float,
+        val provider: String,
+        val setAt: Long,
+        val deleteRequestedAt: Long = 0L,
+    )
 
-    /** Accuracy (m) of the fix home was captured from, or -1 if unknown/unset. */
-    fun homeAccuracy(context: Context): Float = prefs(context).getFloat("acc", -1f)
+    private const val KEY_HOUSES = "houses"
 
-    /** Which provider gave the home fix ("gps" / "network"), or "" if unset. */
-    fun homeProvider(context: Context): String = prefs(context).getString("provider", "") ?: ""
+    /**
+     * The saved houses, oldest first - and the one place a matured deletion actually
+     * happens (see [HouseLock.deleteIsDue]). Reaping on read rather than on a timer is
+     * deliberate: there is no alarm to miss, no notification to fire, and the removal
+     * simply IS the case the next time anything asks. Which is the point - the user is
+     * never told when the month is up.
+     */
+    fun houses(context: Context): List<House> {
+        val p = prefs(context)
+        val raw = p.getString(KEY_HOUSES, null)
+        val stored = when {
+            raw != null -> parseHouses(raw)
+            // Installs from before the list existed: one point, in the old flat keys.
+            p.contains("lat") -> listOf(
+                House(
+                    id = "h0",
+                    lat = p.getFloat("lat", 0f).toDouble(),
+                    lon = p.getFloat("lon", 0f).toDouble(),
+                    accuracy = p.getFloat("acc", -1f),
+                    provider = p.getString("provider", "") ?: "",
+                    setAt = p.getLong("set_at", 0L),
+                )
+            ).also { writeHouses(context, it) }
+            else -> emptyList()
+        }
+        val due = stored.filter { HouseLock.deleteIsDue(it) }
+        if (due.isEmpty()) return stored
+        val kept = stored.filter { h -> due.none { it.id == h.id } }
+        writeHouses(context, kept)
+        return kept
+    }
 
-    /** When home was captured (epoch ms), or 0. */
-    fun homeSetAt(context: Context): Long = prefs(context).getLong("set_at", 0L)
+    private fun parseHouses(raw: String): List<House> = try {
+        val arr = JSONArray(raw)
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            House(
+                id = o.optString("id", "h$i"),
+                lat = o.getDouble("lat"),
+                lon = o.getDouble("lon"),
+                accuracy = o.optDouble("acc", -1.0).toFloat(),
+                provider = o.optString("provider", ""),
+                setAt = o.optLong("set_at", 0L),
+                deleteRequestedAt = o.optLong("delete_at", 0L),
+            )
+        }
+    } catch (t: Throwable) { emptyList() }
 
-    /** Records [loc] as home. Deliberately overwrites - there is only ever one house. */
-    fun setHome(context: Context, loc: Location) {
-        // Float, not Double: ~7 significant figures still resolves to about a metre of
-        // latitude, and SharedPreferences has no double.
+    private fun writeHouses(context: Context, list: List<House>) {
+        // Doubles here, unlike the old flat keys - JSON has no float/double distinction to
+        // lose, so the ~1 m rounding that came of squeezing a latitude into a Float goes.
+        val arr = JSONArray()
+        for (h in list) arr.put(
+            JSONObject()
+                .put("id", h.id)
+                .put("lat", h.lat)
+                .put("lon", h.lon)
+                .put("acc", h.accuracy.toDouble())
+                .put("provider", h.provider)
+                .put("set_at", h.setAt)
+                .put("delete_at", h.deleteRequestedAt)
+        )
         prefs(context).edit()
-            .putFloat("lat", loc.latitude.toFloat())
-            .putFloat("lon", loc.longitude.toFloat())
-            .putFloat("acc", if (loc.hasAccuracy()) loc.accuracy else -1f)
-            .putString("provider", loc.provider ?: "")
-            .putLong("set_at", System.currentTimeMillis())
+            .putString(KEY_HOUSES, arr.toString())
+            // The pre-list keys, gone for good the moment the list exists.
+            .remove("lat").remove("lon").remove("acc").remove("provider").remove("set_at")
             .apply()
     }
 
-    fun clearHome(context: Context) = prefs(context).edit().clear().apply()
+    private fun newId(existing: List<House>): String {
+        var n = existing.size
+        while (existing.any { it.id == "h$n" }) n++
+        return "h$n"
+    }
+
+    fun isSet(context: Context): Boolean = houses(context).isNotEmpty()
+
+    /** How many houses are saved. */
+    fun count(context: Context): Int = houses(context).size
+
+    /**
+     * Saves [loc] as a house, returning it - or null when the list is already full. Always
+     * allowed, in every mode: see the note at the top of this section. This is the ONLY way
+     * a house is written; there is no editing one, by design.
+     */
+    fun addHouse(context: Context, loc: Location): House? {
+        val list = houses(context)
+        if (list.size >= MAX_HOUSES) return null
+        val h = House(
+            id = newId(list),
+            lat = loc.latitude,
+            lon = loc.longitude,
+            accuracy = if (loc.hasAccuracy()) loc.accuracy else -1f,
+            provider = loc.provider ?: "",
+            setAt = System.currentTimeMillis(),
+        )
+        writeHouses(context, list + h)
+        return h
+    }
+
+    /** Removes a house NOW. Only for the modes with no lock - see [HouseLock]. */
+    fun removeHouse(context: Context, id: String) =
+        writeHouses(context, houses(context).filterNot { it.id == id })
+
+    /**
+     * Asks for a house to be removed, starting the wait. Idempotent on purpose: asking
+     * again does not restart the month, so hammering the button changes nothing.
+     */
+    fun requestDelete(context: Context, id: String) {
+        val list = houses(context)
+        val i = list.indexOfFirst { it.id == id }
+        if (i < 0 || list[i].deleteRequestedAt > 0L) return
+        val updated = list.toMutableList()
+        updated[i] = list[i].copy(deleteRequestedAt = System.currentTimeMillis())
+        writeHouses(context, updated)
+    }
+
+    /** Calls the removal off. Always allowed - keeping a house is never the risky direction. */
+    fun cancelDelete(context: Context, id: String) {
+        val list = houses(context)
+        val i = list.indexOfFirst { it.id == id }
+        if (i < 0 || list[i].deleteRequestedAt == 0L) return
+        val updated = list.toMutableList()
+        updated[i] = list[i].copy(deleteRequestedAt = 0L)
+        writeHouses(context, updated)
+    }
 
     // ── The rule ─────────────────────────────────────────────────────────────────────
 
-    /** Metres from home to [loc], or null if home isn't set. */
-    fun distanceFrom(context: Context, loc: Location?): Float? {
-        if (loc == null || !isSet(context)) return null
+    /** Metres from [house] to [loc]. */
+    fun distanceTo(house: House, loc: Location): Float {
         val out = FloatArray(1)
-        Location.distanceBetween(homeLat(context), homeLon(context), loc.latitude, loc.longitude, out)
+        Location.distanceBetween(house.lat, house.lon, loc.latitude, loc.longitude, out)
         return out[0]
     }
+
+    /**
+     * The closest saved house to [loc] and how far away it is, or null with no fix / no
+     * houses. NEAREST WINS, everywhere: with more than one house the phone is at home if it
+     * is at any of them, and every readout below describes the one it is nearest to.
+     */
+    fun nearest(context: Context, loc: Location?): Pair<House, Float>? {
+        if (loc == null) return null
+        var bestHouse: House? = null
+        var bestDist = Float.MAX_VALUE
+        for (h in houses(context)) {
+            val d = distanceTo(h, loc)
+            if (d < bestDist) { bestDist = d; bestHouse = h }
+        }
+        return bestHouse?.let { it to bestDist }
+    }
+
+    /** Metres to the nearest house from [loc], or null if no house is set. */
+    fun distanceFrom(context: Context, loc: Location?): Float? = nearest(context, loc)?.second
 
     /** The error radius we'll actually work with: the phone's, floored (see MIN_ACCURACY_M). */
     fun usableAccuracy(loc: Location?): Float =
@@ -127,22 +283,6 @@ object HomeArea {
             d + acc <= RADIUS_M -> Verdict.HOME
             d - acc > RADIUS_M -> Verdict.AWAY
             else -> Verdict.MAYBE
-        }
-    }
-
-    /** One line explaining the verdict, for the debug page. */
-    fun explain(context: Context, loc: Location?): String {
-        if (!isSet(context)) return "No home point saved yet - press \"I'm in my house\"."
-        if (loc == null) return "Waiting for a location fix…"
-        val age = ageMs(loc)
-        if (age > MAX_FIX_AGE_MS) return "Last fix is ${age / 1000}s old - too stale to judge."
-        val d = distanceFrom(context, loc) ?: return "No home point saved."
-        val acc = usableAccuracy(loc)
-        return when (verdict(context, loc)) {
-            Verdict.HOME -> "${Math.round(d)} m from home, ±${Math.round(acc)} m - the whole error circle is inside the ${Math.round(RADIUS_M)} m radius."
-            Verdict.AWAY -> "${Math.round(d)} m from home, ±${Math.round(acc)} m - wholly outside the ${Math.round(RADIUS_M)} m radius."
-            Verdict.MAYBE -> "${Math.round(d)} m from home, ±${Math.round(acc)} m - the error circle straddles the ${Math.round(RADIUS_M)} m edge, so this decides nothing."
-            Verdict.UNKNOWN -> "No usable fix."
         }
     }
 
@@ -221,6 +361,61 @@ object HomeArea {
                 lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         } catch (_: Throwable) { false }
     }
+}
+
+
+// =====================================================================================
+//  HouseLock  -  in Strict and above, the house is not a setting you can edit.
+// =====================================================================================
+/**
+ * WHY A LOCK AT ALL. Every rule in this app that keys off "at home" is only as good as the
+ * point it is measured from, and that point used to be one button press away from being
+ * somewhere else. Someone who wants an evening off does not have to argue with the mode
+ * picker, the uninstall lock or the ratchet - they could stand in the garden, press save,
+ * and be "out" for the rest of the night in a house they never left. A rule with a one-tap
+ * escape hatch is not a rule, it is a suggestion.
+ *
+ * So a saved house is never edited. The two things that CAN be done split like this:
+ *
+ *   ADDING a house    FREE, INSTANTLY, always, in every mode. This is the pressure valve,
+ *                     and it is what lets the rest be strict: everyone whose life genuinely
+ *                     has two homes in it gets a real answer instead of a refusal. It is
+ *                     safe because being at home only ever TIGHTENS the rules (see
+ *                     [HomeRule]) - another house can cost the user more, never less.
+ *
+ *   REMOVING a house  In Strict and above: A MONTH, AND NOBODY IS TOLD WHEN. This is the
+ *                     only direction that loosens anything, so it is the only one that
+ *                     waits. The wait is ASKED FOR and then unmarked: the app never counts
+ *                     down, never notifies, and the house simply stops being there some
+ *                     time after the month is up, the next time anything looks (see
+ *                     [HomeArea.houses]). A visible countdown is a date to hold out for,
+ *                     and holding out for a date is exactly the behaviour this is trying
+ *                     not to reward.
+ *
+ * In Off and Relaxed a house is removed on the spot - those modes promise nothing, and
+ * making them wait would only teach people not to set the house up in the first place.
+ */
+object HouseLock {
+
+    /** How long a removal sits waiting before it quietly happens. */
+    const val DELETE_DELAY_MS = 30L * 24 * 60 * 60 * 1000
+
+    /** True in the modes that hold the user to the house they saved. */
+    fun applies(ctx: Context): Boolean = Mode.isStrict(ctx) || Mode.isSuperHardcore(ctx)
+
+    /** Is there room for another house? */
+    fun canAdd(ctx: Context): Boolean = HomeArea.count(ctx) < HomeArea.MAX_HOUSES
+
+    /** True when removing a house has to be asked for and waited out rather than just done. */
+    fun deleteNeedsWait(ctx: Context): Boolean = applies(ctx)
+
+    /**
+     * Has this house's month run out? Deliberately not exposed as a countdown anywhere -
+     * [HomeArea.houses] is the only caller, and it acts on it silently.
+     */
+    fun deleteIsDue(house: HomeArea.House): Boolean =
+        house.deleteRequestedAt > 0L &&
+            System.currentTimeMillis() - house.deleteRequestedAt >= DELETE_DELAY_MS
 }
 
 

@@ -425,7 +425,11 @@ class PauseOverlay(private val context: Context) {
     /** Run the one sweep. Idempotent - its two callers race deliberately. */
     private fun begin(root: View, sweepPanel: SweepPanelView) {
         if (view !== root || sweep != null || released) return
-        sweep = SweepAnimator(sweepPanel, UP_MS, DOWN_MS).also {
+        // ramp = false: this one sweep's length is written into the absolute deadlines
+        // below, and a longer round would be cut off by them. The gentler START that the
+        // breathing screens get from the ramp, this gets from the curve itself - see
+        // Motion.sweepUp, which no longer launches on the first frame.
+        sweep = SweepAnimator(sweepPanel, UP_MS, DOWN_MS, ramp = false).also {
             it.start(cycles = 1, onComplete = { release() })
         }
         // The buttons appear UNDER the panel at the top of the sweep, so the way down is

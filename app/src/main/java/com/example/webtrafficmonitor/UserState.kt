@@ -96,7 +96,8 @@ import android.graphics.Path
  *   RELAXED       - the calming "breathing" pause is suppressed for every app.
  *   STRICT        - the breathing pause shows on the FIRST open of a chosen app each day.
  *   SUPERHARDCORE - the breathing pause shows on EVERY open of a chosen app, plus the
- *                   tightest flagging thresholds.
+ *                   tightest flagging thresholds. A ONE-WAY DOOR: once it has been picked,
+ *                   no lower mode can ever be set again on this install (see setMode).
  *
  * The per-mode behaviour that actually differs lives in AppConfig.MODES (one ModeSpec
  * per mode) - keep it there rather than sprinkling `if (isStrict)` around, because the
@@ -111,6 +112,7 @@ object Mode {
     private const val KEY_MODE = "mode"
     private const val KEY_LOCK_UNTIL = "strict_locked_until"
     private const val KEY_EVER_STRICT = "ever_strict"
+    private const val KEY_EVER_SUPER = "ever_superhardcore"
     private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
 
     const val OFF = "off"
@@ -143,6 +145,10 @@ object Mode {
         // existed: latch the flag off the stored mode, not just off future setMode calls.
         if (rank(stored) >= rank(STRICT) && !everStrict(ctx))
             prefs(ctx).edit().putBoolean(KEY_EVER_STRICT, true).apply()
+        // Same latch for the Super hardcore ratchet, for installs that were already sitting
+        // in it before the ratchet existed.
+        if (stored == SUPERHARDCORE && !everSuperHardcore(ctx))
+            prefs(ctx).edit().putBoolean(KEY_EVER_SUPER, true).apply()
         if (isLocked(ctx) && rank(stored) < rank(STRICT)) return STRICT
         return stored
     }
@@ -153,6 +159,13 @@ object Mode {
      * clears it.
      */
     fun everStrict(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_EVER_STRICT, false)
+
+    /**
+     * True once the user has EVER been in Super hardcore. Also one-way, and stronger than
+     * [everStrict]: it makes EVERY lower mode unavailable, not just OFF. There is
+     * deliberately no setter that clears it - see the note on setMode.
+     */
+    fun everSuperHardcore(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_EVER_SUPER, false)
 
     fun isOff(ctx: Context) = current(ctx) == OFF
     fun isRelaxed(ctx: Context) = current(ctx) == RELAXED
@@ -212,25 +225,44 @@ object Mode {
      * Super hardcore additionally REQUIRES the uninstall lock to be active: a mode this
      * strict is pointless if the app can just be deleted in a weak moment. Callers should
      * check the same conditions first to give a useful message (see modeSpinner).
+     *
+     * THE SUPER HARDCORE RATCHET: entering Super hardcore is a ONE-WAY DOOR. Once it has
+     * been chosen, no lower mode can ever be set again on this install - not Strict, not
+     * Relaxed, not Off. Every other lock in this app is a timer you can out-wait; this one
+     * has no clock on it, which is the whole point of it. Someone picking the strictest
+     * mode we have is telling us what they want at their most clear-headed, and the
+     * request they are protecting themselves against is the one that arrives later, at
+     * 2am, from the same person in a much worse state. The mode picker must not offer the
+     * lower modes at all once this is set (see modeSpinner) - an option that is always
+     * refused reads as a door right up until you try the handle.
      */
     fun setMode(ctx: Context, mode: String): Boolean {
         if (isLocked(ctx) && rank(mode) < rank(STRICT)) return false
         if (mode == OFF && everStrict(ctx)) return false
+        if (rank(mode) < rank(SUPERHARDCORE) && everSuperHardcore(ctx)) return false
         if (mode == SUPERHARDCORE &&
             !(UninstallGuard.isEnabled(ctx) && UninstallGuard.isAdminActive(ctx))) return false
         val e = prefs(ctx).edit().putString(KEY_MODE, mode)
         if (rank(mode) >= rank(STRICT)) e.putBoolean(KEY_EVER_STRICT, true)
+        if (mode == SUPERHARDCORE) e.putBoolean(KEY_EVER_SUPER, true)
         e.apply()
         return true
     }
 
-    /** Force STRICT and lock it for 7 days. */
+    /**
+     * Force STRICT and lock it for 7 days.
+     *
+     * It writes the mode straight to prefs rather than going through [setMode], so it has
+     * to honour the Super hardcore ratchet itself: from up there this only arms the week
+     * lock and leaves the mode where it is. Otherwise "start week-long strict mode" would
+     * be a one-tap way back DOWN out of the one mode that has no way back down.
+     */
     fun startWeekStrict(ctx: Context) {
-        prefs(ctx).edit()
-            .putString(KEY_MODE, STRICT)
+        val e = prefs(ctx).edit()
             .putBoolean(KEY_EVER_STRICT, true)
             .putLong(KEY_LOCK_UNTIL, System.currentTimeMillis() + WEEK_MS)
-            .apply()
+        if (!everSuperHardcore(ctx)) e.putString(KEY_MODE, STRICT)
+        e.apply()
     }
 }
 

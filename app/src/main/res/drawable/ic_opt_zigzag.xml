@@ -1,0 +1,9 @@
+<!-- On edge: a jagged line  ·  minimal stroke glyph, 24dp grid, tinted at runtime. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M2.6,15.2 L6.4,8.8 L10.2,15.2 L14,8.8 L17.8,15.2 L21.4,9.6"
+        android:strokeColor="#FF000000" android:strokeWidth="1.7"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" android:strokeLineJoin="round"/>
+</vector>

@@ -9,7 +9,6 @@ import android.content.res.ColorStateList
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
 import android.view.animation.Interpolator
 import android.view.animation.PathInterpolator
 import android.widget.LinearLayout
@@ -194,8 +193,16 @@ object Motion {
     // transition, it is the thing you are meant to watch, and it runs for seconds. Its
     // two curves live here so the gate and the in-app pages move identically.
 
-    /** Up: away at once, easing off as it reaches the top. */
-    val sweepUp: Interpolator get() = DecelerateInterpolator(1.6f)
+    /**
+     * Up: eases IN, gathers pace through the middle, settles into the top.
+     *
+     * It used to be a DecelerateInterpolator, which is fastest at the very first frame -
+     * the panel launched. On the gate that covers an app you have just opened, that reads
+     * as the phone being snatched away, and it is the one moment the whole mechanism is
+     * meant to feel like slowing down. Starting near zero and building is the difference
+     * between being stopped and being asked to wait.
+     */
+    val sweepUp: Interpolator get() = PathInterpolator(0.7f, 0f, 0.22f, 1f)
     /**
      * Down: starts slow, drifts through the middle, and settles with only a slight
      * deceleration into the bottom. Deliberately NOT the mirror of [sweepUp] - coming

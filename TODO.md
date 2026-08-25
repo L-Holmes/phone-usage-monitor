@@ -1,4 +1,55 @@
 
+reasons people would enter the app
+- Initial setup
+- Incorrect block
+- Correct block but [they need to access the settings]
+- Want to increase The strictness of blocking.
+- 
+
+
+
+
+------
+
+
+
+
+------
+
+
+do i add an easier way for user to turn on say the screen slow down thing? 
+or do i keep that in screen repeated checking?
+
+----------------
+
+?????????????????/
+in general:
+- show the bottom bar at all times, even if user click on say the adult content page or one of its suboptoins?
+?????????????????/
+
+--------------------
+
+
+Things requiring the master password:
+- Delete the app
+- Change from superhardcore to a lower level
+- Temporarily unlock the app
+
+
+
+
+
+
+Add a private report feature???
+
+
+
+
+
+
+
+----------------------------
+
 
 just simplify pages in general- strip out anything we don't need. reduce complexity...
 

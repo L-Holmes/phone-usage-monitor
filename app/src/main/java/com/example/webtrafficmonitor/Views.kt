@@ -152,7 +152,31 @@ class SweepAnimator(
     private val panel: SweepPanelView,
     private val upMs: Long = 3_200,
     private val downMs: Long = 3_600,
+    /**
+     * Whether the FIRST rounds run long and settle to [upMs]/[downMs] - see [roundScale].
+     *
+     * On by default, because every in-app breathing screen wants it. The one caller that
+     * turns it off is the app-open gate (Overlay), whose total duration is written into
+     * absolute release deadlines: stretching the round there would let a deadline fire
+     * mid-sweep and hand the phone back early.
+     */
+    private val ramp: Boolean = true,
 ) {
+    /**
+     * How much longer round [round] runs than the settled pace.
+     *
+     * Someone arriving at a breathing screen is wound up, and the first breath is the one
+     * they are least able to follow. So it is the slowest, and each round after it closes
+     * most of the remaining gap: 1.35x, 1.18x, 1.09x, and from there indistinguishable
+     * from the base pace. You feel it slow down and then let you go, rather than being
+     * handed a metronome that was already running.
+     */
+    private fun roundScale(round: Int): Float =
+        if (!ramp) 1f else 1f + FIRST_ROUND_EXTRA / (1 shl round.coerceIn(0, 8))
+
+    private fun upFor(round: Int): Long = (upMs * roundScale(round)).toLong()
+    private fun downFor(round: Int): Long = (downMs * roundScale(round)).toLong()
+
     // Driven off Choreographer and our own clock rather than ValueAnimator, because a
     // ValueAnimator finishes INSTANTLY when the system animator duration scale is 0 -
     // which battery saver, "Remove animations" and Developer Options all do. That is what
@@ -206,9 +230,13 @@ class SweepAnimator(
 
     private fun tick(now: Long, cycles: Int?, onCycle: (Int, Int) -> Unit, onComplete: () -> Unit) {
         val elapsed = now - cycleStart
-        panel.progress = SweepCurve.progress(elapsed, upMs, downMs)
+        // The round in progress is `done` - its durations come from the ramp, not the
+        // constructor, so an early round is the same SHAPE stretched over more time.
+        val up = upFor(done)
+        val down = downFor(done)
+        panel.progress = SweepCurve.progress(elapsed, up, down)
 
-        if (elapsed < upMs + downMs) return
+        if (elapsed < up + down) return
 
         // Round finished.
         done++
@@ -220,6 +248,11 @@ class SweepAnimator(
         } else {
             cycleStart = now
         }
+    }
+
+    private companion object {
+        /** The first round is this much longer than the settled pace. */
+        const val FIRST_ROUND_EXTRA = 0.35f
     }
 
     fun stop() {

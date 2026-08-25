@@ -568,85 +568,9 @@ object DopamineLog {
 }
 
 
-// =====================================================================================
-// LifeInputs  (the OPTIONAL, self-reported habits - a SEPARATE estimate)
-// =====================================================================================
-/**
- * These do NOT touch the measured score. They cannot: they're self-reported, unverifiable,
- * and mixing them in would let someone tick "meditated" and watch the number they came here
- * to face go down. They produce their own clearly-labelled estimate instead.
- */
-object LifeInputs {
-
-    private const val PREFS = "life_inputs"
-
-    /**
-     * One option on a habit's scale. [credit] is how much of that habit's full value this
-     * option is worth, 0..1 - so the scales can be different lengths and still add up fairly.
-     */
-    /** [credit] 0..1 = how much of the habit's full value this option is worth. Label is
-     *  in res/values/strings.xml (habit_<key>_options, index-aligned with this list). */
-    data class Option(val credit: Float)
-
-    /**
-     * A habit, and the answer scale that actually suits it.
-     *
-     * TYPICAL DAY, not "days last week". The scales are per-habit on purpose: eight hours of
-     * sleep is a good day and eight hours of meditation is not a thing, so they cannot share
-     * a scale. Full credit is set at a level that is GOOD, not heroic - the point is to
-     * describe an ordinary decent day, not to make everyone score 20%.
-     */
-    data class Habit(val key: String, val options: List<Option>)
-
-    private fun mins(vararg credits: Float) = credits.map { Option(it) }
-
-    val HABITS: List<Habit> = listOf(
-        Habit("deep_rest", mins(0f, 0.25f, 0.6f, 1f, 1f)),
-        Habit("offline_focus", mins(0f, 0.2f, 0.45f, 0.65f, 0.85f, 1f)),
-        Habit("training", mins(0f, 0.25f, 0.6f, 0.85f, 1f)),
-        Habit("building", mins(0f, 0.2f, 0.5f, 0.8f, 1f)),
-        Habit("creation", mins(0f, 0.2f, 0.5f, 0.8f, 1f)),
-        Habit("in_person", mins(0f, 0.25f, 0.55f, 0.85f, 1f)),
-        Habit("reflection", mins(0f, 0.35f, 0.7f, 0.9f, 1f)),
-        Habit("light_exercise", mins(0f, 0.2f, 0.5f, 0.8f, 1f)),
-        Habit("healthy_eating", listOf(Option(0f), Option(0.4f), Option(0.75f), Option(1f))),
-        Habit("caffeine", listOf(Option(1f), Option(0.9f), Option(0.6f), Option(0.15f))),
-        Habit("alcohol", listOf(Option(1f), Option(0.7f), Option(0.35f), Option(0f))),
-    )
-
-    /** The stored option INDEX for a habit (defaults to the worst/none end of the scale). */
-    fun get(c: Context, key: String): Int = prefs(c).getInt(key, defaultIndex(key))
-    fun set(c: Context, key: String, index: Int) {
-        val h = habit(key) ?: return
-        prefs(c).edit().putInt(key, index.coerceIn(0, h.options.lastIndex)).apply()
-    }
-
-    fun habit(key: String): Habit? = HABITS.firstOrNull { it.key == key }
-    fun optionOf(key: String, index: Int): Option? =
-        habit(key)?.options?.getOrNull(index)
-
-    fun anySet(c: Context) = HABITS.any { get(c, it.key) != defaultIndex(it.key) }
-
-    // Caffeine and alcohol default to "none", which is the GOOD end - so someone who never
-    // opens this page isn't quietly assumed to be drinking. Everything else defaults to 0.
-    private fun defaultIndex(key: String) = 0
-
-    /**
-     * A 0-100 "restorative habits" estimate. Higher = better, which is the OPPOSITE direction
-     * to the dopamine score - deliberately, so the two can never be confused for each other.
-     */
-    fun estimate(c: Context): Int {
-        if (HABITS.isEmpty()) return 0
-        val total = HABITS.sumOf { h ->
-            (optionOf(h.key, get(c, h.key))?.credit ?: 0f).toDouble()
-        }
-        return Math.round(total / HABITS.size * 100).toInt()
-    }
-
-    private fun prefs(c: Context) =
-        c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-}
-
+// LifeInputs (the self-reported sleep/training/focus questionnaire) USED TO LIVE HERE.
+// Removed with its page: it produced a second score that, by its own banner, fed into
+// nothing. The measured baseline below is the only number this app claims.
 
 // =====================================================================================
 // AboutYou  (optional personal numbers, used ONLY to make the cost concrete)
@@ -744,11 +668,8 @@ object DopamineRank {
         Belt("Disciple", "Dopamine Disciple", 7, 40, Palette.series[1]),
     )
 
-    /** One row of the prestige ladder, for the "all the ranks" page. */
-    data class RankLevel(val longTitle: String, val colour: Int, val requirement: String)
+    // RankLevel (one row of the prestige ladder) went with the page that rendered it.
 
-    /** The full ladder, best first, with what each takes. Belt numbers are interpolated
-     *  from BELTS so this page can never drift out of sync with the real rules. */
     private fun longRes(context: Context, long: String): String = context.getString(when (long) {
         "Melatonin Monk" -> R.string.rank_monk_long
         "Grounded Guru" -> R.string.rank_guru_long
@@ -774,24 +695,8 @@ object DopamineRank {
         else -> R.string.rank_initiate
     })
 
-    fun levels(context: Context): List<RankLevel> = BELTS.mapIndexed { i, b ->
-        val flavour = context.getString(when (i) {
-            0 -> R.string.rank_flavour_0
-            1 -> R.string.rank_flavour_1
-            2 -> R.string.rank_flavour_2
-            else -> R.string.rank_flavour_3
-        })
-        RankLevel(longRes(context, b.longTitle), b.colour,
-            context.getString(R.string.rank_req, b.streakDays, b.maxScore, flavour))
-    } + listOf(
-        RankLevel(longRes(context, "Adenosine Apprentice"), Palette.tintDeep, context.getString(R.string.rank_req_apprentice)),
-        RankLevel(longRes(context, "Dopamine Drifter"), Palette.warningText, context.getString(R.string.rank_req_drifter)),
-        RankLevel(longRes(context, "The Twitchy Thumb"), Palette.warningText, context.getString(R.string.rank_req_twitchy)),
-        RankLevel(longRes(context, "Certified Doomscroller"), Palette.danger, context.getString(R.string.rank_req_doomscroller)),
-        RankLevel(longRes(context, "Fully Fried"), Palette.dangerText, context.getString(R.string.rank_req_fried)),
-        RankLevel(longRes(context, "The Journey Begins"), Palette.tint, context.getString(R.string.rank_req_journey)),
-    )
-
+    // levels() - the whole belt ladder, rendered as a page - went with "The ranks".
+    // of() below still gives the CURRENT rank, which is what Overview shows.
     fun of(context: Context): DopamineRankResult {
         val history = DopamineLog.history(context, 90)
         val scored = history.map { d -> DopamineScore.of(context, d).let { if (it.hasData) it.score else -1 } }

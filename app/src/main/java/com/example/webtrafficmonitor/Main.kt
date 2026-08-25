@@ -10,6 +10,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.Location
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -289,12 +290,12 @@ class MainActivity : AppCompatActivity() {
 
     // ── "I feel temptation" flow (groups -> sub-picks -> ride the wave) ─────────
     private enum class TGroup(
-        val short: String, val example: String, val title: String, val category: String, val icon: String,
+        val short: String, val example: String, val title: String, val category: String, val icon: Int,
     ) {
-        SCREEN("Something on a screen", "e.g. my phone, my computer, the TV", "What kind of screen?", "screen", "\uD83D\uDCF1"),
-        PLACE("Linked to where I am", "e.g. bedroom, bathroom, in the house", "Where are you?", "location", "\uD83D\uDCCD"),
-        FEELING("How I'm feeling", "e.g. anxious, low, frustrated", "How are you feeling?", "feeling", "\uD83D\uDCAD"),
-        DOING("Out of habit", "e.g. scrolling, winding down, just woke up", "What were you doing?", "activity", "\uD83D\uDD01"),
+        SCREEN("Something on a screen", "e.g. my phone, my computer, the TV", "What kind of screen?", "screen", R.drawable.ic_opt_display),
+        PLACE("Linked to where I am", "e.g. bedroom, bathroom, in the house", "Where are you?", "location", R.drawable.ic_opt_pin),
+        FEELING("How I'm feeling", "e.g. anxious, low, frustrated", "How are you feeling?", "feeling", R.drawable.ic_opt_pulse),
+        DOING("Out of habit", "e.g. scrolling, winding down, just woke up", "What were you doing?", "activity", R.drawable.ic_opt_repeat),
     }
     private fun baseFor(g: TGroup): List<String> = when (g) {
         TGroup.SCREEN -> Opts.SCREEN_TYPES
@@ -471,6 +472,23 @@ private fun habitOption(key: String, index: Int): String =
 
 private fun temptResId(id: String, suffix: String): Int =
     resources.getIdentifier("temptspec_${id}_$suffix", if (suffix == "covers") "array" else "string", packageName)
+/**
+ * The glyph for a temptation category. Emoji used to live in the TITLES themselves, which
+ * meant the title string carried a picture, every translation had to keep it, and the
+ * result was a column of full-colour cartoons on cards that are otherwise monochrome and
+ * quiet. These are stroke marks in the app's own tint instead - see iconBadge.
+ */
+private fun temptIcon(id: String): Int = when (id) {
+    "scrolling" -> R.drawable.ic_cat_scrolling
+    "checking" -> R.drawable.ic_cat_checking
+    "binge" -> R.drawable.ic_cat_binge
+    "comparison" -> R.drawable.ic_cat_comparison
+    "news" -> R.drawable.ic_cat_news
+    "gaming" -> R.drawable.ic_cat_gaming
+    "shopping" -> R.drawable.ic_cat_shopping
+    else -> R.drawable.ic_opt_pulse
+}
+
 private fun temptTitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "title"))
 private fun temptSubtitle(spec: AppConfig.TemptationSpec): String = getString(temptResId(spec.id, "subtitle"))
 /**
@@ -622,8 +640,8 @@ private fun showStatsMenu() {
     root.addView(titleText(getString(R.string.stats_title)))
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     // NOTE: "Dopamine baseline" deliberately does NOT live here. It is a whole-phone,
-    // whole-life measure, not an adult-content one, so it belongs on the Productivity page -
-    // see showProductivity(). Don't move it back in here.
+    // whole-life measure, not an adult-content one, so it belongs on Overview - see
+    // setupHomeScreen(). Don't move it back in here.
     list.addView(pickCard(getString(R.string.stats_progress)) { showProgress() })
     list.addView(pickCard(getString(R.string.stats_context)) { showContextStats() })
     list.addView(pickCard(getString(R.string.stats_temptation)) { showTemptationStats() })
@@ -632,23 +650,12 @@ private fun showStatsMenu() {
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(list)
     })
-    setContentWithThumb(root) { showReportScreen() }
+    setContentWithThumb(root) { setupMainScreen() }
 }
-
-/** A quiet teal text link, used under the cards on the Productivity page. */
-private fun smallLink(label: String, dp: Float, onClick: () -> Unit): TextView =
-    TextView(this).apply {
-        text = label; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(Palette.tint)
-        isClickable = true; isFocusable = true
-        setPadding(0, (12 * dp).toInt(), 0, (2 * dp).toInt())
-        setOnClickListener { onClick() }
-    }
 
 // ── About you: optional numbers, used ONLY to make the cost concrete ────────
 private var aboutYouBack: () -> Unit = { setupHomeScreen() }
-private var dopamineBack: () -> Unit = { showProductivity() }
-private var lifeInputsBack: () -> Unit = { showProductivity() }
+private var dopamineBack: () -> Unit = { setupHomeScreen() }
 /** The house page is reached from the dashboard AND from Developer tools; back goes home
  *  by default, and the dev card sets it to the tools page it was opened from. */
 private var houseBack: () -> Unit = { setupHomeScreen() }
@@ -792,65 +799,24 @@ private fun showDopamine() {
         }
     }
 
+    // TWO BUTTONS USED TO SIT HERE AND HAVE BEEN REMOVED WITH THEIR PAGES:
+    //   • "The ranks" - the belt ladder. A prestige system bolted onto a number that is
+    //     supposed to be read once a day and acted on; it turned a measurement into a game
+    //     with a score to protect.
+    //   • "Your habits estimate" - a self-reported sleep/training/focus questionnaire that
+    //     produced a second score which, by its own banner, changed nothing.
+    // What is left is the two questions worth asking about a number: how is it worked out,
+    // and how do I bring it down.
     c.addView(statHeader(getString(R.string.dop_more), dp))
-    c.addView(captionedButton(getString(R.string.dop_ranks_btn), getString(R.string.dop_ranks_sub),
-        Palette.successText) { showDopamineRanks() })
     c.addView(captionedButton(getString(R.string.dop_maths_btn), getString(R.string.dop_maths_sub),
         Palette.tint) { showDopamineMaths() })
     c.addView(captionedButton(getString(R.string.dop_guidance_btn), getString(R.string.dop_guidance_sub),
         Palette.series[1]) { showDopamineGuidance() })
-    c.addView(captionedButton(getString(R.string.dop_habits_btn), getString(R.string.dop_habits_sub),
-        Palette.tintDeep) { lifeInputsBack = { showDopamine() }; showLifeInputs() })
     c.addView(TextView(this).apply {
         text = getString(R.string.dop_disclaimer)
         textSize = 12f; setTextColor(Palette.labelTertiary)
         setPadding(0, (14 * dp).toInt(), 0, (20 * dp).toInt())
     })
-}
-
-// ── "How is this calculated?" - every rule, in one list, in plain English ───
-//
-// The prestige ladder, best first, with what each level takes. The current rank is
-// highlighted. Generated from DopamineRank.levels() so it can't drift from the rules.
-private fun showDopamineRanks() {
-    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val root = vbox(pad)
-    root.addView(titleText(getString(R.string.dop_ranks_title)))
-    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
-    })
-    setContentWithThumb(root) { showDopamine() }
-
-    c.addView(TextView(this).apply {
-        text = getString(R.string.dop_ranks_intro)
-        textSize = 14f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.2f)
-        setPadding(0, 0, 0, (12 * dp).toInt())
-    })
-    val current = DopamineRank.of(this).longTitle
-    for (level in DopamineRank.levels(this)) {
-        val mine = level.longTitle == current
-        c.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = Radius.control * dp
-                setColor(if (mine) Palette.successSoft else Palette.surface)
-                if (mine) setStroke((2 * dp).toInt(), level.colour)
-            }
-            val p = (14 * dp).toInt(); setPadding(p, (10 * dp).toInt(), p, (10 * dp).toInt())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (8 * dp).toInt() }
-            addView(TextView(this@MainActivity).apply {
-                text = level.longTitle + (if (mine) getString(R.string.dop_ranks_you) else "")
-                textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(level.colour)
-            })
-            addView(TextView(this@MainActivity).apply {
-                text = level.requirement; textSize = 13f; setTextColor(Palette.labelSecondary)
-                setPadding(0, (2 * dp).toInt(), 0, 0)
-            })
-        })
-    }
 }
 
 // AI / MAINTAINER: this screen is GENERATED from DopamineTuning. If you change a weight or
@@ -1057,102 +1023,6 @@ private fun adviceFor(key: String): String = getString(when (key) {
     "lying", "dark" -> R.string.dop_adv_lyingdark
     else -> R.string.dop_adv_default
 })
-
-// ── The self-reported habits: a SEPARATE estimate, never mixed into the score ──
-private fun showLifeInputs() {
-    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val root = vbox(pad)
-    root.addView(titleText(getString(R.string.dop_life_title)))
-    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f); addView(c)
-    })
-    setContentWithThumb(root) { lifeInputsBack() }
-
-    val banner = TextView(this).apply {
-        text = getString(R.string.dop_life_banner)
-        textSize = 13f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, 1.15f)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = Radius.control * dp; setColor(Palette.surface)
-        }
-        val p = (14 * dp).toInt(); setPadding(p, p, p, p)
-    }
-    c.addView(banner)
-
-    val scoreLabel = TextView(this).apply {
-        textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.successText)
-        setPadding(0, (16 * dp).toInt(), 0, (2 * dp).toInt())
-    }
-    fun paintScore() {
-        scoreLabel.text = getString(R.string.dop_life_score, LifeInputs.estimate(this))
-    }
-    paintScore()
-    c.addView(scoreLabel)
-    c.addView(TextView(this).apply {
-        text = getString(R.string.dop_life_typical)
-        textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (4 * dp).toInt())
-    })
-
-    // Each habit gets the scale that suits IT: sleep in hours, meditation in minutes,
-    // caffeine in cups. A shared 0-7 slider was the wrong shape for all of them.
-    LifeInputs.HABITS.forEach { habit ->
-        c.addView(TextView(this).apply {
-            text = habitLabel(habit.key); textSize = 16f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Palette.label); setPadding(0, (18 * dp).toInt(), 0, (1 * dp).toInt())
-        })
-        c.addView(TextView(this).apply {
-            text = habitHint(habit.key); textSize = 12f; setTextColor(Palette.labelTertiary)
-            setPadding(0, 0, 0, (8 * dp).toInt())
-        })
-        c.addView(optionChips(habit) { paintScore() })
-    }
-    c.addView(View(this), LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, (28 * dp).toInt()))
-}
-
-/** A row of tappable pills - one per option on this habit's scale. Selected one is filled. */
-private fun optionChips(habit: LifeInputs.Habit, onChange: () -> Unit): View {
-    val dp = resources.displayMetrics.density
-    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-    val chips = mutableListOf<TextView>()
-    var selected = LifeInputs.get(this, habit.key)
-
-    fun paint() {
-        chips.forEachIndexed { i, chip ->
-            val on = i == selected
-            chip.setTextColor(if (on) Palette.onFill else Palette.labelSecondary)
-            chip.setTypeface(chip.typeface, if (on) Typeface.BOLD else Typeface.NORMAL)
-            chip.background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = Radius.control * dp
-                setColor(if (on) Palette.tintDeep else 0x00000000)
-                setStroke((1.2f * dp).toInt(), if (on) Palette.tintDeep else Palette.divider)
-            }
-        }
-    }
-
-    habit.options.forEachIndexed { i, opt ->
-        val chip = TextView(this).apply {
-            text = habitOption(habit.key, i)
-            textSize = 12f
-            gravity = Gravity.CENTER
-            val px = (6 * dp).toInt(); val py = (9 * dp).toInt()
-            setPadding(px, py, px, py)
-            isClickable = true; isFocusable = true
-            layoutParams = LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-            ).apply { marginEnd = if (i == habit.options.lastIndex) 0 else (5 * dp).toInt() }
-            setOnClickListener {
-                selected = i
-                LifeInputs.set(this@MainActivity, habit.key, i)
-                paint(); onChange()
-            }
-        }
-        chips.add(chip)
-        row.addView(chip)
-    }
-    paint()
-    return row
-}
 
 // ── Where & how it happens: posture + light at the moment things go wrong ───
 //
@@ -1591,7 +1461,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
     private fun waveWalk() {
         tBack = { stopRideTimer(); temptationUrgeScreen() }
         waveActionScreen(
-            getString(R.string.ride_walk_q), "\uD83D\uDEB6",
+            getString(R.string.ride_walk_q), R.drawable.ic_opt_outside,
             getString(R.string.ride_walk_yes), { waveSuccess() },
             getString(R.string.ride_walk_no), { waveMove() },
         )
@@ -1599,7 +1469,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
     private fun waveMove() {
         tBack = { waveWalk() }
         waveActionScreen(
-            getString(R.string.ride_move_q), "\uD83D\uDEAA",
+            getString(R.string.ride_move_q), R.drawable.ic_opt_door,
             getString(R.string.ride_move_yes), { waveSuccess() },
             getString(R.string.ride_move_no), { wavePhysical() },
         )
@@ -1607,7 +1477,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
     private fun wavePhysical() {
         tBack = { waveMove() }
         waveActionScreen(
-            getString(R.string.ride_phys_q), "\uD83E\uDD38",
+            getString(R.string.ride_phys_q), R.drawable.ic_opt_dumbbell,
             getString(R.string.ride_phys_yes), { waveSuccess() },
             getString(R.string.ride_phys_no), { waveStuck() },
         )
@@ -1633,9 +1503,7 @@ private fun vBars(values: IntArray, sparseLabels: Map<Int, String>): View {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(TextView(this).apply {
-            text = "\uD83C\uDF0A"; textSize = 64f; gravity = Gravity.CENTER
-        })
+        root.addView(heroIcon(R.drawable.ic_opt_wave))
         root.addView(TextView(this).apply {
             text = getString(R.string.ride_peak_title)
             textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
@@ -1758,7 +1626,7 @@ private fun waveBreatheScreen(title: String, side: String, continueLabel: String
 }
 
 private fun waveActionScreen(
-    prompt: String, icon: String,
+    prompt: String, icon: Int,
     yesLabel: String, onYes: () -> Unit, noLabel: String, onNo: () -> Unit,
     tertiaryLabel: String? = null, onTertiary: (() -> Unit)? = null,
 ) {
@@ -1771,9 +1639,9 @@ private fun waveActionScreen(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     root.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    root.addView(TextView(this).apply {
-        text = icon; textSize = 72f; gravity = Gravity.CENTER
-    })
+    // The hero mark. Big, thin and in the brand tint - it carries the screen the way the
+    // 72sp emoji did, without shouting or looking like a different app on every phone.
+    root.addView(heroIcon(icon))
     root.addView(TextView(this).apply {
         text = prompt; textSize = 23f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding((8 * dp).toInt(), (18 * dp).toInt(), (8 * dp).toInt(), 0)
@@ -2225,9 +2093,28 @@ private fun showRecentBlocks() {
 }
 
 // ── Report screen: 4 equal full-width panes ────────────────────────────────
-// ── Bottom navigation (strava-style): icon + label, subtle pill on the selected tab.
+// ── Bottom navigation: a floating pill, not a bar welded to the bottom edge ─────────
+// The pill's geometry, in one place - the reserved space below is derived from it, so a
+// change to the padding cannot silently leave the last card stranded under the pill.
+private val barIconDp = 22          // the glyph itself
+private val barInsetDp = 6          // pill edge -> tab capsule
+private val barTabPadV = 10         // capsule padding, vertical
+private val barTabPadH = 18         // capsule padding, horizontal (roomier: it is a capsule)
+private val barLiftDp = Space.md    // how far the pill hovers above the bottom edge
+
+private val barPillHeight get() = dp(barIconDp + barTabPadV * 2 + barInsetDp * 2)
+private val barReservedSpace get() = barPillHeight + dp(barLiftDp + Space.sm)
+
 /**
- * The tab bar. Glass, hairline top edge, tint for the selected tab in a soft pill.
+ * The tab bar. A single floating glass pill, centred over the content, with the selected
+ * tab carried in a soft tinted capsule inside it.
+ *
+ * WHY IT FLOATS. The old bar was a full-width slab pinned to the bottom with a hairline
+ * above it: it cut the screen off at a hard line and read as chrome bolted onto the page.
+ * A pill that hovers - inset from all three edges, rounded to a capsule, with content
+ * running underneath it - reads as an object sitting ON the app rather than the app's
+ * bottom edge. It costs less width than it looks like it does (two tabs never needed the
+ * whole screen), and it gives the content the full height of the display.
  *
  * TWO TABS, and it stays two. Productivity used to be a third one, but it is a page you
  * open when you want to look at your numbers, not somewhere you live - so it costs a
@@ -2235,69 +2122,115 @@ private fun showRecentBlocks() {
  * (see setupHomeScreen) and reached like any other sub-page. Overview is where you land;
  * Temptations is what you reach for in the moment. Anything else is a sub-page.
  *
- * The selected pill is Palette.tintSoft rather than a 8%-alpha teal: a solid soft colour
- * stays the same over any content, where an alpha wash shifted with whatever scrolled
+ * The selected capsule is Palette.tintSoft rather than an 8%-alpha teal: a solid soft
+ * colour stays the same over any content, where an alpha wash shifted with whatever
+ * scrolled underneath it - and under a floating pill, something is ALWAYS scrolling
  * underneath it.
+ *
+ * The content keeps scrolling behind the pill on purpose (clipToPadding = false), the way
+ * an iOS tab bar does; the bottom padding added below is what stops the last card ending
+ * up permanently parked under it.
  */
 private fun withBottomBar(content: View, selected: Int): View {
-    val wrap = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
+    val root = FrameLayout(this).apply {
         setBackgroundColor(Palette.bg)
-        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
-    wrap.addView(content, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-    wrap.addView(View(this).apply { setBackgroundColor(Palette.hairline) },
-        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, maxOf(1, dp(1))))
+    // Room at the bottom of the scroll for the pill to hover over. Applied to the view we
+    // were handed, so a ScrollView gets extra scroll travel (content passes under the
+    // pill) and a plain column just gets a shorter box (content stops above it).
+    content.setPadding(
+        content.paddingLeft, content.paddingTop,
+        content.paddingRight, content.paddingBottom + barReservedSpace)
+    (content as? ViewGroup)?.clipToPadding = false
+    root.addView(content, FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    // The page fades up; the PILL DOES NOT. setContentView animates whatever it is handed,
+    // and handing it the whole frame meant the bar rose 8dp with the content on every tab
+    // change - a floating object that re-lands each time you touch it. Animate the content
+    // here instead and tell setContentView to leave the frame alone (see skipEnter).
+    content.enterFromBelow()
+    skipEnter = true
+
     val bar = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        setBackgroundColor(Palette.glass)
-        setPadding(dp(Space.xs), dp(Space.xs), dp(Space.xs), dp(Space.sm))
+        gravity = Gravity.CENTER_VERTICAL
+        background = surfaceBg(Palette.glass, Radius.pill, stroke = Palette.hairline)
+        // The one place in the app that gets a real shadow: a floating object has to read
+        // as floating, and a hairline alone cannot say "above the page".
+        elevation = dpf(12f)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            outlineSpotShadowColor = 0x40101820
+            outlineAmbientShadowColor = 0x30101820
+        }
+        val inset = dp(barInsetDp)
+        setPadding(inset, inset, inset, inset)
+        layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(barLiftDp)
+            marginStart = dp(Space.md); marginEnd = dp(Space.md)
+        }
     }
     val tabs = listOf(
-        Triple(R.drawable.ic_nav_overview, getString(R.string.nav_overview)) { setupHomeScreen() },
-        Triple(R.drawable.ic_nav_temptations, getString(R.string.nav_temptations)) { showTemptationsTab() },
+        Triple(R.drawable.ic_nav_overview, getString(R.string.nav_overview)) { switchTab(0) },
+        Triple(R.drawable.ic_nav_temptations, getString(R.string.nav_temptations)) { switchTab(1) },
     )
     tabs.forEachIndexed { i, (icon, label, go) ->
         val sel = i == selected
-        val colour = if (sel) Palette.tint else Palette.labelTertiary
+        val colour = if (sel) Palette.tintDeep else Palette.labelTertiary
         bar.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(Space.xs); marginEnd = dp(Space.xs)
-            }
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             background =
-                if (sel) surfaceBg(Palette.tintSoft, Radius.control, stroke = null)
-                else tappableBg(0x00000000, Radius.control, stroke = null)
-            setPadding(0, dp(Space.xs), 0, dp(Space.xs))
+                if (sel) surfaceBg(Palette.tintSoft, Radius.pill, stroke = null)
+                else tappableBg(0x00000000, Radius.pill, stroke = null)
+            setPadding(dp(barTabPadH), dp(barTabPadV), dp(barTabPadH), dp(barTabPadV))
             isClickable = true; isFocusable = true
             setOnClickListener { if (!sel) go() }
             if (!sel) pressable()
             addView(ImageView(this@MainActivity).apply {
                 setImageResource(icon); setColorFilter(colour)
-            }, LinearLayout.LayoutParams(dp(22), dp(22)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-            })
+            }, LinearLayout.LayoutParams(dp(barIconDp), dp(barIconDp)))
             addView(TextView(this@MainActivity).apply {
-                text = label; textSize = 11f; setTextColor(colour); gravity = Gravity.CENTER
-                if (sel) setTypeface(typeface, Typeface.BOLD)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(Space.xxs) / 2
-            })
+                // BOTH labels are bold, always. Selection is said with colour and the
+                // capsule behind it - never with weight, because bold text is WIDER, and a
+                // wrap-content pill that changes width when you change tab visibly jumps as
+                // it re-centres itself. The pill must be the same size on both tabs.
+                text = label; textSize = Type.footnote; setTextColor(colour)
+                letterSpacing = -0.01f
+                setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginStart = dp(Space.xs) })
         })
     }
-    wrap.addView(bar)
-    return wrap
+    root.addView(bar)
+    // THE TAB REMEMBERS ITSELF FROM THE MOMENT IT IS BUILT. Recording it here, rather than
+    // on the way out, is what makes "back" reliable: sub-pages clear the tab flags at
+    // different points in their own render, so there is no single moment on the way out
+    // when "am I leaving a tab root?" is dependably true. At this point it always is.
+    tabMemory[selected] = TabMemory(root, null, onReport = false, onDev = false, inSub = false)
+    activeTab = selected
+    return root
 }
 
 // ── Disguised home: a productivity face; the addiction tools live behind a tab ─
 // Order, deliberately: the dopamine baseline + rank first (the thing to care about),
-// then the usage graphs (what it costs), then the Productivity door, dev tools, the
-// status console, and a tiny about link. Temptations is the other bottom-bar tab, so
-// it needs no door here. The old "what you've reclaimed" stats and the cost projector
-// live in showScrollCost() inside Productivity now.
+// then the usage graphs (what it costs), then the cost donut and the daily goal, the
+// sensors and status consoles, a tiny about link, and dev tools dead last. Temptations is
+// the other bottom-bar tab, so it needs no door here.
 private fun setupHomeScreen() {
+    // BACK is a return, not an arrival: it hands you the page you left, scrolled where you
+    // left it (see restoreTab). Every OTHER route here - a resume, a mode change, finishing
+    // a flow, "Set" on the usage goal - rebuilds, because those are the moments the numbers
+    // on this page have actually changed and a preserved snapshot would be a stale one.
+    if (inBackNav && restoreTab(0)) return
     onHomeScreen = true; onTemptationsTab = false; onReportScreen = false; onDevScreen = false
     subBack = null
+    claimTab(0)
     inSubPage = false; inTemptationFlow = false
     inLoosenFlow = false; inAppSiteFlow = false
     stopRideTimer(); stopLoosenTimer(); entriesJob?.cancel()
@@ -2482,66 +2415,50 @@ private fun setupHomeScreen() {
         onStatsClick = { aboutYouBack = { setupHomeScreen() }; showAboutYou() },
     ))
 
-    // ── 3. Productivity: the door to their own numbers ───────────────────────
-    //    Sits directly under the usage overview, because that is the graph that raises the
-    //    question this page answers. It replaced a bottom-bar tab, so it has to do the tab
-    //    label's job AND the job the label never did: say what is behind it, and say that
-    //    the app wants three figures FROM the user. The live "n of 3 added" line is the
-    //    only place on Overview that admits any of this takes input at all - which is why
-    //    it is bold and tinted when the count is zero.
-    val numbersAdded = listOf(
-        AboutYou.hasData(this),
-        LifeInputs.anySet(this),
-        UsageGoal.minutesPerDay(this) > 0,
-    ).count { it }
-    content.addView(homeHeading(getString(R.string.home_prod_title), getString(R.string.home_prod_sub)))
-    content.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = tappableBg(Palette.glass); elevation = dpf(1f)
-        clipToOutline = true                       // or the ripple squares off the corners
-        val p = dp(Space.md); setPadding(p, p, p, p)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        isClickable = true; isFocusable = true
-        setOnClickListener { showProductivity() }
-        pressable()
-
-        addView(LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.home_prod_card_title); textSize = Type.headline
-                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            addView(TextView(this@MainActivity).apply {
-                text = "›"; textSize = 22f; setTextColor(Palette.labelQuaternary)
-            })
-        })
-        addView(TextView(this@MainActivity).apply {
-            text = getString(R.string.home_prod_card_sub)
-            textSize = Type.footnote; setTextColor(Palette.labelSecondary)
-            setLineSpacing(0f, Type.lineSpacing)
-            setPadding(0, dp(Space.xxs), 0, 0)
-        })
-        addView(separator())
-        listOf(R.string.home_prod_b1, R.string.home_prod_b2, R.string.home_prod_b3).forEach { line ->
-            addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.proto_bullet, getString(line))
-                textSize = Type.footnote; setTextColor(Palette.labelSecondary)
-                setLineSpacing(0f, Type.lineSpacing)
-                setPadding(0, dp(Space.xxs), 0, 0)
-            })
-        }
-        addView(TextView(this@MainActivity).apply {
-            text = if (numbersAdded == 0) getString(R.string.home_prod_none)
-                   else getString(R.string.home_prod_added, numbersAdded)
-            textSize = Type.footnote; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(if (numbersAdded == 0) Palette.tint else Palette.successText)
-            setPadding(0, dp(Space.sm), 0, 0)
+    // ── 3. What it costs, in one picture ────────────────────────────────────
+    //    This used to be a heading and a big "Open Productivity" card - a door to a page
+    //    that was itself mostly doors. The page is gone (see the note above showUsageGoal):
+    //    what people actually took from it was the donut, so the donut is here, on the
+    //    page they already open, with nothing under it. One number, no navigation.
+    //
+    //    It sits directly under the usage chart on purpose and carries no heading of its
+    //    own: it is the same subject said a second way - the year in hours, then the day
+    //    as a share of the waking one.
+    //
+    //    THE FRACTION is real once there is enough history to trust (the same >= 14 days
+    //    bar the year chart uses); before that it falls back to Usage.minutes, which is
+    //    where the old projector's slider left it. It is never allowed to read 0% and
+    //    imply a clean slate we have not measured.
+    val costMinutes = if (yearIsReal) Math.round(avgDaily * 60f) else Usage.minutes(this)
+    content.addView(glassCard(Space.md).apply {
+        addView(WastedDonutView(this@MainActivity).apply {
+            setFraction(costMinutes / (Usage.WAKING_HOURS * 60f))
+        }, LinearLayout.LayoutParams(dp(168), dp(168)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(Space.xs); bottomMargin = dp(Space.xs)
         })
     })
 
-    // ── 4. Dev tools (only when dev mode is on) ─────────────────────────────
+    //    The one figure on the old page you could actually SET, kept because it draws the
+    //    target line on every usage graph above.
+    content.addView(homeCard(getString(R.string.prod_row_goal), getString(R.string.prod_row_goal_sub),
+        R.drawable.ic_opt_hourglass) { showUsageGoal() })
+
+    // sensors console, then the permission/status console, then the quietest about link
+    content.addView(sensorsConsole())
+    content.addView(permissionConsole())
+    content.addView(TextView(this).apply {
+        text = getString(R.string.home_about_privacy); textSize = 12f; setTextColor(Palette.labelTertiary)
+        gravity = Gravity.CENTER; isClickable = true; isFocusable = true
+        setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        setOnClickListener { showAboutPage() }
+    })
+
+    // ── Dev tools: DEAD LAST, below even the about link (only when dev mode is on) ──
+    // It used to sit up between the Productivity card and the consoles, which put a door
+    // marked "developer" in the middle of the page a user actually reads. It is ours, not
+    // theirs: the bottom of the page is exactly where it belongs.
     if (AppConfig.DEV_MODE) {
         content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -2558,17 +2475,6 @@ private fun setupHomeScreen() {
             addView(TextView(this@MainActivity).apply { text = "›"; textSize = 20f; setTextColor(Palette.labelTertiary) })
         })
     }
-
-    // sensors console, then the permission/status console, then the quietest about link
-    content.addView(sensorsConsole())
-    content.addView(permissionConsole())
-    content.addView(TextView(this).apply {
-        text = getString(R.string.home_about_privacy); textSize = 12f; setTextColor(Palette.labelTertiary)
-        gravity = Gravity.CENTER; isClickable = true; isFocusable = true
-        setPadding(0, (18 * dp).toInt(), 0, (6 * dp).toInt())
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setOnClickListener { showAboutPage() }
-    })
 
     val root = ScrollView(this).apply {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -2715,6 +2621,19 @@ private fun chartStatCard(
 }
 
 // ── Usage goal: pick a daily phone-time target; the home graphs draw it. ──────
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//  THE PRODUCTIVITY PAGE IS GONE, AND SO IS "WHAT THE SCROLL COSTS". DO NOT REBUILD THEM.
+//
+//  Productivity was a page of doors: a dopamine card that Overview already shows, a
+//  reclaimed-hours chart, a door to the cost projector, and three input rows. Two levels
+//  of navigation to reach one number. What survived, and where it went:
+//    • the cost, as a share of your waking day  → the donut, straight onto Overview
+//    • the daily usage goal                     → this page, opened from Overview
+//    • the dopamine baseline                    → already on Overview, always was
+//    • your income (About you)                  → the usage chart's own stats row
+//  Everything else was saying the same thing a third time. If a number needs to be seen,
+//  it goes ON Overview; it does not get a page of its own with a door in front of it.
+// ═══════════════════════════════════════════════════════════════════════════════════════
 private fun showUsageGoal() {
     inSubPage = true
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
@@ -2746,402 +2665,57 @@ private fun showUsageGoal() {
     root.addView(bigChoice(getString(R.string.usage_goal_set), Palette.successText) {
         UsageGoal.setMinutesPerDay(this, minutesOf(seek.progress))
         Toast.makeText(this, getString(R.string.usage_goal_set_toast, fmtHours(minutesOf(seek.progress) / 60f)), Toast.LENGTH_SHORT).show()
-        showProductivity()
+        setupHomeScreen()
     })
     if (current > 0) root.addView(Button(this).apply {
         text = getString(R.string.usage_goal_remove); setAllCaps(false)
-        setOnClickListener { UsageGoal.clear(this@MainActivity); showProductivity() }
+        setOnClickListener { UsageGoal.clear(this@MainActivity); setupHomeScreen() }
     })
-    setContentWithThumb(root) { showProductivity() }
-}
-
-// ── What the scroll costs: the projector + reclaimed stats (moved off the home page). ──
-private fun showScrollCost() {
-    inSubPage = true
-    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-    content.addView(titleText(getString(R.string.scroll_title)))
-
-    val green = Palette.successText; val teal = Palette.tint
-    val s = Progress.snapshot(this)
-    if (s.hasData) {
-        content.addView(statBigCard(Units.hours(this, s.reclaimedHours), getString(R.string.stats_prog_reclaimed_label),
-            getString(R.string.scroll_reclaimed_sub, Progress.EST_MIN_PER_WIN), teal))
-        content.addView(statBigCard("${s.consistency}%", getString(R.string.stats_prog_consistency),
-            getString(R.string.scroll_consistency_sub, s.cleanDays, s.trackedDays), green))
-    } else {
-        content.addView(statBigCard(Units.hours(this, 0), getString(R.string.stats_prog_reclaimed_label),
-            getString(R.string.scroll_reclaimed_empty_sub), teal))
-    }
-
-    content.addView(sectionTitle(getString(R.string.scroll_projector)))
-    val hero = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = glassBg(); elevation = 1f * dp
-        val p = (18 * dp).toInt(); setPadding(p, p, p, p)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-    }
-    val donut = WastedDonutView(this)
-    hero.addView(donut, LinearLayout.LayoutParams((168 * dp).toInt(), (168 * dp).toInt()).apply {
-        gravity = Gravity.CENTER_HORIZONTAL; topMargin = (4 * dp).toInt(); bottomMargin = (6 * dp).toInt()
-    })
-    val bigStat = TextView(this).apply { textSize = 26f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; setTextColor(Palette.danger) }
-    val subStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary); setPadding(0, (2 * dp).toInt(), 0, 0) }
-    val lifeStat = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary); setPadding(0, (8 * dp).toInt(), 0, (12 * dp).toInt()) }
-    // The same lost time, said in ways that aren't hours - money, health, people. Filled in
-    // by refresh(), and it uses THEIR numbers once they've given us any (see AboutYou).
-    val otherStat = TextView(this).apply {
-        textSize = 14f; gravity = Gravity.CENTER; setTextColor(Palette.labelSecondary)
-        setLineSpacing(0f, 1.25f)
-        setPadding(0, 0, 0, (10 * dp).toInt())
-    }
-    val aboutYouLink = TextView(this).apply {
-        textSize = 13f; gravity = Gravity.CENTER; setTextColor(Palette.tint)
-        setTypeface(typeface, Typeface.BOLD)
-        isClickable = true; isFocusable = true
-        setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
-        setOnClickListener { aboutYouBack = { showScrollCost() }; showAboutYou() }
-    }
-    hero.addView(bigStat); hero.addView(subStat); hero.addView(lifeStat)
-    hero.addView(otherStat); hero.addView(aboutYouLink)
-    val minLabel = TextView(this).apply { textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label) }
-    hero.addView(minLabel)
-    val minSeek = android.widget.SeekBar(this).apply { max = 300; progress = Usage.minutes(this@MainActivity).coerceIn(0, 300) }
-    hero.addView(minSeek)
-    val yearLabel = TextView(this).apply { textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, (8 * dp).toInt(), 0, 0) }
-    hero.addView(yearLabel)
-    val yearSeek = android.widget.SeekBar(this).apply { max = 49; progress = (Usage.years(this@MainActivity) - 1).coerceIn(0, 49) }
-    hero.addView(yearSeek)
-    content.addView(hero)
-
-    fun refresh() {
-        val min = Usage.minutes(this); val yrs = Usage.years(this)
-        val perYearHours = min * 365.0 / 60.0
-        val wakingDaysYr = (perYearHours / Usage.WAKING_HOURS)
-        val rate = AboutYou.effectiveHourly(this)
-        val moneyYr = Math.round(perYearHours * rate)
-        val totalWakingYears = perYearHours * yrs / Usage.WAKING_HOURS / 365.0
-        val moneyTotal = moneyYr * yrs
-        donut.setFraction((min / (Usage.WAKING_HOURS * 60f)))
-        bigStat.text = getString(R.string.scroll_waking_days, Math.round(wakingDaysYr).toInt())
-        subStat.text = getString(R.string.scroll_per_year_value, Units.money(this, moneyYr))
-        lifeStat.text = getString(R.string.scroll_over_years, yrs, if (yrs == 1) "" else "s",
-            Units.decimal1(this, totalWakingYears.toFloat()), Units.money(this, moneyTotal))
-        minLabel.text = getString(R.string.scroll_min_per_day, min)
-        yearLabel.text = getString(R.string.scroll_looking_ahead, yrs, if (yrs == 1) "" else "s")
-
-        // Hours are abstract. These aren't.
-        val gymSessions = Math.round(perYearHours / 1.0)          // ~1hr a session
-        val eveningsWithPeople = Math.round(perYearHours / 3.0)   // ~3hr an evening
-        val booksRead = Math.round(perYearHours / 8.0)            // ~8hr a book
-        otherStat.text = getString(R.string.scroll_that_year, gymSessions.toInt(), eveningsWithPeople.toInt(), booksRead.toInt())
-
-        aboutYouLink.text = if (AboutYou.hasData(this))
-            getString(R.string.scroll_valued, Units.money(this, AboutYou.effectiveAnnual(this)))
-        else
-            getString(R.string.scroll_add_rate)
-    }
-
-    val seekListener = object : android.widget.SeekBar.OnSeekBarChangeListener {
-        override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) {
-            if (!fromUser) return
-            if (sb === minSeek) Usage.setMinutes(this@MainActivity, p)
-            else Usage.setYears(this@MainActivity, 1 + p)
-            refresh()
-        }
-        override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
-        override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
-    }
-    minSeek.setOnSeekBarChangeListener(seekListener)
-    yearSeek.setOnSeekBarChangeListener(seekListener)
-
-    val root = ScrollView(this).apply {
-        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        isFillViewport = true
-        addView(content)
-    }
-    setContentWithThumb(root) { showProductivity() }
-    refresh()
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════════════
-//  PRODUCTIVITY
-// ═══════════════════════════════════════════════════════════════════════════════════════
-//  Reached from the "Productivity" section on Overview - it is NOT a bottom-bar tab any
-//  more. The bar is Overview + Temptations, full stop; a third tab for a page you visit
-//  once a week was buying permanent chrome with occasional value.
-//
-//  FOUR GROUPS, in the order a person actually asks the questions:
-//    TODAY          - where am I right now?         → the dopamine baseline
-//    YOUR PROGRESS  - what have I won back?         → this week, reclaimed
-//    WHAT IT COSTS  - what is the rest costing me?  → the projector, and what you'd get back
-//    YOUR NUMBERS   - the three optional figures we want from THEM
-//
-//  YOUR NUMBERS is last and deliberately loud about being an input. It used to be three
-//  identical grey text links buried between graphs, which gave no hint that anything was
-//  editable or what it would change. It is now a grouped list that names what each figure
-//  is FOR and shows what you currently have set, or a tinted "Add" if you have nothing.
-//
-//  TWO THINGS THAT USED TO BE HERE AND AREN'T:
-//    • the reels/shorts/feeds switch → Temptations ▸ Endless Scrolling / Brain Rot, which
-//      already owned exactly those block patterns (AppConfig.SHORT_FORM_PATTERNS). Do not
-//      add a second copy here: two switches over one rule set is a bug waiting to happen.
-//    • the "your next year" 365-square grid → gone. It said the same thing as the
-//      projector's donut above it and the opportunity-cost list below it, a third time.
-// ═══════════════════════════════════════════════════════════════════════════════════════
-private fun showProductivity() {
-    inSubPage = true
-    // Not a tab any more: leaving onHomeScreen set would let a resume past the nudge
-    // threshold rebuild Overview underneath the user (see updateScreen).
-    onHomeScreen = false; onTemptationsTab = false
-    val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-
-    content.addView(titleText(getString(R.string.prod_title)))
-    content.addView(bodyText(getString(R.string.prod_intro)))
-
-    // ── TODAY ───────────────────────────────────────────────────────────────────────
-    //    The dopamine baseline. A whole-phone measure, which is why it lives here and not
-    //    in the adult-content statistics.
-    content.addView(sectionHeader(getString(R.string.prod_sec_today)))
-    val todayScore = DopamineScore.of(this, DopamineLog.today(this))
-    val dopCard = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        background = tappableBg(Palette.glass); elevation = dpf(1f)
-        clipToOutline = true
-        val p = dp(Space.md); setPadding(p, p, p, p)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        isClickable = true; isFocusable = true
-        setOnClickListener { dopamineBack = { showProductivity() }; showDopamine() }
-    }
-    dopCard.addView(TextView(this).apply {
-        text = if (todayScore.hasData) "${todayScore.score}" else "-"
-        textSize = 34f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(if (todayScore.hasData) todayScore.colour else Palette.labelTertiary)
-        includeFontPadding = false
-    })
-    dopCard.addView(LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(Space.sm) + dp(Space.xxs) / 2, 0, 0, 0)
-        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        addView(TextView(this@MainActivity).apply {
-            text = if (todayScore.hasData) todayScore.band else getString(R.string.prod_still_measuring)
-            textSize = Type.body; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-        })
-        addView(TextView(this@MainActivity).apply {
-            text = getString(R.string.prod_out_of_100)
-            textSize = Type.caption; setTextColor(Palette.labelTertiary)
-        })
-    })
-    dopCard.addView(TextView(this).apply {
-        text = "›"; textSize = 22f; setTextColor(Palette.labelQuaternary)
-    })
-    content.addView(dopCard)
-
-    // ── YOUR PROGRESS ───────────────────────────────────────────────────────────────
-    //    The same cumulative card as Overview's year chart, but green and pointing the
-    //    right way: solid line Mon→today, grey dotted projection to Sunday at this pace.
-    content.addView(sectionHeader(getString(R.string.prod_sec_progress)))
-    content.addView(TextView(this).apply {
-        text = getString(R.string.prod_week_reclaimed)
-        textSize = Type.headline; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-        setPadding(0, 0, 0, dp(Space.xs))
-    })
-    run {
-        val dayMs = 24L * 60 * 60 * 1000
-        val winTs = TemptationLog.timestamps(this) +
-            LoosenLog.all(this).filter { it.outcome == "stopped" || it.outcome == "tomorrow" }.map { it.ts }
-        val todayIdx = System.currentTimeMillis() / dayMs
-        // 1 = Monday … 7 = Sunday: how far through the week we are.
-        val daysElapsed = SimpleDateFormat("u", Locale.UK).format(Date()).toInt().coerceIn(1, 7)
-        val realPerDay = FloatArray(daysElapsed) { i ->
-            val idx = todayIdx - (daysElapsed - 1 - i)
-            winTs.count { it / dayMs == idx } * Progress.EST_MIN_PER_WIN / 60f
-        }
-        val hasWins = realPerDay.any { it > 0f }
-        val examplePerDay = floatArrayOf(0.4f, 0.9f, 0.6f, 1.2f, 0.8f, 1.5f, 1.1f)
-        val perDay = if (hasWins) realPerDay else FloatArray(daysElapsed) { examplePerDay[it] }
-        var cum = 0f
-        val soFar = FloatArray(daysElapsed) { i -> cum += perDay[i]; cum }
-        val pace = soFar.last() / daysElapsed
-        val toCome = FloatArray(7 - daysElapsed) { j -> soFar.last() + pace * (j + 1) }
-        val weekDays = DOW_ORDER  // localized Mon..Sun
-        val rate = AboutYou.effectiveHourly(this)
-        val weekProj = toCome.lastOrNull() ?: soFar.last()
-        content.addView(chartStatCard(
-            soFar, weekDays,
-            stats = listOf(
-                fmtHours(soFar.last()) to getString(R.string.stats_prog_reclaimed_label),
-                Units.money(this, Math.round(soFar.last() * rate)) to getString(R.string.prod_value_reclaimed),
-                fmtHours(weekProj) to getString(R.string.prod_by_sunday),
-            ),
-            accent = Palette.successText,
-            dotted = toCome,
-            worth = getString(R.string.prod_worth),
-            example = !hasWins,
-            pointInfo = { i, v, projected ->
-                readoutText("${weekDays.getOrNull(i) ?: ""} · ",
-                    hoursAndMoney(v, rate),
-                    if (projected) getString(R.string.home_projected) else "",
-                    if (projected) Palette.labelTertiary else Palette.successText)
-            },
-        ))
-    }
-
-    // ── WHAT IT COSTS ───────────────────────────────────────────────────────────────
-    //    The projector lives on its own page (showScrollCost); what sits here is the door
-    //    to it plus the version of the same number that isn't hours - books, workouts,
-    //    sleep. Hours are abstract; these aren't.
-    content.addView(sectionHeader(getString(R.string.prod_sec_cost)))
-    content.addView(homeCard(
-        getString(R.string.prod_scroll_cost_title),
-        getString(R.string.prod_scroll_cost_sub, Units.symbol(this))) { showScrollCost() })
-
-    val perYearHours = Usage.minutes(this) * 365.0 / 60.0
-    content.addView(glassCard(Space.md).apply {
-        addView(TextView(this@MainActivity).apply {
-            text = getString(R.string.prod_reclaim_could)
-            textSize = Type.headline; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-        })
-        listOf(
-            getString(R.string.prod_opp_b1, Math.round(perYearHours / 6.0).toInt()),
-            getString(R.string.prod_opp_b2, Math.round(perYearHours / 0.75).toInt()),
-            getString(R.string.prod_opp_b3, Math.round(perYearHours / 480.0 * 100).toInt()),
-            getString(R.string.prod_opp_b4, Math.round(perYearHours / 8.0).toInt()),
-        ).forEach { line ->
-            addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.proto_bullet, line)
-                textSize = Type.callout; setTextColor(Palette.labelSecondary)
-                setLineSpacing(0f, Type.lineSpacing)
-                setPadding(0, dp(Space.xs), 0, 0)
-            })
-        }
-    })
-
-    // ── YOUR NUMBERS ────────────────────────────────────────────────────────────────
-    //    The only group you can put something INTO, so it says so, and each row shows
-    //    what you've got set rather than making you open it to find out.
-    content.addView(sectionHeader(getString(R.string.prod_sec_inputs)))
-    content.addView(bodyText(getString(R.string.prod_inputs_hint)).apply {
-        setPadding(dp(Space.xxs), 0, dp(Space.xxs), dp(Space.sm))
-    })
-    val goalMins = UsageGoal.minutesPerDay(this)
-    content.addView(groupCard(
-        groupRow(getString(R.string.prod_row_income), getString(R.string.prod_row_income_sub),
-            if (AboutYou.hasData(this)) Units.money(this, AboutYou.effectiveAnnual(this)) else null) {
-            aboutYouBack = { showProductivity() }; showAboutYou()
-        },
-        groupRow(getString(R.string.prod_row_habits), getString(R.string.prod_row_habits_sub),
-            if (LifeInputs.anySet(this)) getString(R.string.prod_habits_value, LifeInputs.estimate(this)) else null) {
-            lifeInputsBack = { showProductivity() }; showLifeInputs()
-        },
-        groupRow(getString(R.string.prod_row_goal), getString(R.string.prod_row_goal_sub),
-            if (goalMins > 0) getString(R.string.prod_row_perday, fmtHours(goalMins / 60f)) else null) {
-            showUsageGoal()
-        },
-    ))
-
-    val root = ScrollView(this).apply {
-        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        isFillViewport = true; addView(content)
-    }
     setContentWithThumb(root) { setupHomeScreen() }
 }
 
-/**
- * An inset grouped list, the way iOS Settings does it: ONE card, hairline-separated rows,
- * indented so the hairline starts where the text does.
- *
- * clipToOutline is not optional. Without it a ripple on the first or last row paints
- * square right through the card's rounded corners.
- */
-private fun groupCard(vararg rows: View): View =
-    LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = glassBg(); elevation = dpf(1f)
-        clipToOutline = true
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { bottomMargin = dp(Space.sm) }
-        rows.forEachIndexed { i, row ->
-            if (i > 0) addView(View(this@MainActivity).apply {
-                setBackgroundColor(Palette.hairline)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, maxOf(1, dp(1) / 2),
-                ).apply { marginStart = dp(Space.md) }
-            })
-            addView(row)
-        }
-    }
-
-/**
- * A row inside [groupCard]: what it is, what it's for, and what you currently have set.
- *
- * [value] == null means "nothing entered yet", and the row shows a tinted "Add" instead.
- * That swap is the entire reason this row type exists rather than a plain text link - a
- * row that shows its own state tells you whether it is worth opening.
- */
-private fun groupRow(title: String, sub: String?, value: String?, onClick: () -> Unit): View {
-    val row = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        // No pressable() here: a row that scales inside a fixed card looks broken. The
-        // ripple is the whole feedback, so it has to be a real one.
-        background = tappableBg(0x00000000, radius = 0f, stroke = null)
-        setPadding(dp(Space.md), dp(Space.sm), dp(Space.md), dp(Space.sm))
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        isClickable = true; isFocusable = true; setOnClickListener { onClick() }
-    }
-    val texts = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-    }
-    texts.addView(TextView(this).apply {
-        text = title; textSize = Type.body
-        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-    })
-    if (sub != null) texts.addView(TextView(this).apply {
-        text = sub; textSize = Type.footnote; setTextColor(Palette.labelTertiary)
-        setLineSpacing(0f, Type.lineSpacing); setPadding(0, dp(Space.xxs) / 2, 0, 0)
-    })
-    row.addView(texts)
-    row.addView(TextView(this).apply {
-        text = value ?: getString(R.string.prod_row_add)
-        textSize = Type.callout; maxLines = 1
-        setTypeface(typeface, Typeface.BOLD)
-        setTextColor(if (value == null) Palette.tint else Palette.labelSecondary)
-        setPadding(dp(Space.xs), 0, dp(Space.xs), 0)
-    })
-    row.addView(TextView(this).apply {
-        text = "›"; textSize = 20f; setTextColor(Palette.labelQuaternary)
-    })
-    return row
-}
-
 private fun showTemptationsTab() {
+    if (inBackNav && restoreTab(1)) return          // same as Overview - see setupHomeScreen
     onTemptationsTab = true; onHomeScreen = false; onReportScreen = false; inSubPage = false; subBack = null
+    claimTab(1)
     markTabSeen("temptations")
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
-    val root = vbox(pad)
-    root.addView(TextView(this).apply {
+    // ONE SCROLLING COLUMN, exactly like Overview. It used to be a fixed header with the
+    // list in a weighted ScrollView underneath, which meant the list got the leftovers of
+    // the screen: under the floating pill that showed up as a dead band of page above the
+    // bar, with the last card stranded well short of the bottom. A scrolling page has no
+    // leftovers - the content runs to the bottom edge and passes under the pill.
+    val content = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(pad, pad, pad, pad)
+    }
+    content.addView(TextView(this).apply {
         text = getString(R.string.temp_managing); textSize = 15f; setTextColor(Palette.labelTertiary)
         setPadding(0, 0, 0, (10 * dp).toInt())
     })
-    val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    // ORDER, and it is not alphabetical or structural: the two that catch nearly everyone
+    // go first (endless scrolling, then phone checking), adult content third, and the rest
+    // keep the catalogue's order. The list is read top-down by someone who has already
+    // decided they have a problem - the odds of the first card being the right card are
+    // what matter, not tidiness.
+    //
     // Adult Content keeps its own big bespoke flow. Everything else shares the one simple
     // page below, driven off AppConfig.TEMPTATIONS - add a category there, not here.
-    list.addView(homeCard(getString(R.string.temp_adult_title), getString(R.string.temp_adult_sub)) {
+    fun temptCard(spec: AppConfig.TemptationSpec) =
+        homeCard(temptTitle(spec), temptSubtitle(spec), temptIcon(spec.id)) { showTemptation(spec) }
+    val first = listOf("scrolling", "checking")
+    first.mapNotNull { AppConfig.temptation(it) }.forEach { content.addView(temptCard(it)) }
+    content.addView(homeCard(getString(R.string.temp_adult_title), getString(R.string.temp_adult_sub),
+        R.drawable.ic_cat_adult) {
         reportBackTarget = { showTemptationsTab() }; showReportScreen(offerLock = true)
     })
-    AppConfig.TEMPTATIONS.forEach { spec ->
-        list.addView(homeCard(temptTitle(spec), temptSubtitle(spec)) { showTemptation(spec) })
-    }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+    AppConfig.TEMPTATIONS.filterNot { it.id in first }.forEach { content.addView(temptCard(it)) }
+    val root = ScrollView(this).apply {
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         isFillViewport = true
-        addView(list)
-    })
+        addView(content)
+    }
     setContentNoThumb(withBottomBar(root, 1))
 }
 
@@ -3483,7 +3057,39 @@ private fun habitRideDone(spec: AppConfig.TemptationSpec) {
 // been removed from the project, and nothing else called it. See the note at habitRide.
 
 /** A clean tappable card for the home/tab screens (chevron shown when clickable). */
-private fun homeCard(title: String, sub: String?, onClick: (() -> Unit)? = null): View {
+/**
+ * The leading mark on a card or an option row: the glyph itself, and nothing else.
+ *
+ * NO TILE AND NO COLOUR. It briefly had both - a soft tinted square with a teal glyph -
+ * and a column of them turned every list into a row of green badges competing with the
+ * titles beside them. A line drawing in the same grey as the subtitle sits UNDER the text
+ * in the hierarchy, which is where an icon belongs: it helps you find the row you already
+ * know, and it never asks to be looked at first.
+ *
+ * The fixed [size] box is what keeps the text edges aligned down the list; only the box is
+ * fixed, the ink inside it is free.
+ */
+private fun iconBadge(
+    icon: Int,
+    glyph: Int = Palette.labelSecondary,
+    size: Int = 26,
+): View = ImageView(this).apply {
+    setImageResource(icon)
+    setColorFilter(glyph)
+    layoutParams = LinearLayout.LayoutParams(dp(size), dp(size)).apply { marginEnd = dp(Space.md) }
+}
+
+/** A large, centred, untiled glyph: the one image on a screen that has only one thing to say. */
+private fun heroIcon(icon: Int, size: Int = 76, colour: Int = Palette.label): View =
+    ImageView(this).apply {
+        setImageResource(icon)
+        setColorFilter(colour)
+        layoutParams = LinearLayout.LayoutParams(dp(size), dp(size)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+    }
+
+private fun homeCard(title: String, sub: String?, icon: Int? = null, onClick: (() -> Unit)? = null): View {
     val row = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = if (onClick != null) tappableBg(Palette.glass) else glassBg()
@@ -3497,6 +3103,9 @@ private fun homeCard(title: String, sub: String?, onClick: (() -> Unit)? = null)
             pressable()
         }
     }
+    // Vertically centred against the whole card, one- or two-line subtitle regardless -
+    // the row's CENTER_VERTICAL gravity does it, so nothing here has to know the height.
+    if (icon != null) row.addView(iconBadge(icon))
     val texts = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -4029,6 +3638,10 @@ private fun showReportScreen(offerLock: Boolean = false) {
     // (The "Off is no longer on the list" paragraph used to sit here, under the picker. It
     // was a wall of small print on the page people open when they are already struggling; the
     // ratchet is still explained in the mode rules behind the (i) above.)
+    //
+    // NOR does a "you are locked in" line under the picker, which briefly lived here. The
+    // grey, inert picker showing one option says it already; a paragraph explaining what
+    // the user chose on purpose is just something else to read on a bad day.
 
     // The protocol is the one thing on this page that gets the accent, because it is the
     // one thing here that fixes the problem rather than reacting to it.
@@ -4056,10 +3669,12 @@ private fun showReportScreen(offerLock: Boolean = false) {
     // THE HONEST EXIT deliberately does NOT live on this page. It appears as its own full
     // screen (showBypassOffer) at the moment of a bypass attempt - see
     // maybeShowBypassOffer(). A card sitting here read as a permanent door handle.
-    content.addView(reportPane(
-        getString(R.string.report_pane_stats),
-        getString(R.string.report_pane_stats_sub),
-    ) { showStatsMenu() })
+
+    // STATISTICS IS NOT HERE EITHER, and that is deliberate. "When it happens, where, and
+    // what leads into it" is a chart of your own relapses: interesting to us while tuning
+    // the app, and a place to go and re-read the worst week of your year for the person
+    // actually using it. It is a developer tool now - see setupMainScreen(). Don't put it
+    // back on the page people open when they are already struggling.
 
     // Quiet on purpose: almost nobody needs these, and the ones who do will look for them.
     content.addView(TextView(this).apply {
@@ -5169,6 +4784,15 @@ private fun thumbBack(onBack: () -> Unit): View =
 /** Set while rendering the landing screen, the one page with nothing behind it. */
 private var noThumb = false
 
+/**
+ * Set for one setContentView call, to suppress the standard entrance.
+ *
+ * Two callers: the tab bar (which animates its content itself, so the floating pill can
+ * stay still - see withBottomBar), and a tab/back RESTORE, where the page is not arriving
+ * at all, it is being uncovered. Same one-shot pattern as [noThumb] above.
+ */
+private var skipEnter = false
+
 /** The landing screen: rendered raw, with no thumb back button. */
 private fun setContentNoThumb(content: View) {
     noThumb = true
@@ -5180,8 +4804,11 @@ override fun setContentView(view: View) {
     // to sit ON the page (a card, a row) gets Palette.surface / glass; the page itself is
     // always Palette.bg, which is what stops screens drifting apart tonally.
     if (view.background == null) view.setBackgroundColor(Palette.bg)
+    val enter = !skipEnter
+    skipEnter = false
     if (noThumb) {
-        view.enterFromBelow()
+        if (enter) view.enterFromBelow()
+        currentContent = view
         super.setContentView(view)
         return
     }
@@ -5205,10 +4832,13 @@ override fun setContentView(view: View) {
     // EVERY page gets the same entrance, for free, because it happens here. The content
     // fades up; the back button just fades, so it doesn't appear to slide around the
     // screen between pages (it is the one element that never moves).
-    view.enterFromBelow()
-    thumb.alpha = 0f
-    thumb.animate().alpha(1f).setStartDelay(Motion.fast / 2)
-        .setDuration(Motion.base).setInterpolator(Motion.easeOut).start()
+    if (enter) {
+        view.enterFromBelow()
+        thumb.alpha = 0f
+        thumb.animate().alpha(1f).setStartDelay(Motion.fast / 2)
+            .setDuration(Motion.base).setInterpolator(Motion.easeOut).start()
+    }
+    currentContent = frame
     super.setContentView(frame)
 }
 
@@ -5220,6 +4850,141 @@ private fun setContentWithThumb(content: View, onBack: () -> Unit) {
     inSubPage = true
     subBack = onBack
     setContentView(content)
+}
+
+// =====================================================================================
+//  THE TWO TABS KEEP THEIR PLACE
+// =====================================================================================
+//
+//  Tapping Temptations and then Overview again used to rebuild Overview from scratch:
+//  back to the top of the page, and back out of whatever you had opened. That is fine for
+//  a link and wrong for a TAB. A tab is not a destination you travel to, it is a room you
+//  step out of and back into, and the room is supposed to be how you left it.
+//
+//  So each tab remembers the LIVE VIEW you were last looking at inside it - not a rebuilt
+//  copy, the actual instance - which is what makes the scroll position, the half-open
+//  sections and the sub-page you had opened all come back for free. Rebuilding and then
+//  trying to reapply a scroll offset gets you a flicker and, on any page whose height
+//  depends on live data, the wrong offset.
+//
+//  Memory is written ONLY when you leave a tab sideways (a tab tap or a swipe) and is
+//  consumed the moment you come back. Anything else - the back button, a fresh entry from
+//  a flow, updateScreen() rebuilding the dashboard - drops it, so a stale page can never
+//  resurface later: setupHomeScreen and showTemptationsTab both clear their own slot.
+private class TabMemory(
+    val view: View,
+    val subBack: (() -> Unit)?,
+    val onReport: Boolean,
+    val onDev: Boolean,
+    val inSub: Boolean,
+)
+
+
+/** The view currently on screen (the thumb frame, where there is one). */
+private var currentContent: View? = null
+/** Which tab's stack we are in - a sub-page belongs to the tab it was opened from. */
+private var activeTab = 0
+/** True only while onBackPressed is walking a page's declared back target. */
+private var inBackNav = false
+private val tabMemory = HashMap<Int, TabMemory>()
+
+/**
+ * Called at the top of a tab root's rebuild: this tab is the one we are in, and its old
+ * snapshot is now void - the page is being rebuilt from current data, and withBottomBar
+ * records the fresh one a moment later.
+ */
+private fun claimTab(index: Int) {
+    activeTab = index
+    tabMemory.remove(index)
+}
+
+/** Snapshot whatever is on screen as tab [index]'s saved state. */
+private fun rememberTab(index: Int) {
+    val v = currentContent ?: return
+    tabMemory[index] = TabMemory(v, subBack, onReportScreen, onDevScreen, inSubPage)
+}
+
+/**
+ * Put tab [to]'s saved page back on screen, exactly as it was left - scroll position,
+ * open sections and all. Returns false if there is nothing to put back.
+ *
+ * The identity check matters: if the saved view IS what is already on screen, restoring it
+ * would be a no-op that swallowed a real navigation (it happens when you swipe tabs from a
+ * sub-page and then press back). Drop the snapshot and let the caller build fresh.
+ */
+private fun restoreTab(to: Int): Boolean {
+    val saved = tabMemory[to] ?: return false
+    // Already on screen: restoring would swallow a real navigation. Leave the snapshot
+    // where it is - the caller rebuilds, and the rebuild replaces it (claimTab).
+    if (saved.view === currentContent) return false
+    // The snapshot is NOT consumed. Going Overview -> sub-page -> back -> sub-page -> back
+    // has to work every time, and each of those backs is a fresh restore of the same page.
+    // It is cleared only when the tab is genuinely rebuilt.
+    activeTab = to
+    (saved.view.parent as? ViewGroup)?.removeView(saved.view)
+    onReportScreen = saved.onReport; onDevScreen = saved.onDev; inSubPage = saved.inSub
+    subBack = saved.subBack
+    onHomeScreen = !saved.inSub && to == 0
+    onTemptationsTab = !saved.inSub && to == 1
+    if (onTemptationsTab) markTabSeen("temptations")
+    noThumb = true; skipEnter = true       // uncovered, not arriving: no entrance animation
+    try { setContentView(saved.view) } finally { noThumb = false }
+    return true
+}
+
+/**
+ * Move to the other tab, saving this one exactly as it stands.
+ *
+ * [to] is the tab INDEX used by withBottomBar: 0 Overview, 1 Temptations.
+ */
+private fun switchTab(to: Int) {
+    if (to == activeTab) return
+    rememberTab(activeTab)
+    activeTab = to
+    if (!restoreTab(to)) { if (to == 0) setupHomeScreen() else showTemptationsTab() }
+}
+
+/**
+ * Swipe left/right to change tab, anywhere inside a tab - including its sub-pages, which
+ * is the point: swiping off Adult content and back returns you to Adult content.
+ *
+ * NOT during a flow (temptation, loosen, report-an-app) and NOT at a setup gate the mode
+ * is holding up. Those are screens the user is meant to finish or answer, and a stray
+ * horizontal flick must not be a way out of one.
+ */
+private fun tabSwipeAllowed(): Boolean {
+    if (inTemptationFlow || inLoosenFlow || inAppSiteFlow) return false
+    if (inPermissionFlow || atMandatoryGate()) return false
+    return onHomeScreen || onTemptationsTab || onReportScreen || onDevScreen || inSubPage
+}
+
+private val tabSwipe by lazy {
+    android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+        override fun onFling(
+            e1: android.view.MotionEvent?, e2: android.view.MotionEvent,
+            velocityX: Float, velocityY: Float,
+        ): Boolean {
+            val start = e1 ?: return false
+            if (!tabSwipeAllowed()) return false
+            val dx = e2.x - start.x
+            val dy = e2.y - start.y
+            // Deliberately fussy, because the pages underneath scroll VERTICALLY: it has
+            // to be long enough to be meant, fast enough to be a flick, and clearly more
+            // sideways than not, or a slightly diagonal scroll would change tab under you.
+            if (kotlin.math.abs(dx) < dpf(72f)) return false
+            if (kotlin.math.abs(dx) < kotlin.math.abs(dy) * 1.6f) return false
+            if (kotlin.math.abs(velocityX) < dpf(320f)) return false
+            switchTab(if (dx < 0) 1 else 0)      // drag left = move right along the bar
+            return true
+        }
+    })
+}
+
+override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+    // OBSERVE, never consume: every touch still reaches the page underneath, so scrolling,
+    // ripples and taps behave exactly as they did before the gesture existed.
+    tabSwipe.onTouchEvent(ev)
+    return super.dispatchTouchEvent(ev)
 }
 
 /** Every screen's title, one place. See Design.kt's pageTitle for the type decisions. */
@@ -5277,7 +5042,8 @@ private fun pickCard(label: String, onClick: () -> Unit): TextView {
 // ── nicer option rows: emoji icon (vertically centred) + label + lighter sub ──
 private data class Choice(
     val value: String,               // STABLE key: stored + compared + icon-keyed (English)
-    val icon: String? = null,
+    /** A drawable res for the leading glyph (see optionIcon). Emoji used to live here. */
+    val icon: Int? = null,
     val sub: String? = null,
     val tint: Int = Palette.surfaceSunken,
     val group: String? = null,
@@ -5318,36 +5084,48 @@ private fun metaFor(category: String, v: String): Choice = when (category) {
     else -> Choice(v, label = optLabel(category, v))
 }
 
+// ── THE OPTION GLYPHS ───────────────────────────────────────────────────────────────
+//  These four maps used to return emoji. On a page whose whole job is to be read calmly
+//  by someone mid-urge, a column of full-colour cartoon faces is the loudest thing on the
+//  screen and the least informative - and it rendered differently on every phone. They are
+//  stroke marks now, drawn on the same 24dp grid as the rest of the app's icons.
+//
+//  The FEELINGS are deliberately not faces. A line that goes flat, a line that jags, an
+//  arrow pointing down: the mark says the shape of the mood without acting it out.
 private fun screenIcon(v: String) = when (v) {
-    "Phone" -> "\uD83D\uDCF1"; "Tablet" -> "\uD83D\uDCF2"
-    "Computer / laptop" -> "\uD83D\uDCBB"; "TV" -> "\uD83D\uDCFA"
-    "Someone else's screen" -> "\uD83D\uDC40"; else -> "\uD83D\uDCF1"
+    "Phone" -> R.drawable.ic_opt_phone; "Tablet" -> R.drawable.ic_opt_tablet
+    "Computer / laptop" -> R.drawable.ic_opt_laptop; "TV" -> R.drawable.ic_opt_tv
+    "Someone else's screen" -> R.drawable.ic_opt_eye; else -> R.drawable.ic_opt_display
 }
 private fun locationIcon(v: String) = when (v) {
-    "Bedroom" -> "\uD83D\uDECC"; "Bathroom" -> "\uD83D\uDEBF"; "Living room" -> "\uD83D\uDECB"
-    "Kitchen" -> "\uD83C\uDF73"; "Office / desk" -> "\uD83D\uDCBC"; "Out / in public" -> "\uD83C\uDF33"
-    else -> "\uD83D\uDCCD"
+    "Bedroom" -> R.drawable.ic_opt_bed; "Bathroom" -> R.drawable.ic_opt_droplet
+    "Living room" -> R.drawable.ic_opt_sofa; "Kitchen" -> R.drawable.ic_opt_pan
+    "Office / desk" -> R.drawable.ic_opt_briefcase; "Out / in public" -> R.drawable.ic_opt_tree
+    else -> R.drawable.ic_opt_pin
 }
 private fun activityIcon(v: String) = when (v) {
-    "In bed / trying to sleep" -> "\uD83D\uDECC"; "Just woke up" -> "\uD83C\uDF05"
-    "Scrolling social media" -> "\uD83D\uDCF1"; "Watching videos or TV" -> "\uD83D\uDCFA"
-    "Browsing the web" -> "\uD83C\uDF10"; "Putting off something I should do" -> "\u23F3"
-    "Just finished work or study" -> "\uD83D\uDCBC"; "Bored with nothing to do" -> "\uD83E\uDD71"
-    "After something stressful" -> "\uD83D\uDE23"; "Winding down at night" -> "\uD83C\uDF19"
-    else -> "\uD83D\uDD01"
+    "In bed / trying to sleep" -> R.drawable.ic_opt_bed; "Just woke up" -> R.drawable.ic_opt_sunrise
+    "Scrolling social media" -> R.drawable.ic_opt_phone; "Watching videos or TV" -> R.drawable.ic_opt_tv
+    "Browsing the web" -> R.drawable.ic_opt_globe
+    "Putting off something I should do" -> R.drawable.ic_opt_hourglass
+    "Just finished work or study" -> R.drawable.ic_opt_briefcase
+    "Bored with nothing to do" -> R.drawable.ic_opt_bored
+    "After something stressful" -> R.drawable.ic_opt_bolt
+    "Winding down at night" -> R.drawable.ic_opt_moon
+    else -> R.drawable.ic_opt_repeat
 }
 // feelings carry a group + a subtle tint so the screen reads as grouped bands
 private fun feelingMeta(v: String): Choice = when (v) {
-    "Anxious / on edge" -> Choice(v, "\uD83D\uDE30", null, Palette.warningSoft, "On edge")
-    "Stressed" -> Choice(v, "\uD83D\uDE23", null, Palette.warningSoft, "On edge")
-    "Frustrated / angry" -> Choice(v, "\uD83D\uDE20", null, Palette.dangerSoft, "Wound up")
-    "Low / down" -> Choice(v, "\uD83D\uDE1E", null, Palette.surfaceSunken, "Shut down / flat")
-    "Lonely" -> Choice(v, "\uD83D\uDE41", null, Palette.surfaceSunken, "Shut down / flat")
-    "Tired" -> Choice(v, "\uD83D\uDE34", null, Palette.surfaceSunken, "Shut down / flat")
-    "Neutral" -> Choice(v, "\uD83D\uDE10", null, Palette.surfaceSunken, "Shut down / flat")
-    "Bored" -> Choice(v, "\uD83E\uDD71", null, Palette.surfaceSunken, "Bored")
-    "Happy / excited" -> Choice(v, "\uD83D\uDE04", null, Palette.successSoft, "Feeling good")
-    else -> Choice(v, "\uD83D\uDE36")
+    "Anxious / on edge" -> Choice(v, R.drawable.ic_opt_zigzag, null, Palette.warningSoft, "On edge")
+    "Stressed" -> Choice(v, R.drawable.ic_opt_bolt, null, Palette.warningSoft, "On edge")
+    "Frustrated / angry" -> Choice(v, R.drawable.ic_opt_flame, null, Palette.dangerSoft, "Wound up")
+    "Low / down" -> Choice(v, R.drawable.ic_opt_arrow_down, null, Palette.surfaceSunken, "Shut down / flat")
+    "Lonely" -> Choice(v, R.drawable.ic_opt_person, null, Palette.surfaceSunken, "Shut down / flat")
+    "Tired" -> Choice(v, R.drawable.ic_opt_moon, null, Palette.surfaceSunken, "Shut down / flat")
+    "Neutral" -> Choice(v, R.drawable.ic_opt_line, null, Palette.surfaceSunken, "Shut down / flat")
+    "Bored" -> Choice(v, R.drawable.ic_opt_bored, null, Palette.surfaceSunken, "Bored")
+    "Happy / excited" -> Choice(v, R.drawable.ic_opt_sparkle, null, Palette.successSoft, "Feeling good")
+    else -> Choice(v, R.drawable.ic_opt_line)
 }
 private val FEELING_GROUP_ORDER = listOf("On edge", "Shut down / flat", "Bored", "Feeling good", "Wound up")
 private fun feelingRank(v: String): Int =
@@ -5368,18 +5146,10 @@ private fun rowCard(tint: Int, selected: Boolean): LinearLayout {
         ).apply { topMargin = (10 * dp).toInt() }
     }
 }
-private fun emojiView(icon: String?): View? {
-    if (icon.isNullOrEmpty()) return null
-    val dp = resources.displayMetrics.density
-    return TextView(this).apply {
-        text = icon; textSize = 21f; gravity = Gravity.CENTER
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(Palette.surface)
-        }
-        val s = (40 * dp).toInt()
-        layoutParams = LinearLayout.LayoutParams(s, s).apply { rightMargin = (14 * dp).toInt() }
-    }
+/** The option row's leading glyph. Bare and monotone, like every other icon in the app. */
+private fun optionIcon(icon: Int?): View? {
+    if (icon == null || icon == 0) return null
+    return iconBadge(icon, glyph = Palette.labelSecondary)
 }
 private fun textCol(label: String, sub: String?): LinearLayout {
     val dp = resources.displayMetrics.density
@@ -5402,19 +5172,20 @@ private fun checkRow(choice: Choice, checked: Boolean, onToggle: () -> Unit): Vi
         setTextColor(if (checked) Palette.successText else Palette.labelTertiary)
         setPadding(0, 0, (12 * dp).toInt(), 0)
     })
-    emojiView(choice.icon)?.let { card.addView(it) }
+    optionIcon(choice.icon)?.let { card.addView(it) }
     card.addView(textCol(choice.label, choice.sub))
     card.setOnClickListener { onToggle() }
     return card
 }
 private fun optionRow(choice: Choice, onClick: () -> Unit): View {
     val card = rowCard(choice.tint, false)
-    emojiView(choice.icon)?.let { card.addView(it) }
+    optionIcon(choice.icon)?.let { card.addView(it) }
     card.addView(textCol(choice.label, choice.sub))
     card.setOnClickListener { onClick() }
     return card
 }
-private fun addOwnRow(onClick: () -> Unit): View = optionRow(Choice(getString(R.string.picker_add_own_row), "\u2795"), onClick)
+private fun addOwnRow(onClick: () -> Unit): View =
+    optionRow(Choice(getString(R.string.picker_add_own_row), R.drawable.ic_opt_plus), onClick)
 
 /** Big primary Continue that brightens and grows once something is selected. */
 private fun bigContinue(label: String, onClick: () -> Unit): Button {
@@ -5699,6 +5470,11 @@ private fun startWeekStrict() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
+        inBackNav = true
+        try { dispatchBack() } finally { inBackNav = false }
+    }
+
+    private fun dispatchBack() {
         when {
             // A mode change waiting on the permissions: back CANCELS it. Nothing to undo -
             // the mode was never committed - so this just drops it and carries on.
@@ -6254,6 +6030,10 @@ private fun startWeekStrict() {
             "Every word group, what it scores, the cutoff, and the exact screens we watch " +
                 "for - all for the mode you are in right now.") { showFilterBreakdown() })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
+        // Was a pane on the adult-content page; it is diagnostics, not something to hand a
+        // user in a bad moment (see the note in showReportScreen).
+        content.addView(homeCard(getString(R.string.stats_title),
+            "Progress, context, temptations, relapses and unlocks - the charts behind the log.") { showStatsMenu() })
         // Premium override: pretend this install has paid. Gates nothing yet - see Premium.
         content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -6497,10 +6277,6 @@ private fun startWeekStrict() {
         val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         content.addView(titleText(getString(R.string.house_title)))
-        content.addView(TextView(this).apply {
-            text = getString(R.string.house_intro, Math.round(HomeArea.RADIUS_M))
-            textSize = 13f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (12 * dp).toInt())
-        })
 
         fun subLine() = TextView(this).apply { textSize = 14f; setTextColor(Palette.labelSecondary) }
         fun tinyLine() = TextView(this).apply { textSize = 12f; setTextColor(Palette.labelTertiary) }
@@ -6511,10 +6287,6 @@ private fun startWeekStrict() {
         content.addView(sectionTitle(getString(R.string.house_sec_permissions)))
         val permLine = subLine()
         content.addView(permLine)
-        val permHint = TextView(this).apply {
-            textSize = 12f; setTextColor(Palette.labelTertiary); setPadding(0, (2 * dp).toInt(), 0, (8 * dp).toInt())
-        }
-        content.addView(permHint)
         val grantBtn = bigChoice(getString(R.string.house_grant_1), Palette.tint) {
             requestPermissions(HomeArea.requiredPermissions(), REQ_HOME_LOCATION)
         }
@@ -6541,40 +6313,17 @@ private fun startWeekStrict() {
         }
         content.addView(locWarn)
 
-        // ⚠️ SECTION ORDER IS THE ONBOARDING. Everything below is built first and ADDED
-        // afterwards, in the order a user meets it: permissions (above), then the one thing
-        // they are actually here to do, then the readouts. The save button used to sit at
-        // the very bottom under three sections of diagnostics, so the page's whole purpose
-        // was off-screen and someone who had just granted location had no idea there was a
-        // step left. Keep the action above the numbers.
         val pill = TextView(this).apply {
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setTextColor(Palette.onFill)
             val p = (10 * dp).toInt(); setPadding(p * 2, p, p * 2, p)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = (6 * dp).toInt(); bottomMargin = (6 * dp).toInt()
+                topMargin = (6 * dp).toInt(); bottomMargin = (10 * dp).toInt()
             }
         }
-        val ruleLine = TextView(this).apply {
-            textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
-            setPadding(0, 0, 0, (2 * dp).toInt())
-        }
-        val wouldLine = tinyLine()
-        val bigDist = TextView(this).apply {
-            textSize = 34f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD); setTextColor(Palette.label)
-            setPadding(0, (8 * dp).toInt(), 0, 0)
-        }
-        val whyLine = subLine()
-        val fixLine = subLine(); val fixAgeLine = subLine(); val coordLine = tinyLine()
         val mockLine = TextView(this).apply {
             textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.dangerText); visibility = View.GONE
         }
-        val watchLine = TextView(this).apply { textSize = 15f; setTypeface(typeface, Typeface.BOLD) }
-        val watchMeta = subLine(); val watchHint = tinyLine()
-        val watchLog = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(0, (6 * dp).toInt(), 0, 0)
-        }
-        val homeLine = subLine(); val homeMeta = tinyLine()
 
         locationMonitor?.stop()
         val monitor = LocationMonitor(this)
@@ -6582,184 +6331,207 @@ private fun startWeekStrict() {
         homeAreaUi?.removeCallbacksAndMessages(null)
         val ui = Handler(Looper.getMainLooper()); homeAreaUi = ui
 
-        val saveBtn = bigChoice(getString(R.string.house_save), Palette.tint) {
+        val stamp = java.text.SimpleDateFormat("d MMM", java.util.Locale.UK)
+
+        // ── The houses ───────────────────────────────────────────────────────────────
+        // There can be more than one (HomeArea.MAX_HOUSES) and there is no editing one:
+        // you add where you are now, and you ask for one to be removed. In Strict and above
+        // that request then waits, silently - see HouseLock.
+        //
+        // The cards are built ONCE per page entry - everything that changes them re-enters
+        // the page - and refresh() only writes the live distance inside them.
+        val houses = HomeArea.houses(this)
+        val housesBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val houseDistLines = mutableListOf<Pair<HomeArea.House, TextView>>()
+        val saveReady = tinyLine()
+        val modeName = modeDisplayName(Mode.current(this))
+
+        fun reloadPage() { ui.removeCallbacksAndMessages(null); showHouseArea() }
+
+        /** The fix we would save right now, or null having said why not. */
+        fun usableFix(): Location? {
             val loc = monitor.last
-            when {
-                loc == null -> Toast.makeText(this, getString(R.string.house_no_fix), Toast.LENGTH_LONG).show()
-                HomeArea.ageMs(loc) > HomeArea.MAX_FIX_AGE_MS ->
-                    Toast.makeText(this, getString(R.string.house_stale_fix), Toast.LENGTH_LONG).show()
-                else -> {
-                    HomeArea.setHome(this, loc)
-                    val acc = Math.round(HomeArea.usableAccuracy(loc))
-                    Toast.makeText(this, getString(R.string.house_saved_toast, acc, loc.provider ?: "?"), Toast.LENGTH_LONG).show()
-                    // The watch's gate opens on a home point existing, so hand it the fix
-                    // that just became home - otherwise the dashboard says "not set up" for
-                    // up to a minute after the user has plainly set it up.
-                    HomeAreaWatch.offer(this, loc)
-                    ui.removeCallbacksAndMessages(null); showHouseArea()
+            return when {
+                loc == null -> {
+                    Toast.makeText(this, getString(R.string.house_no_fix), Toast.LENGTH_LONG).show(); null
                 }
+                HomeArea.ageMs(loc) > HomeArea.MAX_FIX_AGE_MS -> {
+                    Toast.makeText(this, getString(R.string.house_stale_fix), Toast.LENGTH_LONG).show(); null
+                }
+                else -> loc
             }
         }
-        val clearBtn = bigChoice(getString(R.string.house_clear), Palette.dangerText) {
-            HomeArea.clearHome(this)
-            Toast.makeText(this, getString(R.string.house_cleared_toast), Toast.LENGTH_SHORT).show()
-            ui.removeCallbacksAndMessages(null); showHouseArea()
+
+        // The watch's gate opens on a house existing, so every save hands it the fix that
+        // just became one - otherwise the dashboard says "not set up" for up to a minute
+        // after the user has plainly set it up.
+        fun addHere(loc: Location) {
+            val added = HomeArea.addHouse(this, loc)
+            if (added == null) {
+                Toast.makeText(this, getString(R.string.house_add_full, HomeArea.MAX_HOUSES), Toast.LENGTH_LONG).show()
+                return
+            }
+            val n = HomeArea.houses(this).indexOfFirst { it.id == added.id } + 1
+            Toast.makeText(this, getString(R.string.house_added_toast, n,
+                Math.round(HomeArea.usableAccuracy(loc)), loc.provider ?: "?"), Toast.LENGTH_LONG).show()
+            HomeAreaWatch.offer(this, loc)
+            reloadPage()
         }
-        /** Live "is there anything worth saving yet?" line, sat right under the button. */
-        val saveReady = tinyLine()
 
-        // ── added in onboarding order ──
+        /**
+         * "Remove this house."
+         *
+         * Under the lock this only ever RECORDS THE REQUEST. The toast says "Noted." and
+         * nothing else: no date, no countdown - a deadline to hold out for is precisely
+         * what a month's wait is meant to deny (see HouseLock).
+         */
+        fun onRemove(house: HomeArea.House, n: Int) {
+            when {
+                // Already asked for: the only thing left to offer is calling it off.
+                house.deleteRequestedAt > 0L -> AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.house_n, n))
+                    .setMessage(getString(R.string.house_remove_pending))
+                    .setPositiveButton(getString(R.string.house_remove_cancel)) { _, _ ->
+                        HomeArea.cancelDelete(this, house.id)
+                        Toast.makeText(this, getString(R.string.house_remove_cancelled_toast), Toast.LENGTH_SHORT).show()
+                        reloadPage()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                HouseLock.deleteNeedsWait(this) -> AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.house_remove_locked_title, n))
+                    .setMessage(getString(R.string.house_remove_locked_body, modeName))
+                    .setPositiveButton(getString(R.string.house_remove_locked_yes)) { _, _ ->
+                        HomeArea.requestDelete(this, house.id)
+                        Toast.makeText(this, getString(R.string.house_remove_asked_toast), Toast.LENGTH_SHORT).show()
+                        reloadPage()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                else -> AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.house_remove_now_title, n))
+                    .setMessage(getString(R.string.house_remove_now_body))
+                    .setPositiveButton(getString(R.string.house_remove)) { _, _ ->
+                        HomeArea.removeHouse(this, house.id)
+                        Toast.makeText(this, getString(R.string.house_removed_toast), Toast.LENGTH_SHORT).show()
+                        reloadPage()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+
+        for ((i, house) in houses.withIndex()) {
+            val n = i + 1
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = GradientDrawable().apply {
+                    cornerRadius = Radius.card * dp
+                    setStroke((1 * dp).toInt(), Palette.hairline)
+                }
+                val q = (12 * dp).toInt(); setPadding(q, q, q, q)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = (8 * dp).toInt() }
+            }
+            // Numbered only when there is more than one - "House 1" on its own reads like a
+            // filing system for something the user thinks of simply as home.
+            if (houses.size > 1) card.addView(TextView(this).apply {
+                text = getString(R.string.house_n, n)
+                textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+            })
+            val distLine = subLine()
+            houseDistLines.add(house to distLine)
+            card.addView(distLine)
+            card.addView(tinyLine().apply {
+                text = String.format(java.util.Locale.UK, "%.5f, %.5f  ·  %s",
+                    house.lat, house.lon, stamp.format(java.util.Date(house.setAt))) +
+                    (if (house.accuracy >= 0f) "  ·  ±${Math.round(house.accuracy)} m" else "")
+            })
+            if (house.accuracy > HomeArea.RADIUS_M) card.addView(tinyLine().apply {
+                text = getString(R.string.house_vague_fix)
+                setTextColor(Palette.warningText)
+            })
+            if (house.deleteRequestedAt > 0L) card.addView(tinyLine().apply {
+                text = getString(R.string.house_remove_pending)
+                setTextColor(Palette.warningText)
+            })
+            card.addView(TextView(this).apply {
+                text = getString(R.string.house_remove)
+                textSize = 14f; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Palette.dangerText); gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    cornerRadius = Radius.control * dp; setStroke((1.5f * dp).toInt(), Palette.dangerText)
+                }
+                val h = (10 * dp).toInt(); setPadding(h, (8 * dp).toInt(), h, (8 * dp).toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (10 * dp).toInt() }
+                isClickable = true; isFocusable = true
+                setOnClickListener { onRemove(house, n) }
+            })
+            housesBox.addView(card)
+        }
+        if (houses.isEmpty()) housesBox.addView(subLine().apply { text = getString(R.string.house_notset) })
+
+        val saveBtn = bigChoice(getString(R.string.house_save), Palette.tint) {
+            usableFix()?.let { addHere(it) }
+        }
+        val addBtn = bigChoice(getString(R.string.house_add), Palette.tint) {
+            val loc = usableFix() ?: return@bigChoice
+            if (!HouseLock.canAdd(this))
+                Toast.makeText(this, getString(R.string.house_add_full, HomeArea.MAX_HOUSES), Toast.LENGTH_LONG).show()
+            else addHere(loc)
+        }
+
         content.addView(sectionTitle(getString(R.string.house_sec_point)))
-        content.addView(homeLine); content.addView(homeMeta)
-        content.addView(saveBtn); content.addView(saveReady); content.addView(clearBtn)
-
-        content.addView(sectionTitle(getString(R.string.house_sec_where)))
-        content.addView(pill); content.addView(ruleLine); content.addView(wouldLine)
-        content.addView(bigDist); content.addView(whyLine)
-
-        content.addView(sectionTitle("Current fix"))
-        content.addView(fixLine); content.addView(fixAgeLine); content.addView(coordLine); content.addView(mockLine)
-
-        // The section that answers "does it work with the app shut?": this is the
-        // accessibility service's own watch, not this page's monitor. Close the app, walk
-        // out of the radius, come back - the log below should already know.
-        content.addView(sectionTitle("Background watch (app closed)"))
-        content.addView(watchLine); content.addView(watchMeta); content.addView(watchHint)
-        content.addView(watchLog)
-
-        val stamp = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.UK)
+        content.addView(pill)
+        content.addView(housesBox)
+        content.addView(saveBtn); content.addView(addBtn); content.addView(saveReady)
+        content.addView(mockLine)
 
         fun refresh() {
             val granted = HomeArea.hasPermissions(this)
             val access = HomeArea.access(this)
             permLine.text = when (access) {
-                HomeArea.Access.ALWAYS -> "Location: ALL THE TIME ✓"
-                HomeArea.Access.WHILE_USING -> "Location: only WHILE USING THE APP"
-                HomeArea.Access.NONE -> "Location: NOT GRANTED - nothing below will read."
+                HomeArea.Access.ALWAYS -> getString(R.string.house_perm_always)
+                HomeArea.Access.WHILE_USING -> getString(R.string.house_perm_foreground)
+                HomeArea.Access.NONE -> getString(R.string.house_perm_none)
             }
             permLine.setTextColor(when (access) {
                 HomeArea.Access.ALWAYS -> Palette.successText
                 HomeArea.Access.WHILE_USING -> Palette.warningText
                 HomeArea.Access.NONE -> Palette.dangerText
             })
-            permHint.text = when (access) {
-                HomeArea.Access.ALWAYS ->
-                    if (HomeArea.backgroundIsSeparate()) "The watch keeps running with the app closed."
-                    else "This Android version has no separate background grant - fine location is all-the-time."
-                HomeArea.Access.WHILE_USING ->
-                    "This only reads while you're looking at the app. Step 2 is the one that matters" +
-                        (if (HomeArea.backgroundRequestable()) "." else
-                            " - and from Android 11 it can only be granted in Settings, not from a dialog.")
-                HomeArea.Access.NONE -> "Step 1 first: Android refuses \"all the time\" until \"while using\" is granted."
-            }
             grantBtn.visibility = if (granted) View.GONE else View.VISIBLE
             bgBtn.visibility = if (access == HomeArea.Access.WHILE_USING) View.VISIBLE else View.GONE
             appSettingsBtn.visibility = if (access == HomeArea.Access.ALWAYS) View.GONE else View.VISIBLE
             locWarn.visibility = if (granted && !HomeArea.locationEnabled(this)) View.VISIBLE else View.GONE
 
             val loc = monitor.last
-            val verdict = HomeArea.verdict(this, loc)
-            val (pillText, colour) = when (verdict) {
-                HomeArea.Verdict.HOME -> "  AT HOME  " to Palette.success
-                HomeArea.Verdict.AWAY -> "  AWAY  " to Palette.tint
-                HomeArea.Verdict.MAYBE -> "  MAYBE - on the edge  " to Palette.warning
-                HomeArea.Verdict.UNKNOWN -> "  NO IDEA  " to Palette.labelQuaternary
+            val (pillText, colour) = when (HomeArea.verdict(this, loc)) {
+                HomeArea.Verdict.HOME -> getString(R.string.house_pill_home) to Palette.success
+                HomeArea.Verdict.AWAY -> getString(R.string.house_pill_away) to Palette.tint
+                HomeArea.Verdict.MAYBE -> getString(R.string.house_pill_maybe) to Palette.warning
+                HomeArea.Verdict.UNKNOWN -> getString(R.string.house_pill_unknown) to Palette.labelQuaternary
             }
             pill.text = pillText
             pill.background = GradientDrawable().apply { cornerRadius = Radius.card * dp; setColor(colour) }
+            pill.visibility = if (houses.isEmpty()) View.GONE else View.VISIBLE
 
-            // The sentence this page exists to show: what the verdict MEANS, in the mode
-            // the user is actually in. Only Super hardcore acts on it, so in every other
-            // mode this says so plainly rather than implying something is happening.
-            val superHardcore = Mode.isSuperHardcore(this)
-            ruleLine.text = when {
-                !HomeArea.isSet(this) -> getString(R.string.house_rule_unset)
-                !superHardcore -> getString(R.string.house_rule_other_modes)
-                verdict == HomeArea.Verdict.HOME -> getString(R.string.house_rule_home)
-                verdict == HomeArea.Verdict.AWAY -> getString(R.string.house_rule_away)
-                else -> getString(R.string.house_rule_unsure)
-            }
-            ruleLine.setTextColor(when {
-                !HomeArea.isSet(this) || !superHardcore -> Palette.labelSecondary
-                verdict == HomeArea.Verdict.HOME -> Palette.successText
-                verdict == HomeArea.Verdict.AWAY -> Palette.label
-                else -> Palette.warningText
-            })
-            wouldLine.text = getString(R.string.house_rule_note)
+            mockLine.visibility = if (loc != null && HomeArea.isMock(loc)) View.VISIBLE else View.GONE
+            mockLine.text = getString(R.string.house_mock)
 
-            val d = HomeArea.distanceFrom(this, loc)
-            bigDist.text = if (d == null) "-- m" else "${Math.round(d)} m"
-            whyLine.text = HomeArea.explain(this, loc)
-
-            if (loc == null) {
-                fixLine.text = if (granted) "Waiting for a fix…" else "No permission, so no fix."
-                fixAgeLine.text = "Providers: " +
-                    "GPS ${if (monitor.hasGps) "on" else "off"}, network ${if (monitor.hasNetwork) "on" else "off"}"
-                coordLine.text = ""
-                mockLine.visibility = View.GONE
-            } else {
-                val acc = HomeArea.usableAccuracy(loc)
-                fixLine.text = "${loc.provider ?: "?"} · ±${Math.round(acc)} m" +
-                    (if (loc.hasAccuracy() && loc.accuracy < HomeArea.MIN_ACCURACY_M)
-                        " (phone claimed ±${Math.round(loc.accuracy)} m; floored)" else "")
-                fixAgeLine.text = "Age ${HomeArea.ageMs(loc) / 1000}s · GPS ${if (monitor.hasGps) "on" else "off"}, " +
-                    "network ${if (monitor.hasNetwork) "on" else "off"}"
-                coordLine.text = String.format(java.util.Locale.UK, "%.5f, %.5f", loc.latitude, loc.longitude)
-                mockLine.visibility = if (HomeArea.isMock(loc)) View.VISIBLE else View.GONE
-                mockLine.text = "⚠ MOCK LOCATION - this fix came from a fake-GPS app, not the hardware."
+            // Each card's live distance - the only part of the list that moves while the
+            // page is open (everything else re-enters the page).
+            for ((house, line) in houseDistLines) {
+                line.text = if (loc == null) getString(R.string.house_dist_unknown)
+                    else getString(R.string.house_dist_now, Math.round(HomeArea.distanceTo(house, loc)))
             }
-
-            // ── the service's watch ──
-            val watching = HomeAreaWatch.armed
-            watchLine.text = when {
-                watching && HomeAreaWatch.bursting -> "ARMED · GPS burst in progress"
-                watching -> "ARMED · network + passive (GPS only when it can't tell)"
-                !HomeArea.isSet(this) -> "Idle - no home point saved."
-                !granted -> "Idle - no location permission."
-                !HomeArea.locationEnabled(this) -> "Idle - location is switched off."
-                else -> "Idle - accessibility service not running?"
-            }
-            watchLine.setTextColor(if (watching) Palette.successText else Palette.labelTertiary)
-            val ctx = HomeAreaContext
-            watchMeta.text = if (ctx.updatedAt == 0L) "No reading published yet."
-                else "Last verdict: ${ctx.label().uppercase()}" +
-                    (if (ctx.distanceM >= 0f) " at ${Math.round(ctx.distanceM)} m" else "") +
-                    " · checked ${(System.currentTimeMillis() - ctx.updatedAt) / 1000}s ago"
-            watchHint.text = if (access == HomeArea.Access.ALWAYS)
-                "This is the one that runs when the app is shut. A change has to hold 60s before it counts."
-            else
-                "⚠ Without \"all the time\", Android starves this of fixes the moment the app isn't visible."
-            val changes = ctx.recent()
-            if (watchLog.childCount != changes.size.coerceAtLeast(1)) {
-                watchLog.removeAllViews()
-                if (changes.isEmpty()) watchLog.addView(tinyLine().apply { text = "No changes recorded yet." })
-                for (c in changes) watchLog.addView(tinyLine().apply {
-                    text = "${stamp.format(java.util.Date(c.at))}  →  ${c.verdict.name}" +
-                        (if (c.distanceM >= 0f) "  (${Math.round(c.distanceM)} m)" else "")
-                })
-            }
-
-            if (HomeArea.isSet(this)) {
-                homeLine.text = String.format(java.util.Locale.UK, "%.5f, %.5f  ·  radius %d m",
-                    HomeArea.homeLat(this), HomeArea.homeLon(this), Math.round(HomeArea.RADIUS_M))
-                val hAcc = HomeArea.homeAccuracy(this)
-                homeMeta.text = "Saved ${stamp.format(java.util.Date(HomeArea.homeSetAt(this)))} " +
-                    "from ${HomeArea.homeProvider(this).ifEmpty { "?" }}" +
-                    (if (hAcc >= 0f) " at ±${Math.round(hAcc)} m" else "") +
-                    (if (hAcc > HomeArea.RADIUS_M) "  ⚠ saved off a fix vaguer than the radius - redo it outdoors" else "")
-                clearBtn.visibility = View.VISIBLE
-                saveBtn.text = getString(R.string.house_save_replace)
-            } else {
-                homeLine.text = getString(R.string.house_notset)
-                homeMeta.text = getString(R.string.house_hint_notset)
-                clearBtn.visibility = View.GONE
-                saveBtn.text = getString(R.string.house_save)
-            }
-            saveBtn.visibility = if (granted) View.VISIBLE else View.GONE
-            // Say whether pressing it will work BEFORE it is pressed. The button used to
-            // answer that with a toast telling you to go and stand near a window, which is
-            // a poor moment to find out - especially right after granting the permission,
-            // when there is genuinely no fix yet and the page looked broken.
+            saveBtn.visibility = if (granted && houses.isEmpty()) View.VISIBLE else View.GONE
+            addBtn.visibility = if (granted && houses.isNotEmpty()) View.VISIBLE else View.GONE
+            // Say whether pressing it will work BEFORE it is pressed, rather than with a
+            // toast telling you to go and stand near a window once you already have.
             saveReady.visibility = if (granted) View.VISIBLE else View.GONE
             val usable = loc != null && HomeArea.ageMs(loc) <= HomeArea.MAX_FIX_AGE_MS
             saveReady.text = when {
@@ -6798,10 +6570,13 @@ private fun startWeekStrict() {
                 object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
                     override fun onGlobalLayout() {
                         root.viewTreeObserver.removeOnGlobalLayoutListener(this)
-                        root.smoothScrollTo(0, (saveBtn.top - pad).coerceAtLeast(0))
-                        saveBtn.animate().scaleX(1.04f).scaleY(1.04f).setDuration(220)
+                        // Whichever of the two is on screen: the first-house save, or -
+                        // for someone who already has one - the add button.
+                        val focus = if (saveBtn.visibility == View.VISIBLE) saveBtn else addBtn
+                        root.smoothScrollTo(0, (focus.top - pad).coerceAtLeast(0))
+                        focus.animate().scaleX(1.04f).scaleY(1.04f).setDuration(220)
                             .withEndAction {
-                                saveBtn.animate().scaleX(1f).scaleY(1f).setDuration(220).start()
+                                focus.animate().scaleX(1f).scaleY(1f).setDuration(220).start()
                             }.start()
                     }
                 })
@@ -9026,10 +8801,13 @@ private fun startWeekStrict() {
         val sp = Spinner(this)
         // Looked like inert text before, so nobody realised the mode was theirs to change.
         // An outlined pill reads as a control.
+        // ...except once the ratchet has closed, when there is genuinely nothing to pick:
+        // it goes grey and inert rather than pretending to be a live control (see below).
+        val ratchetShut = Mode.everSuperHardcore(this)
         sp.background = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = Radius.card * dp
-            setColor(Palette.surface)
-            setStroke((1.5f * dp).toInt(), Palette.tint)
+            setColor(if (ratchetShut) Palette.surfaceSunken else Palette.surface)
+            setStroke((1.5f * dp).toInt(), if (ratchetShut) Palette.labelQuaternary else Palette.tint)
         }
         val px = (14 * dp).toInt(); val py = (6 * dp).toInt()
         sp.setPadding(px, py, px, py)
@@ -9038,14 +8816,24 @@ private fun startWeekStrict() {
         // snapped back with a toast. An option that is always refused is not a choice, it
         // is a trap: it reads as "you can still turn this off" right up until you can't.
         // Take it off the list instead, and say why underneath the picker.
-        val modes = AppConfig.MODES.filterNot {
-            it.id == Mode.OFF && Mode.everStrict(this)
+        //
+        // THE SUPER HARDCORE RATCHET is the same idea taken to its end: once that mode has
+        // been entered, EVERY lower mode leaves the list for good and the picker stops
+        // being a picker at all. Mode.setMode refuses them anyway; showing them greyed or
+        // showing them at all would just be an invitation to keep trying the handle.
+        val modes = AppConfig.MODES.filter {
+            when {
+                ratchetShut -> it.id == Mode.SUPERHARDCORE
+                it.id == Mode.OFF && Mode.everStrict(this) -> false
+                else -> true
+            }
         }
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes.map { modeDisplayName(it.id) })
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         sp.adapter = adapter
         fun curIdx() = modes.indexOfFirst { it.id == Mode.current(this) }.coerceAtLeast(0)
         sp.setSelection(curIdx())
+        sp.isEnabled = !ratchetShut
         sp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
                 val chosen = modes.getOrNull(pos)?.id ?: return
@@ -9058,6 +8846,33 @@ private fun startWeekStrict() {
                         getString(R.string.mode_needs_lock_toast), Toast.LENGTH_LONG).show()
                     sp.setSelection(curIdx())
                     showLockPrompt { }
+                    return
+                }
+                // A ONE-WAY DOOR gets one clear question before it shuts, and it is asked
+                // HERE - ahead of the permission gate below, so the answer is given before
+                // the choice can be parked rather than after it has quietly landed. Not a
+                // nag and not a friction tax: there is no undo behind this one, so the user
+                // has to be able to say afterwards that they knew exactly what they picked.
+                if (chosen == Mode.SUPERHARDCORE) {
+                    sp.setSelection(curIdx())   // keep showing the real mode until they say yes
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle(getString(R.string.mode_super_confirm_title))
+                        .setMessage(getString(R.string.mode_super_confirm_msg))
+                        .setPositiveButton(getString(R.string.mode_super_confirm_yes)) { _, _ ->
+                            if (!corePermsGranted()) {
+                                pendingMode = Mode.SUPERHARDCORE   // lands from updateScreen()
+                                updateScreen()
+                            } else if (Mode.setMode(this@MainActivity, Mode.SUPERHARDCORE)) {
+                                Toast.makeText(this@MainActivity,
+                                    getString(R.string.mode_on_toast, modeDisplayName(Mode.SUPERHARDCORE)),
+                                    Toast.LENGTH_SHORT).show()
+                                // Redrawn rather than nudged: the picker itself changes shape
+                                // once the ratchet shuts (every lower mode leaves the list).
+                                if (!maybeAskAboutHouse(Mode.SUPERHARDCORE)) showReportScreen()
+                            }
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
                     return
                 }
                 // Anything above Off makes the two core permissions MANDATORY. Don't

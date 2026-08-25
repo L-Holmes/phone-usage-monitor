@@ -200,14 +200,12 @@
     <string name="proto_break_locked">Break the addiction protocol  \u00b7  strict %1$s left</string>
     <string name="report_pane_appsite">Report an app/site</string>
     <string name="report_pane_temptation">I feel temptation</string>
-    <string name="report_pane_stats">Statistics</string>
     <string name="report_settings">Settings</string>
     <string name="report_title">Adult content</string>
     <string name="report_mode_label">Protection level</string>
     <string name="report_protocol_sub">The big moves, in order. Work through them once and most of this looks after itself.</string>
     <string name="report_pane_appsite_sub">Something got through, or something should never have been there. Tell us and it\'s blocked.</string>
     <string name="report_pane_temptation_sub">Right now, before you act on it. A couple of minutes here is usually all it takes.</string>
-    <string name="report_pane_stats_sub">When it happens, where, and what leads into it.</string>
 
     <!-- ── Mode names (Main.kt / used app-wide) ──────────────────────────────────────── -->
     <string name="mode_off_name">Off</string>
@@ -218,6 +216,9 @@
     <string name="mode_ratchet_toast">Off is gone for good - you chose Strict once. Relaxed is as loose as it gets now.</string>
     <string name="mode_off_toast">Monitoring off - nothing is watched or blocked</string>
     <string name="mode_needs_lock_toast">Super hardcore needs the uninstall lock on first</string>
+    <string name="mode_super_confirm_title">Super hardcore is permanent</string>
+    <string name="mode_super_confirm_msg">This one has no way back. Once it is on, Strict, Relaxed and Off leave the list for good - not for a week, not until you have earned it back. Ever.\n\nThat is the point of it: you are deciding this now, so that the version of you at 2am does not get a vote.\n\nStill want it?</string>
+    <string name="mode_super_confirm_yes">Yes, lock me in</string>
     <string name="mode_reverted_toast">Monitoring needs the whole setup - the mode is back to %1$s.</string>
 
     <!-- ── Adult-content settings screen (Main.kt) ───────────────────────────────────── -->
@@ -288,6 +289,7 @@
         <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
         <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
         <item>WHERE YOU LIVE: Strict asks you, once, to save where home is. Nothing in Strict acts on it - you are setting it up so it is ready if you ever go to Super hardcore, where being at home is what makes one word enough to close an app. It is GPS and nearby Wi-Fi, on this device only; nothing leaves the phone, and a VPN cannot move it. Set it up any time from Overview → Where you are.</item>
+        <item>THE HOUSE IS THEN FIXED. From here up, where you live is not a setting you can edit on a bad night - there is no way to move a saved house at all. You can ADD another one at any time, instantly, if you genuinely live in two places: that is always allowed, because being at home only ever makes the rules stricter. Removing one is asked for rather than done - it stays on for a while first, and you will not be told how long or when it finally goes.</item>
         <item>ONE WORD STILL DOESN\'T CLOSE AN APP. Strict changes what counts as a detection - more word lists are live and the bar is lower - not how many it takes. It is the same ladder as every other mode: three separate detections for an app you have had a while, two for one we have closed before, one for a newly installed app.</item>
         <item>THE SETUP IS ENFORCED, not just asked for: while anything is still missing - the \"appear on top\" permission, Firefox, or its add-on - everything except the essentials is covered with a screen naming the step you still owe. Calls, texts, alarms, maps, Settings, Firefox and this app all stay open, so you can always finish it (or drop back to Relaxed).</item>
         <item>The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.</item>
@@ -305,8 +307,10 @@
         <item>AT HOME, ONE WORD IS ENOUGH - only in this mode. When the phone can see it is at your house, the detection ladder collapses to one: the first sexual word detected in an app closes it, with no second look and no waiting to see whether it comes back. The house is where it happens, and this is the mode that says so.</item>
         <item>Out of the house - or if it cannot tell where you are - the ordinary ladder applies: three separate detections, minutes apart. Being unsure NEVER makes anything stricter, so a vague fix in a supermarket cannot take an app away.</item>
         <item>That rule needs the house saved first (Overview → Where you are). Until it is, Super hardcore uses the ordinary ladder everywhere.</item>
+        <item>THE HOUSE IS THEN FIXED. From here up, where you live is not a setting you can edit on a bad night - there is no way to move a saved house at all. You can ADD another one at any time, instantly, if you genuinely live in two places: that is always allowed, because being at home only ever makes the rules stricter. Removing one is asked for rather than done - it stays on for a while first, and you will not be told how long or when it finally goes.</item>
         <item>Away from home the detection ladder is the same as everywhere else: one word in an app opens a case rather than closing the app. What this mode changes on top of that is what counts as a detection - the fragment lists (reddit and its misspellings) are only live here.</item>
         <item>The setup is enforced outside this app exactly as it is in Strict: anything still missing and only the essentials open.</item>
+        <item>ONE-WAY DOOR: choosing this mode is permanent. Once it is on, no lower mode can ever be set again on this phone - Strict, Relaxed and Off all leave the picker for good.</item>
         <item>This is Strict with the daily pass taken away.</item>
     </string-array>
 
@@ -608,17 +612,6 @@
     <string name="rank_fried_long">Fully Fried</string>
     <string name="rank_initiate">Initiate</string>
     <string name="rank_journey_long">The Journey Begins</string>
-    <string name="rank_flavour_0">Roughly: well under an hour a day on non-whitelisted apps, nothing late at night, for two months straight. The top of the mountain.</string>
-    <string name="rank_flavour_1">About an hour a day, kept up for a whole month.</string>
-    <string name="rank_flavour_2">Two clean weeks - the feeds barely see you.</string>
-    <string name="rank_flavour_3">One controlled week. The first belt.</string>
-    <string name="rank_req">%1$d days in a row with a baseline of %2$d or less. %3$s</string>
-    <string name="rank_req_apprentice">A 7-day average under 40. The habit is bending - hold it for a week and the belts start.</string>
-    <string name="rank_req_drifter">A 7-day average under 50. Coasting - could go either way.</string>
-    <string name="rank_req_twitchy">A 7-day average under 60. The phone is winning more rounds than you are.</string>
-    <string name="rank_req_doomscroller">A 7-day average under 75. Hours a day going to the scroll.</string>
-    <string name="rank_req_fried">A 7-day average of 75 or more. Rock bottom - from here it only goes up.</string>
-    <string name="rank_req_journey">Where everyone starts: install the app, live one normal day.</string>
     <string name="rank_detail_top">The top of the mountain. Keep sitting on it.</string>
     <string name="rank_detail_belt">%1$d+ days with a baseline ≤ %2$d. Next: %3$s - %4$d days ≤ %5$d.</string>
     <string name="rank_detail_avg">7-day average %1$d. %2$s</string>
@@ -634,18 +627,11 @@
     <string name="dop_driving">WHAT\'S DRIVING IT TODAY</string>
     <string name="dop_pulling_down">PULLING IT DOWN</string>
     <string name="dop_more">MORE</string>
-    <string name="dop_ranks_btn">The ranks</string>
-    <string name="dop_ranks_sub">every level, and what it takes to reach them</string>
     <string name="dop_maths_btn">How is this calculated?</string>
     <string name="dop_maths_sub">every rule, and what it\'s worth</string>
     <string name="dop_guidance_btn">How do I bring this down?</string>
     <string name="dop_guidance_sub">what actually moves the number</string>
-    <string name="dop_habits_btn">Your habits estimate</string>
-    <string name="dop_habits_sub">self-reported · does NOT affect the score above</string>
     <string name="dop_disclaimer">A rough model, not a medical measurement. It exists to make a pattern visible, nothing more.</string>
-    <string name="dop_ranks_title">The ranks</string>
-    <string name="dop_ranks_intro">Hold a low baseline and you climb. The belts are earned by TIME - not one good day, but weeks of them. A rough week drops you fast; climbing back is the long game. That\'s the point.</string>
-    <string name="dop_ranks_you">   ← you</string>
     <string name="dop_guid_title">Bringing it down</string>
     <string name="dop_guid_biggest">YOUR BIGGEST ONE</string>
     <string name="dop_guid_biggest_body">%1$s — %2$s.\n\n%3$s</string>
@@ -679,44 +665,7 @@
     <string name="dop_adv_scrolling">A high rate means you\'re thumbing, not reading. Slowing down IS the intervention.</string>
     <string name="dop_adv_lyingdark">Phone use lying down is what costs you most here. No mode blocks it for you now - but Strict and Super hardcore both grey the screen while you are lying down, which takes most of the pull out of it.</string>
     <string name="dop_adv_default">Cut the time first. It outweighs everything else in the score.</string>
-    <string name="dop_life_title">Your habits estimate</string>
-    <string name="dop_life_banner">This does NOT affect your dopamine baseline.\n\nIt\'s self-reported, so it can\'t - otherwise you could tick a few boxes and watch the number you came here to face go down. This is a separate estimate of the restorative side of your life, and it runs the other way: HIGHER IS BETTER.</string>
-    <string name="dop_life_score">Restorative habits: %1$d / 100</string>
-    <string name="dop_life_typical">On a typical day.</string>
     <!-- LifeInputs.HABITS content (keyed by habit key; option arrays are index-aligned with the credits) -->
-    <string name="habit_deep_rest_label">Sleep</string>
-    <string name="habit_deep_rest_hint">Actual sleep, on a typical night. Not naps.</string>
-    <string-array name="habit_deep_rest_options"><item>under 5h</item><item>5-6h</item><item>6-7h</item><item>7-8h</item><item>8h+</item></string-array>
-    <string name="habit_offline_focus_label">Deep offline focus</string>
-    <string name="habit_offline_focus_hint">A physical book, studying, screen-free work.</string>
-    <string-array name="habit_offline_focus_options"><item>none</item><item>&lt;15 min</item><item>~30 min</item><item>~45 min</item><item>~1 hour</item><item>2 hours+</item></string-array>
-    <string name="habit_training_label">Intense physical training</string>
-    <string name="habit_training_hint">Weights, running, sport - the hard stuff.</string>
-    <string-array name="habit_training_options"><item>none</item><item>&lt;15 min</item><item>~30 min</item><item>~45 min</item><item>1 hour+</item></string-array>
-    <string name="habit_building_label">High-leverage building</string>
-    <string name="habit_building_hint">Business, career, planning, learning - work on your future.</string>
-    <string-array name="habit_building_options"><item>none</item><item>&lt;30 min</item><item>~1 hour</item><item>~2 hours</item><item>3 hours+</item></string-array>
-    <string name="habit_creation_label">Active creation</string>
-    <string name="habit_creation_hint">Writing, music, cooking, making things.</string>
-    <string-array name="habit_creation_options"><item>none</item><item>&lt;15 min</item><item>~30 min</item><item>~1 hour</item><item>2 hours+</item></string-array>
-    <string name="habit_in_person_label">In-person time, phones away</string>
-    <string name="habit_in_person_hint">Real time with people, not messaging them.</string>
-    <string-array name="habit_in_person_options"><item>none</item><item>&lt;30 min</item><item>~1 hour</item><item>~2 hours</item><item>3 hours+</item></string-array>
-    <string name="habit_reflection_label">Screen-free reflection</string>
-    <string name="habit_reflection_hint">Walking alone, meditation, sitting doing nothing. Boredom counts.</string>
-    <string-array name="habit_reflection_options"><item>none</item><item>&lt;15 min</item><item>~30 min</item><item>~45 min</item><item>1 hour+</item></string-array>
-    <string name="habit_light_exercise_label">Light movement</string>
-    <string name="habit_light_exercise_hint">A walk. Anything gentle. Being on your feet.</string>
-    <string-array name="habit_light_exercise_options"><item>none</item><item>&lt;15 min</item><item>~30 min</item><item>~1 hour</item><item>2 hours+</item></string-array>
-    <string name="habit_healthy_eating_label">Eating</string>
-    <string name="habit_healthy_eating_hint">Not a duration - just how the day went.</string>
-    <string-array name="habit_healthy_eating_options"><item>Binged / junk</item><item>Mixed</item><item>Mostly good</item><item>Clean</item></string-array>
-    <string name="habit_caffeine_label">Caffeine</string>
-    <string name="habit_caffeine_hint">After about midday it costs you sleep, which costs you tomorrow.</string>
-    <string-array name="habit_caffeine_options"><item>None</item><item>1 cup, early</item><item>2-3 cups</item><item>Lots / late in the day</item></string-array>
-    <string name="habit_alcohol_label">Alcohol</string>
-    <string name="habit_alcohol_hint">Wrecks deep sleep even when it helps you drop off.</string>
-    <string-array name="habit_alcohol_options"><item>None</item><item>1 drink</item><item>2-3 drinks</item><item>More</item></string-array>
     <!-- dopamine "how it's calculated" (generated from DopamineTuning) -->
     <string name="dop_maths_title">How it\'s calculated</string>
     <string name="dop_maths_intro">Every rule below adds points to a daily total, capped at 100. Higher is worse. Nothing here is hidden from you.</string>
@@ -755,49 +704,8 @@
     <string name="usage_goal_set">Set goal</string>
     <string name="usage_goal_set_toast">Goal set: %1$s a day</string>
     <string name="usage_goal_remove">Remove the goal</string>
-    <string name="scroll_title">What the scroll costs you</string>
-    <string name="scroll_reclaimed_sub">about %1$d min back for every urge you rode out</string>
-    <string name="scroll_consistency_sub">%1$d of the last %2$d days clean - one slip never resets it</string>
-    <string name="scroll_reclaimed_empty_sub">ride out your first urge and your reclaimed time starts here</string>
-    <string name="scroll_projector">The projector</string>
-    <string name="scroll_waking_days">%1$d waking days a year</string>
-    <string name="scroll_per_year_value">≈ %1$s a year of your time</string>
-    <string name="scroll_over_years">Over %1$d year%2$s: about %3$s years of waking life - and %4$s</string>
-    <string name="scroll_min_per_day">%1$d minutes a day on short video &amp; feeds</string>
-    <string name="scroll_looking_ahead">Looking %1$d year%2$s ahead</string>
-    <string name="scroll_that_year">That same year is also:\n%1$d hours of training  ·  %2$d evenings with people  ·  about %3$d books</string>
-    <string name="scroll_valued">Valued at %1$s/yr, from your numbers  ·  change</string>
-    <string name="scroll_add_rate">Add your hourly rate to see what it\'s really costing you  ›</string>
-    <string name="prod_title">Productivity</string>
-    <string name="prod_intro">Where you stand today, what you\'ve won back, and what the rest is costing you.</string>
-    <string name="prod_sec_today">TODAY</string>
-    <string name="prod_sec_progress">YOUR PROGRESS</string>
-    <string name="prod_sec_cost">WHAT IT COSTS</string>
-    <string name="prod_sec_inputs">YOUR NUMBERS</string>
-    <string name="prod_inputs_hint">Three optional figures. Give us any of them and every graph in the app starts talking in your money and your habits instead of averages.</string>
-    <string name="prod_scroll_cost_title">What the scroll costs</string>
-    <string name="prod_scroll_cost_sub">The projector: minutes per day → years and %1$s - plus what you\'ve reclaimed.</string>
-    <string name="prod_week_reclaimed">This week - reclaimed</string>
-    <string name="prod_value_reclaimed">value reclaimed</string>
-    <string name="prod_by_sunday">by Sunday</string>
-    <string name="prod_worth">Your reclaimed time is worth…</string>
-    <string name="prod_dopamine_title">Your dopamine baseline</string>
-    <string name="prod_still_measuring">Still measuring</string>
-    <string name="prod_out_of_100">out of 100 today · higher is more fried</string>
-    <string name="prod_row_income">Your income</string>
-    <string name="prod_row_income_sub">Turns every wasted hour into real money</string>
-    <string name="prod_row_habits">Your habits</string>
-    <string name="prod_row_habits_sub">Sleep, training, focus - sharpens your score</string>
     <string name="prod_row_goal">Daily usage goal</string>
     <string name="prod_row_goal_sub">Draws the target line on every usage graph</string>
-    <string name="prod_row_add">Add</string>
-    <string name="prod_habits_value">%1$d / 100</string>
-    <string name="prod_row_perday">%1$s a day</string>
-    <string name="prod_reclaim_could">Reclaim it and you could</string>
-    <string name="prod_opp_b1">%1$d books read - about 6 hours each</string>
-    <string name="prod_opp_b2">%1$d proper workouts, 45 minutes apiece</string>
-    <string name="prod_opp_b3">%1$d%% of the way to conversational in a new language</string>
-    <string name="prod_opp_b4">%1$d full nights of extra sleep</string>
 
     <!-- ── Break-the-addiction protocol (Main.kt) ────────────────────────────────────── -->
     <string name="proto_intro">Two moves do most of the work: a real break away from your device, then locking it down hard for the week after. Everything else supports those two.</string>
@@ -858,7 +766,7 @@
     <string name="proto_7day_toast">Strict mode on for 7 days</string>
 
     <!-- ── Temptation categories (AppConfig.TEMPTATIONS content, keyed by id) ────────── -->
-    <string name="temptspec_scrolling_title">Endless Scrolling / Brain Rot  🤳</string>
+    <string name="temptspec_scrolling_title">Endless Scrolling / Brain Rot</string>
     <string name="temptspec_scrolling_subtitle">Break the infinite feed loop.</string>
     <!-- Names what the block switch kills. This category owns the reels/shorts/feeds switch
          that used to sit on the Productivity page - same patterns, said out loud. -->
@@ -870,7 +778,7 @@
         <item>Content built on constant novelty, to keep you hunting the next hit</item>
         <item>Losing an hour without ever deciding to spend it</item>
     </string-array>
-    <string name="temptspec_binge_title">Binge Watching  📺</string>
+    <string name="temptspec_binge_title">Binge Watching</string>
     <string name="temptspec_binge_subtitle">Escape loops through endless viewing.</string>
     <string-array name="temptspec_binge_covers">
         <item>Netflix, YouTube, streaming, autoplay running on and on</item>
@@ -879,7 +787,7 @@
         <item>Autoplay and \"recommended for you\" deciding your evening for you</item>
         <item>The gap between choosing to watch something and losing control of the night</item>
     </string-array>
-    <string name="temptspec_comparison_title">Social Comparison / Social Media  👥</string>
+    <string name="temptspec_comparison_title">Social Comparison / Social Media</string>
     <string name="temptspec_comparison_subtitle">Break the comparison and validation loop.</string>
     <string-array name="temptspec_comparison_covers">
         <item>Watching friends, influencers and peers post the highlight reel of their lives</item>
@@ -888,7 +796,7 @@
         <item>Measuring your looks, money, job and progress against strangers</item>
         <item>Coming away feeling behind, small, or quietly anxious</item>
     </string-array>
-    <string name="temptspec_checking_title">Phone Checking  📱</string>
+    <string name="temptspec_checking_title">Phone Checking</string>
     <string name="temptspec_checking_subtitle">Stop the automatic checking habit.</string>
     <string-array name="temptspec_checking_covers">
         <item>Unlocking the phone with no idea why you picked it up</item>
@@ -897,7 +805,7 @@
         <item>Doing it dozens of times a day without noticing</item>
         <item>Wanting the choice back</item>
     </string-array>
-    <string name="temptspec_news_title">News Cycles / Existential Anxiety  📰</string>
+    <string name="temptspec_news_title">News Cycles / Existential Anxiety</string>
     <string name="temptspec_news_subtitle">Step away from endless worry.</string>
     <string-array name="temptspec_news_covers">
         <item>Refreshing the news all day for an update that never settles anything</item>
@@ -906,7 +814,7 @@
         <item>The loop: fear, uncertainty, check, brief relief, fear again</item>
         <item>Being informed is fine. Being consumed by it is not.</item>
     </string-array>
-    <string name="temptspec_gaming_title">Gaming &amp; Reward Loops  🎮</string>
+    <string name="temptspec_gaming_title">Gaming &amp; Reward Loops</string>
     <string name="temptspec_gaming_subtitle">Understand digital reward cycles.</string>
     <string-array name="temptspec_gaming_covers">
         <item>Games built around streaks, unlocks, levels and daily rewards</item>
@@ -915,7 +823,7 @@
         <item>Playing to dodge boredom, stress, or something you owe someone</item>
         <item>The point where entertainment quietly became a compulsion</item>
     </string-array>
-    <string name="temptspec_shopping_title">Impulse Shopping  💳</string>
+    <string name="temptspec_shopping_title">Impulse Shopping</string>
     <string name="temptspec_shopping_subtitle">Break the buying-for-a-feeling loop.</string>
     <string-array name="temptspec_shopping_covers">
         <item>Amazon, Temu, discount sites, ads following you around</item>
@@ -927,7 +835,7 @@
 
     <!-- ── Temptations tab + shared category page (Main.kt) ──────────────────────────── -->
     <string name="temp_managing">What are you managing?</string>
-    <string name="temp_adult_title">Adult Content 🔞</string>
+    <string name="temp_adult_title">Adult Content</string>
     <string name="temp_adult_sub">Tools for the moment, and the longer game.</string>
     <string name="temp_stats">%1$d ridden out</string>
     <string name="temp_pull_title">I feel the pull right now</string>
@@ -1016,32 +924,48 @@
 
     <!-- ── The house page (Main.kt: showHouseArea) ───────────────────────────────────── -->
     <string name="house_title">Your house</string>
-    <string name="house_intro">Whether the phone is within %1$d m of home. Set it up by standing in the house and pressing the button near the bottom - that fix becomes home. It is GPS and nearby Wi-Fi, on this device only: nothing is sent anywhere, and a VPN cannot move it.</string>
-    <string name="house_rule_unset">Not set up yet, so nothing uses it.</string>
-    <string name="house_rule_other_modes">Saved. Only Super hardcore acts on it - in this mode it is a readout.</string>
-    <string name="house_rule_home">At home, in Super hardcore: one word detected in an app closes it, with no second look.</string>
-    <string name="house_rule_away">Out of the house: apps get the ordinary ladder - three detections, minutes apart.</string>
-    <string name="house_rule_unsure">Can\'t tell where you are, so nothing changes. Being unsure never makes anything stricter.</string>
-    <string name="house_rule_note">Nothing else is blocked because of where you are - this shortens the word-detection ladder, and only in Super hardcore.</string>
+    <string name="house_perm_always">Location: all the time ✓</string>
+    <string name="house_perm_foreground">Location: only while the app is open</string>
+    <string name="house_perm_none">Location: not granted</string>
+    <string name="house_pill_home">  AT HOME  </string>
+    <string name="house_pill_away">  OUT  </string>
+    <string name="house_pill_maybe">  ON THE EDGE  </string>
+    <string name="house_pill_unknown">  NO IDEA  </string>
+    <string name="house_mock">⚠ Mock location - this fix came from a fake-GPS app.</string>
+    <string name="house_vague_fix">⚠ Saved off a vague fix - redo it outdoors.</string>
     <string name="house_sec_permissions">Permissions</string>
-    <string name="house_sec_where">Where you are</string>
-    <string name="house_sec_point">Your home point</string>
-    <string name="house_save_ready">Fix is good (±%1$d m) - press the button while you\'re in the house.</string>
-    <string name="house_save_waiting">Waiting for a location fix… give it a few seconds, and go near a window if it doesn\'t come.</string>
+    <string name="house_sec_point">Your house</string>
+    <string name="house_save_ready">Fix is good (±%1$d m).</string>
+    <string name="house_save_waiting">Waiting for a location fix…</string>
     <string name="house_grant_1">1. Grant location (while using the app)</string>
     <string name="house_grant_2">2. Allow all the time</string>
     <string name="house_grant_settings_hint">Permissions → Location → Allow all the time</string>
     <string name="house_open_settings">Open app permission settings</string>
     <string name="house_location_off">Location is OFF system-wide - tap here to turn it on.</string>
-    <string name="house_save">I\'m in my house - save this as home</string>
-    <string name="house_save_replace">I\'m in my house - save this as home (replaces the old point)</string>
-    <string name="house_clear">Clear home point</string>
-    <string name="house_saved_toast">Home saved (±%1$d m from %2$s).</string>
-    <string name="house_cleared_toast">Home point cleared</string>
+    <string name="house_save">Save where I am now as home</string>
     <string name="house_no_fix">No location fix yet - give it a moment (go near a window).</string>
     <string name="house_stale_fix">That fix is stale - wait for a fresh one.</string>
-    <string name="house_notset">Not set.</string>
-    <string name="house_hint_notset">Stand in the house, wait for the accuracy to settle, then press the button.</string>
+    <string name="house_notset">No house saved yet.</string>
+
+
+    <!-- ── More than one house, and the lock on changing them (Strict / Super hardcore) ─ -->
+    <string name="house_n">House %1$d</string>
+    <string name="house_dist_now">%1$d m away right now</string>
+    <string name="house_dist_unknown">Distance unknown - no fix right now.</string>
+    <string name="house_add">＋  Add where I am now as another house</string>
+    <string name="house_add_full">The limit is %1$d houses. Remove one first.</string>
+    <string name="house_added_toast">Added as house %1$d (±%2$d m from %3$s).</string>
+    <string name="house_remove">Remove</string>
+    <string name="house_remove_pending">Removal asked for - it will go on its own.</string>
+    <string name="house_remove_locked_title">Remove house %1$d?</string>
+    <string name="house_remove_locked_body">Not today. In %1$s a house you ask to remove stays on for a while first, and you will not be told how long. You can call it off at any time.</string>
+    <string name="house_remove_locked_yes">Ask for it to be removed</string>
+    <string name="house_remove_asked_toast">Noted.</string>
+    <string name="house_remove_cancel">Keep it after all</string>
+    <string name="house_remove_cancelled_toast">Kept.</string>
+    <string name="house_remove_now_title">Remove house %1$d?</string>
+    <string name="house_remove_now_body">Deletes this point. Your other houses are untouched.</string>
+    <string name="house_removed_toast">House removed.</string>
 
     <!-- ── "Set your house up" offer, shown on entering Strict / Super hardcore ──────── -->
     <string name="house_ask_title">Where is home?</string>
@@ -1090,15 +1014,6 @@
     <!-- The Productivity door. This section replaced the old bottom-bar tab, so it has to do
          the job the tab label used to: say what is behind it AND that the user's own figures
          go in there. Keep the three bullets concrete - they are the whole pitch. -->
-    <string name="home_prod_title">Productivity</string>
-    <string name="home_prod_sub">your numbers &amp; tools</string>
-    <string name="home_prod_card_title">Open Productivity</string>
-    <string name="home_prod_card_sub">Your dopamine baseline, the hours you\'ve won back this week, and what the scroll is really costing you.</string>
-    <string name="home_prod_b1">Your income - so every wasted hour shows in real money</string>
-    <string name="home_prod_b2">Your habits - sleep, training, focus - for a sharper score</string>
-    <string name="home_prod_b3">A daily usage goal - the target line on these graphs</string>
-    <string name="home_prod_added">%1$d of 3 of your numbers added</string>
-    <string name="home_prod_none">Add your own numbers in here</string>
     <string name="home_dev_tools">🔧  Dev tools</string>
     <string name="home_about_privacy">About &amp; privacy</string>
 
