@@ -240,7 +240,6 @@
     <string name="moderules_section_modes">THE MODES - WHAT CHANGES</string>
     <string name="moderules_current">You are in this mode right now</string>
     <string name="moderules_lock">Strict lock is running: %1$s left. You cannot go back to Relaxed until it ends. You can still go up to Super hardcore.</string>
-    <string name="moderules_watched">\"Watched apps\" are the ones that get the pause screen: %1$s.</string>
 
     <!-- Always-on rules (shown in every mode). 8/9/10 and 18/19/20 take numeric args. -->
     <string name="always_on_01">One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.</string>
@@ -275,7 +274,6 @@
         <item>The Productivity page and its screen-time stats keep working either way.</item>
     </string-array>
     <string-array name="mode_relaxed_rules">
-        <item>Pause screen: NEVER. Watched apps open straight away.</item>
         <item>Greyscale: off. Your screen stays in colour.</item>
         <item>Lying down or sitting in the dark changes nothing. Every app still opens - and no mode blocks on posture any more.</item>
         <item>The \"who is the filter for\" switches (Adult content -&gt; Settings) can be changed here (and in Off). In any stricter mode they are forced fully on.</item>
@@ -283,8 +281,6 @@
         <item>You can switch out of this mode whenever you like, unless the 7-day strict lock is running - but if you have ever been Strict, Off is no longer one of the choices.</item>
     </string-array>
     <string-array name="mode_strict_rules">
-        <item>Pause screen: the FIRST time you open a watched app each day. Open it again later the same day and it goes straight in - so 2FA codes and quick checks are not interrupted.</item>
-        <item>The daily pass resets at midnight.</item>
         <item>NIGHT GUARD: gone, in every mode. Lying down never blocks an app any more - not here, and not in Super hardcore. A dark room blocks nothing either.</item>
         <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
         <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
@@ -298,8 +294,6 @@
         <item>The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.</item>
     </string-array>
     <string-array name="mode_superhardcore_rules">
-        <item>Pause screen: EVERY single time you open a watched app. There is no daily pass.</item>
-        <item>Warning: this WILL interrupt you when you jump to an authenticator app for a 2FA code. That is the trade-off you are choosing.</item>
         <item>NIGHT GUARD: gone. Lying down used to block everything but the essentials here - it no longer blocks anything, in any mode. A dark room does not block anything either.</item>
         <item>Greyscale: your screen still turns grey while you are lying down, same as Strict. That is now the only thing posture changes.</item>
         <item>Everything in \"Always on\" above still applies.</item>
@@ -311,7 +305,6 @@
         <item>Away from home the detection ladder is the same as everywhere else: one word in an app opens a case rather than closing the app. What this mode changes on top of that is what counts as a detection - the fragment lists (reddit and its misspellings) are only live here.</item>
         <item>The setup is enforced outside this app exactly as it is in Strict: anything still missing and only the essentials open.</item>
         <item>ONE-WAY DOOR: choosing this mode is permanent. Once it is on, no lower mode can ever be set again on this phone - Strict, Relaxed and Off all leave the picker for good.</item>
-        <item>This is Strict with the daily pass taken away.</item>
     </string-array>
 
     <!-- ── Manage blocks screen (Main.kt) ────────────────────────────────────────────── -->
@@ -499,7 +492,7 @@
     <string name="loosen_min">%1$d min</string>
     <string name="loosen_unlock_for">Unlock for %1$d min</string>
     <string name="loosen_unlocked_title">Unlocked for %1$d min</string>
-    <string name="loosen_unlocked_body">The pause screen and image friction stay on. It re-locks itself when the timer ends.</string>
+    <string name="loosen_unlocked_body">The image friction stays on. It re-locks itself when the timer ends.</string>
     <string name="loosen_go">Go</string>
     <string name="loosen_relocked">Re-locked</string>
     <string name="loosen_continue_now">you can continue now</string>
@@ -868,16 +861,6 @@
     <string name="temp_put_down">Put the phone down</string>
     <string name="temp_put_down_sub">closes the app</string>
 
-    <!-- ── Pause-screen apps (Main.showPauseApps) ───────────────────────────────────── -->
-    <string name="pauseapps_open_title">Which apps pause first</string>
-    <string name="pauseapps_open_sub">%1$d app(s) stop for a moment before they open. Add your own.</string>
-    <string name="pauseapps_title">Pause screen apps</string>
-    <string name="pauseapps_sub">These apps stop for a moment before they open. How often is your mode\'s call: never in Off or Relaxed, the first open of the day in Strict, every single open in Super hardcore.</string>
-    <string name="pauseapps_on_header">STOPS FOR THESE</string>
-    <string name="pauseapps_add_header">TAP AN APP TO ADD IT</string>
-    <string name="pauseapps_none">Nothing pauses right now.</string>
-    <string name="pauseapps_tag">On</string>
-
     <!-- ── Phone-checking measures (CheckingGuard, rendered by Main.checkingCard) ────── -->
     <string name="checking_master_on">●  Checking measures on</string>
     <string name="checking_master_off">○  Turn on checking measures</string>
@@ -1072,6 +1055,4 @@
     <string name="br_home_block">%1$s\n\nYou are at your house, in Super hardcore. Here there is no second look: the first thing detected closes the app. Anywhere else, this one would have been let go.</string>
 
     <!-- ── Pause gate overlay (Overlay.kt) ─────────────────────────────────────────── -->
-    <string name="overlay_dont_want">I don\'t want to access %1$s</string>
-    <string name="overlay_continue_open">Continue to open %1$s</string>
 </resources>

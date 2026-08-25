@@ -17,7 +17,6 @@
 
 ## Dopamine delay
 - Images & video load slower on web browser.
-- Breathing excercise when accessing 
 
 ## For if they do slip...
 - Visual degredation

@@ -188,10 +188,10 @@ object Motion {
     /** Symmetric ease, for things that move and come back (press in / press out). */
     val standard: PathInterpolator get() = PathInterpolator(0.4f, 0f, 0.2f, 1f)
 
-    // ── The pause sweep ─────────────────────────────────────────────────────────────
-    // The one exception to "never above [slow]": the pause gate's panel is not a
-    // transition, it is the thing you are meant to watch, and it runs for seconds. Its
-    // two curves live here so the gate and the in-app pages move identically.
+    // ── The sweep ───────────────────────────────────────────────────────────────────
+    // The one exception to "never above [slow]": the sweep panel is not a transition,
+    // it is the thing you are meant to watch, and it runs for seconds. Its two curves
+    // live here so every page that sweeps moves identically.
 
     /**
      * Up: eases IN, gathers pace through the middle, settles into the top.

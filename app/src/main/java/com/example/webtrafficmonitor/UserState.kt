@@ -93,10 +93,11 @@ import android.graphics.Path
  *                   core permissions (page monitoring + block overlay) are optional -
  *                   pick anything higher and MainActivity's setup gate makes them
  *                   mandatory again (see currentStep()).
- *   RELAXED       - the calming "breathing" pause is suppressed for every app.
- *   STRICT        - the breathing pause shows on the FIRST open of a chosen app each day.
- *   SUPERHARDCORE - the breathing pause shows on EVERY open of a chosen app, plus the
- *                   tightest flagging thresholds. A ONE-WAY DOOR: once it has been picked,
+ *   RELAXED       - the screen stays in colour; the always-on blocking still runs.
+ *   STRICT        - greyscale while lying down, tighter word lists, the borderline
+ *                   watch, and the enforced setup gate.
+ *   SUPERHARDCORE - Strict plus the tightest flagging thresholds and the at-home
+ *                   one-word rule. A ONE-WAY DOOR: once it has been picked,
  *                   no lower mode can ever be set again on this install (see setMode).
  *
  * The per-mode behaviour that actually differs lives in AppConfig.MODES (one ModeSpec
@@ -250,6 +251,35 @@ object Mode {
     }
 
     /**
+     * DEBUG BUILDS ONLY. Write [mode] straight to prefs, ignoring the week lock and both
+     * ratchets - the one thing [setMode] exists to refuse.
+     *
+     * It is inert in a release build (BuildConfig.IS_TESTING is false there), and it must
+     * stay that way. The Super hardcore ratchet is the app's one promise with no clock on
+     * it; a way round it that shipped would make every other lock decorative. This is here
+     * so a developer can move a test device between modes without wiping its data, and
+     * that is the only reason it is here.
+     *
+     * The Super hardcore latch is wound back with it, because that one is what the mode
+     * PICKER reads: left set while the mode is Relaxed it gives a picker listing Super
+     * hardcore alone, which re-offers it the moment the screen is opened. A debug override
+     * that leaves the UI arguing with the stored mode is worse than none.
+     *
+     * ever_strict is NOT wound back - it only hides OFF, so it costs the picker nothing to
+     * keep, and clearing it would hand back a mode the caller never asked for.
+     */
+    fun forceMode(ctx: Context, mode: String): Boolean {
+        if (!BuildConfig.IS_TESTING) return false
+        val e = prefs(ctx).edit()
+            .putString(KEY_MODE, mode)
+            .remove(KEY_LOCK_UNTIL)
+            .putBoolean(KEY_EVER_SUPER, mode == SUPERHARDCORE)
+        if (rank(mode) >= rank(STRICT)) e.putBoolean(KEY_EVER_STRICT, true)
+        e.apply()
+        return true
+    }
+
+    /**
      * Force STRICT and lock it for 7 days.
      *
      * It writes the mode straight to prefs rather than going through [setMode], so it has
@@ -371,136 +401,6 @@ object BypassWatch {
 
     /** Called when they take the offer (or it lapses), so it isn't left sitting there. */
     fun disarm(ctx: Context) = prefs(ctx).edit().remove(KEY_AT).apply()
-
-    private fun prefs(ctx: Context) =
-        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-}
-
-
-// =====================================================================================
-// PauseApps  (WHICH apps get the app-open pause screen)
-// =====================================================================================
-/**
- * The list the pause gate works from: [AppConfig.BREATHING_APPS] as shipped, plus
- * whatever the user has added on Phone Checking → the pause-screen apps page, minus any
- * shipped one they have turned off.
- *
- * Stored as two package sets rather than one list of "the current apps", so a default
- * added in a later version turns up for everyone who has not explicitly said no to it -
- * a saved list would freeze the shipped set at whatever it was on the day they first
- * opened the page.
- *
- * WHICH apps is all this decides. HOW OFTEN the pause may then fire is [BreathingGate]'s
- * call, and whether it fires at all is the mode's - an app added here still never pauses
- * anything in Off or Relaxed.
- */
-object PauseApps {
-
-    private const val PREFS = "pause_apps"
-    private const val KEY_ADDED = "added"
-    private const val KEY_OFF = "off"
-
-    // Resolved once and held, because [contains] is called on the app-launch path - the
-    // one place in this app where a few milliseconds are visible to the user. Both writers
-    // below drop it, and they are the only way the sets can change.
-    @Volatile private var cached: Set<String>? = null
-
-    /** Every package that currently gets the pause screen. */
-    fun all(ctx: Context): Set<String> = cached ?: run {
-        val resolved = (AppConfig.BREATHING_APPS - off(ctx)) + added(ctx)
-        cached = resolved
-        resolved
-    }
-
-    fun contains(ctx: Context, pkg: String): Boolean = pkg in all(ctx)
-
-    /** Turn the pause screen on for [pkg]. Undoes a turn-off of a shipped app. */
-    fun add(ctx: Context, pkg: String) {
-        prefs(ctx).edit()
-            .putStringSet(KEY_OFF, off(ctx) - pkg)
-            .putStringSet(KEY_ADDED, if (pkg in AppConfig.BREATHING_APPS) added(ctx) else added(ctx) + pkg)
-            .apply()
-        // AFTER the write, never before: apply() updates the in-memory map synchronously,
-        // so dropping the cache first leaves a window where a read re-caches the old sets.
-        cached = null
-    }
-
-    /** Turn it off for [pkg], whether it was one of ours or one of theirs. */
-    fun remove(ctx: Context, pkg: String) {
-        prefs(ctx).edit()
-            .putStringSet(KEY_ADDED, added(ctx) - pkg)
-            .putStringSet(KEY_OFF, if (pkg in AppConfig.BREATHING_APPS) off(ctx) + pkg else off(ctx))
-            .apply()
-        cached = null
-    }
-
-    // getStringSet hands back the live stored set, and mutating it is undefined - so every
-    // read copies before anything downstream can touch it.
-    private fun added(ctx: Context): Set<String> =
-        prefs(ctx).getStringSet(KEY_ADDED, emptySet())!!.toSet()
-
-    private fun off(ctx: Context): Set<String> =
-        prefs(ctx).getStringSet(KEY_OFF, emptySet())!!.toSet()
-
-    private fun prefs(ctx: Context) =
-        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-}
-
-
-// =====================================================================================
-// BreathingGate  (how often the app-open pause screen is allowed to fire)
-// =====================================================================================
-/**
- * Decides whether opening a watched app earns a breathing pause right now.
- *
- *  - RELAXED       : never (unless a loosen window is running - that re-arms the gate).
- *  - STRICT        : the FIRST open of that app each calendar day. Re-opening it later the
- *                    same day goes straight through. This is what stops the pause eating
- *                    2FA codes: you tab to the authenticator, grab the code, tab back, and
- *                    the gate does not fire again.
- *  - SUPERHARDCORE : every single open, no daily pass.
- *
- * The pass is per app and per calendar day, so it clears itself at midnight.
- *
- * KNOWN GAP - "reset when the app is swiped away": not implemented, because Android gives
- * an accessibility service no dependable signal for it. Visible-window checks can't see a
- * backgrounded-but-alive app, and a cold-start heuristic based on the first activity is
- * useless for exactly the apps we gate (Firefox/Fenix is single-activity, so a resume and
- * a fresh launch look identical). The honest options are to leave the daily pass as-is, or
- * to take the PACKAGE_USAGE_STATS special permission and watch for ACTIVITY_DESTROYED.
- * If you take that route, call [reset] with the package - that is the only hook needed.
- */
-object BreathingGate {
-
-    private const val PREFS = "breathing_gate"
-
-    /** True if [pkg] should get the breathing pause on this open. */
-    fun shouldBreathe(ctx: Context, pkg: String): Boolean {
-        val spec = Mode.spec(ctx)
-        // A loosen window re-arms the pause even in Relaxed: the whole point of the window
-        // is that the guard rails come off elsewhere, so this one stays on.
-        val on = spec.breathingOn || LoosenWindow.isActive(ctx)
-        if (!on) return false
-        if (spec.breathEveryOpen) return true
-        return prefs(ctx).getString(pkg.lowercase(), null) != today()
-    }
-
-    /** Record that [pkg] has used its pause for today. */
-    fun markBreathed(ctx: Context, pkg: String) {
-        prefs(ctx).edit().putString(pkg.lowercase(), today()).apply()
-    }
-
-    /** Give [pkg] its daily pause back (see the KNOWN GAP note above). */
-    fun reset(ctx: Context, pkg: String) {
-        prefs(ctx).edit().remove(pkg.lowercase()).apply()
-    }
-
-    fun resetAll(ctx: Context) = prefs(ctx).edit().clear().apply()
-
-    // One formatter, not one per call: this is read on every open of a gated app.
-    private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-
-    private fun today(): String = dayFormat.format(Date())
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

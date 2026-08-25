@@ -114,12 +114,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var overlay: OverlayController? = null
     private val keyguard by lazy { getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
 
-    private var breathing: PauseOverlay? = null
-    private var lastForegroundPkgForBreathing: String? = null
-    /** The app the orb currently on screen belongs to, or null when no orb is up. */
-    private var breathingPkg: String? = null
-    private var breathingAwayTicks = 0
-
     private var lastProcessedAt = 0L      // gates LOGGING (cheap to be slow)
     private var lastBlockEvalAt = 0L      // gates BLOCKING (must be quick)
     private var lastLogSignature: String? = null
@@ -191,62 +185,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     mainHandler.postDelayed(this, RECHECK_MS)
                 }
             }
-        }
-    }
-
-    /**
-     * Raise the pause gate for [pkg] and start watching for the moment it goes stale.
-     * The ONLY place the orb goes up, so the watch can never be forgotten.
-     */
-    private fun raiseBreath(pkg: String) {
-        val b = breathing ?: return
-        breathingPkg = pkg
-        breathingAwayTicks = 0
-        b.show(
-            appLabel = appLabelFor(pkg),
-            onContinue = { dropBreath() },
-            onDontWant = { dropBreath(); exitToHome(pkg) },
-        )
-        mainHandler.removeCallbacks(breathingWatch)
-        mainHandler.postDelayed(breathingWatch, BREATH_WATCH_FIRST_MS)
-    }
-
-    /** The ONLY place the orb comes down. Always leaves the watch disarmed. */
-    private fun dropBreath() {
-        mainHandler.removeCallbacks(breathingWatch)
-        breathingPkg = null
-        breathingAwayTicks = 0
-        breathing?.hide()
-    }
-
-    /**
-     * ⚠️ 2026-08-05 - the orb's own way of noticing it is stale. Do not delete it because
-     * "handleEvent already hides it".
-     *
-     * handleEvent DOES hide it when the foreground package changes - but only if the event
-     * reaches that line, and there are half a dozen early returns above it (systemui, the
-     * keyboard, every block path). Anything that leaves the breathing app WITHOUT producing
-     * a window-state-changed event that gets all the way down there left a full-screen cover
-     * sitting over an app it has nothing to do with, and the only thing that eventually took
-     * it away was the overlay's own 25-second ceiling. That is the "it won't disappear for a
-     * while" half of the bug.
-     *
-     * So the orb also checks for itself, off the real window state rather than off events.
-     * It runs only while an orb is actually up (a handful of ticks, then it stops), and it
-     * wants to see the foreground somewhere else TWICE before believing it - one tick mid
-     * app-launch transition is not evidence of anything.
-     */
-    private val breathingWatch = object : Runnable {
-        override fun run() {
-            val mine = breathingPkg
-            if (mine == null || breathing?.isShowing != true) { dropBreath(); return }
-            val front = currentForegroundPackage()
-            // null = can't tell (mid-transition, or the orb's own window is all there is).
-            // Our own app doesn't count either: the orb is drawn by us.
-            if (front != null && front != mine && front != packageName) breathingAwayTicks++
-            else breathingAwayTicks = 0
-            if (breathingAwayTicks >= BREATH_AWAY_TICKS) { dropBreath(); return }
-            mainHandler.postDelayed(this, BREATH_WATCH_MS)
         }
     }
 
@@ -474,11 +412,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // (Accessibility is on by definition here - only the overlay needs checking.)
         Mode.migrateIfUnset(this, Settings.canDrawOverlays(this))
         overlay = OverlayController(this)
-        breathing = PauseOverlay(this)
-        // Warm the pause-app list here rather than on the first app open: the first read
-        // of a prefs file blocks on disk, and the hot path for that read is the moment an
-        // app is being launched.
-        PauseApps.all(this)
         FilterData.init(this)          // load word/app/domain lists from assets/filter/
         BlockRules.load(this)
         AppBlocklist.refresh(this)
@@ -577,10 +510,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
-                    // A breath is over when the phone goes in your pocket. Leaving the orb
-                    // up across a lock is how it came back on unlock, still frozen, with
-                    // its animation long since stopped by the screen turning off.
-                    dropBreath()
                     closeUsageSegment()
                     // Stop charging greylist time to whatever was in front. A dark screen is
                     // not two minutes of Instagram, and the tick has no other way to find out
@@ -883,41 +812,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (packageName != segPkg) onForegroundChanged(packageName)
         }
 
-        // ---- Left the app we were breathing for? Drop the orb. FIRST, before anything ----
-        // This used to live further down, next to the code that RAISES the orb, which meant
-        // any of the half-dozen early returns between here and there could strand it on
-        // screen with the phone unusable. It has no business being conditional on any of
-        // them: the orb belongs to one app, and the moment the foreground is a different
-        // app it is stale. (2026-08-04: this is the "stuck on Breathe in" bug.)
-        //
-        // It tests the orb's OWN package now, not lastForegroundPkgForBreathing. That field
-        // is set on every foreground change whether an orb went up or not, so it had already
-        // moved on in the case that matters most - the app under the orb pushing a window
-        // from a different package (Play Store handing over to the installer). The orb knows
-        // which app it belongs to; ask it. (2026-08-05.)
-        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            breathingPkg != null && packageName != breathingPkg
-        ) {
-            dropBreath()
-        }
-
-        // ---- While the pause gate is up, do NOTHING with content events. ----
-        // ⚠️ 2026-08-24 - this is what made the sweep freeze mid-rise and then jump.
-        // The gate's panel animates on the accessibility service's MAIN THREAD, and the
-        // page path below walks the whole node tree on that same thread - readAddressBar,
-        // hasWebView, the in-app-browser host read, the text scan. On a heavy page
-        // (Firefox Nightly is the reliable case) one of those walks is tens of
-        // milliseconds, they arrive in bursts while a page loads, and the panel simply
-        // stops until they let go of the thread.
-        //
-        // None of that work is worth anything here: the app underneath is covered and
-        // cannot be touched, so there is no new page to read and nothing the user could
-        // have navigated to. Window CHANGES still go through - that is how the gate finds
-        // out it is stale, and how a block still lands the moment the gate comes down.
-        if (breathing?.isShowing == true &&
-            type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        ) return
-
         // ---- App-level block: FIRST, on every event, before any throttling. ----
         // A plain set lookup is effectively free, and running it on the very first
         // window event of an app launch is what makes the cover appear instantly
@@ -926,35 +820,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (blockedApp != null) {
             showAppBlock(blockedApp, packageName)
             return // No point reading or logging pages inside a blocked app.
-        }
-        // ---- The pause gate: a pause when a chosen app opens ----
-        // Fire only when the foreground app actually changes, so it triggers on a fresh
-        // open but never while you're already inside the app. How OFTEN it may fire is
-        // BreathingGate's call: every open in super hardcore, otherwise only the first
-        // open of that app each day (which is what keeps it out of the way of 2FA codes).
-        //
-        // POSITION MATTERS. This sits directly after the app-block lookup (a set lookup,
-        // effectively free) and BEFORE the window-list walk below, which is a binder call
-        // into the system on every window change. This is a race against the app you just
-        // launched painting its first frame, and anything between the event and the cover
-        // is time you spend looking at the app you were trying not to open.
-        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            packageName != lastForegroundPkgForBreathing &&
-            // Another cover already owns the screen. Note this leaves the marker ALONE:
-            // consuming it here spent the app's one "you just opened it" moment on an
-            // event that could never have raised the gate, and the pause was then skipped
-            // entirely for that visit. That is the "sometimes it doesn't even trigger".
-            overlay?.isShowing != true && breathing?.isShowing != true
-        ) {
-            lastForegroundPkgForBreathing = packageName   // the drop happens at the top now
-            if (PauseApps.contains(this, packageName) &&
-                BreathingGate.shouldBreathe(this, packageName)) {
-                // Cover first, bookkeeping after: the write is a prefs edit and the cover
-                // is the thing racing the app's first frame.
-                raiseBreath(packageName)
-                BreathingGate.markBreathed(this, packageName)
-                return
-            }
         }
 
         // The event's package is only ONE of the apps on screen. A window change is exactly
@@ -1140,15 +1005,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     /** Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop. */
     private fun showAppBlock(reason: String, blockedPackage: String) {
         val controller = overlay ?: return
-        // The breathing orb is a SEPARATE overlay, and it sits above this one. If it is up
-        // when a block lands, it stays up - and because every path that hides it lives
-        // further down handleEvent, past several early returns, the user is left staring at
-        // "Breathe in" forever with the phone unusable. (Exactly what happened on
-        // 2026-08-04: the Play Store is a breathing app, installing TikTok raised the orb,
-        // the new install was blocked, and the orb was never taken down.)
-        //
-        // A block always wins over a breath. Kill it here, where every block path passes.
-        dropBreath()
         val freshAppBlock = !appBlockActive          // ADD
         appBlockActive = true
         if (freshAppBlock) BlockEventLog.recordApp(this, blockedPackage, reason)   // ADD
@@ -1559,8 +1415,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     // Two binder calls into PackageManager, and getApplicationInfo can hit disk on a cold
-    // cache. That is fine once - it is not fine on the app-launch path, which is exactly
-    // where the pause gate asks for it. Labels do not change while an app is installed.
+    // cache. That is fine once - it is not fine on the block path, which is exactly where
+    // the block reasons ask for it. Labels do not change while an app is installed.
     private val appLabels = HashMap<String, String>()
 
     private fun appLabelFor(pkg: String): String = appLabels.getOrPut(pkg) {
@@ -2469,7 +2325,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(recheck)
-        dropBreath()        // a full-screen cover must never outlive the service that owns it
         RoomGuard.stop()
         HomeAreaWatch.stop()
         greyscaleSensor?.stop(); greyscaleSensor = null
@@ -2542,11 +2397,6 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         private const val MIN_INTERVAL_MS = 700L
         private const val RECHECK_MS = 400L
-        /** First stale-check on the orb: late enough to be past the app-launch transition. */
-        private const val BREATH_WATCH_FIRST_MS = 2_500L
-        private const val BREATH_WATCH_MS = 1_500L
-        /** Consecutive ticks showing a different app in front before the orb is dropped. */
-        private const val BREATH_AWAY_TICKS = 2
         private const val MAX_TEXT_CHARS = 1000
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40

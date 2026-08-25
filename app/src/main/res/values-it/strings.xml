@@ -196,7 +196,6 @@
     <string name="moderules_section_modes">LE MODALITÀ - COSA CAMBIA</string>
     <string name="moderules_current">Sei in questa modalità in questo momento</string>
     <string name="moderules_lock">Il blocco rigido è attivo: ancora %1$s. Non puoi tornare a Rilassata finché non finisce. Puoi comunque salire a Super rigida.</string>
-    <string name="moderules_watched">Le \"app monitorate\" sono quelle che ricevono la schermata di pausa: %1$s.</string>
 
     <string name="always_on_01">Un\'eccezione a tutto ciò che segue: la modalità OFF. In Off il monitoraggio è completamente disattivato e nessuna di queste regole viene applicata.</string>
     <string name="always_on_02">I siti per adulti noti vengono bloccati del tutto. Oltre a Off, la modalità non fa differenza.</string>
@@ -392,7 +391,7 @@
     <string name="loosen_min">%1$d min</string>
     <string name="loosen_unlock_for">Sblocca per %1$d min</string>
     <string name="loosen_unlocked_title">Sbloccato per %1$d min</string>
-    <string name="loosen_unlocked_body">La schermata di pausa e l\'attrito sulle immagini restano attivi. Si riblocca da solo quando il timer finisce.</string>
+    <string name="loosen_unlocked_body">L\'attrito sulle immagini resta attivo. Si riblocca da solo quando il timer finisce.</string>
     <string name="loosen_go">Vai</string>
     <string name="loosen_relocked">Ribloccato</string>
     <string name="loosen_continue_now">ora puoi continuare</string>
@@ -685,14 +684,6 @@
     <string name="temp_ridden_out">%1$d superate</string>
     <string name="temp_put_down">Posa il telefono</string>
     <string name="temp_put_down_sub">chiude l\'app</string>
-    <string name="pauseapps_open_title">Quali app si fermano</string>
-    <string name="pauseapps_open_sub">%1$d app si fermano un attimo prima di aprirsi. Aggiungi le tue.</string>
-    <string name="pauseapps_title">App con schermata di pausa</string>
-    <string name="pauseapps_sub">Queste app si fermano un attimo prima di aprirsi. Quanto spesso lo decide la modalità: mai in Off o Rilassata, alla prima apertura del giorno in Rigida, a ogni singola apertura in Super rigida.</string>
-    <string name="pauseapps_on_header">SI FERMANO PER QUESTE</string>
-    <string name="pauseapps_add_header">TOCCA UN\'APP PER AGGIUNGERLA</string>
-    <string name="pauseapps_none">Al momento non si ferma nulla.</string>
-    <string name="pauseapps_tag">Attiva</string>
 
     <string name="checking_master_on">●  Misure anti-controllo attive</string>
     <string name="checking_master_off">○  Attiva le misure anti-controllo</string>
@@ -868,8 +859,6 @@
     <string name="br_new_app_block">%1$s\n\nQuesta app è nuova qui - sul tuo telefono da %2$d giorno/i - quindi basta un solo rilevamento. Un\'app che usi da mesi avrebbe avuto altre due possibilità prima di questa schermata.</string>
     <string name="br_home_block">%1$s\n\nSei a casa tua, in Super rigida. Qui non c\'è una seconda occhiata: la prima cosa rilevata chiude l\'app. In qualsiasi altro posto questa sarebbe stata lasciata passare.</string>
 
-    <string name="overlay_dont_want">Non voglio accedere a %1$s</string>
-    <string name="overlay_continue_open">Continua e apri %1$s</string>
 
     <!-- ── String-arrays ─────────────────────────────────────────────────────────────── -->
     <string-array name="opt_feeling"><item>Annoiato</item><item>Ansioso / teso</item><item>Stressato</item><item>Giù / abbattuto</item><item>Solo</item><item>Stanco</item><item>Frustrato / arrabbiato</item><item>Felice / entusiasta</item><item>Neutro</item></string-array>
@@ -887,7 +876,6 @@
         <item>La pagina Produttività e le sue statistiche di tempo schermo continuano a funzionare comunque.</item>
     </string-array>
     <string-array name="mode_relaxed_rules">
-        <item>Schermata di pausa: MAI. Le app monitorate si aprono subito.</item>
         <item>Scala di grigi: disattivata. Lo schermo resta a colori.</item>
         <item>Essere sdraiato o al buio non cambia nulla. Ogni app si apre comunque - e nessuna modalità blocca più in base alla postura.</item>
         <item>Gli interruttori \"per chi è il filtro\" (Contenuti per adulti → Impostazioni) si possono modificare qui (e in Off). In qualsiasi modalità più rigida sono forzati al massimo.</item>
@@ -895,8 +883,6 @@
         <item>Puoi uscire da questa modalità quando vuoi, a meno che sia attivo il blocco rigido di 7 giorni - ma se sei mai stato in Rigida, Off non è più tra le scelte.</item>
     </string-array>
     <string-array name="mode_strict_rules">
-        <item>Schermata di pausa: la PRIMA volta che apri un\'app monitorata ogni giorno. Riaprila più tardi lo stesso giorno e va dritta - così codici 2FA e controlli rapidi non vengono interrotti.</item>
-        <item>Il pass giornaliero si ripristina a mezzanotte.</item>
         <item>GUARDIA NOTTURNA: eliminata, in tutte le modalità. Essere sdraiato non blocca più nessuna app - né qui né in Super rigida. Nemmeno il buio blocca nulla.</item>
         <item>PORTA A SENSO UNICO: scegliere Rigida una volta rimuove Off per sempre da questa installazione. Potrai tornare a Rilassata - mai a Off.</item>
         <item>L\'APP CHE CI VA SEMPRE VICINO: se in un\'app continuano a comparire parole borderline per qualche minuto, compare una schermata di avviso - e se la cosa prosegue, quell\'app si chiude per un\'ora. Niente qui ha superato il limite da solo; è lo schema il punto. Un tratto pulito annulla tutto.</item>
@@ -910,8 +896,6 @@
         <item>Il blocco rigido di 7 giorni (se lo avvii) ti impedisce di tornare a Rilassata per una settimana. Puoi comunque salire a Super rigida.</item>
     </string-array>
     <string-array name="mode_superhardcore_rules">
-        <item>Schermata di pausa: OGNI singola volta che apri un\'app monitorata. Non c\'è nessun pass giornaliero.</item>
-        <item>Attenzione: questo TI interromperà quando salti a un\'app di autenticazione per un codice 2FA. È il compromesso che stai scegliendo.</item>
         <item>GUARDIA NOTTURNA: eliminata. Prima, mentre eri sdraiato, qui si aprivano solo gli elementi essenziali - ora essere sdraiato non blocca più nulla, in nessuna modalità. Nemmeno il buio blocca qualcosa.</item>
         <item>Scala di grigi: lo schermo diventa comunque grigio mentre sei sdraiato, come in Rigida. È l\'unica cosa che ora cambia con la postura.</item>
         <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
@@ -923,7 +907,6 @@
         <item>Fuori casa la scala dei rilevamenti è la stessa di ovunque: una parola in un\'app apre un caso invece di chiudere l\'app. Quello che questa modalità cambia in più è che cosa conta come rilevamento - le liste di frammenti (reddit e i suoi errori di scrittura) sono attive solo qui.</item>
         <item>La configurazione viene imposta fuori da questa app esattamente come in Rigida: se manca qualcosa, si aprono solo gli elementi essenziali.</item>
         <item>PORTA A SENSO UNICO: scegliere questa modalità è definitivo. Una volta attiva, nessuna modalità inferiore potrà più essere impostata su questo telefono - Rigida, Rilassata e Spenta spariscono dal selettore per sempre.</item>
-        <item>Questa è Rigida senza il pass giornaliero.</item>
     </string-array>
     <string-array name="feel_neg"><item>Rimpianto</item><item>Intorpidito</item><item>Vuoto</item><item>In colpa</item></string-array>
     <string-array name="feel_pos"><item>Fiero</item><item>Sollevato</item><item>Lucido</item><item>In controllo</item></string-array>

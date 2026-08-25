@@ -86,7 +86,7 @@ import android.graphics.Path
 // SweepPanel  (the rising panel + its driver)
 // -------------------------------------------------------------------------------------
 // ⚠️ 2026-08-24 - REPLACED THE BREATHING ORB, and this is now the ONLY animation the
-// pause gate and the in-app "ride it out" pages have. Keep it that way, and keep it dumb.
+// in-app "ride it out" pages have. Keep it that way, and keep it dumb.
 //
 // The orb was a full-screen radial gradient whose size, alpha and phase label all moved
 // together, with a second animator pulsing the label. It was fiddly, it was expensive on

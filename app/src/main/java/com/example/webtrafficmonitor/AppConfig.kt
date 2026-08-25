@@ -93,7 +93,7 @@ object AppConfig {
 
     // === Mode → permissions ==========================================================
     // The app's modes and what each allows. Display names are read from here so the
-    // rest of the app stays consistent. (Behavioural wiring beyond names/breathing/
+    // rest of the app stays consistent. (Behavioural wiring beyond names/greyscale/
     // flag-threshold is still in code; this block is the dial to grow into.)
     //
     // ┌───────────────────────────────────────────────────────────────────────────────┐
@@ -113,8 +113,6 @@ object AppConfig {
     data class ModeSpec(
         val id: String,
         val displayName: String,
-        val breathingOn: Boolean,      // show the breathing pause on "breathing apps" at all
-        val breathEveryOpen: Boolean,  // true = every open; false = first open of each day only
         val greyscale: Boolean,        // let the greyscale watcher grey the screen in this mode
         /**
          * The NIGHT GUARD: block every non-essential app while the phone says you are lying
@@ -155,15 +153,15 @@ object AppConfig {
 
     val MODES: List<ModeSpec> = listOf(
         ModeSpec(id = "off", displayName = "Off",
-            breathingOn = false, breathEveryOpen = false, greyscale = false,
+            greyscale = false,
             nightGuard = false,
             flagThreshold = 0, flagLyingDown = false),
         ModeSpec(id = "relaxed", displayName = "Relaxed",
-            breathingOn = false, breathEveryOpen = false, greyscale = false,
+            greyscale = false,
             nightGuard = false,
             flagThreshold = 60, flagLyingDown = false),
         ModeSpec(id = "strict",  displayName = "Strict",
-            breathingOn = true,  breathEveryOpen = false, greyscale = true,
+            greyscale = true,
             // NO night guard in Strict any more (2026-08-01). First the light trigger kept
             // catching ordinary dim evening rooms (2026-07-15 DULL->DARK), then the lying-
             // down trigger proved too harsh as well - both now live in Super hardcore only.
@@ -172,7 +170,7 @@ object AppConfig {
             nightGuard = false,
             flagThreshold = 45, flagLyingDown = false),
         ModeSpec(id = "superhardcore", displayName = "Super hardcore",
-            breathingOn = true,  breathEveryOpen = true, greyscale = true,
+            greyscale = true,
             // NO night guard here either, as of 2026-08-24. The dark trigger came out first
             // (see nightGuardLuxBelow), and the lying-down one followed the same day: this
             // was the last mode that had it, so nothing blocks on posture anywhere now.
@@ -288,8 +286,8 @@ object AppConfig {
     )
 
     // === Temptations (the categories on the Temptations tab) =========================
-    // Sexual arousal is NOT here - it has its own bespoke, much heavier flow (breathing +
-    // supervised loosen + relapse reporting). Everything below shares ONE simple page
+    // Sexual arousal is NOT here - it has its own bespoke, much heavier flow (supervised
+    // loosen + relapse reporting). Everything below shares ONE simple page
     // (Main.kt -> showTemptation), which is deliberately small: see what it is, ride the
     // urge out, block what feeds it, log a slip. Nothing else. Adding a category is a new
     // entry here and nothing else - no new screen code.
@@ -305,9 +303,6 @@ object AppConfig {
         /** Packages the same switch BANS outright (AppRules.BLOCK - for things like game
          *  apps, where a time limit is just a shorter session, not a deterrent). */
         val blockApps: List<String> = emptyList(),
-        /** The Phone Checking page's friction measures (see CheckingGuard) - the one
-         *  category with nothing to block, because the pull is the device itself. */
-        val checkingMeasures: Boolean = false,
         // Display text (title / subtitle / covers / insteadOf) now lives in
         // res/values/strings.xml as temptspec_<id>_* (keyed by id) so it can be translated.
         // Resolved at display time in Main.kt (temptTitle/temptSubtitle/temptCovers/temptInsteadOf).
@@ -347,9 +342,9 @@ object AppConfig {
         ),
         TemptationSpec(
             id = "checking",
-            // Nothing to block: the pull here is the device itself, not a site. The page
-            // offers the CheckingGuard friction measures (and the 30-minute lockdown) instead.
-            checkingMeasures = true,
+            // Nothing to block: the pull here is the device itself, not a site. The friction
+            // that answers it is CheckingGuard's unlock/tap pause (always on, in the service)
+            // and the 30-minute lockdown offered on the page.
         ),
         TemptationSpec(
             id = "news",
@@ -713,16 +708,8 @@ object AppConfig {
         Search("ebay.", "/sch", listOf("_nkw")),
     )
 
-    // === Apps the monitor ignores / never logs / pause-gates =========================
+    // === Apps the monitor ignores / never logs ======================================
     val IGNORED_PACKAGES: Set<String> = setOf("com.android.systemui")
-    // The apps that get the pause screen AS SHIPPED. Not the live list - the user adds and
-    // removes their own on Phone Checking -> the pause-screen apps page, and PauseApps
-    // (UserState.kt) is what the service actually reads. Adding one here still reaches
-    // everyone who has not turned it off by hand, which is why the store keeps the two
-    // sets rather than a copy of this one.
-    val BREATHING_APPS: Set<String> = setOf(
-        "org.mozilla.firefox", "org.mozilla.fenix", "com.google.android.youtube", "com.android.vending",
-    )
     val NOT_LOGGED_PACKAGES: Set<String> = setOf(
         "com.sec.android.app.launcher", "com.google.android.apps.nexuslauncher",
         "com.android.launcher", "com.android.launcher3", "com.microsoft.launcher",

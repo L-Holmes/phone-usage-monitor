@@ -98,7 +98,7 @@ import android.graphics.Path
 //   AppConfig.kt              – all editable config lists & thresholds
 //   AccessibilityService.kt   – PageMonitorAccessibilityService (the monitor)
 //   Blocking.kt               – block rules, whitelist, escalation, app/greylist, lockdown, unlock timers
-//   Overlay.kt                – block + breathing overlays
+//   Overlay.kt                – the block overlay
 //   Database.kt               – Room entities/DAO/DB + the log RecyclerView adapter
 //   UserState.kt              – prefs-backed state: Mode, logs, Progress, Usage, Protocol, option lists
 //   Views.kt                  – custom Views (orb, faces, charts, thumb-back, etc.)
@@ -2777,14 +2777,6 @@ private fun showTemptation(spec: AppConfig.TemptationSpec) {
 
     if (TemptationBlocks.hasBlocks(spec)) list.addView(blockSwitch(spec))
 
-    // Phone Checking has nothing to block - the pull is the phone itself - so the pause
-    // screen IS its measure, and this is where you say which apps it stops.
-    if (spec.checkingMeasures) list.addView(captionedButton(
-        getString(R.string.pauseapps_open_title),
-        getString(R.string.pauseapps_open_sub, PauseApps.all(this).size), Palette.tint) {
-            showPauseApps(spec)
-        })
-
     // RESTORED-FROM-HEAD 2026-08-04 — the "I slipped" button and the "try this instead" line
     // are gone here because their strings (temp_slipped_*, temp_try_instead) and the
     // temptInsteadOf() helper no longer exist. See the note at habitRide.
@@ -2856,110 +2848,6 @@ private fun blockSwitch(spec: AppConfig.TemptationSpec): View {
         on = !on
         TemptationBlocks.setEnabled(this, spec, on)
         paint()
-    }
-    return row
-}
-
-/**
- * WHICH apps get the pause screen, as a page you can edit.
- *
- * Same shape as the adult-content block list (showBlockApps / blockAppRow): the installed
- * apps are loaded off the main thread, drawn as icon rows, and a tap flips that one. The
- * apps that already pause are pulled to the top, so the page opens on the answer to the
- * question the button asked. Order is fixed at load - a row that jumped to another section
- * the moment you tapped it would lose your place in a list this long.
- *
- * This page only decides WHICH apps. How often the pause may then fire is the mode's call
- * (never in Off/Relaxed, first open of the day in Strict, every open in Super hardcore),
- * which is what the subtitle says.
- */
-private fun showPauseApps(spec: AppConfig.TemptationSpec) {
-    inSubPage = true
-    val dp = resources.displayMetrics.density
-    val pad = (Space.page * dp).toInt()
-    val root = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad)
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    }
-    root.addView(titleText(getString(R.string.pauseapps_title)))
-    root.addView(TextView(this).apply {
-        text = getString(R.string.pauseapps_sub)
-        textSize = 13f; setTextColor(Palette.labelSecondary); setLineSpacing(0f, Type.lineSpacing)
-        setPadding(0, 0, 0, (10 * dp).toInt())
-    })
-    val loading = TextView(this).apply { text = getString(R.string.appsite_loading); textSize = 14f }
-    root.addView(loading)
-    val listLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    root.addView(ScrollView(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-        addView(listLayout)
-    })
-    setContentWithThumb(root) { showTemptation(spec) }
-
-    lifecycleScope.launch(Dispatchers.IO) {
-        val installed = loadLaunchableApps()
-        val on = PauseApps.all(this@MainActivity)
-        // An app that pauses and has since been uninstalled (or has no launcher icon)
-        // still has to be listed, or there is no way to take it back off.
-        val listed = installed.map { it.pkg }.toSet()
-        val paused = (installed.filter { it.pkg in on } +
-            (on - listed).map { AppRow(appLabelOrPackage(it), it, null) })
-            .sortedBy { it.label.lowercase() }
-        val rest = installed.filter { it.pkg !in on }
-        runOnUiThread {
-            loading.visibility = View.GONE
-            fun header(text: String) = listLayout.addView(TextView(this@MainActivity).apply {
-                this.text = text; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
-                setTextColor(Palette.labelTertiary)
-                setPadding(0, (14 * dp).toInt(), 0, (2 * dp).toInt())
-            })
-            header(getString(R.string.pauseapps_on_header))
-            if (paused.isEmpty()) listLayout.addView(TextView(this@MainActivity).apply {
-                text = getString(R.string.pauseapps_none)
-                textSize = 14f; setTextColor(Palette.labelSecondary)
-                setPadding(0, (6 * dp).toInt(), 0, 0)
-            })
-            paused.forEach { listLayout.addView(pauseAppRow(it)) }
-            header(getString(R.string.pauseapps_add_header))
-            rest.forEach { listLayout.addView(pauseAppRow(it)) }
-        }
-    }
-}
-
-/** One app: tap to give it the pause screen, tap again to take it away. */
-private fun pauseAppRow(a: AppRow): LinearLayout {
-    val dp = resources.displayMetrics.density
-    val row = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        setPadding((8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt())
-        isClickable = true; isFocusable = true
-    }
-    val icon = ImageView(this).apply {
-        layoutParams = LinearLayout.LayoutParams((36 * dp).toInt(), (36 * dp).toInt())
-        if (a.icon != null) setImageDrawable(a.icon)
-    }
-    val name = TextView(this).apply {
-        text = a.label; textSize = 16f; setPadding((12 * dp).toInt(), 0, 0, 0)
-        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-    }
-    val tag = TextView(this).apply {
-        text = getString(R.string.pauseapps_tag); textSize = 13f
-        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.successText)
-    }
-    row.addView(icon); row.addView(name); row.addView(tag)
-
-    fun render() {
-        val on = PauseApps.contains(this, a.pkg)
-        tag.visibility = if (on) View.VISIBLE else View.GONE
-        icon.alpha = if (on) 1f else 0.55f
-    }
-    render()
-
-    row.setOnClickListener {
-        if (PauseApps.contains(this, a.pkg)) PauseApps.remove(this, a.pkg)
-        else PauseApps.add(this, a.pkg)
-        render()
     }
     return row
 }
@@ -3835,7 +3723,7 @@ private fun showAdultSettings() {
  * │  if a user can feel a rule, this screen must state it, in words a tired person    │
  * │  can understand at 1am.                                                           │
  * │                                                                                  │
- * │  Whenever you touch anything that branches on Mode (breathing, greyscale, block   │
+ * │  Whenever you touch anything that branches on Mode (greyscale, block              │
  * │  thresholds, sensors, lock behaviour), re-read those lists and fix them.          │
  * └──────────────────────────────────────────────────────────────────────────────────┘
  */
@@ -3914,13 +3802,6 @@ private fun showModeRules() {
             setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
         })
     }
-
-    list.addView(TextView(this).apply {
-        text = getString(R.string.moderules_watched,
-            PauseApps.all(this@MainActivity).joinToString(", ") { appLabelOrPackage(it) })
-        textSize = 13f; setTextColor(Palette.labelTertiary)
-        setPadding(0, (6 * dp).toInt(), 0, (16 * dp).toInt())
-    })
 
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -8710,11 +8591,40 @@ private fun startWeekStrict() {
         header("Mode")
         row("Current mode", spec?.displayName ?: modeId)
         row("Week-long strict lock", if (Mode.isLocked(this)) "locked - ${Mode.timeLeft(this)}" else "off", Mode.isLocked(this))
-        row("Breathing pause", if (spec?.breathingOn == true) "on" else "off", spec?.breathingOn == true)
         row("Page flag threshold", "${spec?.flagThreshold ?: "-"} (score \u2265 this is flagged)")
         row("Flag when lying down", if (spec?.flagLyingDown == true) "on" else "off", spec?.flagLyingDown == true)
         row("Night guard light trigger", spec?.nightGuardLuxBelow?.let { "\u2264 ${it.toInt()} lux" } ?: "off",
             spec?.nightGuardLuxBelow != null)
+
+        // DEBUG BUILDS ONLY - the only way past the two ratchets, and it exists so a test
+        // device can be moved between modes without wiping its data. Mode.forceMode is
+        // itself inert in a release build; this row is hidden there as well, because an
+        // override you can see but not use reads as a door (see modeSpinner's note on
+        // options that are always refused).
+        if (BuildConfig.IS_TESTING) {
+            list.addView(TextView(this).apply {
+                text = "Set mode (debug build)"; textSize = 12f
+                setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
+                setPadding((2 * dp).toInt(), (12 * dp).toInt(), 0, (4 * dp).toInt())
+            })
+            AppConfig.MODES.forEach { m ->
+                list.addView(TextView(this).apply {
+                    val here = m.id == modeId
+                    text = (if (here) "\u25CF  " else "\u25CB  ") + m.displayName
+                    textSize = 14f
+                    setTextColor(if (here) Palette.success else Palette.tint)
+                    setPadding(0, (7 * dp).toInt(), 0, (7 * dp).toInt())
+                    isClickable = !here; isFocusable = !here
+                    if (!here) setOnClickListener {
+                        if (Mode.forceMode(this@MainActivity, m.id)) {
+                            Toast.makeText(this@MainActivity,
+                                "Mode forced to ${m.displayName}", Toast.LENGTH_SHORT).show()
+                            showDevConsole()
+                        }
+                    }
+                })
+            }
+        }
 
         header("Blocking")
         row("Reels / shorts / feeds", if (ShortForm.enabled()) "blocked" else "allowed", ShortForm.enabled())
