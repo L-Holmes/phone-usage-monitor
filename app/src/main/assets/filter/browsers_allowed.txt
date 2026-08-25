@@ -3,4 +3,4 @@
 # One package per line. LANGUAGE-NEUTRAL. Loaded by FilterData → AppConfig.ALLOWED_BROWSERS.
 
 org.mozilla.firefox
-org.mozilla.fenix
+
