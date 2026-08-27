@@ -847,6 +847,10 @@
     <string name="br_why_manual">Hai aggiunto tu questa regola alla lista di blocco %1$s.</string>
     <string name="br_why_preset">Fa parte di una categoria che hai attivato.</string>
     <string name="block_score_line">Questa pagina totalizza %1$d (una pagina si blocca a %2$d)</string>
+    <string name="br_proxy_client">%1$s è un\'app di terze parti per %2$s</string>
+    <string name="proxy_why_host">ha aperto %1$s</string>
+    <string name="proxy_why_signin">ti ha mandato su %1$s per accedere</string>
+    <string name="block_leaving">Sto uscendo…</string>
     <string name="block_score_none">Niente in questa schermata ha totalizzato punti: il motivo è tutto qui sopra.</string>
     <string name="br_back_same">È ancora LA STESSA pagina bloccata. Premi di nuovo Indietro, o vai alla Home.</string>
     <string name="br_back_diff">È una pagina DIVERSA - ma è bloccata anche questa. Premi di nuovo Indietro, o vai alla Home.</string>

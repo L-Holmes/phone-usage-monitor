@@ -866,6 +866,50 @@ object TamperWatch {
  * service's process, which runs all day, and losing them on a restart costs one lenient
  * window - which is the right way round for a rule that acts on a suspicion.
  */
+/**
+ * THE PRIMER MEMORY — "you said that a minute ago, so this counts for more".
+ *
+ * ⚠️ 2026-08-27, and the reason this exists at all: "live cam" used to be a LOUD phrase.
+ * One sighting of it, on one screen, closed the app. It is not sexual — it is a traffic
+ * camera, a nest box, a building site — and neither are "hidden cam", "adult content" or
+ * "not safe for work". Blocking on them made the app feel arbitrary, which is the one thing
+ * a blocker cannot afford to feel.
+ *
+ * So they became PRIMERS, and this is the half of that tier the scorer cannot hold, because
+ * the scorer is stateless on purpose: WHEN a primer was seen, and WHERE. One phrase on its
+ * own means nothing and is forgotten in [FilterTuning.PRIMER_WINDOW_MS]. The same phrase
+ * followed a minute later by something genuinely sexual, in the same app, is a trail — and
+ * for that window everything real that turns up is worth [FilterTuning.PRIMER_MULTIPLIER]
+ * times as much.
+ *
+ * Scoped to the APP, not the page: someone reading a page of camera listings and then
+ * opening a tab is one session, and a browser is where that sequence actually happens. In
+ * memory only, and deliberately: a primer that survived a reboot would be a punishment
+ * hours later for a phrase nobody remembers seeing.
+ */
+object PrimerWatch {
+
+    private val seenAt = HashMap<String, Long>()
+
+    /** Record what a scoring pass found. [primers] comes straight off BorderlineScorer.Reading. */
+    fun note(surface: String?, primers: Int) {
+        if (surface == null || primers <= 0) return
+        seenAt[surface] = System.currentTimeMillis()
+    }
+
+    /** Is a primer still live for [surface]? This is what Settings.primed is built from. */
+    fun isPrimed(surface: String?): Boolean {
+        val at = seenAt[surface ?: return false] ?: return false
+        if (System.currentTimeMillis() - at <= FilterTuning.PRIMER_WINDOW_MS) return true
+        seenAt.remove(surface)                     // expired: forget it rather than re-check forever
+        return false
+    }
+
+    /** Everything forgotten. Used by the dev console's "reset" and by tests. */
+    fun clear() = seenAt.clear()
+}
+
+
 object BorderlineWatch {
 
     // ── Tuning: what "borderline for five minutes" actually means ────────────────────

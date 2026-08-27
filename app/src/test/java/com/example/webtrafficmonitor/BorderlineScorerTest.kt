@@ -492,4 +492,104 @@ class BorderlineScorerTest {
         assertTrue("'$more' (scored ${scoreAsTitle(more)}) should clear it", blocksAsTitle(more))
     }
 
+    // ── PRIMERS: the tier that cannot block ─────────────────────────────────────────
+    // The report that created this tier: ONE sighting of "live cam" closed an app. It is a
+    // traffic camera. If any of these tests fails, a primer has got its teeth back.
+
+    private val primed =
+        BorderlineScorer.Settings(blockFemale = true, blockMale = true, relaxed = false, primed = true)
+
+    @Test
+    fun `a primer can never block, on the web or in an app`() {
+        listOf("live cam", "hidden cam", "spy cam", "adult content", "not safe for work",
+               "hot girls", "pole dance").forEach {
+            assertTrue(
+                "'$it' must NOT block as a title (scored ${scoreAsTitle(it)})",
+                !blocksAsTitle(it),
+            )
+            assertTrue(
+                "'$it' must NOT block an app screen (scored ${scoreInBody(it)})",
+                !blocksInApp(it),
+            )
+        }
+    }
+
+    @Test
+    fun `repeating a primer does not turn it into evidence`() {
+        // The cap and the family rule have to hold for primers too, or "live cam live cam
+        // live cam" is a block by accumulation - which is the same bug in a longer coat.
+        val spam = (1..20).joinToString(" ") { "live cam" }
+        assertTrue("a page of primers must not block (scored ${scoreInBody(spam)})",
+            !blocksInApp(spam))
+        assertTrue(BorderlineScorer.evaluate(null, null, spam) == null)
+    }
+
+    @Test
+    fun `a primer is not somebody else's second signal`() {
+        // "nude" alone can never block: one family. A primer beside it must not become the
+        // second distinct signal that lets it through.
+        assertTrue("'live cam nude' must not block an app screen " +
+            "(scored ${scoreInBody("live cam nude")})", !blocksInApp("live cam nude"))
+        assertEquals(
+            1,
+            BorderlineScorer.read(null, null, "live cam nude").families,
+        )
+    }
+
+    @Test
+    fun `a primer multiplies a real signal, and only a real signal`() {
+        val plain = BorderlineScorer.read(null, null, "nude sexy babe")
+        val withPrimer = BorderlineScorer.read(null, null, "nude sexy babe", primed)
+        assertTrue(
+            "a primed screen must score higher (${plain.score} -> ${withPrimer.score})",
+            withPrimer.score > plain.score,
+        )
+        // ...but a screen with nothing real on it is multiplied by nothing.
+        assertEquals(
+            BorderlineScorer.read(null, null, "the rules of chess").score,
+            BorderlineScorer.read(null, null, "the rules of chess", primed).score,
+        )
+        assertEquals(
+            BorderlineScorer.read(null, null, "live cam").score,
+            BorderlineScorer.read(null, null, "live cam", primed).score,
+        )
+    }
+
+    @Test
+    fun `a primer on the screen is reported so it can be remembered`() {
+        assertEquals(1, BorderlineScorer.read(null, null, "a live cam of the harbour").primers)
+        assertEquals(0, BorderlineScorer.read(null, null, "the rules of chess").primers)
+    }
+
+    @Test
+    fun `a primer cannot rescue an ordinary page`() {
+        // The multiplier must never be enough on its own to push innocent text over a bar.
+        listOf(
+            "chicken breast recipe",
+            "sheer curtains for the living room",
+            "handmade lace necklace",
+            "best bra for summer",
+        ).forEach {
+            assertTrue(
+                "'$it' must not block even while primed " +
+                    "(scored ${BorderlineScorer.read(it, null, null, primed).score})",
+                BorderlineScorer.evaluate(it, null, null, primed) == null,
+            )
+        }
+    }
+
+    // ── The two-different-signals rule ───────────────────────────────────────────────
+
+    @Test
+    fun `a block on score needs two different signals, everywhere`() {
+        assertTrue("the web bar must demand corroboration too",
+            FilterTuning.WEB_MIN_FAMILIES >= 2)
+        // One family, repeated until it would clear the bar on arithmetic alone.
+        val oneWord = (1..10).joinToString(" ") { "lingerie" }
+        assertTrue(
+            "one family repeated must never block (scored ${scoreAsTitle(oneWord)})",
+            !blocksAsTitle(oneWord),
+        )
+    }
+
 }

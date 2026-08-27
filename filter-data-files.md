@@ -51,7 +51,7 @@ there AND on-device, assets don't. `FilterData.langSet/langLines` read them via 
 behaviour unchanged).
 - [x] `words_core/mixed/support/combo/extra_explicit/subtle/dual/ambiguous/person.txt`
 - [x] `variant_explicit.txt`, `variant_dual.txt`
-- [x] `phrases_loud.txt`, `phrases_soft.txt`
+- [x] `phrases_loud.txt`, `phrases_soft.txt`, `phrases_primer.txt`
 - [x] `medical_context.txt`
 - [x] `exceptions.txt` (`word: n1, n2, …`) → `BannedWordExceptions` parser
 - [x] `family_groups.txt` (`head, infl1, …`) → `BannedWords.famOf` parser

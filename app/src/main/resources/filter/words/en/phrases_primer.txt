@@ -1,0 +1,21 @@
+# PRIMER phrases - adult-ADJACENT, not adult. Both modes.
+#
+# These can never block anything, in any mode, however many times they appear. They are
+# worth FilterTuning.PRIMER_WEIGHT (a rounding error against any bar), they are excluded
+# from the distinct-signal count, and their only real job is to ARM the primer multiplier:
+# for FilterTuning.PRIMER_WINDOW_MS afterwards, in the same app, a genuinely sexual signal
+# counts FilterTuning.PRIMER_MULTIPLIER times as much.
+#
+# THE TEST FOR THIS FILE: could a person who is not looking for anything meet this phrase
+# in an ordinary day? A traffic camera, a nature live cam, a "hidden cam prank", a company
+# policy page, a settings toggle labelled "Adult content". If yes, it belongs here and NOT
+# in phrases_loud.txt - it was one sighting of "live cam" closing an app that created this
+# tier in the first place (2026-08-27).
+# LANGUAGE-SPECIFIC.
+live cam
+hidden cam
+spy cam
+pole dance
+hot girls
+adult content
+not safe for work

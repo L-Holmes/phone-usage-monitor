@@ -105,6 +105,31 @@ class OverlayController(private val context: Context) {
     val isShowing: Boolean get() = view != null
 
     /**
+     * CAN A COVER BE LEFT BEHIND?  (asked directly, 2026-08-27, and worth answering here)
+     *
+     * Not by the process dying: this is a TYPE_ACCESSIBILITY_OVERLAY window, and the window
+     * token belongs to this process. When the process goes - killed for an ANR, killed under
+     * memory pressure, force-stopped - the window goes with it. There is no path by which a
+     * cover outlives the app that drew it, so nothing needs cleaning up at the next start.
+     *
+     * The real risk was never a leaked WINDOW, it was a leaked STATE: a cover still on screen
+     * while the thing that should take it down had stopped running. Two ways that happened,
+     * both now closed:
+     *
+     *   1. the service's main thread wedged, so the cover's buttons could not be delivered
+     *      and the recheck loop never ran (see the stall watchdog in AccessibilityService);
+     *   2. `view` here disagreed with reality, because addView threw half way and we kept a
+     *      reference to a window that was never added - or added one on top of an existing
+     *      one. detach() below makes both states impossible to hold.
+     */
+    private fun detach() {
+        val existing = view ?: return
+        view = null
+        runCatching { windowManager.removeViewImmediate(existing) }
+            .onFailure { android.util.Log.w("OverlayController", "stale cover would not detach", it) }
+    }
+
+    /**
      * [showGoBack] - whether the quiet "Go back one page instead" link is offered at all.
      * Only a distracting WEB PAGE in a browser gets it: pressing Back there plausibly
      * lands somewhere fine. For everything else - a blocked app, the night guard's
@@ -129,25 +154,22 @@ class OverlayController(private val context: Context) {
             existing.findViewById<TextView>(R.id.block_reason).text = reason
             setDetailsOn(existing, details)
             // The cover can be re-shown for a DIFFERENT kind of block (a page cover
-            // upgraded to an app cover, say) - keep the link's visibility current.
+            // upgraded to an app cover, say) - keep the link's visibility current...
             existing.findViewById<View>(R.id.btn_go_back).visibility =
                 if (showGoBack) View.VISIBLE else View.GONE
+            // ...and its BUTTONS current with it. They used to be bound once, on the first
+            // cover, and never again - so after an upgrade, "Go to home screen" was still
+            // running the previous block's exit, aimed at the previous block's app.
+            bindButtons(existing, onGoBack, onLeave, onReport)
             return
         }
 
         val overlay = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
         overlay.findViewById<TextView>(R.id.block_reason).text = reason
         setDetailsOn(overlay, details)
-        // Typed as View, not Button: "go back" and "report" are quiet TextView links now,
-        // and only "leave" is still an actual Button.
-        val goBack = overlay.findViewById<View>(R.id.btn_go_back)
-        goBack.visibility = if (showGoBack) View.VISIBLE else View.GONE
-        goBack.setOnClickListener {
-            pressAnimation(it)
-            onGoBack()
-        }
-        overlay.findViewById<View>(R.id.btn_leave).setOnClickListener { onLeave() }
-        overlay.findViewById<View>(R.id.btn_report).setOnClickListener { onReport() }
+        overlay.findViewById<View>(R.id.btn_go_back).visibility =
+            if (showGoBack) View.VISIBLE else View.GONE
+        bindButtons(overlay, onGoBack, onLeave, onReport)
 
         // Wrap the cover in a FrameLayout we control, so the temporary image layer
         // can be laid ON TOP of the cover (and removed) without touching the XML.
@@ -170,28 +192,65 @@ class OverlayController(private val context: Context) {
             PixelFormat.OPAQUE,
         )
 
+        // Belt: nothing of ours may already be attached. `view` is null here (we returned
+        // early above if it was not), but an addView that threw part-way in the past could
+        // have left a window up with no reference to it - and a second full-screen opaque
+        // cover on top of an invisible first one is a phone nobody can use.
+        detach()
         try {
             windowManager.addView(container, params)
             view = container
         } catch (t: Throwable) {
             // Never crash the service over a cover; log it instead.
             android.util.Log.e("OverlayController", "could not show block cover", t)
-            view = null
+            // addView can throw AFTER the window was registered (BadTokenException happens
+            // before, an inflation failure can happen after). Ask for it to go either way.
+            view = container
+            detach()
         }
 
 
     }
 
-    fun hide() {
-        view?.let {
-            try {
-                windowManager.removeView(it)
-            } catch (t: Throwable) {
-                android.util.Log.e("OverlayController", "could not remove cover", t)
-            }
-            view = null
+    /**
+     * (Re)bind the cover's three actions. Typed as View, not Button: "go back" and "report"
+     * are quiet TextView links now, and only "leave" is still an actual Button.
+     */
+    private fun bindButtons(
+        root: View,
+        onGoBack: () -> Unit,
+        onLeave: () -> Unit,
+        onReport: () -> Unit,
+    ) {
+        root.findViewById<View>(R.id.btn_go_back).setOnClickListener {
+            pressAnimation(it)
+            onGoBack()
         }
+        // ⚠️ 2026-08-27. The press animation and the status line go on BEFORE onLeave(),
+        // deliberately. Leaving takes a few hundred milliseconds of real work - handing a
+        // browser a fresh tab, asking the system for Home - and if the service's main thread
+        // happens to be busy reading a heavy screen, that work starts late. With no
+        // acknowledgement in between, a tap that registered perfectly is indistinguishable
+        // from a dead button, and the report that follows is "I press it and nothing
+        // happens". One frame of feedback costs nothing and answers that.
+        root.findViewById<View>(R.id.btn_leave).setOnClickListener {
+            pressAnimation(it)
+            flashStatusOn(root, context.getString(R.string.block_leaving))
+            onLeave()
+        }
+        root.findViewById<View>(R.id.btn_report).setOnClickListener { onReport() }
     }
+
+    /**
+     * Take the cover down. Idempotent, and safe to call when nothing is up.
+     *
+     * removeViewImmediate rather than removeView, deliberately: removeView schedules the
+     * teardown through the view hierarchy's own traversal, so a cover asked to go while the
+     * main thread is under pressure can stay on screen for another frame or several. This is
+     * the one window in the app where "eventually" is not good enough - it is covering the
+     * whole screen and the user is trying to get out from under it.
+     */
+    fun hide() = detach()
 
     /** Update just the cover's reason text (used by the live block countdown). */
     fun setReason(reason: String) {
@@ -208,13 +267,19 @@ class OverlayController(private val context: Context) {
     /**
      * Show [message] on the status line and FLASH it.
      *
-     * Only ever called when the user has actually tapped "Go back" - the status line stays
-     * empty otherwise. The flash restarts on every tap, even if the text is identical, so a
-     * user mashing Back on a page that won't budge can SEE that each press registered and the
-     * cover re-checked. Without that it looks frozen and they assume the button is broken.
+     * Only ever a RESPONSE TO A TAP - "Go back", or "Go to home screen" acknowledging
+     * itself. The status line stays empty otherwise. The flash restarts on every tap, even
+     * if the text is identical, so a user mashing a button on a cover that won't budge can
+     * SEE that each press registered. Without that it looks frozen and they assume the
+     * button is broken.
      */
     fun flashStatus(message: String) {
-        val status = view?.findViewById<TextView>(R.id.block_status) ?: return
+        flashStatusOn(view ?: return, message)
+    }
+
+    /** [flashStatus], against a specific root - used while the cover is still being built. */
+    private fun flashStatusOn(root: View, message: String) {
+        val status = root.findViewById<TextView>(R.id.block_status) ?: return
         status.animate().cancel()
         status.text = message
         status.alpha = 0f

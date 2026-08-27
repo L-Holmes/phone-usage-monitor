@@ -1,0 +1,107 @@
+# SERVICE MARKERS  —  how a third-party client gives itself away.
+#
+# apps_clients.txt is a list of names, and a list of names is always out of date. This file
+# is the other half: what a blocked service LOOKS LIKE from the outside, so an app nobody
+# has ever heard of can be recognised as a client of one.
+#
+# Three kinds of evidence, in descending order of how much they are worth:
+#
+#   domains:  hosts that belong to the service. Seeing one of these INSIDE an app that is
+#             not that service's own app is not a hint, it is a confession - a third-party
+#             client has to send you to the real service to sign in, and that sign-in page
+#             is a web page with a readable address. ONE sighting is enough.
+#
+#   strong:   phrases only that service's own interface uses. TWO different ones on one
+#             screen make the app a suspect; it takes a SECOND, separate sighting (minutes
+#             apart, so one screen cannot count twice) before anything is blocked.
+#             ⚠️ Put a phrase here only if you would be surprised to meet it anywhere else.
+#             "upvote" and "karma" are NOT here - every forum client has them.
+#
+#   hints:    substrings of the app's own name or package. Never evidence on its own; worth
+#             one strong marker when something real is already on screen. "Boost for Reddit"
+#             says what it is in its name, and so do most of them.
+#
+# Format:  one block per service, "field: comma, separated, values". "#" = comment.
+# Matching is case-insensitive against the screen text we already read for the word filter,
+# so this costs nothing extra to run.
+#
+# ⚠️ WHERE THIS IS DELIBERATELY NOT RUN: browsers (they are supposed to show anything), the
+# Play Store and Settings (they describe other apps for a living, and a Play Store listing
+# for Reddit is not a Reddit client), launchers, and this app's own screens - our own block
+# lists are full of these words. See ClientMarkers.isScannable.
+# LANGUAGE-SPECIFIC (the "strong" markers are UI phrases, so a translated client needs its
+# own file; domains and hints are language-neutral but cost nothing to repeat). Lives under
+# resources/ rather than assets/ so the pure-JVM tests can read it - see ClientMarkersTest.
+# Loaded by FilterData.langLines -> ClientMarkers.
+
+service: reddit
+label: Reddit
+domains: reddit.com, redd.it, redditstatic.com, redditmedia.com
+strong: subreddit, subreddits, crosspost, post karma, comment karma, r/popular, reddit premium, moderators of this community
+hints: reddit, redd, snoo, baconreader, infinity for, boost for, sync for, slide for, relay for, joey for, stealth for
+
+service: flickr
+label: Flickr
+domains: flickr.com, flic.kr, staticflickr.com
+strong: photostream, flickr pro, flickr commons, photosets, explore flickr, your photostream
+hints: flickr, flick, flickfolio
+
+service: instagram
+label: Instagram
+domains: instagram.com, cdninstagram.com, ig.me
+strong: instagram, igtv, close friends, story highlights, instagram stories
+hints: instagram, insta, gram, barinsta, instander
+
+service: tiktok
+label: TikTok
+domains: tiktok.com, tiktokcdn.com, musical.ly
+strong: tiktok, for you page, duet with, tiktok live, stitch this video
+hints: tiktok, tok, musically, proxitok
+
+service: x
+label: X (Twitter)
+domains: twitter.com, x.com, t.co, twimg.com
+strong: retweet, retweets, quote tweet, tweeted, x premium, who to follow
+hints: twitter, tweet, nitter, fritter, squawker
+
+service: tumblr
+label: Tumblr
+domains: tumblr.com, tumblr.co
+strong: reblog, reblogged, tumblr, notes on this post
+hints: tumblr
+
+service: imgur
+label: Imgur
+domains: imgur.com, i.stack.imgur.com
+strong: imgur, most viral, imgur album, imgur emerald
+hints: imgur
+
+service: pinterest
+label: Pinterest
+domains: pinterest.com, pinimg.com, pin.it
+strong: pinterest, idea pins, your boards, save this pin
+hints: pinterest, pin it
+
+service: youtube
+label: YouTube
+domains: youtube.com, youtu.be, ytimg.com, googlevideo.com
+strong: youtube, watch later, subscriptions feed, youtube shorts, channel subscribers
+hints: youtube, newpipe, libretube, skytube, vanced, invidious, piped
+
+service: twitch
+label: Twitch
+domains: twitch.tv, ttvnw.net, jtvnw.net
+strong: twitch, subscriber only chat, twitch prime, channel points, raid this channel
+hints: twitch, twire
+
+service: snapchat
+label: Snapchat
+domains: snapchat.com, snap.com, sc-cdn.net
+strong: snapchat, snap score, my eyes only, snap map, streaks with
+hints: snapchat, snap
+
+service: onlyfans
+label: OnlyFans
+domains: onlyfans.com, onlyfans.co, ofans.com
+strong: onlyfans, subscribe to see, ppv message, tip menu
+hints: onlyfans, fansly, ofans

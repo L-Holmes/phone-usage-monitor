@@ -89,6 +89,7 @@ import android.view.animation.PathInterpolator
 
 //other
 
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.graphics.Path
 
@@ -5908,8 +5909,18 @@ private fun startWeekStrict() {
         // ...and the word filter second, because the log is mostly read to answer "why did
         // THAT get blocked", which is a question this page exists to answer properly.
         content.addView(homeCard("Word filter",
-            "Every word group, what it scores, the cutoff, and the exact screens we watch " +
-                "for - all for the mode you are in right now.") { showFilterBreakdown() })
+            "The formula a block comes out of, every word group and what it scores, the " +
+                "cutoffs, and the exact screens we watch for - all for the mode you are in " +
+                "right now.") { showFilterBreakdown() })
+        // Third, and on the dev-tools home rather than buried in the Word filter page: this
+        // is the one list the app writes BY ITSELF, about apps on this phone, and the only
+        // place a wrong judgement can be reversed. A feature nobody can find is a feature
+        // that only ever surprises people.
+        content.addView(homeCard(
+            "Caught in the act",
+            "Apps caught being a client for something already blocked - what gave each one " +
+                "away, and how to overrule it.",
+        ) { showProxyClients() })
         content.addView(homeCard("System console", "Current mode, thresholds, and what's on or off.") { showDevConsole() })
         // Was a pane on the adult-content page; it is diagnostics, not something to hand a
         // user in a bad moment (see the note in showReportScreen).
@@ -7422,6 +7433,7 @@ private fun startWeekStrict() {
         FilterCatalogue.Behaviour.NEEDS_A_SECOND -> Palette.labelSecondary
         FilterCatalogue.Behaviour.ONLY_IN_CONTEXT -> Palette.warningText
         FilterCatalogue.Behaviour.NO_SCORE -> Palette.labelTertiary
+        FilterCatalogue.Behaviour.NEVER_BLOCKS -> Palette.tintDeep
     }
 
     // ── THE MODE COLOUR SYSTEM ──────────────────────────────────────────────────────
@@ -7565,7 +7577,9 @@ private fun startWeekStrict() {
         // ═════════════════════════════════════════════════════════════════════════════
         //  1. THE CUTOFF
         // ═════════════════════════════════════════════════════════════════════════════
-        section("The cutoff", "Words add up to a score. These are the scores that block.")
+        section("The cutoff",
+            "Words add up to a score. These are the scores that block - and every one of " +
+                "them went UP on 27 Aug 2026, because the filter was acting on too little.")
 
         val webCard = glassCard(Space.md)
         webCard.addView(ruleHeading("A WEB PAGE", Palette.dangerText))
@@ -7573,6 +7587,8 @@ private fun startWeekStrict() {
         webCard.addView(separator())
         webCard.addView(smallRule("or ONE Core word, Loud phrase or site name. Always enough, " +
             "on its own.", true))
+        webCard.addView(smallRule("anything else needs ${FilterTuning.WEB_MIN_FAMILIES} " +
+            "DIFFERENT signals - one word said five ways is still one word", true))
         list.addView(webCard)
 
         val appCard = glassCard(Space.md)
@@ -7584,6 +7600,8 @@ private fun startWeekStrict() {
             "one Core word blocks it", true))
         appCard.addView(smallRule("over ${FilterTuning.APP_LONG_TEXT_WORDS} words on screen:  " +
             "a Core word needs a second different word", true))
+        appCard.addView(smallRule("everything below the bar needs " +
+            "${FilterTuning.APP_MIN_FAMILIES} different signals, always", true))
         list.addView(appCard)
 
         val ssCard = glassCard(Space.md)
@@ -7594,6 +7612,76 @@ private fun startWeekStrict() {
         ssCard.addView(smallRule("ordinary searching and image search are NOT touched - web " +
             "browsing is monitored lightly, because the Firefox add-on is what covers images", true))
         list.addView(ssCard)
+
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  1b. THE FORMULA  -  the arithmetic itself, written out
+        // ═════════════════════════════════════════════════════════════════════════════
+        //  Added 2026-08-27. Everything on this page described one PIECE of the sum - what
+        //  a word is worth, what doubles it, what caps it - and never the sum. So "why did
+        //  that block" had no answer on the page that exists to answer it. This card is the
+        //  whole calculation, in order, and every number in it is read from FilterTuning,
+        //  so it cannot drift away from what the scorer actually does.
+        section("The formula",
+            "Every block that comes from words is this sum, and nothing else. Read it top " +
+                "to bottom: it is the order the scorer works in.")
+
+        val formula = glassCard(Space.md)
+        formula.addView(ruleHeading("THE SUM", Palette.tintDeep))
+        formula.addView(monoBlock(
+            "  for every signal on the screen\n" +
+                "      points = weight\n" +
+                "             x ${FilterTuning.TITLE_URL_MULTIPLIER}    in the title or URL\n" +
+                "             x ${FilterTuning.GENDER_OFF_MULTIPLIER}  if its gender switch is off\n" +
+                "      (one family stops at ${FilterTuning.PER_WORD_CAP} hits and\n" +
+                "       ${FilterTuning.SINGLE_WORD_MAX} points, unless it is Core)\n" +
+                "\n" +
+                "  SCORE  = sum of every signal\n" +
+                "             x ${FilterTuning.MEDICAL_DAMPEN} if the page reads medical\n" +
+                "                    (Core and Loud are spared)\n" +
+                "             x ${FilterTuning.PRIMER_MULTIPLIER}  if a primer is live",
+        ))
+        formula.addView(separator())
+        formula.addView(ruleHeading("AND IT BLOCKS IF", Palette.dangerText))
+        formula.addView(monoBlock(
+            "  ONE Core word, Loud phrase or site name\n" +
+                "     - or -\n" +
+                "  SCORE >= $webBar   on a web page\n" +
+                "  SCORE >= ${FilterTuning.APP_THRESHOLD}   on an app screen\n" +
+                "     AND >= ${FilterTuning.WEB_MIN_FAMILIES} DIFFERENT signals",
+        ))
+        list.addView(formula)
+
+        val worked = glassCard(Space.md)
+        worked.addView(ruleHeading("WORKED THROUGH", Palette.labelSecondary))
+        worked.addView(bodyText(
+            "A page titled \"bikini lingerie sheer\", in $modeName, both gender switches " +
+                "on, no primer live.",
+        ))
+        val subtleT = FilterTuning.SUBTLE_WEIGHT * FilterTuning.TITLE_URL_MULTIPLIER
+        val ambigT = FilterTuning.AMBIGUOUS_WEIGHT * FilterTuning.TITLE_URL_MULTIPLIER
+        worked.addView(monoBlock(
+            "  bikini    ${FilterTuning.SUBTLE_WEIGHT} x ${FilterTuning.TITLE_URL_MULTIPLIER} = $subtleT\n" +
+                "  lingerie  ${FilterTuning.SUBTLE_WEIGHT} x ${FilterTuning.TITLE_URL_MULTIPLIER} = $subtleT\n" +
+                "  sheer     ${FilterTuning.AMBIGUOUS_WEIGHT} x ${FilterTuning.TITLE_URL_MULTIPLIER} = $ambigT\n" +
+                "                    ----\n" +
+                "  SCORE               ${subtleT * 2 + ambigT}   vs a bar of $webBar\n" +
+                "\n" +
+                "  3 different signals - enough of those\n" +
+                "  score short of the bar - ALLOWED",
+        ))
+        worked.addView(separator())
+        worked.addView(smallRule(
+            "now say \"live cam\" had appeared in this app a minute ago. The same page is " +
+                "worth ×${FilterTuning.PRIMER_MULTIPLIER}, which is the whole job of a " +
+                "primer: it moves a page along the scale, it never decides one.",
+            true))
+        list.addView(worked)
+
+        note("Every number above is read straight out of the filter's own tuning, so this " +
+            "card cannot fall out of step with what actually happens. What it does NOT " +
+            "cover is the blocks that never involve a score at all - a banned domain, one " +
+            "of your own rules, a blocked app, the night and room guards. Those are " +
+            "decisions already made, and they land on sight.")
 
         // ═════════════════════════════════════════════════════════════════════════════
         //  2. THE WORDS
@@ -7817,9 +7905,22 @@ private fun startWeekStrict() {
                 "Off. No score, no threshold.")
         list.addView(listCard(
             "Blacklisted apps & sites", BlockedCategories.ALL.size, "categories",
-            "User-uploaded feeds, sexual content, livestreams and dating, VPNs.",
+            "User-uploaded feeds, sexual content, livestreams and dating, VPNs, and the " +
+                "third-party apps that reach the same services another way.",
             "Each category is a pair of plain text files. Tap to read them.",
             Palette.dangerText, openPage = { showBlacklistPage() },
+        ))
+        list.addView(listCard(
+            "Caught in the act  ·  learned on this phone", ProxyClients.all(this).size, "apps",
+            "Apps this phone has caught being a client for something already blocked.",
+            "A list of names can never be complete - there are a dozen Reddit apps and one " +
+                "Flickr app is not the only Flickr app. So the app also WATCHES: an app that " +
+                "opens the service's own sign-in page has confessed (one sighting is enough), " +
+                "and an app using the service's own vocabulary is a suspect that needs a " +
+                "second sighting a minute later.\n\nTap to see what was caught, what gave " +
+                "each one away, and to overrule any of it.",
+            if (ProxyClients.all(this).isEmpty()) Palette.labelTertiary else Palette.dangerText,
+            openPage = { showProxyClients() },
         ))
 
         section("Other things never scanned")
@@ -7911,10 +8012,17 @@ private fun startWeekStrict() {
                 "Tap any of them to see what is on the list.")
         list.addView(listCard(
             "Known adult domains", -1,
-            if (DomainBlocklist.isReady) "~550k hosts" else "not loaded in this process",
+            if (DomainBlocklist.isReady) "${"%,d".format(DomainBlocklist.size)} hosts"
+            else "not loaded in this process",
             "Built once from public blocklists, then cached on the device.",
             "Far too large to page through here - use the Try it box, or the log, to check a " +
-                "specific host. The service builds it in the background on first run.",
+                "specific host. The service builds it in the background on first run.\n\n" +
+                "It is held as a sorted array of 64-bit fingerprints rather than as the host " +
+                "names themselves: 8 bytes each instead of about a hundred, which took the " +
+                "list from roughly 80MB of memory to 4MB. That matters for more than " +
+                "tidiness - a background process holding 80MB is the first thing Android " +
+                "kills when something big starts downloading, and killing this one stops all " +
+                "blocking. The trade is that the list can no longer be listed, only asked.",
             if (DomainBlocklist.isReady) Palette.dangerText else Palette.labelTertiary,
             null,
         ))
@@ -7993,6 +8101,28 @@ private fun startWeekStrict() {
     }
 
     // ── the page's own components ────────────────────────────────────────────────────
+
+    /**
+     * A block of pre-formatted arithmetic. Monospaced and scrollable sideways, because a
+     * formula that wraps is a formula nobody can read - and the alternative (letting the
+     * page scroll sideways) breaks every other card on it.
+     */
+    private fun monoBlock(text: String): View {
+        val dp = resources.displayMetrics.density
+        val body = TextView(this).apply {
+            this.text = text
+            textSize = Type.caption
+            typeface = Typeface.MONOSPACE
+            setTextColor(Palette.labelSecondary)
+            setLineSpacing(0f, Type.lineSpacing)
+            setHorizontallyScrolling(true)
+        }
+        return HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(body)
+            setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
+        }
+    }
 
     /** A small all-caps heading INSIDE a card, marking which rule the card is about. */
     private fun ruleHeading(text: String, tone: Int): TextView = TextView(this).apply {
@@ -8106,6 +8236,7 @@ private fun startWeekStrict() {
         val rule = when (g.behaviour) {
             FilterCatalogue.Behaviour.BLOCKS_ALONE -> "One is enough on its own"
             FilterCatalogue.Behaviour.ONLY_IN_CONTEXT -> "Only counts in context"
+            FilterCatalogue.Behaviour.NEVER_BLOCKS -> "Can never block - it multiplies"
             else -> null
         }
         card.addView(TextView(this).apply {
@@ -8357,13 +8488,23 @@ private fun startWeekStrict() {
         val ex = BorderlineScorer.explain(text, null, null, settings)
             ?: return "Scores 0.\nNothing in there is on any list."
         val bar = BorderlineScorer.webBar()
-        val web = ex.score >= bar
+        // Ask the real verdict rather than comparing to the bar by hand: since the
+        // two-different-signals rule went in, clearing the bar is no longer the whole
+        // story, and a "try it" box that disagrees with the filter is worse than none.
+        val web = BorderlineScorer.evaluate(text, null, null, settings) != null
         val inApp = BorderlineScorer.evaluateInApp(text, null, null, settings) != null
+        val signals = ex.contributions.count { it.tier != "primer" && it.points > 0 }
         val sb = StringBuilder()
         sb.append("SCORE ${ex.score}\n")
         sb.append("read as a page TITLE, so every hit\n")
         sb.append("counts x${FilterTuning.TITLE_URL_MULTIPLIER}. The same words in\n")
         sb.append("body text would score about half.\n\n")
+        sb.append("$signals different signal(s)")
+        sb.append(if (signals >= FilterTuning.WEB_MIN_FAMILIES) "  - enough\n"
+                  else "  - needs ${FilterTuning.WEB_MIN_FAMILIES}\n")
+        if (ex.primed) sb.append("primed, so x${FilterTuning.PRIMER_MULTIPLIER} applied\n")
+        else if (ex.primers > 0) sb.append("${ex.primers} primer(s), nothing to multiply yet\n")
+        sb.append('\n')
         sb.append(if (web) "BLOCKED" else "allowed").append("  as a web page (bar $bar)\n")
         sb.append(if (inApp) "BLOCKED" else "allowed")
             .append("  on an app screen (bar ${FilterTuning.APP_THRESHOLD})\n")
@@ -8390,6 +8531,9 @@ private fun startWeekStrict() {
             append(if (group.points > 0) "${group.points} points per hit" else "Scores nothing")
             if (group.behaviour == FilterCatalogue.Behaviour.BLOCKS_ALONE) {
                 append("  ·  one is enough on its own")
+            }
+            if (group.behaviour == FilterCatalogue.Behaviour.NEVER_BLOCKS) {
+                append("  ·  can never block, in any mode")
             }
             group.gate?.let { append("\nOnly counts with $it.") }
             val on = MODE_CHIPS.filter { activeInMode(group, it.id) }.map { AppConfig.modeName(it.id) }
@@ -8469,6 +8613,124 @@ private fun startWeekStrict() {
      * give the same result - name in bold, detail indented and quiet underneath - for the
      * cost of a single layout pass.
      */
+    /**
+     * THE CAUGHT-IN-THE-ACT LIST  -  apps the detector decided are clients for a service we
+     * already block, and the evidence for each. See ProxyClients.kt.
+     *
+     * This screen is not a nicety. Everything on it is a whole app taken away on the app's
+     * own judgement rather than off a list somebody wrote, and a judgement the user cannot
+     * see, argue with or reverse is one they will eventually reverse by uninstalling the
+     * blocker. So: what was blocked, WHAT GAVE IT AWAY, and a tap to say "no it isn't".
+     */
+    private fun showProxyClients() {
+        filterScrollY = filterScroll?.scrollY ?: filterScrollY
+        val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
+        val root = vbox(pad)
+        root.addView(titleText("Caught in the act"))
+
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            isFillViewport = true; addView(list)
+        })
+        setContentWithThumb(root) { showFilterBreakdown() }
+
+        fun render() {
+            list.removeAllViews()
+
+            val intro = glassCard(Space.md)
+            intro.addView(bodyText(
+                "Blocking a service by blocking its own app stops working the moment " +
+                    "somebody installs a different app that signs in to the same account. " +
+                    "These are the apps this phone has caught doing that.\n\n" +
+                    "Two things give a client away. Opening the service's OWN SITE is proof " +
+                    "- it has to send you there to sign in - and one sighting is enough. " +
+                    "Using the service's OWN WORDS is only a suspicion, and it takes a " +
+                    "second sighting a minute later before anything is blocked.",
+            ))
+            list.addView(intro)
+
+            val found = ProxyClients.all(this)
+            list.addView(sectionLabel(if (found.isEmpty()) "NOTHING CAUGHT YET"
+                                      else "${found.size} BLOCKED"))
+            if (found.isEmpty()) {
+                val none = glassCard(Space.md)
+                none.addView(bodyText(
+                    "Nothing on this phone has given itself away. The well-known clients are " +
+                        "blocked by name anyway - see \"Third-party clients & front-ends\" " +
+                        "on the previous page.",
+                ))
+                list.addView(none)
+            }
+            for (d in found) {
+                val card = glassCard(Space.md)
+                card.addView(ruleHeading(appLabel(d.pkg).uppercase(), Palette.dangerText))
+                card.addView(bodyText("A third-party ${d.label} app."))
+                card.addView(separator())
+                card.addView(smallRule("what gave it away:  ${d.why}", true))
+                card.addView(smallRule("caught ${relativeWhen(d.at)}", true))
+                card.addView(smallRule("package:  ${d.pkg}", true))
+                card.addView(tapRow("This is NOT a ${d.label} app - unblock it") {
+                    ProxyClients.clear(this, d.pkg)
+                    render()
+                })
+                list.addView(card)
+            }
+
+            val overruled = ProxyClients.cleared(this)
+            if (overruled.isNotEmpty()) {
+                list.addView(sectionLabel("YOU OVERRULED THESE"))
+                val card = glassCard(Space.md)
+                card.addView(bodyText(
+                    "The detector will not act on these again, however plainly they behave " +
+                        "like a client. That is the point of the override - but it is also " +
+                        "the one way round this whole feature, so it is listed here rather " +
+                        "than hidden.",
+                ))
+                for (pkg in overruled) {
+                    card.addView(separator())
+                    card.addView(tapRow("${appLabel(pkg)}  -  watch it again") {
+                        ProxyClients.unclear(this, pkg)
+                        render()
+                    })
+                }
+                list.addView(card)
+            }
+        }
+        render()
+    }
+
+    /** A small all-caps list heading, outside a card. */
+    private fun sectionLabel(text: String): TextView = TextView(this).apply {
+        val dp = resources.displayMetrics.density
+        this.text = text; textSize = Type.caption
+        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.labelTertiary)
+        letterSpacing = 0.06f
+        setPadding((2 * dp).toInt(), (18 * dp).toInt(), 0, (8 * dp).toInt())
+    }
+
+    /** A tappable line inside a card, for the one action a card offers. */
+    private fun tapRow(text: String, onTap: () -> Unit): TextView = TextView(this).apply {
+        val dp = resources.displayMetrics.density
+        this.text = text; textSize = Type.footnote
+        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.tintDeep)
+        background = tappableBg(Palette.glass)
+        setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
+        setOnClickListener { it.pressable(); onTap() }
+    }
+
+    /** "3 minutes ago" / "yesterday" - enough to place a detection without a date parser. */
+    private fun relativeWhen(at: Long): String {
+        val mins = (System.currentTimeMillis() - at) / 60_000
+        return when {
+            mins < 1 -> "just now"
+            mins < 60 -> "$mins min ago"
+            mins < 60 * 24 -> "${mins / 60} h ago"
+            mins < 60 * 24 * 2 -> "yesterday"
+            else -> "${mins / (60 * 24)} days ago"
+        }
+    }
+
     private fun showWordList(
         title: String, head: String, what: String, note: String, entries: List<Entry>,
     ) {

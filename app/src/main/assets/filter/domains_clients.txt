@@ -1,0 +1,45 @@
+# ALTERNATIVE FRONT-ENDS  -  the WEB half of apps_clients.txt.
+#
+# A front-end re-serves a blocked service's content from a different domain, so every
+# host rule we have misses it. Same problem as the third-party apps, same answer.
+#
+# These are the well-known public instances. The list cannot be complete - anyone can
+# host one, and the instance lists rotate weekly - which is why the SCORER and the
+# detector matter more than this file does. It is the cheap half.
+#
+# LANGUAGE-NEUTRAL. One host per line. Loaded by FilterData -> BlockedCategories.
+
+# ── Reddit front-ends ────────────────────────────────────────────────────────────────
+libreddit.spike.codes
+teddit.net
+redlib.matthew.science
+safereddit.com
+old.reddit.com
+reddit-stream.com
+unddit.com
+redditcommentsearch.com
+
+# ── Twitter / X front-ends ───────────────────────────────────────────────────────────
+nitter.net
+nitter.poast.org
+nitter.privacydev.net
+twiiit.com
+xcancel.com
+
+# ── YouTube front-ends ───────────────────────────────────────────────────────────────
+invidious.io
+yewtu.be
+inv.nadeko.net
+piped.video
+piped.kavin.rocks
+
+# ── TikTok / Instagram front-ends ────────────────────────────────────────────────────
+proxitok.pabloferreiro.es
+tiktok-scraper.com
+bibliogram.art
+imginn.com
+picuki.com
+dumpor.com
+storiesig.info
+anonyig.com
+inflact.com

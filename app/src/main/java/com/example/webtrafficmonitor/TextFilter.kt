@@ -58,7 +58,7 @@ import android.content.Context
 
 // ── Scoring knobs (mirrors STRICT_TUNING / RELAXED_TUNING in textfilter.js) ───────────
 object FilterTuning {
-    const val EXPLICIT_WEIGHT = 15       // CORE tier — instant (== THRESHOLD)
+    const val EXPLICIT_WEIGHT = 18       // CORE tier — instant (== THRESHOLD)
     const val MIXED_WEIGHT = 8           // "nude"-type — needs a second distinct signal
     const val STRONG_WEIGHT = 8          // SUPPORT tier — never blocks alone
     const val SUBTLE_WEIGHT = 2          // strict-only suggestive
@@ -67,17 +67,36 @@ object FilterTuning {
     const val COMBO_WEIGHT = 7           // relaxed-only: hot/sexy + person combo
 
     // PHRASES (see BannedPhrases). LOUD is treated like the CORE tier (exempt from the
-    // single-word cap) so a loud phrase in a title — 8 × TITLE_URL_MULTIPLIER = 16 — blocks
+    // single-word cap) so a loud phrase in a title — 9 × TITLE_URL_MULTIPLIER = 18 — blocks
     // on its own. SOFT is a weak, strict-only corroborator.
-    const val PHRASE_LOUD_WEIGHT = 8
+    const val PHRASE_LOUD_WEIGHT = 9
     const val PHRASE_SOFT_WEIGHT = 3
+
+    // ── PRIMERS: THE THINGS THAT ARE NOT EVIDENCE, ONLY A NUDGE ──────────────────────
+    // 2026-08-27. "live cam" used to be a LOUD phrase, which meant ONE sighting of it —
+    // on any screen, in any app, in a settings label if you like — closed the app on the
+    // spot. It is not sexual. Neither is "hidden cam", "adult content" or "not safe for
+    // work": they are things said ABOUT content far more often than they are content.
+    //
+    // So they moved to their own tier, which cannot block anything, ever:
+    //   • it scores PRIMER_WEIGHT, which is nothing (2 points against a bar of 24);
+    //   • it is excluded from the distinct-signal count, so it can never be somebody
+    //     else's second signal;
+    //   • what it DOES do is ARM a multiplier. For PRIMER_WINDOW_MS afterwards, in the
+    //     same app, anything genuinely sexual that turns up scores PRIMER_MULTIPLIER
+    //     times as much.
+    // "Live cam" then does exactly what the user asked of it: nothing on its own, and a
+    // thumb on the scale if a real sexual word follows it a minute later.
+    const val PRIMER_WEIGHT = 2
+    const val PRIMER_MULTIPLIER = 1.5f
+    const val PRIMER_WINDOW_MS = 10 * 60_000L
 
     const val CONTEXT_WINDOW = 4         // a DUAL/AMBIGUOUS/COMBO word counts only within this
     const val EXCEPTION_WINDOW = 3       // an innocent-context word within this vetoes a match
-    const val PER_WORD_CAP = 5           // one family can contribute at most this many times
-    const val SINGLE_WORD_MAX = 14       // = THRESHOLD-1: one family can NEVER block alone
-    const val THRESHOLD = 15             // score at/above this → block
-    const val DEFINITE_THRESHOLD = 30    // score at/above this → "definite nsfw" band
+    const val PER_WORD_CAP = 4           // one family can contribute at most this many times
+    const val SINGLE_WORD_MAX = 17       // = THRESHOLD-1: one family can NEVER block alone
+    const val THRESHOLD = 18             // score at/above this → block
+    const val DEFINITE_THRESHOLD = 36    // score at/above this → "definite nsfw" band
     const val TITLE_URL_MULTIPLIER = 2   // hits in the title or URL count double
 
     // ── IN-APP SCREENS ARE HELD TO A TIGHTER BAR THAN WEB PAGES ──────────────────────
@@ -92,8 +111,17 @@ object FilterTuning {
     // clears 11 easily - so below the web threshold we require APP_MIN_FAMILIES distinct
     // families to have scored. "Blocking takes at least two different signals" is the rule
     // that keeps "nude lipstick" out of the block list, and it survives the tighter bar.
-    const val APP_THRESHOLD = 11
+    const val APP_THRESHOLD = 13
     const val APP_MIN_FAMILIES = 2
+
+    // ── AND SO IS A WEB PAGE, SINCE 2026-08-27 ───────────────────────────────────────
+    // The same rule, said out loud on the web side rather than left to fall out of the
+    // arithmetic: a page blocked BY SCORE needs at least this many DIFFERENT signals.
+    // It was already true by accident (SINGLE_WORD_MAX is one point under THRESHOLD),
+    // but "by accident" is not a guarantee, and the explicit tier was never capped at
+    // all — so a single uncapped signal repeated four times could reach the bar on its
+    // own. Now it cannot. One word is a question, not an answer, everywhere.
+    const val WEB_MIN_FAMILIES = 2
 
     // ── HOW MUCH TEXT IS ON THE SCREEN CHANGES WHAT ONE BAD WORD MEANS ──────────────
     // "porn" on a screen with eight words on it is the screen. The same word once inside a
@@ -121,7 +149,7 @@ object FilterTuning {
     // A screen at or above this is "borderline": not enough to block, too much to call clean.
     // One of these is nothing. A stream of them, in one app, for minutes, is a pattern - see
     // BorderlineWatch. Sits deliberately below APP_THRESHOLD.
-    const val BORDERLINE_FLOOR = 6
+    const val BORDERLINE_FLOOR = 7
 
     // Splitting a word across spaces ("p o r n", "pr o n") is the other half of the same
     // trick. Runs of up to JOIN_MAX_TOKENS tokens, each at most JOIN_MAX_LEN characters,
@@ -153,7 +181,11 @@ object FilterTuning {
     //
     // The domain blocklist, the ban list and the search-engine rule are untouched by this -
     // those are judgements the add-on does not duplicate. Only the HEURISTIC gets the berth.
-    const val WEB_THRESHOLD = 21
+    //
+    // 2026-08-27: 21 → 24, part of the across-the-board harshening. Every bar on this page
+    // moved up together, so the SHAPE of the filter is unchanged - it simply now wants more
+    // on the page before it will act.
+    const val WEB_THRESHOLD = 24
 }
 
 
@@ -261,6 +293,14 @@ object BannedPhrases {
     val LOUD: Set<String> get() = FilterData.langSet("phrases_loud.txt")
 
     val SOFT: Set<String> get() = FilterData.langSet("phrases_soft.txt")
+
+    /**
+     * PRIMER = not adult, but adult-adjacent: the phrase people use ABOUT this content far
+     * more often than they use it AS this content. "live cam" is a traffic camera, a bird
+     * box and a building site before it is anything else; "not safe for work" is a label on
+     * a toggle. None of these may block anything on their own — see FilterTuning.PRIMER_*.
+     */
+    val PRIMER: Set<String> get() = FilterData.langSet("phrases_primer.txt")
 }
 
 
@@ -381,6 +421,8 @@ object FilterCatalogue {
         ONLY_IN_CONTEXT,
         /** Never scores. It is a trigger for other groups, or a veto. */
         NO_SCORE,
+        /** Scores a token amount that can never reach any bar. It arms a multiplier instead. */
+        NEVER_BLOCKS,
     }
 
     data class Group(
@@ -452,9 +494,36 @@ object FilterCatalogue {
             note = "Not one word of \"try on haul\" is bannable; the three in that order " +
                 "plainly are. Counted like Core, so ×2 in a title reaches the bar alone. " +
                 "Matched against the page with punctuation stripped, so \"Try-On HAUL!!\" " +
-                "still matches.",
+                "still matches.\n\nThis list got SHORTER on 27 Aug 2026. Everything on it " +
+                "has to be a phrase you would not meet by accident - \"live cam\", " +
+                "\"hidden cam\", \"adult content\" and \"not safe for work\" plainly are, " +
+                "and they moved to Primers below.",
             activeIn = ALWAYS,
         ) { BannedPhrases.LOUD.sorted() },
+
+        Group(
+            name = "Primers",
+            points = FilterTuning.PRIMER_WEIGHT,
+            behaviour = Behaviour.NEVER_BLOCKS,
+            what = "Adult-ADJACENT. Cannot block anything, ever - it arms a multiplier.",
+            examples = "live cam · hidden cam · adult content",
+            scores = "\"live cam\" then \"nude\" a minute later  -  the second one counts " +
+                "×${FilterTuning.PRIMER_MULTIPLIER}",
+            passes = "\"live cam\" on its own, fifty times over  -  " +
+                "${FilterTuning.PRIMER_WEIGHT} pts, and nothing happens",
+            note = "The newest tier, added because ONE sighting of \"live cam\" used to " +
+                "close an app. These are phrases people meet without looking for anything: " +
+                "a traffic camera, a nest box, a policy page, a settings toggle.\n\nA " +
+                "primer is not evidence and is not treated as any: it does not count " +
+                "towards the \"two different signals\" rule, and its own " +
+                "${FilterTuning.PRIMER_WEIGHT} points are there so the block screen can " +
+                "show it was seen, not so it can add up to anything.\n\nWhat it does do " +
+                "is REMEMBER. For ${FilterTuning.PRIMER_WINDOW_MS / 60_000} minutes " +
+                "afterwards, in that same app, anything genuinely sexual scores " +
+                "×${FilterTuning.PRIMER_MULTIPLIER}. One is nothing; one followed by the " +
+                "real thing is a trail.",
+            activeIn = ALWAYS,
+        ) { BannedPhrases.PRIMER.sorted() },
 
         Group(
             name = "Mixed",
@@ -645,6 +714,18 @@ object FilterCatalogue {
             "It is a much stronger signal: nobody's page title mentions this by accident.",
         ),
         Scaler(
+            "A primer was seen recently",
+            "×${FilterTuning.PRIMER_MULTIPLIER}",
+            "An adult-adjacent phrase in this app in the last " +
+                "${FilterTuning.PRIMER_WINDOW_MS / 60_000} minutes multiplies everything " +
+                "REAL that follows it.",
+            "The only multiplier that makes the filter stricter rather than gentler, and " +
+                "the only one with a memory. It cannot fire on its own: a screen with " +
+                "nothing but primers on it is multiplied by nothing, because " +
+                "×${FilterTuning.PRIMER_MULTIPLIER} of zero is zero. Scoped to the app, " +
+                "and forgotten when you close it for long enough.",
+        ) { BannedPhrases.PRIMER.sorted() },
+        Scaler(
             "The page reads medical",
             "×${FilterTuning.MEDICAL_DAMPEN}",
             "Any clinical word on the page damps every SOFT signal, hard.",
@@ -719,8 +800,19 @@ object FilterCatalogue {
         ),
     )
 
-    /** The two caps: the reason a single word can never block anything. */
+    /** The caps: the reason a single word can never block anything. */
     val CAPS: List<Scaler> = listOf(
+        Scaler(
+            "Two different signals, always",
+            "min ${FilterTuning.WEB_MIN_FAMILIES}",
+            "A block ON SCORE needs at least ${FilterTuning.WEB_MIN_FAMILIES} different " +
+                "signals - on a web page and on an app screen alike.",
+            "Only a Core word, a Loud phrase or a site name is ever allowed to be the whole " +
+                "case on its own. Everything else has to be corroborated by something that " +
+                "is not itself. Repeating one word, or spelling it three ways, is still one " +
+                "signal - see \"Word families\" below. Primers are not a signal at all and " +
+                "can never be the second one.",
+        ),
         Scaler(
             "Same word, over and over",
             "max ${FilterTuning.PER_WORD_CAP}×",
@@ -806,6 +898,10 @@ object BorderlineScorer {
         val contributions: List<Contribution> = emptyList(),
         /** Near-misses of banned words seen this pass — see BorderlineWatch. */
         val suspicious: Int = 0,
+        /** Primer phrases seen this pass — see PrimerWatch. Never evidence, only a nudge. */
+        val primers: Int = 0,
+        /** Was a primer live for this surface, so the score was multiplied? */
+        val primed: Boolean = false,
     )
 
     /**
@@ -819,14 +915,21 @@ object BorderlineScorer {
         val blockMale: Boolean,
         val relaxed: Boolean,
         val superHardcore: Boolean = false,
+        /**
+         * Is a PRIMER still live for the surface being scored? See PrimerWatch. Passed in
+         * rather than read here, because the scorer itself is stateless and timeless — it
+         * must give the same answer for the same text twice, or the unit tests are lying.
+         */
+        val primed: Boolean = false,
     ) {
         companion object {
             val ALL_ON = Settings(true, true, relaxed = false)
-            fun of(c: Context) = Settings(
+            fun of(c: Context, primed: Boolean = false) = Settings(
                 AttractionFilter.blockFemale(c),
                 AttractionFilter.blockMale(c),
                 relaxed = Mode.isRelaxed(c) || Mode.isOff(c),
                 superHardcore = Mode.isSuperHardcore(c),
+                primed = primed,
             )
         }
     }
@@ -882,9 +985,20 @@ object BorderlineScorer {
         val bodyWords: Int = 0,
         /** Near-misses of banned words. Evidence of someone trying spellings. */
         val suspicious: Int = 0,
+        /** Primer phrases matched this pass. Arms PrimerWatch; never blocks anything. */
+        val primers: Int = 0,
+        /** Was the score multiplied because a primer was live? */
+        val primed: Boolean = false,
     ) {
-        /** Distinct signals that actually scored — what the in-app threshold gates on. */
-        val families: Int get() = detail.count { it.value.points > 0f }
+        /**
+         * Distinct signals that actually scored — what every min-families rule gates on.
+         *
+         * PRIMERS ARE DELIBERATELY NOT COUNTED. The whole promise of that tier is that it
+         * is not evidence; letting it be somebody else's "second distinct signal" would
+         * hand it back the power to block that it was created to take away.
+         */
+        val families: Int get() =
+            detail.count { it.value.points > 0f && it.value.tier != TIER_PRIMER }
     }
 
     /** Raw score for logging/flagging; null when nothing sexual was found. */
@@ -897,11 +1011,26 @@ object BorderlineScorer {
      * The verdict for a WEB PAGE. Two ways to block, and only two:
      *   • ONE unmistakable signal - a CORE word, a LOUD phrase, a hard fragment. Always
      *     enough, on its own, at any length, in any mode. "porn" is porn.
-     *   • or the score reaches WEB_THRESHOLD, which no single word can do alone.
+     *   • or the score reaches WEB_THRESHOLD **and** at least WEB_MIN_FAMILIES DIFFERENT
+     *     signals scored. The arithmetic alone very nearly guaranteed the second half
+     *     already (SINGLE_WORD_MAX sits one point under the bar); since 2026-08-27 it is
+     *     a rule rather than a consequence, so no amount of re-tuning can quietly undo it.
      */
-    fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? {
+    fun evaluate(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Result? =
+        judgeWeb(title, url, content, s).result
+
+    /**
+     * The web verdict AND the numbers behind it, from ONE pass — the mirror of [judgeApp].
+     *
+     * The service needs both even on a page that does NOT block: a primer sighting has to
+     * be recorded whether or not the page it appeared on was worth acting on, and a page
+     * that keeps not-quite-blocking is what BorderlineWatch counts.
+     */
+    fun judgeWeb(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Verdict {
         val t = compute(title, url, content, s)
-        return if (t.explicitHit || t.score >= FilterTuning.WEB_THRESHOLD) resultOf(t) else null
+        val corroborated = t.families >= FilterTuning.WEB_MIN_FAMILIES
+        val blocks = t.explicitHit || (t.score >= FilterTuning.WEB_THRESHOLD && corroborated)
+        return Verdict(if (blocks) resultOf(t) else null, readingOf(t))
     }
 
     /**
@@ -926,14 +1055,21 @@ object BorderlineScorer {
      * The raw numbers a screen produced, for callers that watch a screen over TIME rather
      * than judge it once - see BorderlineWatch. Never a verdict.
      */
-    data class Reading(val score: Int, val families: Int, val suspicious: Int, val bodyWords: Int) {
+    data class Reading(
+        val score: Int,
+        val families: Int,
+        val suspicious: Int,
+        val bodyWords: Int,
+        /** Primer phrases on this screen. What arms PrimerWatch. */
+        val primers: Int = 0,
+    ) {
         /** Not enough to block, but not nothing either. What BorderlineWatch counts. */
         val borderline: Boolean
             get() = suspicious > 0 || score >= FilterTuning.BORDERLINE_FLOOR
     }
 
     /** The verdict AND the reading behind it, from ONE scoring pass. */
-    data class AppVerdict(val result: Result?, val reading: Reading)
+    data class Verdict(val result: Result?, val reading: Reading)
 
     /**
      * Judge an app screen and report the numbers at the same time. The service needs both on
@@ -941,9 +1077,8 @@ object BorderlineScorer {
      * back borderline - and scoring the same text twice to get them would double the cost of
      * the hottest path in the app.
      */
-    fun judgeApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): AppVerdict {
+    fun judgeApp(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Verdict {
         val t = compute(title, url, content, s)
-        val reading = Reading(t.score, t.families, t.suspicious, t.bodyWords)
         val wall = t.bodyWords > FilterTuning.APP_LONG_TEXT_WORDS
         val corroborated = t.families >= FilterTuning.APP_MIN_FAMILIES
         val result = when {
@@ -952,7 +1087,7 @@ object BorderlineScorer {
             t.score >= FilterTuning.APP_THRESHOLD && corroborated -> resultOf(t)
             else -> null
         }
-        return AppVerdict(result, reading)
+        return Verdict(result, readingOf(t))
     }
 
     fun read(title: String?, url: String?, content: String?, s: Settings = Settings.ALL_ON): Reading =
@@ -986,7 +1121,10 @@ object BorderlineScorer {
     private const val MAX_SHOWN = 4
 
     private fun resultOf(t: Tally): Result =
-        Result(t.score, reasonFor(t.score), contributionsOf(t), t.suspicious)
+        Result(t.score, reasonFor(t.score), contributionsOf(t), t.suspicious, t.primers, t.primed)
+
+    private fun readingOf(t: Tally): Reading =
+        Reading(t.score, t.families, t.suspicious, t.bodyWords, t.primers)
 
     /** The per-family detail as a user-facing list, biggest share first. */
     private fun contributionsOf(t: Tally): List<Contribution> =
@@ -1060,6 +1198,7 @@ object BorderlineScorer {
 
         // Phrases are matched on the whole (normalised) field, because the meaning is in the
         // ORDER — no single word of "try on haul" is bannable, the three together plainly are.
+        var primers = 0
         for ((text, mult) in listOf(
             normalise(title) to FilterTuning.TITLE_URL_MULTIPLIER,
             normalise(url) to FilterTuning.TITLE_URL_MULTIPLIER,
@@ -1068,6 +1207,13 @@ object BorderlineScorer {
             val (loud, soft) = scorePhrases(text, mult, set, detail)
             explicitTotal += loud
             otherTotal += soft
+            // PRIMERS. Scored last and kept in `otherTotal` like any other soft signal, but
+            // counted separately: the COUNT is what the service hands to PrimerWatch, and
+            // the points are a token amount that exists only so the breakdown on the block
+            // screen can show the phrase was seen at all.
+            val (primerPts, primerCount) = scorePrimers(text, mult, detail)
+            otherTotal += primerPts
+            primers += primerCount
         }
 
         // Mode-gated FRAGMENTS (ModeFragments): title and URL only, never the body. They are
@@ -1091,10 +1237,28 @@ object BorderlineScorer {
             otherTotal *= FilterTuning.MEDICAL_DAMPEN
             for (d in detail.values) if (d.tier != TIER_EXPLICIT) d.points *= FilterTuning.MEDICAL_DAMPEN
         }
+
+        // ── THE PRIMER MULTIPLIER ────────────────────────────────────────────────────
+        // A primer is live either because one is on THIS screen or because one was on a
+        // screen in this app a few minutes ago (set.primed — PrimerWatch holds the clock).
+        // It multiplies only a page that has said something REAL: primer points alone are
+        // never multiplied, because 1.5 × nothing is still nothing and pretending otherwise
+        // would be the one-signal block coming back through the side door.
+        val hasRealSignal = detail.values.any { it.tier != TIER_PRIMER && it.points > 0f }
+        val primed = (set.primed || primers > 0) && hasRealSignal
+        var total = explicitTotal + otherTotal
+        if (primed) {
+            total *= FilterTuning.PRIMER_MULTIPLIER
+            // The per-family shares are multiplied alongside, or the percentages shown on
+            // the block screen would be percentages of a score that no longer exists.
+            for (d in detail.values) if (d.tier != TIER_PRIMER) d.points *= FilterTuning.PRIMER_MULTIPLIER
+        }
+
         return Tally(
-            Math.round(explicitTotal + otherTotal), detail,
+            Math.round(total), detail,
             explicitHit = detail.values.any { it.tier == TIER_EXPLICIT && it.full && it.points > 0f },
             bodyWords = bodyTokens.size, suspicious = suspicious,
+            primers = primers, primed = primed,
         )
     }
 
@@ -1195,6 +1359,9 @@ object BorderlineScorer {
     /** The tier that is exempt from every softener: CORE words, LOUD phrases, hard fragments. */
     private const val TIER_EXPLICIT = "explicit"
 
+    /** The tier that can never block: adult-ADJACENT phrases. See FilterTuning.PRIMER_*. */
+    private const val TIER_PRIMER = "primer"
+
     /**
      * Add one hit for [fam]. Two caps apply: PER_WORD_CAP on occurrences, and — for every
      * tier except explicit — SINGLE_WORD_MAX on the family's total points, the guarantee that
@@ -1257,6 +1424,28 @@ object BorderlineScorer {
         val loud = run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT, TIER_EXPLICIT)
         val soft = if (!set.relaxed) run(BannedPhrases.SOFT, FilterTuning.PHRASE_SOFT_WEIGHT, "phrase") else 0f
         return loud to soft
+    }
+
+    /**
+     * PRIMER phrases against one normalised field. Returns (points, how many matched).
+     *
+     * Deliberately the dullest function in the file: no gender multiplier, no mode gate, no
+     * context test. A primer is not a judgement about the page, so there is nothing here to
+     * get wrong — it is a note that the page mentioned something adult-adjacent, worth two
+     * points and a fifteen-minute memory.
+     */
+    private fun scorePrimers(
+        text: String, mult: Int, detail: HashMap<String, Detail>,
+    ): Pair<Float, Int> {
+        if (text.isBlank()) return 0f to 0
+        var pts = 0f
+        var n = 0
+        for (p in BannedPhrases.PRIMER) {
+            if (!text.contains(" $p ")) continue
+            pts += add("primer:$p", TIER_PRIMER, FilterTuning.PRIMER_WEIGHT, mult, 1f, detail)
+            n++
+        }
+        return pts to n
     }
 
     /**

@@ -67,35 +67,90 @@ object DomainBlocklist {
     )
 
     private const val BUNDLED_ASSET = "blocklist/adult_hosts.txt.gz"
-    private const val CACHE_NAME = "adult_hosts_cache.txt.gz"
+    /** The old cache: one host per line, gzipped. Read once on upgrade, then deleted. */
+    private const val LEGACY_CACHE = "adult_hosts_cache.txt.gz"
+    /** The cache we keep now: sorted 64-bit fingerprints, nothing else. See the note below. */
+    private const val CACHE_NAME = "adult_hosts.fp"
+    private const val CACHE_MAGIC = 0x57544D31            // "WTM1"
 
-    @Volatile private var hosts: HashSet<String>? = null
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  WHY THIS IS A LongArray AND NOT A HashSet<String>
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  It was `HashSet<String>` of ~550,000 hosts, and that cost about **eighty megabytes
+    //  of Java heap** - roughly a hundred bytes per host once you count the String object,
+    //  its byte array, the HashMap.Node and the table slot. It was, by a distance, the
+    //  largest thing in the process.
+    //
+    //  That is not merely wasteful, it is the mechanism behind half the 2026-08-27 report.
+    //  A background process holding 80MB is a prime candidate for the low-memory killer, and
+    //  the moment you ask the Play Store to download a few apps the phone goes looking for
+    //  exactly that. Killing this process stops all blocking and leaves the app unable to
+    //  start. Being small is a RELIABILITY feature here, not a tidiness one.
+    //
+    //  So we no longer keep the hosts. We keep a sorted array of 64-bit fingerprints of
+    //  them - 8 bytes each, 4.4MB for the lot, allocated once and never touched again -
+    //  and answer isBlocked() with a binary search.
+    //
+    //  ── "SO IT CAN BE WRONG?" ────────────────────────────────────────────────────────
+    //  In principle a hash can collide, and blocking a site that is not on the list would be
+    //  the worst kind of bug this app has. So, the arithmetic, out loud:
+    //
+    //    P(one innocent host collides with any of 550,000 entries) = 550_000 / 2^64
+    //                                                             ≈ 0.00000000000003
+    //
+    //  At ten million lookups - far more than a phone will do in years - the expected number
+    //  of false blocks is about three in ten million. It is many orders of magnitude below
+    //  the chance that the machine-built list simply contains a wrong domain, which is a
+    //  thing that demonstrably happens and is why domains_trusted.txt outranks this list
+    //  (see the note in AccessibilityService.evaluateBlock). The safety valve for a wrong
+    //  answer already exists and covers this case identically.
+    //
+    //  Nothing enumerates this list - the UI shows a count, and the block screen names the
+    //  host it was asked about - so giving up the strings costs no feature.
+    @Volatile private var fingerprints: HostFingerprints? = null
     @Volatile private var loading = false
 
-    val isReady: Boolean get() = hosts != null
+    val isReady: Boolean get() = fingerprints != null
+
+    /** How many hosts are loaded. 0 when the list has not been built yet. */
+    val size: Int get() = fingerprints?.size ?: 0
 
     /** Load once: cache → (seed from bundled asset) → download & cache. Safe to call repeatedly. */
     fun warmUp(context: Context) {
-        if (hosts != null || loading) return
+        if (fingerprints != null || loading) return
         loading = true
         val app = context.applicationContext
         Thread {
             try {
                 val cache = java.io.File(app.filesDir, CACHE_NAME)
-                if (cache.exists() && cache.length() > 0L) {
-                    hosts = readGz(java.util.zip.GZIPInputStream(cache.inputStream()))
-                    Log.i("DomainBlocklist", "loaded ${hosts?.size ?: 0} hosts from cache")
-                } else {
-                    // Seed from the bundled asset (if any) so blocking works immediately.
-                    tryLoadAsset(app)?.let { hosts = it }
-                    // Then build from the network and cache it for next time.
-                    val built = downloadAndBuild()
-                    if (built != null && built.isNotEmpty()) {
-                        writeGz(cache, built)
-                        hosts = built
-                        Log.i("DomainBlocklist", "built ${built.size} hosts from network; cached")
-                    } else if (hosts == null) {
-                        Log.w("DomainBlocklist", "no cache, no asset, no network - blocklist empty for now")
+                val legacy = java.io.File(app.filesDir, LEGACY_CACHE)
+                when {
+                    cache.exists() && cache.length() > 0L -> {
+                        fingerprints = readCache(cache)?.let { HostFingerprints(it) }
+                        Log.i("DomainBlocklist", "loaded ${size} hosts from cache")
+                    }
+                    // Upgrading from the old text cache: convert it in place, once. Streamed,
+                    // so the 550k Strings this replaces are never all in memory at the same
+                    // time - which is the entire point of the change.
+                    legacy.exists() && legacy.length() > 0L -> {
+                        val converted = readHostStream(java.util.zip.GZIPInputStream(legacy.inputStream()))
+                        fingerprints = HostFingerprints(converted)
+                        writeCache(cache, converted)
+                        legacy.delete()
+                        Log.i("DomainBlocklist", "converted ${size} hosts from the old cache")
+                    }
+                    else -> {
+                        // Seed from the bundled asset (if any) so blocking works immediately.
+                        tryLoadAsset(app)?.let { fingerprints = HostFingerprints(it) }
+                        // Then build from the network and cache it for next time.
+                        val built = downloadAndBuild()
+                        if (built != null && built.isNotEmpty()) {
+                            writeCache(cache, built)
+                            fingerprints = HostFingerprints(built)
+                            Log.i("DomainBlocklist", "built ${built.size} hosts from network; cached")
+                        } else if (fingerprints == null) {
+                            Log.w("DomainBlocklist", "no cache, no asset, no network - blocklist empty for now")
+                        }
                     }
                 }
             } catch (t: Throwable) {
@@ -108,52 +163,83 @@ object DomainBlocklist {
 
     /** Delete the cache and rebuild from the network on the next warmUp. */
     fun rebuild(context: Context) {
-        java.io.File(context.applicationContext.filesDir, CACHE_NAME).delete()
-        hosts = null
+        val dir = context.applicationContext.filesDir
+        java.io.File(dir, CACHE_NAME).delete()
+        java.io.File(dir, LEGACY_CACHE).delete()
+        fingerprints = null
         warmUp(context)
     }
 
     /** True if the host, or any of its parent domains, is on the adult blocklist. */
-    fun isBlocked(host: String): Boolean {
-        val set = hosts ?: return false
-        var cur = host.lowercase().removePrefix("www.")
-        while (true) {
-            if (cur in set) return true
-            val dot = cur.indexOf('.')
-            if (dot < 0) return false
-            cur = cur.substring(dot + 1)
-            if (cur.indexOf('.') < 0) return false   // don't test a bare TLD
+    fun isBlocked(host: String): Boolean = fingerprints?.contains(host) == true
+
+    /**
+     * A growing long[]. Not a List<Long> - that would box every entry and put us straight
+     * back into the megabytes this change exists to remove.
+     */
+    private class LongList(initial: Int = 1 shl 16) {
+        var data = LongArray(initial)
+            private set
+        var size = 0
+            private set
+
+        fun add(v: Long) {
+            if (size == data.size) data = data.copyOf(data.size * 2)
+            data[size++] = v
+        }
+
+        /** Sorted, deduplicated, trimmed to length. The array this returns is the final one. */
+        fun finish(): LongArray {
+            val out = data.copyOf(size)
+            java.util.Arrays.sort(out)
+            var n = 0
+            for (i in out.indices) if (n == 0 || out[i] != out[n - 1]) out[n++] = out[i]
+            return if (n == out.size) out else out.copyOf(n)
         }
     }
 
     // ── internals ─────────────────────────────────────────────────────────────────────
-    private fun tryLoadAsset(context: Context): HashSet<String>? = try {
-        readGz(java.util.zip.GZIPInputStream(context.assets.open(BUNDLED_ASSET)))
+    private fun tryLoadAsset(context: Context): LongArray? = try {
+        readHostStream(java.util.zip.GZIPInputStream(context.assets.open(BUNDLED_ASSET)))
     } catch (t: Throwable) { null }
 
-    private fun downloadAndBuild(): HashSet<String>? {
-        val set = HashSet<String>(800_000)
+    /** Read a one-host-per-line stream straight into fingerprints. No host is ever kept. */
+    private fun readHostStream(input: java.io.InputStream): LongArray {
+        val list = LongList()
+        input.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                val h = line.trim()
+                if (h.isNotEmpty() && !h.startsWith("#")) list.add(HostFingerprints.of(h))
+            }
+        }
+        return list.finish()
+    }
+
+    private fun downloadAndBuild(): LongArray? {
+        val list = LongList(1 shl 19)
         var anyOk = false
         for (url in NETWORK_SOURCES) {
             try {
-                fetchHosts(url).forEach { set.add(it) }
+                fetchInto(url, list)
                 anyOk = true
             } catch (t: Throwable) {
                 Log.w("DomainBlocklist", "fetch failed $url: ${t.message}")
             }
         }
-        return if (anyOk && set.isNotEmpty()) set else null
+        if (!anyOk || list.size == 0) return null
+        return list.finish()
     }
 
-    private fun fetchHosts(urlStr: String): List<String> {
+    /** Stream one source into [out]. Parsed and hashed line by line; nothing accumulates. */
+    private fun fetchInto(urlStr: String, out: LongList) {
         val conn = (java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection).apply {
             connectTimeout = 15_000; readTimeout = 45_000; requestMethod = "GET"
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "web-traffic-monitor")
         }
         try {
-            return conn.inputStream.bufferedReader().useLines { seq ->
-                seq.mapNotNull { parseHost(it) }.toList()
+            conn.inputStream.bufferedReader().useLines { seq ->
+                seq.forEach { line -> parseHost(line)?.let { out.add(HostFingerprints.of(it)) } }
             }
         } finally {
             conn.disconnect()
@@ -173,17 +259,119 @@ object DomainBlocklist {
         return host
     }
 
-    private fun readGz(input: java.util.zip.GZIPInputStream): HashSet<String> {
-        val set = HashSet<String>(600_000)
-        input.bufferedReader().useLines { lines ->
-            lines.forEach { val h = it.trim(); if (h.isNotEmpty() && !h.startsWith("#")) set.add(h) }
+    // ── the cache file ────────────────────────────────────────────────────────────────
+    //  magic, count, then `count` big-endian longs. Deliberately NOT gzipped: hashes are
+    //  incompressible, so gzip would spend CPU to save nothing, and reading raw means the
+    //  load is one sequential read with no parsing and no transient objects at all - the
+    //  peak memory of a cold start is the finished array and a 64KB buffer.
+    private const val CHUNK_LONGS = 8192
+
+    private fun readCache(file: java.io.File): LongArray? {
+        java.io.DataInputStream(file.inputStream().buffered()).use { input ->
+            if (input.readInt() != CACHE_MAGIC) return null
+            val count = input.readInt()
+            if (count <= 0 || count > MAX_HOSTS) return null
+            val out = LongArray(count)
+            val buf = ByteArray(CHUNK_LONGS * 8)
+            var i = 0
+            while (i < count) {
+                val n = minOf(CHUNK_LONGS, count - i)
+                input.readFully(buf, 0, n * 8)
+                val lb = java.nio.ByteBuffer.wrap(buf, 0, n * 8).asLongBuffer()
+                lb.get(out, i, n)
+                i += n
+            }
+            return out
         }
-        return set
     }
 
-    private fun writeGz(file: java.io.File, set: Set<String>) {
-        java.util.zip.GZIPOutputStream(file.outputStream()).bufferedWriter().use { w ->
-            for (h in set) { w.write(h); w.newLine() }
+    private fun writeCache(file: java.io.File, values: LongArray) {
+        val tmp = java.io.File(file.parentFile, file.name + ".tmp")
+        java.io.DataOutputStream(tmp.outputStream().buffered()).use { out ->
+            out.writeInt(CACHE_MAGIC)
+            out.writeInt(values.size)
+            val buf = ByteArray(CHUNK_LONGS * 8)
+            var i = 0
+            while (i < values.size) {
+                val n = minOf(CHUNK_LONGS, values.size - i)
+                val lb = java.nio.ByteBuffer.wrap(buf, 0, n * 8).asLongBuffer()
+                lb.put(values, i, n)
+                out.write(buf, 0, n * 8)
+                i += n
+            }
+        }
+        // Rename last, so a cache half-written when the process died is never read back.
+        if (!tmp.renameTo(file)) tmp.delete()
+    }
+
+    /** Sanity bound on a cache header, so a corrupt file cannot ask for a gigabyte. */
+    private const val MAX_HOSTS = 5_000_000
+}
+
+
+// ── The blocklist's lookup half, on its own so it can be tested ──────────────────────
+/**
+ * A set of hosts, stored as SORTED 64-BIT FINGERPRINTS rather than as strings, answering
+ * "is this host, or any parent domain of it, in the set?".
+ *
+ * Split out of DomainBlocklist for one reason: DomainBlocklist needs a Context, a network
+ * and an 8MB cache file, and none of that can run in a JVM unit test - so the part that
+ * actually decides whether a page is blocked was, until 2026-08-27, untested. This class
+ * needs none of it. See HostFingerprintsTest.
+ *
+ * The memory reasoning, and the collision arithmetic, are on DomainBlocklist.
+ */
+class HostFingerprints(private val sorted: LongArray) {
+
+    val size: Int get() = sorted.size
+
+    /**
+     * The PARENT WALK. "cdn.images.example.com" is checked as itself, then
+     * "images.example.com", then "example.com" - so a list entry covers its subdomains -
+     * and stops before "com", because a bare TLD entry would block the internet.
+     */
+    fun contains(host: String): Boolean {
+        var cur = host.lowercase().trim().removePrefix("www.")
+        if (cur.isEmpty()) return false
+        while (true) {
+            if (java.util.Arrays.binarySearch(sorted, of(cur)) >= 0) return true
+            val dot = cur.indexOf('.')
+            if (dot < 0) return false
+            cur = cur.substring(dot + 1)
+            if (cur.indexOf('.') < 0) return false   // don't test a bare TLD
+        }
+    }
+
+    companion object {
+        /**
+         * FNV-1a 64 over the host's bytes, then a splitmix64 finalizer.
+         *
+         * FNV alone is fine for a hash table but its low bits are poorly mixed, and we
+         * binary search a sorted array rather than mask into buckets - so every bit has to
+         * earn its place. The finalizer is what makes the collision arithmetic honest.
+         *
+         * Hosts are ASCII by the time they reach here (parseHost rejects anything else), so
+         * iterating characters and iterating bytes are the same thing.
+         */
+        fun of(host: String): Long {
+            var h = -0x340d631b7bdddcdbL                   // FNV-1a 64 offset basis
+            for (c in host) {
+                h = h xor (c.code.toLong() and 0xFF)
+                h *= 0x100000001b3L                        // FNV prime
+            }
+            var z = h
+            z = (z xor (z ushr 30)) * -0x40a7b892e31b1a47L
+            z = (z xor (z ushr 27)) * -0x6b2fb644ecceee15L
+            return z xor (z ushr 31)
+        }
+
+        /** Build from host names. Used by the tests and by anything holding a small list. */
+        fun from(hosts: Collection<String>): HostFingerprints {
+            val out = LongArray(hosts.size)
+            var i = 0
+            for (h in hosts) out[i++] = of(h.lowercase().trim())
+            java.util.Arrays.sort(out)
+            return HostFingerprints(out)
         }
     }
 }
@@ -444,6 +632,15 @@ object BlockedCategories {
             appsFile = "apps_ai_companion.txt", domainsFile = "domains_ai_companion.txt",
         ),
                 Category(
+            "clients", "Third-party apps for blocked services",
+            why = "Blocking a service by blocking the app it ships is a block on one icon. " +
+                "These are the same feeds, signed in to through somebody else's app or " +
+                "re-served from somebody else's domain - which is exactly what a " +
+                "package-name block and a host block both miss.",
+            appsTitle = "Third-party clients & front-ends",
+            appsFile = "apps_clients.txt", domainsFile = "domains_clients.txt",
+        ),
+        Category(
             "vpn", "VPNs, proxies and anonymisers",
             "The one tool that defeats every network-level control at once - and reaching " +
                 "for one is itself the signal worth acting on.",

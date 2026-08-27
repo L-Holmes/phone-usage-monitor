@@ -1,0 +1,76 @@
+# THIRD-PARTY CLIENTS FOR BLOCKED SERVICES  -  blocked outright.
+#
+# ⚠️ WHY THIS FILE EXISTS  (2026-08-27)
+# Every other app list here blocks a SERVICE by blocking the app the service ships. That
+# stops working the moment somebody installs a different app that signs in to the same
+# account and shows the same feed. Blocking com.reddit.frontpage while "Infinity for
+# Reddit" is one search away is not blocking Reddit; it is blocking one icon.
+#
+# So this list is the same services again, reached through somebody else's app. The
+# reported example was FlickFolio, a third-party Flickr client - Flickr's own app is on
+# apps_ugc.txt, and FlickFolio walked straight past it.
+#
+# THIS LIST CAN NEVER BE COMPLETE, and it is not meant to be. It is the seed. The detector
+# (ClientMarkers / ProxyClients) is what catches the ones nobody has heard of - it watches
+# for a service's own sign-in page or its own vocabulary inside an app that is not that
+# service's app. This file is here so the well-known ones are blocked from the first run,
+# before the detector has ever seen them.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ Only package names I could state with confidence are listed. A wrong entry that
+#    happens to be a real other app blocks an innocent app, so do not guess - let the
+#    detector find it instead, which at least records WHY.
+
+# ── Reddit ──────────────────────────────────────────────────────────────────────
+Infinity for Reddit = ml.docilealligator.infinityforreddit
+RedReader = org.quantumbadger.redreader
+Slide for Reddit = me.ccrama.redditslide
+Boost for Reddit = com.rubenmayayo.reddit
+Sync for Reddit = com.laurencedawson.reddit_sync
+Sync for Reddit Pro = com.laurencedawson.reddit_sync.pro
+Relay for Reddit = free.reddit.news
+Joey for Reddit = o.o.joey
+Stealth for Reddit = com.cosmos.unreddit
+BaconReader = com.onelouder.baconreader
+BaconReader Premium = com.onelouder.baconreader.premium
+Reddit is Fun = com.andrewshu.android.reddit
+Reddit is Fun (golden) = com.andrewshu.android.redditdonation
+
+# ── Flickr ─────────────────────────────────────────────────────────────────────
+# The one that started this. Flickr's own app is already blocked (apps_ugc.txt); this one
+# signs in to the same account and shows the same photostream. Package read off a real
+# device, 2026-08-27 - not guessed.
+FlickFolio = com.snapwood.flickfolio
+
+# ── Instagram ───────────────────────────────────────────────────────────────
+Barinsta = me.austinhuang.instagrabber
+
+# ── X / Twitter ───────────────────────────────────────────────────────────
+Fritter = com.jonjomckay.fritter
+
+# ── YouTube ──────────────────────────────────────────────────────────────
+NewPipe = org.schabi.newpipe
+LibreTube = com.github.libretube
+SkyTube = free.rm.skytube.oss
+YouTube Vanced = com.vanced.android.youtube
+ReVanced YouTube = app.revanced.android.youtube
+
+# ── Twitch ─────────────────────────────────────────────────────────────────
+Twire = com.perflyst.twire
+
+# ── KNOWN, BUT THE PACKAGE NAME IS NOT CONFIRMED ─────────────────────────────────
+# Same convention as apps_ugc.txt: named, never guessed at. A wrong package here blocks a
+# real, innocent app under somebody else's name - one draft of this file had "Now for
+# Reddit" pointing at com.gmail.jmartindev.timetune, which is TimeTune, a calendar app.
+# The detector finds these anyway the first time one is opened, and RECORDS what gave it
+# away, which is a better outcome than a lucky guess. Fill one in from the monitor log.
+#
+#   Now for Reddit
+#   Summit for Reddit
+#   Dawn for Reddit
+#   Eterna for Reddit
+#   Instander            (Instagram)
+#   Squawker             (X / Twitter)
+#   Imgur Viewer         (Imgur)

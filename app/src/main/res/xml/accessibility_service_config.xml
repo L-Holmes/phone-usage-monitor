@@ -5,4 +5,21 @@
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_description"
-    android:notificationTimeout="0" />
+    android:notificationTimeout="100" />
+<!--
+  ⚠️ notificationTimeout WAS 0, AND 0 IS "SEND ME EVERY SINGLE EVENT, IMMEDIATELY".
+
+  That is the tap the Play Store bug came out of. A big app redrawing itself - the Play Store
+  working through a download queue, a Compose list settling - emits window-content-changed
+  events continuously, and at 0 the framework forwards every one of them. Each arriving event
+  makes this service read the screen, and reading the screen means blocking cross-process
+  calls into the app that is busy (see the note on pageMatches in AccessibilityService.kt).
+
+  100ms tells the framework to coalesce: at most one event of a given type per 100ms. It is
+  the cheapest fix in the whole change, because it removes the work rather than budgeting it.
+
+  The cost is bounded and small: a block can land up to 100ms later than it used to. Content
+  changes were already gated at BLOCK_INTERVAL_MS (200ms), so for those it costs nothing at
+  all; only the "you just opened something" window-state event is affected, and a tenth of a
+  second is under the app-launch animation.
+-->

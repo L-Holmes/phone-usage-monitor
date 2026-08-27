@@ -58,6 +58,7 @@ almost never hand-edit the plugin's word/domain lists directly — that's how th
 | `BannedWordExceptions.MAP` | `EXCEPTIONS` |
 | `FilterTuning` (+ `Settings.relaxed`) | `STRICT_TUNING` / `RELAXED_TUNING` |
 | `BannedPhrases.LOUD` / `.SOFT` | `EXTRA_PHRASE_LIST` (+ any loud-phrase handling) |
+| `BannedPhrases.PRIMER` + `PrimerWatch` | *(NOT PORTED YET — see "Pending sync" below)* |
 | `DomainBlocklist` / `DomainStrikes` / `DomainGreylist` | same names |
 | `StrictOnlyBlocklist` | `StrictOnlyBlocklist` |
 | `SearchEngineBlocklist` | *(add a matching block list in domains.js)* |
@@ -66,9 +67,55 @@ almost never hand-edit the plugin's word/domain lists directly — that's how th
 
 ### Tuning parity (numbers must match)
 
-`THRESHOLD 15`, `DEFINITE_THRESHOLD 30`, `CORE/EXPLICIT 15`, `MIXED 8`, `SUPPORT/STRONG 8`,
-`SUBTLE 2`, `DUAL 3`, `AMBIGUOUS 2`, `COMBO 7`, `PER_WORD_CAP 5`, `SINGLE_WORD_MAX 14`,
-`CONTEXT_WINDOW 4`, `EXCEPTION_WINDOW 3`, `TITLE_URL_MULTIPLIER 2`.
+**Every one of these moved on 27 Aug 2026** — the filter was acting on too little evidence,
+so all the bars went up together and the phrase tier was split. The plugin is BEHIND until
+these are ported.
+
+`THRESHOLD 18`, `DEFINITE_THRESHOLD 36`, `CORE/EXPLICIT 18`, `MIXED 8`, `SUPPORT/STRONG 8`,
+`SUBTLE 2`, `DUAL 3`, `AMBIGUOUS 2`, `COMBO 7`, `PHRASE_LOUD 9`, `PHRASE_SOFT 3`,
+`PRIMER 2`, `PER_WORD_CAP 4`, `SINGLE_WORD_MAX 17`, `WEB_THRESHOLD 24`,
+`WEB_MIN_FAMILIES 2`, `CONTEXT_WINDOW 4`, `EXCEPTION_WINDOW 3`, `TITLE_URL_MULTIPLIER 2`,
+`PRIMER_MULTIPLIER 1.5`, `PRIMER_WINDOW_MS 600000`.
+
+### Pending sync — THE PRIMER TIER (added 27 Aug 2026, Kotlin only so far)
+
+The report behind it: ONE sighting of "live cam" closed an app. It is a traffic camera. So
+the adult-ADJACENT phrases came out of `phrases_loud.txt` into `phrases_primer.txt`, and got
+a tier of their own that **can never block anything**:
+
+- worth `PRIMER_WEIGHT` (2), which cannot reach any bar;
+- **excluded from the distinct-signal count**, so it can never be somebody else's second
+  signal — this is the part that is easy to get wrong when porting;
+- it ARMS a multiplier instead: for `PRIMER_WINDOW_MS` afterwards, **in the same app/site**,
+  everything genuinely sexual scores ×`PRIMER_MULTIPLIER`. `PrimerWatch` (Blocking.kt) holds
+  that clock, because the scorer itself is stateless and must stay that way.
+
+### Pending sync — THIRD-PARTY CLIENTS (added 27 Aug 2026, Kotlin only so far)
+
+`ProxyClients.kt` + `assets/filter/apps_clients.txt` + `domains_clients.txt` +
+`resources/filter/words/en/clients_services.txt`. Blocking a service by blocking the app it
+ships is a block on one icon; FlickFolio walked past a blocked Flickr. The detector watches
+for a service's own DOMAIN (proof — a client must send you to the real service to sign in),
+its own AUTHORIZE url in a browser (the Custom Tab handoff, attributed to the app that was in
+front), or its own VOCABULARY (a suspicion needing a second sighting a minute later).
+
+The plugin has no equivalent and mostly does not need one — a browser extension has no app
+screens — but `domains_clients.txt` (the alternative FRONT-ENDS: nitter, libreddit, invidious,
+imginn…) belongs in `background/domains.js` and should be mirrored there.
+
+### Storage note — the domain blocklist is fingerprints now
+
+`DomainBlocklist` no longer holds host STRINGS. ~1.03M hosts as a `HashSet<String>` cost about
+80MB of Java heap and made the process the first thing Android killed under memory pressure;
+it is now a sorted `LongArray` of 64-bit fingerprints (`HostFingerprints`), 8MB, binary
+searched. Nothing enumerates the list, so no feature was lost. The cache file format changed
+with it (`adult_hosts.fp`, magic `WTM1`) and the old `.txt.gz` is converted once and deleted.
+**If `HostFingerprints.of` ever changes, bump `CACHE_MAGIC`** or every cached list silently
+stops matching — there is a test for that.
+
+The other half of the same change: `WEB_MIN_FAMILIES`. A block ON SCORE now needs two
+DIFFERENT signals on the web as well as in an app. Only a CORE word, a LOUD phrase or a site
+name may ever be the whole case on its own.
 
 ---
 
@@ -97,6 +144,11 @@ signal to strongest:
 - **Word FAMILIES** — inflections count once, so "nude/nudes/nudity" can't stack into a block.
 - **`SINGLE_WORD_MAX`** — no non-CORE word ever blocks alone; blocking needs two DIFFERENT
   signals. So one "sex" or one "vagina" can never block by itself.
+- **`WEB_MIN_FAMILIES` / `APP_MIN_FAMILIES`** — the same rule said out loud rather than left
+  to fall out of the arithmetic. A score-based block needs 2 different signals, everywhere.
+- **PRIMERS** — the adult-ADJACENT phrases ("live cam", "hidden cam", "adult content", "not
+  safe for work") cannot block at all and cannot corroborate anything. They only multiply a
+  page that has already said something real.
 - **Per-word `EXCEPTIONS`** — an innocent neighbour within `EXCEPTION_WINDOW` vetoes the match
   outright: "naked mole rat", "nude lipstick", "vaginal health", "breast cancer", "pussy
   riot", "hardcore punk", "vulva pain".

@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
@@ -156,9 +157,232 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     // foreground, never by individual events (events flicker; window state doesn't).
     private var appBlockActive = false
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    //  THE BACKGROUND THREAD  -  and why the broadcasts moved onto it
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    //  ⚠️ 2026-08-27. THIS IS THE THING THAT WAS KILLING THE APP, and it is worth being
+    //  precise about the difference between the two halves of that.
+    //
+    //  A slow main thread is a performance problem. A slow main thread WITH A BROADCAST
+    //  WAITING ON IT is a correctness problem, because the system does not merely complain:
+    //  a broadcast receiver that does not return inside its timeout is an ANR, and an ANR in
+    //  a background process gets the PROCESS KILLED.
+    //
+    //  All three ANR traces pulled off the phone say the same thing. Subject: "Broadcast of
+    //  Intent { act=android.intent.action.SCREEN_OFF ... }". The receiver never ran - it was
+    //  still queued behind an accessibility event that was parked in a five-second
+    //  cross-process read (see the note on pageMatches). Screen goes off, broadcast times
+    //  out, process is killed. And killing this process takes the accessibility service with
+    //  it - which is why blocking silently stopped - and leaves the launcher unable to start
+    //  MainActivity, which is the "splash screen that never loads".
+    //
+    //  So our receivers no longer run on the main thread at all. They are registered against
+    //  this HandlerThread, they return in microseconds, and anything that genuinely needs the
+    //  main thread is posted there to happen whenever it is free. A busy main thread can now
+    //  make us LATE. It can no longer make us DEAD.
+    private var bgThread: android.os.HandlerThread? = null
+    private var bgHandler: Handler? = null
+
+    private fun startBackgroundThread() {
+        if (bgHandler != null) return
+        val t = android.os.HandlerThread("wtm-bg", android.os.Process.THREAD_PRIORITY_BACKGROUND)
+        t.start()
+        bgThread = t
+        bgHandler = Handler(t.looper)
+    }
+
+    /** Register a receiver so it is delivered OFF the main thread. See the note above. */
+    private fun registerOffMainThread(
+        receiver: android.content.BroadcastReceiver,
+        filter: android.content.IntentFilter,
+    ) {
+        runCatching { registerReceiver(receiver, filter, null, bgHandler) }
+    }
+
+    // ── THE STALL WATCHDOG ──────────────────────────────────────────────────────────
+    // The main thread cannot notice that it is stuck; that is what being stuck means. So a
+    // beat is posted to it from the background thread and the background thread checks
+    // whether it came back. A long stall is recorded rather than guessed at - the whole
+    // reason this bug survived so long is that from inside the app it looked like nothing
+    // at all was happening.
+    @Volatile private var lastBeatAt = 0L
+    @Volatile private var beatPending = false
+
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            val now = SystemClock.uptimeMillis()
+            if (beatPending) {
+                val stalled = now - lastBeatAt
+                if (stalled > STALL_WARN_MS) {
+                    android.util.Log.e("PageMonitor", "MAIN THREAD STALLED ${stalled}ms")
+                    // A cover whose buttons cannot be delivered is a locked phone. Ask for it
+                    // to come down; the post lands the moment the main thread is free again,
+                    // which is the earliest anything could have removed it anyway (a view can
+                    // only be removed by the thread that added it).
+                    if (stalled > STALL_PANIC_MS) mainHandler.post { panicDropCover() }
+                }
+            } else {
+                lastBeatAt = now
+                beatPending = true
+                mainHandler.post { beatPending = false }
+            }
+            bgHandler?.postDelayed(this, HEARTBEAT_MS)
+        }
+    }
+
+    /**
+     * Take the cover down because the service stopped being able to think, not because the
+     * block ended. Only ever reached after a stall long enough that the cover's own buttons
+     * were undeliverable - at which point the cover is not blocking anything, it is just a
+     * wall the user cannot get past. The next healthy evaluation puts it straight back if
+     * the block still stands.
+     */
+    private fun panicDropCover() {
+        val controller = overlay ?: return
+        if (!controller.isShowing) return
+        android.util.Log.e("PageMonitor", "dropping cover after a main-thread stall")
+        appBlockActive = false
+        shownBlockHost = null
+        shownBlockUrl = null
+        controller.hide()
+        mainHandler.removeCallbacks(recheck)
+        mainHandler.postDelayed(recheck, RECHECK_MS)
+    }
+
     private var keyboardPackages: Set<String> = emptySet()
 
     private var lastDumpAt = 0L
+
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    //  THE NODE BUDGET  -  why the phone used to freeze under a block screen
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    //  ⚠️ 2026-08-27. THE PLAY STORE BUG. Reported as: the block screen appears, "Go to home
+    //  screen" does nothing at all, the app then stops monitoring, and five minutes later a
+    //  block screen lands on some completely unrelated app.
+    //
+    //  Every one of those symptoms is ONE cause. Reading a screen means walking the
+    //  accessibility node tree, and every getChild() is a separate call into the other app's
+    //  process. One event used to walk that tree up to SIX times over - the address bar, the
+    //  WebView test, the in-app host, the focused URL, the page text, the screen sample -
+    //  with a depth limit but NO limit on how many nodes that came to. On an ordinary app
+    //  that is a few hundred nodes and nobody notices. The Play Store is a deep, lazily-built
+    //  Compose hierarchy that fires content-change events continuously while it loads, and
+    //  there it is thousands of cross-process calls per event, several times a second.
+    //
+    //  All of it runs on the service's MAIN thread - the same thread that delivers taps to
+    //  the cover. So:
+    //    * the cover's buttons "do nothing": the tap is queued behind seconds of tree walking;
+    //    * monitoring appears to stop: events are being delivered faster than they finish;
+    //    * a block lands minutes later on the wrong app: the backlog is finally processed,
+    //      and a decision made about a screen the user left long ago is applied to whatever
+    //      happens to be in front now.
+    //
+    //  Two limits fix it, and both have to stay. This one bounds the COST of a single pass:
+    //  the walks are grouped into three phases (see beginWalkBudget) and each phase gets one
+    //  allowance, so six unbounded walks of one screen become three bounded ones. The
+    //  wall-clock deadline inside an allowance is the real protection - a node count says
+    //  nothing at all about how slow the app on the other end of the binder is being.
+    //
+    //  Running out is not a failure. It truncates what we read from a screen we have already
+    //  read the top of, and the very next event starts again with a full allowance.
+    private var walkNodes = 0
+    private var walkUntil = 0L
+    private var walkTruncated = false
+
+    // ── THE PASS ────────────────────────────────────────────────────────────────────
+    // One accessibility event = one pass. The id is bumped at the top of each, and it is
+    // what lets a read be cached for exactly as long as it is still about the same screen.
+    //
+    // ⚠️ AND `rootInActiveWindow` IS NOT A FIELD, IT IS A BLOCKING CALL. It reads like a
+    // property, which is how this file ended up calling it six or seven times per event -
+    // once in the guard scan, once for the text sample, once inside hasWebView, once inside
+    // isTypingInField, and so on. Each one is a round trip to the app on screen with a FIVE
+    // SECOND timeout, and on this Samsung build a Knox ServiceManager lookup on top. Fetch
+    // it once per pass and hand the same node round.
+    private var passId = 0L
+    private var passRootId = -1L
+    private var passRoot: AccessibilityNodeInfo? = null
+
+    private fun beginPass() {
+        passId++
+        passRootId = -1L
+        passRoot = null
+        // Every pass starts with an allowance. Without this a pass that ran out would leave
+        // walkNodes at zero, and passRoot() - which refuses to start a blocking read once the
+        // budget is gone - would hand back null for the whole of the NEXT event too.
+        beginWalkBudget()
+    }
+
+    /** The active window's root for THIS pass: fetched at most once, never after the deadline. */
+    private fun passRoot(): AccessibilityNodeInfo? {
+        if (passRootId == passId) return passRoot
+        passRootId = passId
+        // Past the deadline we do not start another blocking call - see canWalk(). Asking
+        // through canWalk() rather than testing walkNodes directly is deliberate: fetching a
+        // root IS one of these calls, and it should be charged for like any other.
+        passRoot = if (!canWalk()) null else runCatching { rootInActiveWindow }.getOrNull()
+        return passRoot
+    }
+
+    /**
+     * Start a fresh allowance. Called between PHASES of an evaluation, never inside a walk.
+     *
+     * There are three phases and they get separate allowances on purpose. One shared
+     * allowance sounds tidier and is quietly dangerous: the chrome reads (address bar,
+     * WebView test, in-app host) run FIRST, so on a big enough tree they would spend the
+     * lot and the page-text read - the one thing the whole content filter is built on -
+     * would come back empty. A screen that reads as empty scores zero, and scoring zero is
+     * indistinguishable from being clean. Blocking would fail open on exactly the heavy,
+     * busy apps that need it most, and it would fail silently.
+     *
+     * So each phase is guaranteed its own slice. The worst case is the sum of them, which
+     * is still a fraction of what this used to cost when it was unbounded.
+     */
+    private fun beginWalkBudget(nodes: Int = WALK_NODES_CHROME, ms: Long = WALK_MS_CHROME) {
+        walkNodes = nodes
+        walkUntil = SystemClock.uptimeMillis() + ms
+        walkTruncated = false
+    }
+
+    /**
+     * May we visit one more node? Every recursive walk in this file asks first, and so does
+     * passRoot() before it starts a blocking read.
+     *
+     * ⚠️ THE CLOCK IS READ ON EVERY NODE, and the first version of this checked it every
+     * 32nd to "save time". That was backwards. The thing being budgeted here is not
+     * arithmetic, it is a getChild() that goes to another process and can block for
+     * milliseconds each - so thirty-two of them between two clock readings is thirty-two
+     * chances to sail past the deadline. Measured on the phone: a Play Store pass that had
+     * ALREADY spent its node budget still took 563ms. uptimeMillis() is a vDSO read; against
+     * a binder round trip it costs nothing at all.
+     *
+     * This cannot make a pass instant. One blocking read that has already started cannot be
+     * cancelled, and the framework gives it five seconds - so the true worst case is "the
+     * deadline, plus one slow call". What it does guarantee is that we never START another
+     * one after the deadline, which is the difference between a slow pass and a wedged phone.
+     */
+    private fun canWalk(): Boolean {
+        if (walkNodes <= 0) return false
+        if (SystemClock.uptimeMillis() > walkUntil) {
+            walkNodes = 0
+            walkTruncated = true
+            return false
+        }
+        walkNodes--
+        return true
+    }
+
+    // The other half of the fix: how long the LAST pass actually took, and a cool-off if it
+    // was slow. A screen that is expensive to read once is expensive to read every time, so
+    // rather than discovering that afresh sixty times a second, we stand back from it for as
+    // long as it cost us. Worst case the reader uses half the main thread instead of all of
+    // it - and half a main thread still delivers taps.
+    private var busyUntil = 0L
+    // The surface the last expensive pass was about, so a genuinely NEW window can still
+    // skip the throttle and be covered instantly.
+    private var lastEvalPkg: String? = null
+    private var lastEvalWindow = -1
 
     /**
      * Runs every RECHECK_MS while an app block is up. Looks at the real window
@@ -354,11 +578,100 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     // Page-match text lists now live in AppConfig (PAGE-TEXT BLOCK RULES) so devs edit
     // them in one place. This just runs the match against whatever's on screen.
+    //
+    // ⚠️ 2026-08-27 - THIS FUNCTION IS WHY THE PHONE DIED. DO NOT PUT THE OLD ONE BACK.
+    //
+    // It used to be two lines:
+    //
+    //     val root = rootInActiveWindow ?: return false
+    //     return page.mustContain.all { root.findAccessibilityNodeInfosByText(it).isNotEmpty() }
+    //
+    // Both of those are SYNCHRONOUS CROSS-PROCESS CALLS, and neither is cheap:
+    //
+    //   • getRootInActiveWindow() blocks this thread until the app on screen answers.
+    //     AccessibilityInteractionClient gives it a FIVE SECOND timeout. (On this Samsung
+    //     build it also drags in a Knox hook that does a ServiceManager lookup first, so it
+    //     is two round trips, not one.)
+    //   • findAccessibilityNodeInfosByText() is worse: the search does not run here, it runs
+    //     ON THE UI THREAD OF THE APP BEING SEARCHED. Ask a busy app and you wait behind
+    //     whatever it is doing. Same five-second ceiling.
+    //
+    // The caller ran this over UNINSTALL_GUARD_PAGES (5) and then ESCAPE_ROUTE_PAGES (12),
+    // once per accessibility event, ABOVE the throttle - up to thirty-odd blocking calls per
+    // event, each able to take five seconds. And GUARDED_SETTINGS_PACKAGES contains
+    // com.android.vending, on purpose: our own Play Store listing has an Uninstall button.
+    //
+    // So: open the Play Store, let it download something, and its UI thread is busy while it
+    // fires content-change events continuously. Every one of those events put this service's
+    // main thread into a queue behind the Play Store. Three ANR traces off the user's phone
+    // (24, 25 and 26 Aug) all land on exactly these two lines, main thread parked in
+    // AccessibilityInteractionClient.waitForResultTimedLocked, 74% CPU in our process across
+    // the half-minute before it.
+    //
+    // An ANR in a BROADCAST is fatal here: the system kills the process. That kills the
+    // accessibility service (blocking silently stops) and leaves MainActivity unable to
+    // start (the launch icon shows the splash and hangs). Every symptom in the report is
+    // this one function.
+    //
+    // The replacement reads the screen ONCE, into a string, with a node and time budget, and
+    // matches every page against that string in memory. Thirty blocking searches become one
+    // bounded walk that shares the pass's budget like every other read.
     private fun pageMatches(page: AppConfig.PageMatch): Boolean {
-        val root = rootInActiveWindow ?: return false
-        return page.mustContain.all { needle ->
-            root.findAccessibilityNodeInfosByText(needle).isNotEmpty()
+        val text = guardScreenText() ?: return false
+        return page.mustContain.all { it.lowercase() in text }
+    }
+
+    /**
+     * The screen's text, lowercased, for the page guards - read at most once per pass.
+     *
+     * Deliberately a SEPARATE read from sampleVisibleText: that one is capped at 1000
+     * characters because it feeds the word scorer, and a guard needle ("force stop") can sit
+     * well below the fold of a Settings page. This one gets a bigger character cap and reads
+     * contentDescription too, which is where a Settings switch's label often lives.
+     *
+     * Cached for the pass, so asking about seventeen different pages costs one read.
+     */
+    private var guardTextPass = 0L
+    private var guardText: String? = null
+
+    private fun guardScreenText(): String? {
+        if (guardTextPass == passId) return guardText
+        guardTextPass = passId
+        val root = passRoot()
+        guardText = if (root == null) null else {
+            val out = StringBuilder()
+            collectGuardText(root, out, 0)
+            out.toString().lowercase().takeIf { it.isNotBlank() }
         }
+        return guardText
+    }
+
+    private fun collectGuardText(node: AccessibilityNodeInfo?, out: StringBuilder, depth: Int) {
+        if (node == null || depth > MAX_DEPTH || out.length >= MAX_GUARD_CHARS) return
+        if (!canWalk()) return
+        node.text?.toString()?.let { if (it.isNotBlank()) out.append(it).append('\n') }
+        node.contentDescription?.toString()?.let { if (it.isNotBlank()) out.append(it).append('\n') }
+        for (i in 0 until node.childCount) collectGuardText(node.getChild(i), out, depth + 1)
+    }
+
+    private var lastGuardScanAt = 0L
+    private var lastGuardWindow = -1
+
+    /**
+     * May the page guards read the screen right now?
+     *
+     * Yes immediately when the WINDOW changed - that is somebody opening a page, which is
+     * the event this guard exists for. Otherwise at most once every GUARD_SCAN_MS, because
+     * the alternative is what the note on pageMatches describes.
+     */
+    private fun guardScanDue(event: AccessibilityEvent): Boolean {
+        val now = SystemClock.uptimeMillis()
+        val newWindow = event.windowId != lastGuardWindow ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        if (!newWindow && now - lastGuardScanAt < GUARD_SCAN_MS) return false
+        lastGuardScanAt = now
+        lastGuardWindow = event.windowId
+        return true
     }
 
     /** The uninstall-guard page in front, or null. */
@@ -411,6 +724,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // monitoring was live, so keep it live rather than defaulting them to Off.
         // (Accessibility is on by definition here - only the overlay needs checking.)
         Mode.migrateIfUnset(this, Settings.canDrawOverlays(this))
+        // FIRST: the broadcasts and the watchdog need somewhere to land that is not the
+        // main thread. Everything below this line registers something.
+        startBackgroundThread()
+        // A reconnect after the process was killed must not inherit a cover. The window died
+        // with the old process, but our own idea of one has to be cleared with it or the
+        // first evaluation would think a cover is already up and never raise a real one.
+        overlay?.hide()
+        appBlockActive = false
         overlay = OverlayController(this)
         FilterData.init(this)          // load word/app/domain lists from assets/filter/
         BlockRules.load(this)
@@ -433,6 +754,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         HomeAreaWatch.start(this)
         startTamperWatch()
         startInstallWatch()
+        bgHandler?.postDelayed(heartbeat, HEARTBEAT_MS)
     }
 
     /**
@@ -469,13 +791,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             if (intent?.action != Intent.ACTION_PACKAGE_ADDED) return
             if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return  // an update
             val pkg = intent.data?.schemeSpecificPart ?: return
-            if (Mode.isOff(this@PageMonitorAccessibilityService)) return
+            // PACKAGE_ADDED arrives in bursts while the Play Store works through a queue of
+            // downloads - the exact window this whole file's 2026-08-27 rework is about. It
+            // is delivered on the background thread and does its (disk) work there too; only
+            // the recording touches SharedPreferences, which is safe off the main thread.
+            val service = this@PageMonitorAccessibilityService
+            if (Mode.isOff(service)) return
             val category = BlockedCategories.appCategory(pkg)
             if (category != null) {
-                BypassWatch.record(this@PageMonitorAccessibilityService, BypassWatch.Reason.INSTALLED_BLOCKED)
+                BypassWatch.record(service, BypassWatch.Reason.INSTALLED_BLOCKED)
                 android.util.Log.w("PageMonitor", "blocked-category app installed: $pkg (${category.id})")
             }
-            InstallLog.record(this@PageMonitorAccessibilityService, pkg, category?.title)
+            InstallLog.record(service, pkg, category?.title)
         }
     }
 
@@ -483,7 +810,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val filter = android.content.IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply {
             addDataScheme("package")
         }
-        runCatching { registerReceiver(installReceiver, filter) }
+        registerOffMainThread(installReceiver, filter)
     }
 
     // ═════════════════════════════════════════════════════════════════════════════════
@@ -508,16 +835,23 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private val screenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_OFF -> {
-                    closeUsageSegment()
-                    // Stop charging greylist time to whatever was in front. A dark screen is
-                    // not two minutes of Instagram, and the tick has no other way to find out
-                    // the screen went off (no accessibility event fires for it).
-                    updateGreyTracking(null, false)
-                    screenOffAt = System.currentTimeMillis()
+            // Delivered on the background thread (see registerOffMainThread) and it must
+            // RETURN from there, immediately. This is the exact broadcast whose timeout was
+            // getting the process killed, so nothing slow, nothing main-thread-affine, and
+            // no waiting for the post to run: hand the work over and get out.
+            val action = intent?.action ?: return
+            mainHandler.post {
+                when (action) {
+                    Intent.ACTION_SCREEN_OFF -> {
+                        closeUsageSegment()
+                        // Stop charging greylist time to whatever was in front. A dark screen
+                        // is not two minutes of Instagram, and the tick has no other way to
+                        // find out the screen went off (no accessibility event fires for it).
+                        updateGreyTracking(null, false)
+                        screenOffAt = System.currentTimeMillis()
+                    }
+                    Intent.ACTION_USER_PRESENT -> onUnlock()
                 }
-                Intent.ACTION_USER_PRESENT -> onUnlock()
             }
         }
     }
@@ -528,7 +862,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_USER_PRESENT)
         }
-        runCatching { registerReceiver(screenReceiver, filter) }
+        registerOffMainThread(screenReceiver, filter)
     }
 
     private fun onUnlock() {
@@ -706,15 +1040,46 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // A crash in here kills the whole service ("keeps stopping") and with it
         // ALL blocking - never let one bad event take the service down.
+        val startedAt = SystemClock.uptimeMillis()
         try {
             handleEvent(event)
         } catch (t: Throwable) {
             android.util.Log.e("PageMonitor", "event handling failed", t)
+        } finally {
+            noteEventCost(event, SystemClock.uptimeMillis() - startedAt)
         }
+    }
+
+    /**
+     * How long that event cost us, and what to do about it.
+     *
+     * This method is the whole self-healing half of the Play Store fix. The node budget caps
+     * ONE pass; this caps the DUTY CYCLE. If reading a screen took 200ms, we do not read
+     * another for 200ms - so however hostile the app in front is, at least half of the
+     * service's main thread stays free to deliver a tap on the cover's "Go to home screen"
+     * button. The old behaviour had no such floor, which is why that button looked dead.
+     */
+    private fun noteEventCost(event: AccessibilityEvent?, elapsed: Long) {
+        if (elapsed < SLOW_PASS_MS) return
+        // Stand back for twice what it cost, capped. Twice rather than once because the cost
+        // that actually hurts is not the arithmetic - it is a cross-process read that was
+        // already in flight when the deadline passed and could not be cancelled. An app that
+        // answers slowly once will answer slowly again in a moment, and the capped backoff is
+        // what keeps a third of the main thread free while it does.
+        busyUntil = SystemClock.uptimeMillis() + minOf(elapsed * 2, MAX_BACKOFF_MS)
+        android.util.Log.w(
+            "PageMonitor",
+            "slow pass: ${elapsed}ms for ${event?.packageName}" +
+                (if (walkTruncated) " (read budget spent)" else ""),
+        )
     }
 
     private fun handleEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
+        // A new pass: any screen read cached for the last event is now about a screen that
+        // may no longer be there. See beginPass / passRoot.
+        beginPass()
 
         val type = event.eventType
 
@@ -764,12 +1129,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // The RECORDING happens whether or not the lock is on: reaching for the uninstall
         // button is the signal we care about, and someone without the lock enabled is if
         // anything closer to actually going through with it. Bouncing still needs the lock.
-        if (packageName in AppConfig.GUARDED_SETTINGS_PACKAGES) {
+        // ⚠️ 2026-08-27 - THROTTLED, AND IT HAS TO BE. See the note on pageMatches: this
+        // block reads the whole screen, and GUARDED_SETTINGS_PACKAGES includes the Play
+        // Store, which fires content-change events continuously while it downloads. Running
+        // an unthrottled screen read off every one of those is what wedged the main thread
+        // and got the process killed. Half a second is nobody's escape window - you cannot
+        // find and press Uninstall in that - and a WINDOW CHANGE (opening the page in the
+        // first place) is never throttled at all.
+        if (packageName in AppConfig.GUARDED_SETTINGS_PACKAGES && guardScanDue(event)) {
+            beginWalkBudget(WALK_NODES_GUARD, WALK_MS_GUARD)
             val guardPage = ourUninstallScreen()
             if (guardPage != null) {
                 recordBypassAttempt(guardPage)
                 if (UninstallGuard.isAdminActive(this) && guardArmed(guardPage, packageName)) {
-                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    goHome()
                     return
                 }
             }
@@ -783,7 +1156,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     Toast.makeText(
                         this, getString(R.string.br_escape_route, escape.label), Toast.LENGTH_LONG,
                     ).show()
-                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    goHome()
                     return
                 }
             }
@@ -793,8 +1166,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // themselves out of turning it ON in the first place.
         if (packageName == "com.android.settings" &&
             Greyscale.isLockColorPage(this) && Greyscale.isOn(this) &&
+            guardScanDue(event) &&
             pageMatches(AppConfig.COLOR_CORRECTION_PAGE)) {
-            performGlobalAction(GLOBAL_ACTION_HOME)
+            goHome()
             return
         }
         if (packageName in IGNORED_PACKAGES) return
@@ -854,21 +1228,50 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
 
         val now = System.currentTimeMillis()
+        val uptime = SystemClock.uptimeMillis()
+
+        // ── AN OLD EVENT DESCRIBES A SCREEN THAT IS GONE ────────────────────────────
+        // Everything above this line is cheap and correct to run late: an app on the block
+        // list is on the block list whenever we hear about it. Everything BELOW reads a
+        // screen and judges it, and doing that from a stale event is what produced "a block
+        // screen popped up five minutes later, on a different app" - the judgement was about
+        // the Play Store, the cover landed on whatever was in front by the time we got to it.
+        //
+        // So a late event is dropped rather than acted on. With the node budget above in
+        // place these should be rare; when they are not, dropping them is exactly right.
+        if (uptime - event.eventTime > STALE_EVENT_MS) return
 
         // Blocking now runs on a MUCH shorter leash than logging. The old single 700ms gate
         // ran both, and it is why a banned word gave you a clear look at the results before
         // the cover landed, and why a page you'd already banned took a beat to be covered on
-        // reopen. A window CHANGE (new page, app resumed) never waits at all.
+        // reopen. A window CHANGE onto a NEW surface never waits at all.
+        //
+        // "Onto a new surface" is the 2026-08-27 qualifier, and it is the difference between
+        // a leash and no leash. A state change used to skip the throttle unconditionally,
+        // which is fine for the case it was written for (you opened something) and useless
+        // against an app that fires state changes at itself while it loads - the Play Store
+        // does, and every one of them bought a full six-walk read of a very large tree. Now
+        // only a genuinely different window or package jumps the queue; the same surface
+        // talking to itself waits its 200ms like everything else.
         val stateChange = type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        if (!stateChange && now - lastBlockEvalAt < BLOCK_INTERVAL_MS) return
+        val newSurface = packageName != lastEvalPkg || event.windowId != lastEvalWindow
+        if (!(stateChange && newSurface) && now - lastBlockEvalAt < BLOCK_INTERVAL_MS) return
+        // ...and if the last pass was expensive, stand back for as long as it cost, unless
+        // this is a new surface (where being slow is not a reason to be late).
+        if (!newSurface && uptime < busyUntil) return
         lastBlockEvalAt = now
+        lastEvalPkg = packageName
+        lastEvalWindow = event.windowId
 
         // Known-safe app (maps, messaging, banking, utilities…): no public feed and
         // no arbitrary web content worth scanning - skip the read/scan/screenshot/log
         // entirely to save battery and CPU.
         if (Whitelist.isSafeApp(this, packageName)) return
 
-        val root = rootInActiveWindow ?: return
+        // PHASE 1: the chrome. Everything that tells us WHAT page this is.
+        beginWalkBudget(WALK_NODES_CHROME, WALK_MS_CHROME)
+
+        val root = passRoot() ?: return
 
         if (DEBUG_DUMP_NODES && packageName in BROWSER_DEBUG_PACKAGES &&
             now - lastDumpAt > DUMP_INTERVAL_MS
@@ -913,6 +1316,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
         readFocusedFullUrl(host)?.let { lastFullUrl = it }   // fills in path if user taps the bar
 
+        // PHASE 2: the text. Its own allowance, because this is the read the content filter
+        // cannot do without - see beginWalkBudget.
+        beginWalkBudget(WALK_NODES_TEXT, WALK_MS_TEXT)
         // Content = the web page itself (WebView subtree), falling back to the whole
         // screen for non-browser apps.
         val text = readWebViewText() ?: sampleVisibleText(root)
@@ -1087,7 +1493,82 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         BlockedCategories.appCategory(pkg)?.let {
             return getString(R.string.br_blocked_category_app, appLabelFor(pkg!!), it.title)
         }
+        // ...and the ones the CURATED list could never have named, caught in the act. See
+        // ProxyClients.kt. Deliberately last of the app rules: an app that is blocked for a
+        // reason we can state plainly should be blocked with that reason, not this one.
+        ProxyClients.detected(this, pkg)?.let {
+            return getString(R.string.br_proxy_client, appLabelFor(pkg!!), it.label)
+        }
         return AppTimedBlock.reasonIfBlocked(this, pkg)
+    }
+
+    /**
+     * THIRD-PARTY CLIENT DETECTION. Two signals, worth very different amounts.
+     *
+     * The DOMAIN signal is proof and acts on one sighting: a third-party client has to send
+     * you to the real service to sign in, and §2.5 already reads the host out of an app's
+     * own chrome, so "reddit.com inside an app that is not Reddit" arrives here for free.
+     *
+     * The VOCABULARY signal is a suspicion and needs a second sighting a minute later,
+     * because one screen is a question, not an answer - the same rule RepeatGate applies to
+     * word detections, for the same reason.
+     *
+     * Never acts while monitoring is off, and never on an app ClientMarkers.isScannable
+     * excludes - browsers, the Play Store, Settings, launchers, ourselves. Read the note on
+     * that function before adding anything here: everything in this method ends in a whole
+     * app being taken away.
+     */
+    private fun detectProxyClient(pkg: String, host: String?, title: String?, content: String?, url: String?) {
+        if (Mode.isOff(this)) return
+
+        // THE HANDOFF. A browser showing a service's own AUTHORIZE url is an app asking to
+        // sign in, and the app that asked is the one that was in front a moment ago. This is
+        // the only place a browser is looked at, and only for a URL nobody browses to by
+        // choice - see ClientMarkers.serviceForAuthUrl.
+        if (AppBlocklist.isBrowser(pkg)) {
+            val handoff = ClientMarkers.serviceForAuthUrl(host, url) ?: return
+            val asker = RecentAppsTracker.recentlyBefore(pkg)
+                .firstOrNull { ClientMarkers.isScannable(it, packageName) } ?: return
+            val why = getString(R.string.proxy_why_signin, host.orEmpty())
+            if (ProxyClients.proof(this, asker, handoff, why)) {
+                android.util.Log.w("PageMonitor", "proxy client (sign-in handoff): $asker -> ${handoff.id}")
+                BlockEventLog.recordApp(
+                    this, asker,
+                    getString(R.string.br_proxy_client, appLabelFor(asker), handoff.label),
+                )
+            }
+            return
+        }
+
+        if (!ClientMarkers.isScannable(pkg, packageName)) return
+
+        // PROOF: the service's own site, inside an app that is not that service's app.
+        val byHost = ClientMarkers.serviceForHost(host)
+        if (byHost != null) {
+            val why = getString(R.string.proxy_why_host, host.orEmpty())
+            if (ProxyClients.proof(this, pkg, byHost, why)) {
+                android.util.Log.w("PageMonitor", "proxy client: $pkg -> ${byHost.id} ($host)")
+                BlockEventLog.recordApp(
+                    this, pkg,
+                    getString(R.string.br_proxy_client, appLabelFor(pkg), byHost.label),
+                )
+                coverForeground()
+            }
+            return
+        }
+
+        // SUSPICION: the service's own vocabulary. The app's LABEL is passed in as well, but
+        // only ever as a tie-breaker - see ClientMarkers.suspectFromScreen.
+        val screen = listOfNotNull(title, content).joinToString(" ")
+        val match = ClientMarkers.suspectFromScreen(screen, appLabelFor(pkg) + " " + pkg) ?: return
+        if (ProxyClients.suspect(this, pkg, match.service, match.why())) {
+            android.util.Log.w("PageMonitor", "proxy client: $pkg -> ${match.service.id} (${match.why()})")
+            BlockEventLog.recordApp(
+                this, pkg,
+                getString(R.string.br_proxy_client, appLabelFor(pkg), match.service.label),
+            )
+            coverForeground()
+        }
     }
 
     /**
@@ -1277,28 +1758,39 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private val bluetoothReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED) return
-            if (appBlockActive) {
-                // A cover is up. If Bluetooth just came back on, the recheck loop clears it
-                // within RECHECK_MS via appBlockReason returning null - but nudge it so the
-                // phone comes back immediately rather than a beat later.
-                mainHandler.removeCallbacks(recheck)
-                mainHandler.post(recheck)
-                return
-            }
-            if (leaving) return
-            val pkg = currentForegroundPackage() ?: return
-            val reason = appBlockReason(pkg) ?: return
-            showAppBlock(reason, pkg)
+            mainHandler.post { onBluetoothStateChanged() }   // off the broadcast thread at once
         }
+    }
+
+    private fun onBluetoothStateChanged() {
+        if (appBlockActive) {
+            // A cover is up. If Bluetooth just came back on, the recheck loop clears it
+            // within RECHECK_MS via appBlockReason returning null - but nudge it so the
+            // phone comes back immediately rather than a beat later.
+            mainHandler.removeCallbacks(recheck)
+            mainHandler.post(recheck)
+            return
+        }
+        if (leaving) return
+        val pkg = currentForegroundPackage() ?: return
+        val reason = appBlockReason(pkg) ?: return
+        showAppBlock(reason, pkg)
     }
 
     private fun startBluetoothWatch() {
         val filter = android.content.IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
-        runCatching { registerReceiver(bluetoothReceiver, filter) }
+        registerOffMainThread(bluetoothReceiver, filter)
     }
 
-    /** The gender switches, read fresh each pass so a change takes effect on the next page. */
-    private fun filterSettings() = BorderlineScorer.Settings.of(this)
+    /**
+     * The switches in force for one scoring pass, read fresh so a change takes effect on the
+     * next page. [surface] is the app the text came from: it is what PrimerWatch is keyed on,
+     * so an adult-adjacent phrase seen in this app minutes ago can still be multiplying what
+     * turns up now. Null (the default) means "no primer" - used by the paths that only want
+     * a number for the log.
+     */
+    private fun filterSettings(surface: String? = null) =
+        BorderlineScorer.Settings.of(this, primed = PrimerWatch.isPrimed(surface))
 
     /**
      * The "here is WHY" block under a cover's reason: the handful of words that actually
@@ -1323,11 +1815,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var explainResult: BorderlineScorer.Result? = null
 
     /** The score + breakdown for a page the SCORER didn't block (so it was never asked). */
-    private fun explainPage(title: String?, url: String?, content: String?): BorderlineScorer.Result? {
-        val key = "${url.orEmpty()}|${title.orEmpty()}|${content?.length ?: 0}"
+    private fun explainPage(
+        title: String?, url: String?, content: String?, settings: BorderlineScorer.Settings,
+    ): BorderlineScorer.Result? {
+        val key = "${url.orEmpty()}|${title.orEmpty()}|${content?.length ?: 0}|${settings.primed}"
         if (key != explainKey) {
             explainKey = key
-            explainResult = BorderlineScorer.explain(title, url, content, filterSettings())
+            explainResult = BorderlineScorer.explain(title, url, content, settings)
         }
         return explainResult
     }
@@ -1348,10 +1842,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         title: String?,
         url: String?,
         content: String?,
+        settings: BorderlineScorer.Settings,
     ): String? {
         contributorText(verdict)?.let { return it }          // the scorer blocked: it explains itself
         if (verdict != null) return null
-        val explained = explainPage(title, url, content)
+        val explained = explainPage(title, url, content, settings)
             ?: return getString(R.string.block_score_none)
         val head = getString(R.string.block_score_line, explained.score, BorderlineScorer.webBar())
         return contributorText(explained)?.let { "$head\n\n$it" } ?: head
@@ -1374,14 +1869,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private fun isTypingInField(): Boolean {
         fun walk(node: AccessibilityNodeInfo?, depth: Int): Boolean {
-            if (node == null || depth > ADDRESS_BAR_DEPTH) return false
+            if (node == null || depth > ADDRESS_BAR_DEPTH || !canWalk()) return false
             if (node.isFocused && node.isEditable) return true
             for (i in 0 until node.childCount) {
                 if (walk(node.getChild(i), depth + 1)) return true
             }
             return false
         }
-        return walk(rootInActiveWindow, 0)
+        return walk(passRoot(), 0)
     }
 
     private fun blockSettled(): Boolean =
@@ -1467,7 +1962,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         lastHostPkg
             ?.takeIf { it != pkg && AppBlocklist.isBrowser(it) }
             ?.let { sendBrowserHome(it) }
-        mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, LEAVE_REDIRECT_MS)
+        mainHandler.postDelayed({ goHome() }, LEAVE_REDIRECT_MS)
         mainHandler.postDelayed({
             controller.hide()
             shownBlockHost = null
@@ -1486,8 +1981,38 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val redirecting = redirectBrowser && target != null && AppBlocklist.isBrowser(target)
         if (redirecting) sendBrowserHome(target!!)
         // Only wait if we actually handed the browser an intent; otherwise go straight out.
-        if (redirecting) mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, BROWSER_HOME_DELAY_MS)
-        else performGlobalAction(GLOBAL_ACTION_HOME)
+        if (redirecting) mainHandler.postDelayed({ goHome() }, BROWSER_HOME_DELAY_MS)
+        else goHome()
+        // An APP cover is owned by the recheck loop, which is what takes it down once an
+        // allowed app is genuinely in front. Nudge it rather than waiting for its next tick,
+        // so the cover lifts as the home screen arrives instead of a beat afterwards.
+        mainHandler.removeCallbacks(recheck)
+        mainHandler.postDelayed(recheck, BROWSER_HOME_DELAY_MS + RECHECK_MS)
+    }
+
+    /**
+     * GO HOME, AND ACTUALLY GO.
+     *
+     * ⚠️ 2026-08-27. performGlobalAction returns a boolean and it is not decoration: it
+     * comes back false when the system declines the action - during a window transition,
+     * while another accessibility interaction is in flight, or when the service has been
+     * temporarily disconnected. We ignored it, so a declined Home was indistinguishable
+     * from a dead button, which is precisely how the cover's only way out was reported.
+     *
+     * When it declines, ask the launcher directly. That route needs no accessibility
+     * privileges at all, so it works in the cases where the first one did not.
+     */
+    private fun goHome() {
+        val done = runCatching { performGlobalAction(GLOBAL_ACTION_HOME) }.getOrDefault(false)
+        if (done) return
+        android.util.Log.w("PageMonitor", "GLOBAL_ACTION_HOME declined - using a home intent")
+        runCatching {
+            startActivity(
+                Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_HOME)
+                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            )
+        }
     }
 
     /**
@@ -1531,6 +2056,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         url: String?,
     ) {
         val controller = overlay ?: return
+
+        // PHASE 3: deciding. The reads made from here on (the WebView test for browser
+        // chrome, the am-I-typing test) get their own small allowance so a screen that was
+        // expensive to READ cannot leave the VERDICT unable to look at anything.
+        beginWalkBudget(WALK_NODES_VERDICT, WALK_MS_VERDICT)
 
         // Mid-exit: the cover is being held up on purpose until Home lands. Do not touch it.
         if (leaving) return
@@ -1633,6 +2163,15 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // The numbers behind an APP screen's verdict, kept so a screen that did not block can
         // still be counted by BorderlineWatch. Null for anything that isn't an app screen.
         var appReading: BorderlineScorer.Reading? = null
+        // The numbers behind ANY scored screen, web included - as opposed to appReading
+        // above, which is app screens only because BorderlineWatch is. Only PrimerWatch
+        // reads this: it needs to know a primer was on screen whether or not it blocked.
+        var scoredReading: BorderlineScorer.Reading? = null
+        // ONE Settings for the whole pass, built once. The primed flag has to be read BEFORE
+        // this screen is scored, or a primer on this very screen would arm the multiplier
+        // that is then applied to the same screen twice over - the scorer already handles
+        // the same-screen case itself (see compute()).
+        val settings = filterSettings(packageName)
         val baseReason = when {
                appGuard != null -> appGuard
                extGuard != null -> extGuard
@@ -1678,12 +2217,19 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                // The heuristic - and ONLY the heuristic - waits for real page text.
                !contentReady -> null
                // A REAL browser gets the web bar. An app's in-app browser does NOT: the web
-               // bar is 21 because the image add-on is reading the same page from the
-               // inside, and it is not doing that inside Instagram. Domain rules apply
+               // bar sits where it does (FilterTuning.WEB_THRESHOLD) because the image add-on
+               // is reading the same page from the inside, and it is not doing that inside
+               // Instagram. Domain rules apply
                // either way now (that is the point of §2.5) - only the scoring bar differs.
-               AppBlocklist.isBrowser(packageName) ->
-                   BorderlineScorer.evaluate(title, url, content, filterSettings())
-                       ?.also { verdict = it }?.reason
+               AppBlocklist.isBrowser(packageName) -> {
+                   // judgeWeb, not evaluate: the READING is wanted even when the page does
+                   // not block, because that is where a primer sighting comes from (see
+                   // PrimerWatch) - and "live cam" not blocking is exactly the case that
+                   // has to be remembered.
+                   val judged = BorderlineScorer.judgeWeb(title, url, content, settings)
+                   scoredReading = judged.reading
+                   judged.result?.also { verdict = it }?.reason
+               }
                // NON-BROWSER APPS. This used to be the hole in the whole design: the
                // heuristic ran on web pages and inside browsers, and nowhere else - so an
                // app feed got nothing but a keyword match against its screen TITLE, which
@@ -1696,12 +2242,28 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                    // ONE scoring pass gives both the verdict and the raw numbers. The numbers
                    // are what BorderlineWatch needs: a screen that does not block is still
                    // worth remembering if it keeps not-quite-blocking (see below).
-                   val judged = BorderlineScorer.judgeApp(title, url, content, filterSettings())
+                   val judged = BorderlineScorer.judgeApp(title, url, content, settings)
                    appReading = judged.reading
+                   scoredReading = judged.reading
                    judged.result?.also { verdict = it }?.reason
                }
                else -> null
            }
+
+        // ── IS THIS APP A CLIENT FOR SOMETHING WE ALREADY BLOCK? ────────────────────
+        // See ProxyClients.kt for the whole argument. Run here because this is the one place
+        // that already has all three inputs - the package, the host read out of the app's own
+        // chrome, and the screen text - so it costs one map lookup and one substring scan
+        // over text we have already collected.
+        detectProxyClient(packageName, host, title, content, url)
+
+        // ── PRIMERS: REMEMBER THE ADULT-ADJACENT THING, ACT ON NOTHING ──────────────
+        // Recorded whether or not this screen blocked, and deliberately so: the whole point
+        // of the tier is that "live cam" on its own does nothing at the time. What it does
+        // is arm the multiplier for the next few minutes IN THIS APP, so that if something
+        // genuinely sexual follows it, that thing counts for more. Keyed on the package, not
+        // the page, because the sequence this is here to catch happens across pages.
+        PrimerWatch.note(packageName, scoredReading?.primers ?: 0)
 
         // ── ONE WORD IS A QUESTION, NOT AN ANSWER (see RepeatGate) ──────────────────
         // A word detection on an APP SCREEN no longer closes the app by itself. It opens a
@@ -1768,13 +2330,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (gatedReason != null) {
             val freshShow = !controller.isShowing
             // The cover's working-out, for EVERY kind of block (see coverDetails).
-            val details = coverDetails(verdict, title, url, content)
+            val details = coverDetails(verdict, title, url, content, settings)
             // Scored for app screens too, not just web pages - an in-app block is now a
             // thing that can happen, and a block event with no score is not reviewable.
             // Reuse the verdict when the scorer is what blocked; a block that came from
             // somewhere else (a rule, a banned domain, a screen guard) is scored by the
             // same cached pass the cover just used, so nothing is computed twice.
-            val scored = verdict ?: explainPage(title, url, content)
+            val scored = verdict ?: explainPage(title, url, content, settings)
             shownBlockScore = scored?.score
             shownBlockWords = BorderlineScorer
                 .topContributors(scored?.contributions ?: emptyList()).map { it.word }
@@ -1928,9 +2490,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     /** The package of the application window that is actually in front, or null. */
     private fun currentForegroundPackage(): String? {
         try {
+            var looked = 0
             for (window in windows) {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
                 if (!window.isActive && !window.isFocused) continue
+                // ⚠️ window.root is a BLOCKING CROSS-PROCESS READ of that app, with the same
+                // five-second ceiling as everything else in this file (see pageMatches). The
+                // window list can be long, and this runs from the recheck loop every 400ms
+                // while a cover is up - i.e. exactly when the phone must stay responsive. Cap
+                // how many we are willing to ask.
+                if (looked++ >= MAX_WINDOWS_QUERIED) break
                 val pkg = window.root?.packageName?.toString() ?: continue
                 if (isNoise(pkg)) continue
                 return pkg
@@ -1938,7 +2507,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         } catch (_: Throwable) {
             // fall through to the fallback below
         }
-        val pkg = rootInActiveWindow?.packageName?.toString() ?: return null
+        val pkg = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() ?: return null
         return if (isNoise(pkg)) null else pkg
     }
 
@@ -1959,9 +2528,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun visibleAppPackages(): List<String> {
         val out = ArrayList<String>(3)
         try {
+            var looked = 0
             for (window in windows) {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
                 if (!isReallyOnScreen(window)) continue
+                if (looked++ >= MAX_WINDOWS_QUERIED) break     // see currentForegroundPackage
                 val pkg = window.root?.packageName?.toString() ?: continue
                 if (isNoise(pkg)) continue
                 if (pkg !in out) out.add(pkg)
@@ -2065,7 +2636,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             collectAddressCandidates(root, depth = 0, out = candidates)
         }
 
-        collectFrom(rootInActiveWindow)
+        collectFrom(passRoot())
         try {
             for (window in windows) {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
@@ -2083,7 +2654,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         depth: Int,
         out: MutableList<String>,
     ) {
-        if (node == null || depth > ADDRESS_BAR_DEPTH) return
+        if (node == null || depth > ADDRESS_BAR_DEPTH || !canWalk()) return
         if (isAddressBar(node) && !node.isFocused) {
             addressTextOf(node)?.let { out.add(it) }
         }
@@ -2146,6 +2717,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
     private fun collectText(node: AccessibilityNodeInfo?, out: StringBuilder, depth: Int) {
         if (node == null || depth > MAX_DEPTH || out.length >= MAX_TEXT_CHARS) return
+        if (!canWalk()) return
 
         val nodeText = node.text?.toString()?.trim()
         if (!nodeText.isNullOrEmpty()) {
@@ -2182,7 +2754,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private fun readInAppBrowserHost(root: AccessibilityNodeInfo): String? {
         var found: String? = null
         fun walk(node: AccessibilityNodeInfo?, depth: Int, insideWeb: Boolean) {
-            if (node == null || found != null || depth > ADDRESS_BAR_DEPTH) return
+            if (node == null || found != null || depth > ADDRESS_BAR_DEPTH || !canWalk()) return
             val nowInside = insideWeb || node.className == "android.webkit.WebView"
             if (!nowInside) {
                 bareHost(node.text?.toString())?.let { found = it; return }
@@ -2228,7 +2800,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private fun readWebViewText(): String? {
         val out = StringBuilder()
-        rootInActiveWindow?.let { collectWebViewText(it, depth = 0, out = out, insideWeb = false) }
+        passRoot()?.let { collectWebViewText(it, depth = 0, out = out, insideWeb = false) }
         return out.toString().trim().take(MAX_TEXT_CHARS).takeIf { it.isNotBlank() }
     }
 
@@ -2246,14 +2818,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private fun hasWebView(): Boolean {
         fun walk(node: AccessibilityNodeInfo?, depth: Int): Boolean {
-            if (node == null || depth > MAX_DEPTH) return false
+            if (node == null || depth > MAX_DEPTH || !canWalk()) return false
             if (node.className == "android.webkit.WebView") return true
             for (i in 0 until node.childCount) {
                 if (walk(node.getChild(i), depth + 1)) return true
             }
             return false
         }
-        return walk(rootInActiveWindow, 0)
+        return walk(passRoot(), 0)
     }
 
     // private fun collectWebViewText(
@@ -2281,6 +2853,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         insideWeb: Boolean,
     ) {
         if (node == null || depth > MAX_DEPTH || out.length >= MAX_TEXT_CHARS) return
+        if (!canWalk()) return
         val nowInside = insideWeb || node.className == "android.webkit.WebView"
         if (nowInside) {
             val t = node.text?.toString()?.trim()
@@ -2303,7 +2876,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (currentHost == null) return null
         var found: String? = null
         fun walk(node: AccessibilityNodeInfo?, depth: Int) {
-            if (node == null || depth > ADDRESS_BAR_DEPTH || found != null) return
+            if (node == null || depth > ADDRESS_BAR_DEPTH || found != null || !canWalk()) return
             if (isAddressBar(node) && node.isFocused) {
                 val t = node.text?.toString()?.trim()
                 if (!t.isNullOrBlank() &&
@@ -2315,7 +2888,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             }
             for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
         }
-        rootInActiveWindow?.let { walk(it, 0) }
+        passRoot()?.let { walk(it, 0) }
         return found
     }
 
@@ -2335,6 +2908,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         runCatching { unregisterReceiver(bluetoothReceiver) }
         runCatching { unregisterReceiver(installReceiver) }
         mainHandler.removeCallbacks(tamperBeat)
+        bgHandler?.removeCallbacksAndMessages(null)
+        bgThread?.quitSafely()
+        bgThread = null
+        bgHandler = null
         super.onDestroy()
     }
 
@@ -2400,6 +2977,42 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val MAX_TEXT_CHARS = 1000
         private const val MAX_TITLE_CHARS = 120
         private const val MAX_DEPTH = 40
+
+        // The node budget - see the block comment on beginWalkBudget. The MS figures are the
+        // ones that matter: they are a promise about the main thread, not about a tree. The
+        // three phases add up to 100ms in the very worst case, and on an ordinary app the
+        // whole pass finishes in a fraction of one phase without ever reaching a limit.
+        private const val WALK_NODES_CHROME = 900     // address bar, WebView test, in-app host
+        private const val WALK_MS_CHROME = 40L
+        private const val WALK_NODES_TEXT = 900       // the page/screen text itself
+        private const val WALK_MS_TEXT = 40L
+        private const val WALK_NODES_VERDICT = 500    // the checks made while deciding
+        private const val WALK_MS_VERDICT = 20L
+        private const val WALK_NODES_GUARD = 700      // the uninstall / escape-route page scan
+        private const val WALK_MS_GUARD = 30L
+        // The guard needles sit further down a Settings page than the scorer's sample ever
+        // reaches, so this read gets its own, larger character cap.
+        private const val MAX_GUARD_CHARS = 8000
+        // The page guards are the most expensive thing we do and the least urgent: nobody
+        // reaches the uninstall button in under half a second. One scan per this long.
+        private const val GUARD_SCAN_MS = 500L
+        // How many windows we will do a blocking root read on in one sweep. Split screen is
+        // two, plus a PiP; beyond that the list is apps that merely still exist.
+        private const val MAX_WINDOWS_QUERIED = 4
+        // A pass slower than this makes us stand back for as long as it took.
+        private const val SLOW_PASS_MS = 60L
+        // ...and however slow a pass was, never go quiet for longer than this. A backoff is
+        // a courtesy to the main thread, not a licence to stop watching the screen.
+        private const val MAX_BACKOFF_MS = 2_000L
+        // The stall watchdog. The beat is cheap; the thresholds are what matter. WARN is
+        // "something is wrong and it should be in the log"; PANIC is "the cover's own buttons
+        // have been undeliverable for long enough that the phone is unusable, take it down".
+        private const val HEARTBEAT_MS = 2_000L
+        private const val STALL_WARN_MS = 3_000L
+        private const val STALL_PANIC_MS = 8_000L
+        // An event older than this describes a screen the user has already left. Reading it
+        // is work spent on the past, and ACTING on it is how a block lands on the wrong app.
+        private const val STALE_EVENT_MS = 1500L
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 700L
         // A page must stay blocked this long before Back/Leave writes a PERMANENT
