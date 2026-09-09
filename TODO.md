@@ -1,12 +1,30 @@
 
+
+
+need to stop usre keep going back on the same app...
+then carrying on scrolling etc.
+
+block for a solid amount of time...
+
+dont allow them to keep getting blocked and returning...
+
+-----
+block screen doesn't fit on horizontal. 
+
+-----
+
+
 reasons people would enter the app
 - Initial setup
 - Incorrect block
 - Correct block but [they need to access the settings]
 - Want to increase The strictness of blocking.
-- 
 
 
+
+------
+
+Once every two months for an emergency code
 
 
 ------

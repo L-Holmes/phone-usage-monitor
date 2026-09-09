@@ -1502,13 +1502,56 @@ object AppBlocklist {
 
     private val sessionAllow = mutableSetOf<String>()
 
-    // NEW: browsers detected on THIS device at runtime. Starts empty, so if
-    // detection never runs or fails, only the static list below is used.
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  THE BROWSER YOU INSTALLED AFTER WE LOOKED  (fixed 2026-09-09)
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  This set is the answer to "is this a browser?" for everything that is not on the
+    //  hand-written list, and it used to be built in exactly two places: the accessibility
+    //  service connecting, and MainActivity.onResume. Both are things that happen when the
+    //  phone or the app STARTS, and neither is a thing that happens when a browser ARRIVES.
+    //
+    //  So: install a new browser from the Play Store without opening our app afterwards,
+    //  and it was not a browser as far as we were concerned - for as long as the service
+    //  stayed connected, which is days. The screens still got read (the content scorer runs
+    //  on any scannable app), so it looked like monitoring was fine; what was missing was
+    //  everything that keys off isBrowser() - the "this app is a browser" cover, the web
+    //  scoring bar, the host fallback, the sign-in handoff. Opening our app "fixed" it,
+    //  because onResume is the other refresh, which is exactly what made the bug look like
+    //  magic rather than like a stale cache.
+    //
+    //  Three changes, and each closes a different hole:
+    //   1. PACKAGE_ADDED/REMOVED/REPLACED refreshes it (see startInstallWatch). This is the
+    //      real fix: the set is now rebuilt when the thing it describes changes.
+    //   2. It is PERSISTED. A background process gets killed, and until this thread has
+    //      finished the query a fresh process would answer isBrowser() with "no" for every
+    //      browser on the phone - including the static ones' dynamic peers. The cache is
+    //      seeded synchronously from disk before the thread starts, so a new process is
+    //      never dumber than the old one was.
+    //   3. An unlock re-checks it if the last look was over STALE_MS ago (a cheap net for
+    //      the installs whose broadcast we never saw - process dead at the time, or an
+    //      install the package-visibility rules hid from us).
+    private const val PREFS = "app_blocklist"
+    private const val KEY_DETECTED = "detected_browsers"
+
+    /** How old a detection has to be before an unlock is allowed to redo it. */
+    const val STALE_MS = 15 * 60 * 1000L
+
+    // Browsers detected on THIS device at runtime. null means "not read from disk yet";
+    // empty means "we looked and found none", which is a different thing.
     @Volatile
-    private var dynamicBrowsers: Set<String> = emptySet()
+    private var dynamicBrowsers: Set<String>? = null
 
     @Volatile
     private var refreshing = false
+
+    /** A refresh asked for while one was running. See the Play Store burst note below. */
+    @Volatile
+    private var rerunRequested = false
+
+    @Volatile
+    private var lastRefreshAt = 0L
+
+    private fun detected(): Set<String> = dynamicBrowsers ?: emptySet()
 
     /**
      * Returns the package name (used as the cover's reason text) if [packageName]
@@ -1520,7 +1563,7 @@ object AppBlocklist {
         if (pkg in sessionAllow) return null
         if (pkg in ALLOWED_BROWSERS) return null         // only Firefox; DuckDuckGo is NOT here
         if (pkg in BLOCKED_BROWSERS) return packageName   // static list
-        if (pkg in dynamicBrowsers) return packageName    // NEW: detected at runtime
+        if (pkg in detected()) return packageName         // detected at runtime
         return null
     }
 
@@ -1532,7 +1575,7 @@ object AppBlocklist {
     fun isBrowser(packageName: String?): Boolean {
         if (packageName.isNullOrBlank()) return false
         val pkg = packageName.lowercase()
-        return pkg in ALLOWED_BROWSERS || pkg in BLOCKED_BROWSERS || pkg in dynamicBrowsers
+        return pkg in ALLOWED_BROWSERS || pkg in BLOCKED_BROWSERS || pkg in detected()
     }
 
     /** Lets a blocked app through until the app process restarts ("report" button). */
@@ -1541,33 +1584,58 @@ object AppBlocklist {
     }
 
     /**
-     * NEW. Asks Android which installed apps can open web links and remembers them
-     * as extra browsers to block. Completely optional and self-contained:
-     *  - Runs on a background thread, so it can never freeze the UI or the service.
-     *  - Wrapped in try/catch: if anything goes wrong it leaves the detected set
-     *    empty and the static list keeps working.
+     * Asks Android which installed apps can open web links and remembers them as extra
+     * browsers to block. Self-contained:
+     *  - The disk cache is read on the CALLING thread, so the answer is correct the moment
+     *    this returns even though the query itself has not run yet.
+     *  - The query runs on a background thread, so it can never freeze the UI or the service.
+     *  - Wrapped in try/catch: if anything goes wrong the previous set stays in place and
+     *    the static list keeps working.
      *  - Skips the allow-list (DuckDuckGo) and our own app.
-     * Safe to call repeatedly; overlapping calls are ignored.
      */
-    fun refresh(context: Context) {
-        if (refreshing) return
-        refreshing = true
+    fun refresh(context: Context) = refresh(context, 0L)
+
+    /**
+     * [minIntervalMs] > 0 turns this into "only if the last look is older than that" - for
+     * the periodic safety net, which must not re-query the package manager on every unlock.
+     */
+    @Synchronized
+    fun refresh(context: Context, minIntervalMs: Long) {
         val appContext = context.applicationContext
+        // FIRST, and synchronously: a process that has just been recreated must not answer
+        // isBrowser() with an empty set for however long the query below takes.
+        if (dynamicBrowsers == null) dynamicBrowsers = readCache(appContext)
+        if (minIntervalMs > 0L && lastRefreshAt != 0L &&
+            android.os.SystemClock.elapsedRealtime() - lastRefreshAt < minIntervalMs) return
+        // PACKAGE_ADDED arrives in bursts while the Play Store works through a download
+        // queue. Dropping the overlapping calls would drop the LAST one, which is the one
+        // that can see every package in the burst - so remember that one is owed instead.
+        if (refreshing) { rerunRequested = true; return }
+        refreshing = true
         Thread {
             try {
-                val found = detectBrowsers(appContext)
-                dynamicBrowsers = found
-                // Visible diagnostic: one row in the app's list showing what was found.
-                MonitorStore.record(
-                    appContext,
-                    MonitorEntry(
-                        timestamp = System.currentTimeMillis(),
-                        kind = MonitorEntry.KIND_PAGE,
-                        packageName = appContext.packageName,
-                        title = "Browser detection: found ${found.size}",
-                        text = found.sorted().joinToString("\n"),
-                    ),
-                )
+                do {
+                    rerunRequested = false
+                    val found = detectBrowsers(appContext)
+                    val changed = found != dynamicBrowsers
+                    dynamicBrowsers = found
+                    lastRefreshAt = android.os.SystemClock.elapsedRealtime()
+                    if (changed) {
+                        writeCache(appContext, found)
+                        // Visible diagnostic, only when the answer MOVED. Recording every
+                        // refresh would now mean a row per unlock and per app open.
+                        MonitorStore.record(
+                            appContext,
+                            MonitorEntry(
+                                timestamp = System.currentTimeMillis(),
+                                kind = MonitorEntry.KIND_PAGE,
+                                packageName = appContext.packageName,
+                                title = "Browser detection: found ${found.size}",
+                                text = found.sorted().joinToString("\n"),
+                            ),
+                        )
+                    }
+                } while (rerunRequested)
             } catch (_: Throwable) {
                 // Leave dynamicBrowsers as-is. The static list still works.
             } finally {
@@ -1591,6 +1659,19 @@ object AppBlocklist {
             .mapNotNull { it.activityInfo?.packageName?.lowercase() }
             .filter { it != ownPackage && it !in ALLOWED_BROWSERS }
             .toSet()
+    }
+
+    private fun prefs(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun readCache(context: Context): Set<String> = try {
+        prefs(context).getStringSet(KEY_DETECTED, emptySet())!!.toSet()
+    } catch (_: Throwable) {
+        emptySet()
+    }
+
+    private fun writeCache(context: Context, set: Set<String>) {
+        runCatching { prefs(context).edit().putStringSet(KEY_DETECTED, HashSet(set)).apply() }
     }
 
     // NEW: browsers that must stay allowed even if detected at runtime.

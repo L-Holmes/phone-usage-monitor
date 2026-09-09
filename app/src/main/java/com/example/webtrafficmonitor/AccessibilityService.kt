@@ -250,7 +250,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         mainHandler.postDelayed(recheck, RECHECK_MS)
     }
 
-    private var keyboardPackages: Set<String> = emptySet()
+    // @Volatile since 2026-09-09: it is now reloaded from the package-change receiver,
+    // which runs on the background thread, and read on the main thread on every event.
+    @Volatile private var keyboardPackages: Set<String> = emptySet()
 
     private var lastDumpAt = 0L
 
@@ -788,14 +790,32 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private val installReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != Intent.ACTION_PACKAGE_ADDED) return
+            val service = this@PageMonitorAccessibilityService
+            val action = intent?.action ?: return
+
+            // ── WHAT IS A BROWSER CHANGED (2026-09-09) ─────────────────────────────────
+            // Before any of the install-log work below, and before the Mode check, because
+            // this is not a policy decision - it is our idea of the phone going out of date.
+            // AppBlocklist's runtime set was previously only rebuilt when the service
+            // connected or the app was opened, so a browser installed while we were simply
+            // running was not treated as a browser until the next time one of those
+            // happened. See the note on AppBlocklist. Removals count too: an uninstalled
+            // browser must stop being one, or its package name lingers and a reinstalled
+            // app that reuses it inherits the answer. A REPLACE (an update) can change the
+            // intent filters, so that counts as well - which is why this sits above the
+            // EXTRA_REPLACING return that guards the install log.
+            AppBlocklist.refresh(service)
+            // Same shape, same one-shot bug: a keyboard installed after we connected was not
+            // recognised as a keyboard window, so its overlay was read as app content.
+            loadKeyboardPackages()
+
+            if (action != Intent.ACTION_PACKAGE_ADDED) return
             if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return  // an update
             val pkg = intent.data?.schemeSpecificPart ?: return
             // PACKAGE_ADDED arrives in bursts while the Play Store works through a queue of
             // downloads - the exact window this whole file's 2026-08-27 rework is about. It
             // is delivered on the background thread and does its (disk) work there too; only
             // the recording touches SharedPreferences, which is safe off the main thread.
-            val service = this@PageMonitorAccessibilityService
             if (Mode.isOff(service)) return
             val category = BlockedCategories.appCategory(pkg)
             if (category != null) {
@@ -807,7 +827,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     }
 
     private fun startInstallWatch() {
-        val filter = android.content.IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply {
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            // REMOVED and REPLACED are new (2026-09-09): the receiver now also keeps the
+            // detected-browser and keyboard sets current, and both of those go stale on a
+            // package leaving or being updated, not only on one arriving.
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
             addDataScheme("package")
         }
         registerOffMainThread(installReceiver, filter)
@@ -880,6 +906,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             justWokeUntil = now + DopamineTuning.JUST_WOKE_WINDOW_MIN * 60_000L
         }
         lastUnlockAt = now
+        // THE NET UNDER THE PACKAGE RECEIVER (2026-09-09). The receiver is the real fix for
+        // a browser installed behind our back, but it only fires while this process is
+        // alive to hear it, and Android filters package broadcasts by what our <queries>
+        // block lets us see. An unlock is the cheapest recurring moment we have, and this
+        // does nothing at all unless the last look was over AppBlocklist.STALE_MS ago.
+        AppBlocklist.refresh(this, AppBlocklist.STALE_MS)
         urgentOpenArmed = true          // the next app opened is a candidate "straight-in open"
         DopamineLog.update(this) { it.unlocks++ }
         // Phone-checking friction (hardcore): too many unlocks this hour -> a short pause.
