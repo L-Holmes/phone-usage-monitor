@@ -527,6 +527,22 @@ object AppConfig {
         val armedWhen: (Context) -> Boolean = { true },
         /** The condition above in plain words, for the watched-screens page. */
         val armedNote: String? = null,
+        /**
+         * Is this page one of OUR OWN OFF-SWITCHES?
+         *
+         * Three pages are, and they are a different class of thing from the rest of the
+         * list. "Multiple users" or "Private DNS" is somewhere a person can hide an app
+         * from the guard - worth bouncing, worth recording. But the accessibility switch,
+         * the overlay permission and the device-admin page are the guard itself, and
+         * landing on one of them is a person reaching for the off switch with intent.
+         *
+         * Marking them here is what arms SettingsLockout: an hour of no Settings for the
+         * first attempt, a day for the second. See the long note at the top of
+         * SettingsGuard.kt for why bouncing alone was not enough.
+         */
+        val armsLockout: Boolean = false,
+        /** The wording SettingsLockout shows back to the user. Only read when armsLockout. */
+        val lockoutCause: String? = null,
     )
 
     // Bounced to Home while the uninstall lock is ON - the "escape routes" that would
@@ -539,7 +555,8 @@ object AppConfig {
     // have granted anything is how the lock ends up guarding its own front door - see the
     // long note on GrantWindow.
     val UNINSTALL_GUARD_PAGES: List<PageMatch> = listOf(
-        PageMatch("Device admin", listOf("Web Traffic Monitor", "admin app")),
+        PageMatch("Device admin", listOf("Web Traffic Monitor", "admin app"),
+            armsLockout = true, lockoutCause = SettingsLockout.Cause.ADMIN_PAGE),
         PageMatch("App info - uninstall", listOf("Web Traffic Monitor", "uninstall"),
             armedWhen = { !GrantWindow.isOpen(it) },
             armedNote = "and only once every permission we run on is granted - " +
@@ -548,11 +565,13 @@ object AppConfig {
             armedWhen = { !GrantWindow.isOpen(it) },
             armedNote = "and only once every permission we run on is granted - " +
                 "this page is the only way to grant them"),
-        PageMatch("Page monitoring (accessibility)", listOf("page monitoring")),
+        PageMatch("Page monitoring (accessibility)", listOf("page monitoring"),
+            armsLockout = true, lockoutCause = SettingsLockout.Cause.MONITORING_PAGE),
         PageMatch("Overlay - Appear on top", listOf("Appear on top"),
             armedWhen = { Settings.canDrawOverlays(it) },
             armedNote = "and only once the overlay permission is granted - " +
-                "this page is where it is granted"),
+                "this page is where it is granted",
+            armsLockout = true, lockoutCause = SettingsLockout.Cause.OVERLAY_PAGE),
     )
 
     // Settings packages these pages are matched in. It was hardcoded to com.android.settings,
@@ -565,13 +584,23 @@ object AppConfig {
         "com.samsung.android.settings",     // some Samsung builds
     )
 
+    // THE SETTINGS APPS PROPER - the set above minus the store.
+    //
+    // The distinction matters wherever a rule is about SETTINGS rather than about "anywhere
+    // our listing turns up". SettingsLockout shuts Settings for an hour, and it has no
+    // business shutting the PLAY STORE for an hour over somebody opening our accessibility
+    // page - that is an unrelated app and an unrelated penalty. The grant window uses the
+    // same set for the same reason (a permission is granted in Settings, never in a store),
+    // so it is derived here once rather than subtracted in two places.
+    val SETTINGS_ONLY_PACKAGES: Set<String> = GUARDED_SETTINGS_PACKAGES - "com.android.vending"
+
     // Where an unarmed guard page (PageMatch.armedWhen) is actually let through: SETTINGS
     // ONLY. Derived from the list above rather than retyped, so a new OEM settings package
     // gets it automatically - but any STORE added up there has to be subtracted here too.
     // The Play Store's listing for us matches the App-info text ("Web Traffic Monitor" +
     // "uninstall") and carries a live Uninstall button rather than a permission switch: no
     // grant was ever completed there, so it is bounced exactly as it always was.
-    val GRANT_WINDOW_PACKAGES: Set<String> = GUARDED_SETTINGS_PACKAGES - "com.android.vending"
+    val GRANT_WINDOW_PACKAGES: Set<String> = SETTINGS_ONLY_PACKAGES
 
     // ═══════════════════════════════════════════════════════════════════════════════
     //  (2b) THE OTHER WAYS OUT  -  bounced and recorded like the uninstall pages
@@ -607,6 +636,18 @@ object AppConfig {
         // Unpreventable, but worth recording as the attempt it is.
         PageMatch("Factory reset", listOf("Erase all data")),
         PageMatch("Factory reset (alt)", listOf("Factory data reset")),
+        // ── THE OTHER OFF SWITCH (2026-09-09) ────────────────────────────────────────
+        // Android can bind an accessibility service to a hardware SHORTCUT: hold both
+        // volume keys, or tap the accessibility button in the navigation bar. Point that
+        // shortcut at us and monitoring can be toggled from the lock screen, without ever
+        // opening the page every other guard in this file is watching.
+        //
+        // Here rather than in UNINSTALL_GUARD_PAGES, and deliberately WITHOUT armsLockout:
+        // these strings are AOSP's and no OEM's, so the chance of a near-miss on a Samsung
+        // or Xiaomi build is real, and an hour of no Settings is too much to spend on a
+        // guess. Bounced and recorded is the right weight for a page we are less sure of.
+        PageMatch("Accessibility shortcut", listOf("Accessibility shortcut")),
+        PageMatch("Volume key shortcut", listOf("Volume key shortcut")),
     )
 
     // The system Colour/Color-correction page (where Greyscale is toggled). Blocked only
@@ -678,11 +719,16 @@ object AppConfig {
         for (page in UNINSTALL_GUARD_PAGES) {
             add(GuardedScreen(
                 page.label, "Android Settings",
-                "While the uninstall lock is on" + (page.armedNote?.let { ", $it" } ?: "") +
-                    ". The VISIT is recorded either way.",
+                (if (page.armsLockout) "In every mode above Relaxed, or while the uninstall lock is on"
+                 else "While the uninstall lock is on") +
+                    (page.armedNote?.let { ", $it" } ?: "") + ". The VISIT is recorded either way.",
                 GuardAction.BOUNCE,
-                "One of the four ways to take the guard down: uninstall it, force-stop it, " +
-                    "deactivate its admin, or revoke a permission it runs on.",
+                if (page.armsLockout)
+                    "One of the app's own off switches. Landing here costs you Settings - " +
+                        "an hour the first time, a day the second, three days after that."
+                else
+                    "One of the four ways to take the guard down: uninstall it, force-stop it, " +
+                        "deactivate its admin, or revoke a permission it runs on.",
                 page.mustContain.map { "screen says \"$it\"" },
             ))
         }

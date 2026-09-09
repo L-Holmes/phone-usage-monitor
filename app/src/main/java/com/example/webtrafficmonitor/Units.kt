@@ -187,6 +187,27 @@ object Units {
         return if (m >= 60) hoursMins(c, m / 60, m % 60) else mins(c, m)
     }
 
+    /**
+     * "2d 23h" / "3h 5m" / "45m" / "20s" from a duration in MILLISECONDS - the house style
+     * for a countdown that has to cover everything from seconds to days in one cell.
+     *
+     * It always shows two units at most, and never a leading zero unit ("3h", not "0d 3h"),
+     * because the whole point of it is a lockout timer somebody reads at a glance while
+     * annoyed. The seconds rung exists so the last minute of a wait visibly moves.
+     */
+    fun compactDuration(c: Context, ms: Long): String {
+        val s = (ms.coerceAtLeast(0L) + 999) / 1000
+        val m = s / 60
+        val h = m / 60
+        val d = h / 24
+        return when {
+            d > 0 -> daysHours(c, d, h % 24)
+            h > 0 -> hoursMins(c, h, m % 60)
+            m > 0 -> mins(c, m)
+            else -> secs(c, s)
+        }
+    }
+
     private fun prefs(c: Context) =
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

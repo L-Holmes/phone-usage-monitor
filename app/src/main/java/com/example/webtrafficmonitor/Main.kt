@@ -5333,6 +5333,11 @@ private fun startWeekStrict() {
         // shows "not heard" for up to ~12s and looks like the sensors dropped.
         beaconScanner?.start(); pressureMon?.start()
         locationMonitor?.start()
+        // The stand-in guard runs only while page monitoring is off (SettingsGuard.kt).
+        // Opening the app is the cheapest recurring moment we have to notice that the answer
+        // has changed either way - the accessibility service starts it on the way out and
+        // stops it on the way in, but neither of those runs if the process was killed.
+        MonitorFallback.sync(this)
         updateScreen()   // re-checks prerequisites every time the app is foregrounded
     }
 
@@ -8931,6 +8936,35 @@ private fun startWeekStrict() {
             else "STOOD DOWN - still to grant: ${pending.joinToString(", ")}",
             pending.isEmpty())
 
+        // ── The settings guard (SettingsGuard.kt) ────────────────────────────────────
+        // "Why can I not open Settings?" and "why did nothing happen when I tried?" both
+        // get answered here rather than in a log file.
+        header("Settings guard")
+        val lockLeft = SettingsLockout.remaining(this)
+        row("Settings lockout",
+            if (lockLeft <= 0) "none"
+            else Units.compactDuration(this, lockLeft) +
+                (if (SettingsLockout.enforcedNow(this)) " left" else " left - STOOD DOWN"),
+            lockLeft <= 0)
+        row("Ladder position", when (SettingsLockout.level(this)) {
+            0 -> "clean - next attempt costs 1h"
+            1 -> "1 served - next attempt costs 24h"
+            else -> "${SettingsLockout.level(this)} served - next attempt costs 72h"
+        }, SettingsLockout.level(this) == 0)
+        row("Attempts recorded", "${SettingsLockout.totalStrikes(this)}")
+        SettingsLockout.lastCause(this)?.let { row("Last attempt", it) }
+        row("Usage access (stand-in guard)",
+            if (MonitorFallback.hasUsageAccess(this)) "granted" else "not granted - can only nag",
+            MonitorFallback.hasUsageAccess(this))
+        row("Stand-in guard wanted now",
+            if (MonitorFallback.wanted(this)) "YES - monitoring is off" else "no",
+            !MonitorFallback.wanted(this))
+        val offAt = MonitorHealth.lastOffAt(this)
+        row("Monitoring switched off",
+            if (offAt == 0L) "never"
+            else "${MonitorHealth.offCount(this)}x, last ${relativeWhen(offAt)}",
+            offAt == 0L)
+
         header("Active timers")
         row("App lockdown", if (Lockdown.isActive(this)) "${minLeft(Lockdown.remaining(this))} left" else "none", Lockdown.isActive(this))
         row("Unlock window", if (LoosenWindow.isActive(this)) "${minLeft(LoosenWindow.remaining(this))} left" else "none", LoosenWindow.isActive(this))
@@ -9286,10 +9320,32 @@ private fun startWeekStrict() {
             isClickable = true; isFocusable = true; setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
             setOnClickListener { onClick() }
         })
+        // ⚠️ THESE TWO ROWS STOP BEING SHORTCUTS ONCE THE PERMISSION IS ON. 2026-09-09.
+        //
+        // They used to deep-link straight to the switch whatever their state, which made the
+        // app itself the fastest route to its own off switch: open the dashboard, tap the
+        // green row, land on the toggle. That is a door we were holding open next to a wall
+        // we had spent this much code building (see SettingsGuard.kt).
+        //
+        // On, they do nothing but say so. Off, they still take you there - that is the whole
+        // point of them, and refusing there would strand somebody mid-setup. The one-way
+        // shape is the same rule GrantWindow and the Colour-correction page already follow:
+        // a guard that would stop you turning something ON is not armed until it is on.
         row(getString(R.string.status_page_monitoring), isAccessibilityEnabled()) {
             openAccessibilitySettings()
         }
         row(getString(R.string.status_block_overlay), Settings.canDrawOverlays(this)) { requestOverlayPermission() }
+        // Usage access: not one of the core permissions, and never demanded. It is what lets
+        // the stand-in guard tell one app from another if monitoring is ever switched off,
+        // and without it that guard can only nag - see MonitorFallback.hasUsageAccess.
+        row(getString(R.string.status_usage_access), MonitorFallback.hasUsageAccess(this)) {
+            if (MonitorFallback.hasUsageAccess(this)) {
+                Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this, getString(R.string.status_usage_access_why), Toast.LENGTH_LONG).show()
+                runCatching { startActivity(MonitorFallback.usageAccessIntent(this)) }
+            }
+        }
         row(getString(R.string.status_uninstall_lock), UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this)) { toggleUninstallGuard() }
         // The add-on is the one thing here we cannot actually read the state of, so this row
         // shows what the user TOLD us in setup - and stays theirs to correct. Switching it off
@@ -9330,7 +9386,19 @@ private fun startWeekStrict() {
         }
     }
 
+    /**
+     * Open the "appear on top" page - but ONLY while the permission is missing.
+     *
+     * Once it is granted this is a shortcut to the switch that turns the block screen off,
+     * and the app must not be the thing that offers it. Settings is still reachable by hand;
+     * what has gone is our help getting there. See the note on permissionConsole, and the
+     * long one at the top of SettingsGuard.kt for why this mattered enough to close.
+     */
     private fun requestOverlayPermission() {
+        if (Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_LONG).show()
+            return
+        }
         startActivity(
             Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -9417,6 +9485,12 @@ private fun startWeekStrict() {
     // on Android 11+ deep-link straight to THIS app's service page, and launch it as its own
     // task so a single back press lands back in the app instead of walking the Settings stack.
     private fun openAccessibilitySettings() {
+        // Same one-way rule as requestOverlayPermission: while monitoring is ON, this is a
+        // shortcut to the switch that turns it off, and we do not carry people to that.
+        if (isAccessibilityEnabled()) {
+            Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_LONG).show()
+            return
+        }
         val cn = ComponentName(this, PageMonitorAccessibilityService::class.java).flattenToString()
         if (android.os.Build.VERSION.SDK_INT >= 30) {   // Android 11+ (R): deep-link to our page
             try {

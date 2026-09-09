@@ -707,6 +707,242 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * comment on BypassWatch: the point is to catch them reaching for the destructive option
      * and offer the honest one instead.
      */
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  THE SETTINGS DOOR  —  read the long note at the top of SettingsGuard.kt first
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //
+    //  Everything that happens because the app in front is a Settings app (or the Play
+    //  Store, which carries our listing and its Uninstall button).
+    //
+    //  ⚠️ THE ORDER OF THE FOUR STEPS IS THE FIX, NOT A TIDINESS THING. They run cheapest
+    //  first, and the expensive one is the one that was being raced:
+    //
+    //    1. a live SettingsLockout   - one set lookup. No screen read at all.
+    //    2. the remembered page      - one in-memory string. No screen read at all.
+    //    3. the event's own text     - a substring test on data the framework handed us.
+    //    4. the full screen scan     - the old path, throttled exactly as before.
+    //
+    //  Steps 1-3 cost microseconds and answer the two pages the bypass actually used, so in
+    //  the case that matters we are no longer waiting on rootInActiveWindow and a tree walk
+    //  while somebody taps blind at a switch. Step 4 stays because the multi-word pages
+    //  ("Web Traffic Monitor" + "uninstall") genuinely need the whole screen.
+    //
+    //  Returns true when the event has been dealt with and handleEvent should stop.
+    private fun guardSettings(event: AccessibilityEvent, pkg: String): Boolean {
+        val stateChange = event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+
+        // Somebody is standing in Settings, which is the one place the overlay permission
+        // can be taken away. Checked here rather than only on the two-minute tamper beat
+        // because this is the exact moment it can change.
+        if (stateChange) MonitorHealth.checkOverlayRevoked(this)
+
+        // (1) SETTINGS IS SHUT. Instant and unraceable: it needs no idea of what page is in
+        // front, so there is no window between the app appearing and us knowing.
+        //
+        // SETTINGS_ONLY, not the whole guarded set: the Play Store is in that set because our
+        // listing there has an Uninstall button, and taking somebody's app store away for an
+        // hour because they opened our accessibility page is a penalty aimed at the wrong app.
+        if (pkg in AppConfig.SETTINGS_ONLY_PACKAGES && SettingsLockout.enforcedNow(this)) {
+            ejectFromSettings(pkg, SettingsLockout.coverText(this))
+            return true
+        }
+
+        // (2) THE PAGE WE LEFT THEM ON. Settings restores its own back stack, so a re-entry
+        // inside the minute is overwhelmingly the same page. Bounce first, read afterwards -
+        // being wrong costs one bounce out of a Settings app they are about to lose anyway.
+        if (stateChange) {
+            val remembered = StickyGuardPage.match(pkg)?.let { label ->
+                AppConfig.UNINSTALL_GUARD_PAGES.firstOrNull { it.label == label }
+            }
+            if (remembered != null && guardBounces(remembered, pkg)) {
+                onGuardPage(remembered, pkg)
+                return true
+            }
+        }
+
+        // (3) THE EVENT'S OWN TEXT. Both pages the bypass was worked through are identified
+        // by their window title alone, and the title arrives inside the event. See eventText.
+        //
+        // ⚠️ WINDOW CHANGES ONLY, and that restriction is load-bearing. On a state change
+        // event.text IS the window title, which is what we want to match. On a CONTENT change
+        // it is whatever row happened to redraw - so a scroll down the Accessibility LIST,
+        // which has our service's name in it, would read as "they are standing on our toggle
+        // page" and cost them an hour of Settings for looking at the font-size setting.
+        // Content changes fall through to step 4, which reads the actual screen and is right.
+        val quick = if (!stateChange) null else {
+            val handed = eventText(event)
+            AppConfig.UNINSTALL_GUARD_PAGES.firstOrNull { quickMatches(it, handed) }
+        }
+        if (quick != null) {
+            StickyGuardPage.remember(pkg, quick.label)
+            recordBypassAttempt(quick)
+            if (guardBounces(quick, pkg)) {
+                onGuardPage(quick, pkg)
+                return true
+            }
+        }
+
+        // (4) THE FULL SCAN - the original path, and still throttled. See the note on
+        // pageMatches for why an unthrottled version of this got the process killed.
+        if (!guardScanDue(event)) return false
+        beginWalkBudget(WALK_NODES_GUARD, WALK_MS_GUARD)
+        val guardPage = ourUninstallScreen()
+        if (guardPage != null) {
+            StickyGuardPage.remember(pkg, guardPage.label)
+            recordBypassAttempt(guardPage)
+            if (guardBounces(guardPage, pkg)) {
+                onGuardPage(guardPage, pkg)
+                return true
+            }
+        }
+        // The OTHER ways out: a second user, a private space, a cloned app, sideloading,
+        // the system clock, Private DNS, a factory reset. Strict and above only - in
+        // Relaxed these are ordinary settings somebody is entitled to open.
+        if (!Mode.isRelaxed(this) && !Mode.isOff(this)) {
+            val escape = AppConfig.ESCAPE_ROUTE_PAGES.firstOrNull { pageMatches(it) }
+            if (escape != null) {
+                BypassWatch.record(this, BypassWatch.Reason.ESCAPE_ROUTE)
+                Toast.makeText(
+                    this, getString(R.string.br_escape_route, escape.label), Toast.LENGTH_LONG,
+                ).show()
+                // Ejected rather than merely sent home, for the same reason as everything
+                // else on this list: Settings reopens on the page you left it on.
+                ejectFromSettings(pkg, getString(R.string.br_escape_route, escape.label))
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Everything the EVENT ITSELF carries, lowercased - no screen read, no binder call.
+     *
+     * ⚠️ THIS IS THE FAST PATH, AND IT IS WHY THE BYPASS CLOSED. A window-state-changed
+     * event for a Settings page carries that page's TITLE in event.text, and both pages the
+     * bypass was worked through ("Appear on top", "Web Traffic Monitor - page monitoring")
+     * are identified by their title alone. Matching here costs a string build; matching the
+     * old way costs a rootInActiveWindow plus a bounded tree walk, and the gap between the
+     * two was exactly the window somebody was tapping blind into.
+     *
+     * className is appended because a Settings switch row's CLICK event often carries
+     * "android.widget.Switch" and nothing else useful - see noteSettingsTap.
+     */
+    private fun eventText(event: AccessibilityEvent): String {
+        val out = StringBuilder()
+        for (t in event.text) if (t != null) out.append(t).append('\n')
+        event.contentDescription?.let { out.append(it).append('\n') }
+        event.className?.let { out.append(it).append('\n') }
+        return out.toString().lowercase()
+    }
+
+    /** [pageMatches], against a string we already have rather than against the screen. */
+    private fun quickMatches(page: AppConfig.PageMatch, text: String): Boolean =
+        text.isNotEmpty() && page.mustContain.all { it.lowercase() in text }
+
+    /**
+     * Does this page's bounce actually fire right now?
+     *
+     * [guardArmed] answers the grant-window half (a guard that would stop you turning
+     * something ON is not armed until it is on). This adds the POLICY half, and it is
+     * wider than it used to be:
+     *
+     *   • the uninstall-lock pages bounce while the lock is active, exactly as before;
+     *   • OUR OWN OFF-SWITCHES (page monitoring, appear on top, device admin - the pages
+     *     marked armsLockout) bounce in every mode above Relaxed, lock or no lock. The old
+     *     code gated them on the uninstall lock, which meant a Strict user without the lock
+     *     could walk straight into the accessibility switch. Strict asks to be held to
+     *     something; the switch that turns the holding off is not an ordinary settings page.
+     */
+    private fun guardBounces(page: AppConfig.PageMatch, pkg: String): Boolean {
+        if (!guardArmed(page, pkg)) return false
+        if (UninstallGuard.isAdminActive(this)) return true
+        return page.armsLockout && !Mode.isRelaxed(this) && !Mode.isOff(this)
+    }
+
+    /**
+     * They are standing on a guarded page and the bounce is armed. This is the whole
+     * response, in one place, so every one of the four detection routes behaves identically.
+     */
+    private fun onGuardPage(page: AppConfig.PageMatch, pkg: String) {
+        StickyGuardPage.remember(pkg, page.label)
+        val cover = if (page.armsLockout) {
+            // OUR OWN OFF-SWITCH. Take Settings away - an hour, then a day, then three days -
+            // and SAY SO on the cover. A penalty nobody is told about only teaches "try
+            // again in a minute", which is the behaviour this is here to stop.
+            val cause = page.lockoutCause ?: SettingsLockout.Cause.MONITORING_PAGE
+            val ms = SettingsLockout.strike(this, cause)
+            if (ms > 0) getString(R.string.br_settings_locked, cause, Units.compactDuration(this, ms))
+            else getString(R.string.br_guard_page, page.label)
+        } else {
+            getString(R.string.br_guard_page, page.label)
+        }
+        ejectFromSettings(pkg, cover)
+    }
+
+    /**
+     * Get them off this page AND KEEP THEM OFF IT FOR A MOMENT.
+     *
+     * ⚠️ THE COVER IS NOT DECORATION HERE, IT IS THE FIX. goHome() on its own loses the race
+     * this whole change is about: they reopen Settings, Android restores the same page, and
+     * they tap the switch before we have finished reading the screen. The block cover is
+     * opaque and CONSUMES TOUCHES (OverlayController sets FLAG_NOT_FOCUSABLE and nothing
+     * else), and ReentryGuard puts it back up off the first window event with no screen read
+     * in the way - so the queued taps land on it instead of on the switch.
+     *
+     * Cover first, Home second, deliberately: raising it before asking for Home means the
+     * page they were on is not on screen during the transition either.
+     */
+    private var lastEjectPkg: String? = null
+    private var lastEjectAt = 0L
+
+    private fun ejectFromSettings(pkg: String, coverText: String) {
+        // ⚠️ THE DEBOUNCE IS NOT AN OPTIMISATION. A Settings page in front fires
+        // content-change events several times a second and every one of them arrives here,
+        // so an undebounced version would ask the system for Home dozens of times over one
+        // visit - performGlobalAction is a cross-process call, and hammering it during a
+        // window transition is how it starts returning false (see goHome). The COVER is
+        // refreshed every time regardless; only the trip home is rationed.
+        val now = SystemClock.uptimeMillis()
+        val sameVisit = pkg == lastEjectPkg && now - lastEjectAt < EJECT_DEBOUNCE_MS
+        lastEjectPkg = pkg
+        lastEjectAt = now
+        ReentryGuard.arm(pkg)
+        ReentryGuard.onForeground(pkg)        // start the hold NOW, not on the way back in
+        showAppBlock(coverText, pkg)
+        if (!sameVisit) goHome()
+    }
+
+    /**
+     * A TAP INSIDE SETTINGS, checked against our own off-switches. Returns true when the tap
+     * was dealt with and the caller should stop.
+     *
+     * THE ONE SIGNAL THAT SAYS THEY WENT FOR IT rather than merely looked, and the cheapest
+     * detection in the file: a click event arrives carrying its own package, class and label,
+     * so nothing here reads the screen. It is also the LAST line of defence - if a tap did
+     * beat every check above, this still sees it happen and still charges for it.
+     *
+     * DELIBERATELY GENEROUS ABOUT WHAT WAS TAPPED. Identifying precisely which node is the
+     * switch means matching OEM layouts, and being wrong there means missing the one event
+     * this exists to catch. A stray tap on our own accessibility page costs the user an hour
+     * of Settings they can sit out; a missed one costs them the guard.
+     */
+    private fun noteSettingsTap(event: AccessibilityEvent): Boolean {
+        val pkg = event.packageName?.toString() ?: return false
+        if (pkg !in AppConfig.GUARDED_SETTINGS_PACKAGES) return false
+        // Which page is under the finger? The remembered one first (free), then the tap's own
+        // label - a Settings switch row's click event carries the row's text.
+        val handed = eventText(event)
+        val page = StickyGuardPage.match(pkg)?.let { label ->
+            AppConfig.UNINSTALL_GUARD_PAGES.firstOrNull { it.label == label }
+        } ?: AppConfig.UNINSTALL_GUARD_PAGES.firstOrNull { quickMatches(it, handed) }
+        if (page == null || !page.armsLockout) return false
+        if (!guardBounces(page, pkg)) return false
+        recordBypassAttempt(page)
+        SettingsLockout.strike(this, SettingsLockout.Cause.TAPPED_SWITCH)
+        ejectFromSettings(pkg, SettingsLockout.coverText(this))
+        return true
+    }
+
     private fun recordBypassAttempt(page: AppConfig.PageMatch) {
         val label = page.label.lowercase()
         val reason = when {
@@ -756,6 +992,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         HomeAreaWatch.start(this)
         startTamperWatch()
         startInstallWatch()
+        // Monitoring is on again (this method IS that), so the stand-in has nothing left to
+        // do - MonitorFallback.sync stops it. The overlay reading is a BASELINE, not a
+        // check: MonitorHealth needs to have seen the permission granted once before it can
+        // call a later absence a revocation.
+        MonitorHealth.checkOverlayRevoked(this)
+        MonitorFallback.sync(this)
         bgHandler?.postDelayed(heartbeat, HEARTBEAT_MS)
     }
 
@@ -767,8 +1009,17 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private val tamperBeat = object : Runnable {
         override fun run() {
-            if (TamperWatch.beat(this@PageMonitorAccessibilityService)) {
+            val service = this@PageMonitorAccessibilityService
+            if (TamperWatch.beat(service)) {
                 android.util.Log.w("PageMonitor", "tamper signal: clock jump or coverage gap")
+            }
+            // THE OTHER SWITCH. "Appear on top" going away is the half of the bypass we can
+            // still see happening from in here (the accessibility half kills this service, so
+            // it is caught in onUnbind instead). guardSettings checks it too, off a window
+            // change in Settings, which is far sooner; this is the net under that for a
+            // revocation done from somewhere we were not watching.
+            if (MonitorHealth.checkOverlayRevoked(service)) {
+                android.util.Log.w("PageMonitor", "overlay permission revoked - settings locked")
             }
             mainHandler.postDelayed(this, TamperWatch.HEARTBEAT_MS)
         }
@@ -1125,6 +1376,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 // Phone-checking friction. CLICKS only, never scrolls - one swipe fires a
                 // burst of TYPE_VIEW_SCROLLED events, which would trip the rate instantly.
                 if (type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+                    // Before anything else: was that tap aimed at our own off switch? The
+                    // click event carries its own package and label, so this costs nothing
+                    // and it is the single most direct signal we get. See noteSettingsTap.
+                    if (noteSettingsTap(event)) return
                     val popup = CheckingGuard.recordTap(this)
                     if (popup != null) Toast.makeText(this, popup, Toast.LENGTH_LONG).show()
                     else if (CheckingGuard.pauseReason() != null) coverForeground()
@@ -1168,30 +1423,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // and got the process killed. Half a second is nobody's escape window - you cannot
         // find and press Uninstall in that - and a WINDOW CHANGE (opening the page in the
         // first place) is never throttled at all.
-        if (packageName in AppConfig.GUARDED_SETTINGS_PACKAGES && guardScanDue(event)) {
-            beginWalkBudget(WALK_NODES_GUARD, WALK_MS_GUARD)
-            val guardPage = ourUninstallScreen()
-            if (guardPage != null) {
-                recordBypassAttempt(guardPage)
-                if (UninstallGuard.isAdminActive(this) && guardArmed(guardPage, packageName)) {
-                    goHome()
-                    return
-                }
-            }
-            // The OTHER ways out: a second user, a private space, a cloned app, sideloading,
-            // the system clock, Private DNS, a factory reset. Strict and above only - in
-            // Relaxed these are ordinary settings somebody is entitled to open.
-            if (!Mode.isRelaxed(this) && !Mode.isOff(this)) {
-                val escape = AppConfig.ESCAPE_ROUTE_PAGES.firstOrNull { pageMatches(it) }
-                if (escape != null) {
-                    BypassWatch.record(this, BypassWatch.Reason.ESCAPE_ROUTE)
-                    Toast.makeText(
-                        this, getString(R.string.br_escape_route, escape.label), Toast.LENGTH_LONG,
-                    ).show()
-                    goHome()
-                    return
-                }
-            }
+        if (packageName in AppConfig.GUARDED_SETTINGS_PACKAGES && guardSettings(event, packageName)) {
+            return
         }
         // Optional user lock: keep them off the Colour-correction page so they can't turn
         // greyscale back off. Only while greyscale is actually on, so they can never lock
@@ -1210,6 +1443,12 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (packageName.lowercase() in keyboardPackages || isKeyboardWindow(event)) return
 
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            // THE RE-ENTRY HOLD (see SettingsGuard.kt). An app we have just ejected somebody
+            // from gets covered for a few seconds when they walk straight back into it, so
+            // the taps they have already queued up land on the cover instead of on whatever
+            // is underneath. In the window-state branch only: a hold that restarted on every
+            // content change would never end.
+            ReentryGuard.onForeground(packageName)
             RecentAppsTracker.onForeground(packageName)
             // How well we know an app decides how many detections it takes to close it
             // (AppTrust / RepeatGate), and "how well we know it" is counted here - one
@@ -1480,6 +1719,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // a block; ours can wait until the phone is actually unlocked. This also makes
         // the recheck loop drop an existing cover the moment the screen locks.
         if (keyguard.isKeyguardLocked) return null
+        // THE RE-ENTRY HOLD, above the mode check on purpose. It is not a policy about what
+        // may be looked at - it is the last few seconds of an ejection that has already been
+        // decided on, and the uninstall-lock bounce that triggers it runs in every mode,
+        // Off included. A countdown, so the recheck loop ticks it down for free.
+        ReentryGuard.reason(this, pkg)?.let { return it }
         if (Mode.isOff(this)) return null                     // monitoring off: nothing is covered
         if (LoosenWindow.isActive(this)) return null          // loosen window: apps allowed
         // Strict was chosen but the setup that enforces it never finished. Ahead of every
@@ -2928,8 +3172,37 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // Nothing to clean up.
     }
 
+    /**
+     * THE LAST THING THIS SERVICE EVER RUNS, and the only place we can tell "the user
+     * switched monitoring off" apart from "the process is being replaced".
+     *
+     * By the time unbind arrives the Secure setting has already been rewritten, so asking
+     * MonitorHealth.monitoringOn here gives the honest answer: false means the switch was
+     * thrown. An app update, a reboot or a low-memory kill all leave it true, and none of
+     * those should cost anybody a lockout.
+     *
+     * Two things happen when it WAS thrown, and they are the two halves of the answer:
+     * SettingsLockout is struck (so Settings is shut for an hour the moment monitoring is
+     * back), and MonitorGuardService is started (so the phone is not simply unguarded in the
+     * meantime - see the long note on that class for what it can and cannot do).
+     */
+    override fun onUnbind(intent: Intent?): Boolean {
+        runCatching {
+            if (!MonitorHealth.monitoringOn(this)) {
+                android.util.Log.w("PageMonitor", "page monitoring switched OFF - handing over")
+                MonitorHealth.noteMonitoringOff(this)
+                MonitorFallback.sync(this)
+            }
+        }.onFailure { android.util.Log.e("PageMonitor", "handover failed", it) }
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
         mainHandler.removeCallbacks(recheck)
+        // In-memory guard state belongs to this process; a new one must not inherit a hold
+        // or a remembered page from an instance that is gone.
+        ReentryGuard.reset()
+        StickyGuardPage.forget()
         RoomGuard.stop()
         HomeAreaWatch.stop()
         greyscaleSensor?.stop(); greyscaleSensor = null
@@ -3047,6 +3320,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val STALE_EVENT_MS = 1500L
         private const val ADDRESS_BAR_DEPTH = 25
         private const val GO_BACK_DEBOUNCE_MS = 700L
+        // One trip home per visit to a guarded page - see ejectFromSettings.
+        private const val EJECT_DEBOUNCE_MS = 1_200L
         // A page must stay blocked this long before Back/Leave writes a PERMANENT
         // ban for it - long enough to outlast the stale-content flicker while
         // navigating back through history, so innocent previous pages aren't banned.

@@ -1026,6 +1026,29 @@
     <string name="br_setup_missing_overlay">Still to do: allow the app to appear on top of other apps.</string>
     <string name="br_setup_missing_firefox">Still to do: install Firefox.</string>
     <string name="br_setup_missing_extension">Still to do: add the image-monitor add-on to Firefox.</string>
+
+    <!-- ── The settings guard (SettingsGuard.kt) ─────────────────────────────────────
+         These are the covers a person sees while trying to switch the app off. They are
+         written to be READ BY SOMEBODY ANNOYED: what happened, what it cost, when it ends.
+         Never coy about the penalty - a punishment nobody is told about only teaches
+         "try again in a minute", which is the exact behaviour this whole feature exists
+         to stop. %1$s is the cause in the user's own words, %2$s the time left. -->
+    <string name="br_settings_locked">Settings is closed for %2$s.\n\nThat happened because %1$s.\n\nThis is the thing you asked to be protected from. Sit it out - it will pass long before the timer does.</string>
+    <string name="br_guard_page">%1$s is off limits while the lock is on.</string>
+    <!-- The few seconds after an ejection, so queued taps land here instead of on a switch.
+         %1$s is an already-formatted count of seconds ("4 s") and it counts down. -->
+    <string name="br_reentry_hold">Hold on - %1$s.\n\nYou were just sent out of here. Give it a moment before going back in.</string>
+    <!-- The stand-in cover, drawn by MonitorGuardService while page monitoring is OFF. -->
+    <string name="br_monitoring_off">Page monitoring is off.\n\nNothing but calls, texts and the essentials opens until it is back on.</string>
+    <string name="monitor_off_fix">Turn page monitoring back on</string>
+    <string name="monitor_off_title">Page monitoring is off</string>
+    <string name="monitor_off_body">The guard is not running. Tap to put it back on.</string>
+    <string name="monitor_off_channel">Monitoring switched off</string>
+    <!-- Tapping a permission row that is already ON. The row stops being a shortcut once
+         the permission is granted - see the note on permissionConsole. -->
+    <string name="status_already_on">Already on. To change it, open Settings yourself - this app will not take you there.</string>
+    <string name="status_usage_access">Usage access (backup guard)</string>
+    <string name="status_usage_access_why">Lets the app keep blocking if page monitoring is ever switched off.</string>
     <!-- The block cover's "why": the words that carried the score. %1$s word, %2$d times seen, %3$d percent of the score. -->
     <string name="block_contributors_header">WHAT SCORED</string>
     <string name="block_contributor_line">\"%1$s\" - %2$d×, %3$d%% of the score</string>

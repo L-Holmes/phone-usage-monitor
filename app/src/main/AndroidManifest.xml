@@ -1,9 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- ═══ THE STAND-IN GUARD (MonitorGuardService, see SettingsGuard.kt) ═══════════
+         Switching "page monitoring" off in Settings destroys our accessibility service
+         outright, and nothing in that file can run afterwards. These four permissions are
+         what lets an ordinary foreground service take over until the switch goes back on.
+
+         PACKAGE_USAGE_STATS is signature|appop: declaring it does NOT grant it, it only
+         makes the app appear in Settings -> Special access -> Usage access, where the user
+         grants it by hand. Without it the stand-in cannot tell what app is in front, so it
+         covers nothing and only nags - see MonitorFallback.hasUsageAccess.
+
+         RECEIVE_BOOT_COMPLETED matters because a reboot with monitoring already off is a
+         gap the accessibility service cannot close for itself: nothing of ours would run. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-permission android:name="android.permission.INTERNET"/> <!-- used for loading in the banned urls list. -->
 
@@ -83,6 +103,31 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- The stand-in guard: runs ONLY while page monitoring is off, and stops itself
+             the moment it is back on. specialUse because none of Android 14's foreground
+             service types describes "keep enforcing a self-imposed block while the user's
+             own accessibility service is disabled" - it is not dataSync, health, or any of
+             the rest, and claiming one of those would be a false declaration. -->
+        <service
+            android:name=".MonitorGuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Restores self-imposed content blocking after the user's own accessibility service is switched off" />
+        </service>
+
+        <!-- A reboot while monitoring is off would otherwise leave nothing of ours running. -->
+        <receiver
+            android:name=".GuardBootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Prevent user from uninstall -->
         <receiver
