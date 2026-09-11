@@ -999,7 +999,7 @@ class StatLineChartView(
     private val goal: Float? = null,
     private val dotted: FloatArray = FloatArray(0),
     private val goalPerSlot: Float? = null,
-    private val accent: Int = Palette.tint,   // the app's primary teal
+    private val accent: Int = Palette.tint,   // the app's primary brand blue
     private val dottedColour: Int? = null,          // projection colour (grey for "estimated")
     private val gridStep: Float? = null,            // labelled y gridline every this many units
     private val minorStep: Float? = null,           // unlabelled y gridline (e.g. half-hours)

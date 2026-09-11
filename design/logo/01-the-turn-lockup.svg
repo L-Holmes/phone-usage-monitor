@@ -9,8 +9,8 @@
      role="img" aria-label="Web Traffic Monitor">
   <defs>
     <linearGradient id="lk-tile" x1="0" y1="0" x2="0.45" y2="1">
-      <stop offset="0" stop-color="#18B7A2"/>
-      <stop offset="1" stop-color="#0C8073"/>
+      <stop offset="0" stop-color="#5A70CF"/>
+      <stop offset="1" stop-color="#2E3F8A"/>
     </linearGradient>
   </defs>
 
@@ -21,7 +21,7 @@
           stroke-width="36" stroke-linecap="round"/>
     <path d="M244 358 C 320 358, 356 250, 414 122"
           fill="none" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round"/>
-    <circle cx="244" cy="358" r="34" fill="#0E8375"/>
+    <circle cx="244" cy="358" r="34" fill="#33468F"/>
     <circle cx="244" cy="358" r="17" fill="#FFFFFF"/>
   </g>
 

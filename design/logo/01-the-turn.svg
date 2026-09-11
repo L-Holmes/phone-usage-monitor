@@ -12,8 +12,8 @@
      role="img" aria-label="The Turn">
   <defs>
     <linearGradient id="turn-tile" x1="0" y1="0" x2="0.45" y2="1">
-      <stop offset="0" stop-color="#18B7A2"/>
-      <stop offset="1" stop-color="#0C8073"/>
+      <stop offset="0" stop-color="#5A70CF"/>
+      <stop offset="1" stop-color="#2E3F8A"/>
     </linearGradient>
   </defs>
 
@@ -31,6 +31,6 @@
 
   <!-- the decision -->
   <circle cx="244" cy="358" r="34" fill="url(#turn-tile)"/>
-  <circle cx="244" cy="358" r="34" fill="#0C8073" fill-opacity="0.25"/>
+  <circle cx="244" cy="358" r="34" fill="#2E3F8A" fill-opacity="0.25"/>
   <circle cx="244" cy="358" r="17" fill="#FFFFFF"/>
 </svg>

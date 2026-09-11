@@ -24,9 +24,9 @@
     <color name="ds_on_fill">#FFFFFFFF</color>
 
     <!-- Brand -->
-    <color name="ds_tint">#FF14A08F</color>
-    <color name="ds_tint_deep">#FF0E8375</color>
-    <color name="ds_tint_soft">#FFE4F4F1</color>
+    <color name="ds_tint">#FF4057B3</color>
+    <color name="ds_tint_deep">#FF33468F</color>
+    <color name="ds_tint_soft">#FFE8ECF8</color>
 
     <!-- Semantics -->
     <color name="ds_success">#FF30B85B</color>

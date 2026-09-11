@@ -43,7 +43,7 @@
         <!-- the decision: a hole punched in both strokes, then the pivot itself -->
         <path
             android:pathData="M244,358m-34,0a34,34 0,1 0,68 0a34,34 0,1 0,-68 0"
-            android:fillColor="#FF0E8375"/>
+            android:fillColor="#FF33468F"/>
         <path
             android:pathData="M244,358m-17,0a17,17 0,1 0,34 0a17,17 0,1 0,-34 0"
             android:fillColor="#FFFFFFFF"/>

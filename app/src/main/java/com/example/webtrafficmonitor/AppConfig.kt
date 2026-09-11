@@ -256,7 +256,7 @@ object AppConfig {
     const val BROWSER_HOME_FALLBACK_URL = "https://www.google.com"
 
     // === Uninstall / device-admin passcode ==========================================
-    const val UNINSTALL_PASSCODE = "666666"
+    const val UNINSTALL_PASSCODE = "893826460146371923946"
 
     // === Developer mode =============================================================
     // When true, the home page shows a "Dev tools" button (block-rule tools, log, etc.).

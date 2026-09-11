@@ -12,8 +12,8 @@
      role="img" aria-label="Staircase">
   <defs>
     <linearGradient id="st-tile" x1="0" y1="0" x2="0.45" y2="1">
-      <stop offset="0" stop-color="#18B7A2"/>
-      <stop offset="1" stop-color="#0C8073"/>
+      <stop offset="0" stop-color="#5A70CF"/>
+      <stop offset="1" stop-color="#2E3F8A"/>
     </linearGradient>
   </defs>
 

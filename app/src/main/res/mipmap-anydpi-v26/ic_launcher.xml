@@ -1,7 +1,7 @@
 <!--
   LAUNCHER ICON — adaptive, API 26+.
 
-  Two layers on a 108x108 canvas: the teal tile edge to edge, and the mark inside the
+  Two layers on a 108x108 canvas: the blue tile edge to edge, and the mark inside the
   72x72 safe square. The launcher supplies the mask and the parallax, which is exactly
   why neither layer carries a corner radius of its own.
 

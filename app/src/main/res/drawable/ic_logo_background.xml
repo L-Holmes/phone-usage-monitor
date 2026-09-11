@@ -1,7 +1,7 @@
 <!--
   THE APP MARK — background layer ("The Turn", see design/logo/01-the-turn.svg).
 
-  The teal tile, drawn edge to edge on the 108x108 adaptive-icon canvas. No corner
+  The blue tile, drawn edge to edge on the 108x108 adaptive-icon canvas. No corner
   radius here on purpose: the launcher applies its own mask (circle, squircle,
   teardrop, whatever the OEM ships), and a radius of ours would show as a dark
   crescent inside theirs.
@@ -21,8 +21,8 @@
                 android:type="linear"
                 android:startX="0" android:startY="0"
                 android:endX="48.6" android:endY="108">
-                <item android:offset="0" android:color="#FF18B7A2"/>
-                <item android:offset="1" android:color="#FF0C8073"/>
+                <item android:offset="0" android:color="#FF5A70CF"/>
+                <item android:offset="1" android:color="#FF2E3F8A"/>
             </gradient>
         </aapt:attr>
     </path>

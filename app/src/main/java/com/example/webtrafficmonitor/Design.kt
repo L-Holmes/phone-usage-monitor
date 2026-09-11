@@ -82,12 +82,12 @@ object Palette {
     const val onFill = 0xFFFFFFFF.toInt()
 
     // ── Brand ───────────────────────────────────────────────────────────────────────
-    /** The app's teal, cleaned up: same identity, more light in it. */
-    const val tint = 0xFF14A08F.toInt()
+    /** The app's brand blue. Muted royal blue at hue ~228°, NOT 240°: Samsung AMOLED "Vivid" mode pushes saturated blues toward red, so anything on the 240° line reads as purple on the phone. */
+    const val tint = 0xFF4057B3.toInt()
     /** Pressed / active state of the tint. */
-    const val tintDeep = 0xFF0E8375.toInt()
+    const val tintDeep = 0xFF33468F.toInt()
     /** A wash of the tint, for selected rows and soft badges. */
-    const val tintSoft = 0xFFE4F4F1.toInt()
+    const val tintSoft = 0xFFE8ECF8.toInt()
 
     // ── Semantics ───────────────────────────────────────────────────────────────────
     // Each has a FILL (backgrounds, buttons, bars) and an ON-LIGHT text variant that
@@ -109,7 +109,7 @@ object Palette {
     const val coverText = 0xFFF4F6F8.toInt()
     /**
      * The pause sweep's panel. A deep blue: it has to read as a solid object moving over
-     * the near-black [cover], without the brand teal's glow - this is the one surface in
+     * the near-black [cover], without the brand blue's glow - this is the one surface in
      * the app whose whole job is to be looked at for several seconds.
      */
     const val sweep = 0xFF17335E.toInt()
@@ -117,10 +117,10 @@ object Palette {
     // ── Data / charts ───────────────────────────────────────────────────────────────
     // Ordered so adjacent series stay distinguishable. Use in order; don't cherry-pick.
     val series = intArrayOf(
-        0xFF14A08F.toInt(),   // teal (brand)
-        0xFF4B8DF8.toInt(),   // blue
+        0xFF4057B3.toInt(),   // brand blue
+        0xFF22B8CF.toInt(),   // cyan (was a mid blue, now too close to the brand)
         0xFFF5A524.toInt(),   // amber
-        0xFF9B6DE8.toInt(),   // violet
+        0xFFE0509A.toInt(),   // rose (violet sat too close to the brand blue)
         0xFF30B85B.toInt(),   // green
         0xFFE5484D.toInt(),   // red
     )
@@ -253,7 +253,7 @@ fun Context.tappableBg(
     fill: Int = Palette.surface,
     radius: Float = Radius.card,
     stroke: Int? = Palette.hairline,
-    ripple: Int = 0x1F14A08F,
+    ripple: Int = 0x1F4057B3,
 ): RippleDrawable {
     val base = surfaceBg(fill, radius, stroke)
     val mask = GradientDrawable().apply { cornerRadius = dpf(radius); setColor(0xFF000000.toInt()) }
