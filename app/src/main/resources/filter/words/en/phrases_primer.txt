@@ -11,6 +11,14 @@
 # policy page, a settings toggle labelled "Adult content". If yes, it belongs here and NOT
 # in phrases_loud.txt - it was one sighting of "live cam" closing an app that created this
 # tier in the first place (2026-08-27).
+#
+# THE SECOND JOB (2026-09-19): a primer PAIRS. A primer and any word the filter recognises
+# ("girl", "hot", "sexy" - scored or not) in the same app inside FilterTuning.PAIR_WINDOW_MS,
+# in either order, is a block in Strict and above. So a phrase here is not harmless: it is
+# half of a block. "live cam" then "girl" three minutes later closes the app. Keep that in
+# mind before adding one - and note that a primer's own words never pair with it ("hot
+# girls" cannot pair with "hot"), so a phrase made of listed words is still safe alone.
+# The Reddit spellings in ModeFragments (Super hardcore only) are primers too, in code.
 # LANGUAGE-SPECIFIC.
 live cam
 hidden cam

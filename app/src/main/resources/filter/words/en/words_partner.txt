@@ -1,0 +1,31 @@
+# PAIRING PARTNERS from the context-gated tiers - see FilterTuning.PAIR_WINDOW_MS.
+#
+# A pairing is a PRIMER ("reddit", "live cam" - never a block alone) plus a PARTNER in the
+# same app inside PAIR_WINDOW_MS, in either order, in Strict and above. A partner is any
+# recognised, un-vetoed word from the tiers that are suggestive by themselves - Core,
+# Mixed, Support, Subtle, Combo - and a LOUD phrase. Those need no listing here.
+#
+# THIS FILE is the exception to that: the context-gated words (words_dual.txt /
+# words_ambiguous.txt) score NOTHING without a sexual word beside them, because "load",
+# "package", "score" and "women" are ordinary vocabulary - and ordinary vocabulary must not
+# be half of a block. The handful below are the ones that lean sexual enough to be, bare:
+# "reddit" then "girl" three minutes later is the report that created the pairing rule.
+# One word per line. "#" = comment. LANGUAGE-SPECIFIC (English). Loaded by FilterData.
+#
+# ⚠️ Every word here should also have its everyday senses in exceptions.txt ("hot: weather,
+#    sauce, ..."), because an exception vetoes the partner as well as the score.
+girl
+girls
+hot
+babe
+babes
+chick
+chicks
+teen
+teens
+hottie
+hotties
+hookup
+vixen
+naughty
+kink

@@ -19,6 +19,14 @@ Telegram X = org.thunderdog.challegram
 Kik = kik.android
 Session = network.loki.messenger
 MEGA = mega.privacy.android.app
+TeraBox = com.dubox.drive
+
+# ── Booru / hentai gallery clients (2026-09-19) - sideloaded, so these are the packages
+#    the projects themselves ship ────────────────────────────────────────────────────
+Flexbooru = onlymash.flexbooru
+Flexbooru (Play) = onlymash.flexbooru.play
+EhViewer = com.hippo.ehviewer
+EhViewer (NekoInverter) = io.github.nekoinverter.ehviewer
 
 # ── Dating / hookup apps that ship on Play ───────────────────────────────────────────
 Tinder = com.tinder
@@ -29,6 +37,7 @@ Grindr = com.grindrapp.android
 Badoo = com.badoo.mobile
 
 # ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Boorusama
 # Pure
 # Fanvue
 # OmeTV

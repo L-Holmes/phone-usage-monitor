@@ -266,15 +266,29 @@ class BorderlineScorerTest {
     fun `hard fragments still block on their own`() {
         // The site names are unmistakable spellings; they keep CORE-tier behaviour.
         assertTrue("scrolller must still block", blocksAsTitle("scrolller"))
-        // Reddit stays Super-hardcore-only, exactly as before.
-        assertTrue(
-            "reddit must block in super hardcore",
-            BorderlineScorer.evaluate("red dit pics", null, null, superHardcore) != null,
-        )
-        assertTrue(
-            "reddit must NOT block below super hardcore",
-            BorderlineScorer.evaluate("red dit pics", null, null) == null,
-        )
+    }
+
+    @Test
+    fun `reddit is a primer - seen in super hardcore, never a block alone`() {
+        // The report: "Reddit" three times closed an app. It was a hard fragment, so each
+        // sighting was a full detection. It is a place, not a word, and a place is only
+        // evidence next to what somebody went there for - so it is a primer now.
+        for (title in listOf("red dit pics", "reddit", "I asked reddit reddit reddit")) {
+            assertTrue(
+                "'$title' must NOT block in super hardcore",
+                BorderlineScorer.evaluate(title, null, null, superHardcore) == null,
+            )
+            assertTrue(
+                "'$title' must NOT block an app screen in super hardcore",
+                BorderlineScorer.evaluateInApp(title, null, null, superHardcore) == null,
+            )
+        }
+        val r = BorderlineScorer.read("red dit pics", null, null, superHardcore)
+        assertEquals("...but it is REMEMBERED", listOf("reddit"), r.primerNames)
+        assertEquals("one note per family, however many spellings match", 0, r.families)
+        assertTrue("and it is not borderline either", !r.borderline)
+        // Below super hardcore it is nothing at all, exactly as before.
+        assertEquals(emptyList<String>(), BorderlineScorer.read("red dit pics", null, null).primerNames)
     }
 
     @Test
@@ -559,6 +573,70 @@ class BorderlineScorerTest {
     fun `a primer on the screen is reported so it can be remembered`() {
         assertEquals(1, BorderlineScorer.read(null, null, "a live cam of the harbour").primers)
         assertEquals(0, BorderlineScorer.read(null, null, "the rules of chess").primers)
+    }
+
+    @Test
+    fun `a page of primers is not borderline`() {
+        // BorderlineWatch counts "nearly blocking" screens for minutes and then blocks for
+        // an hour. A page of camera listings must not read that way, or the one-sighting
+        // block is back as a three-minute one.
+        val spam = (1..20).joinToString(" ") { "live cam hidden cam spy cam" }
+        val r = BorderlineScorer.read("live cam", null, spam)
+        assertTrue("primer points must not count as borderline (score ${r.score})", !r.borderline)
+        assertEquals("a primer family is worth PRIMER_WEIGHT in total, not per sighting",
+            r.score, r.primerPoints)
+    }
+
+    // ── PAIRING: a primer plus a partner ────────────────────────────────────────────
+
+    @Test
+    fun `the scorer reports the partners a screen carries, scored or not`() {
+        // "girl" and "hot" are context-gated: bare, they score nothing. They are still
+        // recognised, and that recognition is what the pairing rule runs on.
+        val bare = BorderlineScorer.read(null, null, "a girl in a hot car")
+        assertEquals(0, bare.score)
+        assertEquals(listOf("girl", "hot"), bare.partners)
+        assertEquals(listOf("sexy"), BorderlineScorer.read(null, null, "sexy").partners)
+        // Ordinary text has no partners at all.
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "the rules of chess").partners)
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "she sent her wife a photo").partners)
+    }
+
+    @Test
+    fun `ordinary context-gated words are not partners`() {
+        // The DUAL tier exists because these are everyday vocabulary. Only the short list
+        // in words_partner.txt may be half of a block; the rest never are, bare.
+        for (text in listOf(
+            "the package arrived", "page load time", "final score", "a bus ride home",
+            "women in engineering", "the ladies final", "a tight budget", "wet weather",
+            "adult education", "mature cheddar", "screw driver", "dirty laundry",
+        )) {
+            assertEquals("'$text' must carry no partner", emptyList<String>(),
+                BorderlineScorer.read(null, null, text).partners)
+        }
+    }
+
+    @Test
+    fun `an innocent-context exception vetoes a partner too`() {
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "the naked mole rat").partners)
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "nude lipstick shades").partners)
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "hot weather this week").partners)
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "girl guides camp").partners)
+        assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "a comic strip").partners)
+    }
+
+    @Test
+    fun `a primer's own words are not its partner`() {
+        // "hot girls" is a primer phrase made of two context-gated words. If those counted
+        // as partners it would pair with itself on sight - a one-sighting block again.
+        for (text in listOf("hot girls", "pole dance class", "adult content settings")) {
+            val r = BorderlineScorer.read(null, null, text)
+            assertTrue("'$text' must register as a primer", r.primerNames.isNotEmpty())
+            assertEquals("'$text' must not carry its own words as partners",
+                emptyList<String>(), r.partners)
+        }
+        // A DIFFERENT word beside the primer is a partner, as it should be.
+        assertEquals(listOf("sexy"), BorderlineScorer.read(null, null, "hot girls sexy").partners)
     }
 
     @Test

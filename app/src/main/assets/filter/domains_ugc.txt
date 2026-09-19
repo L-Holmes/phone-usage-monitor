@@ -52,5 +52,75 @@ twitter.com
 reddit.com
 discord.com
 
+# ── The fediverse (2026-09-19) - the well-known instances. Anyone can host one, so this
+#    list is the cheap half; the client detector (clients_services.txt) is the other. ──
+bsky.app
+bsky.social
+join-lemmy.org
+lemmy.world
+lemmy.ml
+lemm.ee
+sh.itjust.works
+lemmy.ca
+lemmy.one
+lemmy.zip
+lemmy.today
+lemmy.dbzer0.com
+lemmy.blahaj.zone
+lemdro.id
+beehaw.org
+programming.dev
+feddit.org
+feddit.de
+feddit.uk
+sopuli.xyz
+discuss.tchncs.de
+hexbear.net
+lemmygrad.ml
+piefed.social
+fedia.io
+kbin.earth
+joinmastodon.org
+mastodon.social
+mastodon.online
+mastodon.world
+mastodon.cloud
+mastodon.xyz
+mastodonapp.uk
+mas.to
+mstdn.social
+mstdn.jp
+fosstodon.org
+hachyderm.io
+infosec.exchange
+mastodon.art
+techhub.social
+universeodon.com
+c.im
+toot.community
+kolektiva.social
+social.vivaldi.net
+misskey.io
+pixelfed.social
+pixelfed.org
+pixelfed.de
+primal.net
+snort.social
+iris.to
+coracle.social
+nostrudel.ninja
+njump.me
+
+# ── Other social networks with lax moderation (2026-09-19) ──────────────────────────
+vk.com
+ok.ru
+mewe.com
+minds.com
+gab.com
+truthsocial.com
+parler.com
+gettr.com
+quora.com
+
 # ── Blocked as an APP, allowed as a WEBSITE (see the note at the top) ────────────────
 # facebook.com

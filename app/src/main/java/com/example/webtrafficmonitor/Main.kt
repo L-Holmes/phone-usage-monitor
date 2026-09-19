@@ -8509,6 +8509,23 @@ private fun startWeekStrict() {
                   else "  - needs ${FilterTuning.WEB_MIN_FAMILIES}\n")
         if (ex.primed) sb.append("primed, so x${FilterTuning.PRIMER_MULTIPLIER} applied\n")
         else if (ex.primers > 0) sb.append("${ex.primers} primer(s), nothing to multiply yet\n")
+        // The PAIRING, read off the same text: a primer and a partner on one screen is a
+        // pair on the spot; either half alone is what the next few minutes would pair with.
+        val reading = BorderlineScorer.read(text, null, null, settings)
+        if (reading.primerNames.isNotEmpty() || reading.partners.isNotEmpty()) {
+            val primers = reading.primerNames.joinToString(", ") { "\"$it\"" }.ifEmpty { "none" }
+            val partners = reading.partners.joinToString(", ") { "\"$it\"" }.ifEmpty { "none" }
+            sb.append("\nPAIRING (Strict and above)\n")
+            sb.append("  primers:  $primers\n")
+            sb.append("  partners: $partners\n")
+            sb.append(
+                if (reading.primerNames.isNotEmpty() && reading.partners.isNotEmpty())
+                    "  a PAIR on one screen - blocks in Strict+\n"
+                else
+                    "  one half; the other within ${FilterTuning.PAIR_WINDOW_MS / 60_000} min " +
+                        "in the same app would block\n",
+            )
+        }
         sb.append('\n')
         sb.append(if (web) "BLOCKED" else "allowed").append("  as a web page (bar $bar)\n")
         sb.append(if (inApp) "BLOCKED" else "allowed")

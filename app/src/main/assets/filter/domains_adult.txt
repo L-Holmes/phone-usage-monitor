@@ -161,6 +161,11 @@ safebooru.org
 realbooru.com
 xbooru.com
 
+# Fediverse instances that exist FOR this content (2026-09-19)
+lemmynsfw.com
+baraag.net
+pawoo.net
+
 # Reddit mirrors and NSFW front-ends
 redgifs.com
 scrolller.net

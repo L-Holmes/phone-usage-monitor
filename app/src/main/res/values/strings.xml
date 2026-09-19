@@ -1082,6 +1082,13 @@
     <string name="br_repeat_block">%1$s\n\nThat makes %2$d separate detections in this app inside %3$d minutes. One on its own is always let go - this one kept coming back.</string>
     <string name="br_new_app_block">%1$s\n\nThis app is new here - on your phone %2$d day(s) - so one detection is enough. An app you had used for months would have had two more chances before this screen.</string>
     <string name="br_home_block">%1$s\n\nYou are at your house, in Super hardcore. Here there is no second look: the first thing detected closes the app. Anywhere else, this one would have been let go.</string>
+    <!-- A PAIRING (PrimerWatch): a primer and a partner word in one app inside the window.
+         1 = what was seen first, 2 = what came second, 3 = the window in minutes,
+         4 = one of the br_paired_* gap phrases below. -->
+    <string name="br_paired_block">\"%1$s\" and then \"%2$s\" in this app, inside %3$d minutes\n\nNeither of those blocks anything on its own - \"%1$s\" could sit on screen all day. But \"%2$s\" turned up %4$s, in the same app, and two different things that close together is the pattern this filter is here to notice.</string>
+    <string name="br_paired_same_screen">on the same screen</string>
+    <string name="br_paired_seconds_later">%1$d seconds later</string>
+    <string name="br_paired_minutes_later">%1$d minute(s) later</string>
 
     <!-- ── Pause gate overlay (Overlay.kt) ─────────────────────────────────────────── -->
 </resources>

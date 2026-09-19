@@ -58,7 +58,9 @@ almost never hand-edit the plugin's word/domain lists directly — that's how th
 | `BannedWordExceptions.MAP` | `EXCEPTIONS` |
 | `FilterTuning` (+ `Settings.relaxed`) | `STRICT_TUNING` / `RELAXED_TUNING` |
 | `BannedPhrases.LOUD` / `.SOFT` | `EXTRA_PHRASE_LIST` (+ any loud-phrase handling) |
-| `BannedPhrases.PRIMER` + `PrimerWatch` | *(NOT PORTED YET — see "Pending sync" below)* |
+| `BannedPhrases.PRIMER` + `PrimerWatch` | `PRIMER_PHRASE_LIST` + `PrimerTrail` (background.js) — ported 19 Sep 2026 |
+| `BannedWords.PARTNER` (`words_partner.txt`) + the pairing rule | `PARTNER` + `primerNote` handling in textgate.js — ported 19 Sep 2026 |
+| `WEB_MIN_FAMILIES` | `MIN_FAMILIES` — ported 19 Sep 2026 |
 | `DomainBlocklist` / `DomainStrikes` / `DomainGreylist` | same names |
 | `StrictOnlyBlocklist` | `StrictOnlyBlocklist` |
 | `SearchEngineBlocklist` | *(add a matching block list in domains.js)* |
@@ -75,20 +77,46 @@ these are ported.
 `SUBTLE 2`, `DUAL 3`, `AMBIGUOUS 2`, `COMBO 7`, `PHRASE_LOUD 9`, `PHRASE_SOFT 3`,
 `PRIMER 2`, `PER_WORD_CAP 4`, `SINGLE_WORD_MAX 17`, `WEB_THRESHOLD 24`,
 `WEB_MIN_FAMILIES 2`, `CONTEXT_WINDOW 4`, `EXCEPTION_WINDOW 3`, `TITLE_URL_MULTIPLIER 2`,
-`PRIMER_MULTIPLIER 1.5`, `PRIMER_WINDOW_MS 600000`.
+`PRIMER_MULTIPLIER 1.5`, `PRIMER_WINDOW_MS 600000`, `PAIR_WINDOW_MS 300000`.
 
-### Pending sync — THE PRIMER TIER (added 27 Aug 2026, Kotlin only so far)
+Ported so far (19 Sep 2026): `PRIMER 2`, `PRIMER_MULTIPLIER 1.5`, `PRIMER_WINDOW_MS`,
+`PAIR_WINDOW_MS`, `MIN_FAMILIES 2`. STILL BEHIND in the plugin: the raised bars
+(`THRESHOLD` 15→18, `CORE` 15→18, `DEFINITE` 30→36, `SINGLE_WORD_MAX` 14→17,
+`PER_WORD_CAP` 5→4, `PHRASE_LOUD` 8→9) — port them together, they are one decision.
 
-The report behind it: ONE sighting of "live cam" closed an app. It is a traffic camera. So
-the adult-ADJACENT phrases came out of `phrases_loud.txt` into `phrases_primer.txt`, and got
-a tier of their own that **can never block anything**:
+### Synced 19 Sep 2026 — THE PRIMER TIER and THE PAIRING
 
-- worth `PRIMER_WEIGHT` (2), which cannot reach any bar;
+The report behind the tier (27 Aug): ONE sighting of "live cam" closed an app. It is a
+traffic camera. The adult-ADJACENT phrases came out of `phrases_loud.txt` into
+`phrases_primer.txt` and got a tier that **can never block anything alone**. ⚠️ The plugin
+kept "live cam" as a LOUD phrase until 19 Sep — that was the "live cam took one instance to
+block" report — and now matches:
+
+- worth `PRIMER_WEIGHT` (2) **per family in total** (one note per page, not per sighting —
+  before 19 Sep it scored per occurrence, which let a page of camera listings read as
+  "borderline" to BorderlineWatch and earn an hour's block by accumulation);
 - **excluded from the distinct-signal count**, so it can never be somebody else's second
-  signal — this is the part that is easy to get wrong when porting;
-- it ARMS a multiplier instead: for `PRIMER_WINDOW_MS` afterwards, **in the same app/site**,
-  everything genuinely sexual scores ×`PRIMER_MULTIPLIER`. `PrimerWatch` (Blocking.kt) holds
-  that clock, because the scorer itself is stateless and must stay that way.
+  signal — this is the part that is easy to get wrong when porting. Which is why the
+  two-different-signals rule is now an explicit `MIN_FAMILIES` in the plugin too: "nude"
+  (14) + "live cam" (2) would otherwise have cleared 15 on one real word;
+- it ARMS a multiplier: for `PRIMER_WINDOW_MS` afterwards, **in the same app / browser**,
+  everything genuinely sexual scores ×`PRIMER_MULTIPLIER`;
+- **THE PAIRING (19 Sep):** "Reddit" three times closed an app — it was a hard fragment in
+  Super hardcore, so each sighting was a full detection and RepeatGate confirmed the third.
+  Reddit is a place, not a word, so the `ModeFragments.SUPER_HARDCORE` spellings are primers
+  now (plugin has no super-hardcore, so nothing to port there). And a primer plus a PARTNER
+  in the same app inside `PAIR_WINDOW_MS` (5 min), either order, is a block in Strict and
+  above (`PrimerWatch.Pairing`, `AccessibilityService.pairedReason`; plugin: `PrimerTrail`
+  in background.js + the `primerNote` branch in textgate.js). A partner is a recognised,
+  un-vetoed word from the tiers that are suggestive by themselves (Core/Mixed/Support/
+  Subtle/Combo) or a LOUD phrase; the context-gated tiers are NOT partners except the short
+  list in `words_partner.txt` (`girl`, `hot`, `babe`, `teen`…), each of which has its
+  everyday senses in `exceptions.txt` ("hot: weather, sauce…"), because an exception vetoes
+  the partner as well as the score. A primer's own words never pair with it ("hot girls").
+  The scorer reports `Reading.primerNames` / `Reading.partners`; the clock is elsewhere.
+
+`PrimerWatch` (Blocking.kt) / `PrimerTrail` (background.js) hold the clock, because the
+scorer itself is stateless and must stay that way. Both are in memory only, on purpose.
 
 ### Pending sync — THIRD-PARTY CLIENTS (added 27 Aug 2026, Kotlin only so far)
 
@@ -102,6 +130,15 @@ front), or its own VOCABULARY (a suspicion needing a second sighting a minute la
 The plugin has no equivalent and mostly does not need one — a browser extension has no app
 screens — but `domains_clients.txt` (the alternative FRONT-ENDS: nitter, libreddit, invidious,
 imginn…) belongs in `background/domains.js` and should be mirrored there.
+
+### Pending sync — the CATEGORY domain lists (2026-09-19)
+
+`domains_media.txt` (GIF sites, wallpaper sites, image hosts/pastebins, video hosts, manga
+aggregators) and the fediverse instances added to `domains_ugc.txt` (lemmy.world, mastodon.social,
+bsky.app…) are Android-only for now. The plugin's `AlwaysBlocklist` in domains.js is the
+place they would go; whether the browser should block them at all is a separate call from
+blocking the APPS (the whole point of the app block is that a browser has an address bar and
+this add-on, and an app has neither).
 
 ### Storage note — the domain blocklist is fingerprints now
 

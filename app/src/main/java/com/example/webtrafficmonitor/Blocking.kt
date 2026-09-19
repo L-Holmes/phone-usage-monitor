@@ -882,6 +882,17 @@ object TamperWatch {
  * for that window everything real that turns up is worth [FilterTuning.PRIMER_MULTIPLIER]
  * times as much.
  *
+ * ⚠️ 2026-09-19, THE PAIRING. "Reddit" three times closed an app - a hard fragment, three
+ * full detections, RepeatGate confirmed. Reddit is a place, not a word, so it became a
+ * primer too - and a primer got a second, sharper job. The multiplier only helps a screen
+ * that already scores; "reddit" followed by a bare "girl" (which scores nothing: it is
+ * context-gated) was still nothing at all, and that is precisely the trail worth acting
+ * on. So this now remembers PARTNERS as well - every word the filter recognised, scored or
+ * not (see BorderlineScorer.Reading.partners) - and reports a [Pairing] whenever a primer
+ * and a partner are both live in one app inside [FilterTuning.PAIR_WINDOW_MS], in either
+ * order. The service blocks on a pairing in Strict and above. Neither half can do it alone:
+ * "reddit" for an hour is nothing, and so is "girl" for an hour.
+ *
  * Scoped to the APP, not the page: someone reading a page of camera listings and then
  * opening a tab is one session, and a browser is where that sequence actually happens. In
  * memory only, and deliberately: a primer that survived a reboot would be a punishment
@@ -889,24 +900,118 @@ object TamperWatch {
  */
 object PrimerWatch {
 
-    private val seenAt = HashMap<String, Long>()
+    /**
+     * A primer and a partner, both live in one app. The PAIRING rule's whole output.
+     * [first] and [second] are in the order they were seen; [gapMs] is the time between
+     * their first sightings (0 when they arrived on one screen). [fresh] is true the first
+     * time this pair is reported and false while it merely persists, so the caller can act
+     * once (record the block) and then just keep the cover up.
+     */
+    data class Pairing(
+        val primer: String,
+        val partner: String,
+        val first: String,
+        val second: String,
+        val gapMs: Long,
+        val fresh: Boolean,
+    )
 
-    /** Record what a scoring pass found. [primers] comes straight off BorderlineScorer.Reading. */
-    fun note(surface: String?, primers: Int) {
-        if (surface == null || primers <= 0) return
-        seenAt[surface] = System.currentTimeMillis()
+    /** One family's presence on a trail: when it first turned up, and when it was last seen. */
+    private class Sighting(var firstAt: Long, var lastAt: Long)
+
+    /** Everything remembered about one app: its primers, its partners, and whether they pair. */
+    private class Trail {
+        val primers = HashMap<String, Sighting>()
+        val partners = HashMap<String, Sighting>()
+        /** Set while a pairing is live, so the next report knows it is not new. */
+        var paired = false
+    }
+
+    private val trails = HashMap<String, Trail>()
+
+    /**
+     * Record what a scoring pass found on [surface], and say whether that makes a pair.
+     * [reading] comes straight off BorderlineScorer; null records nothing and reports
+     * whatever is already live. The returned pairing is what the service blocks on - in
+     * Strict and above; the decision to act is the caller's, this only keeps the clock.
+     */
+    fun note(surface: String?, reading: BorderlineScorer.Reading?): Pairing? =
+        noteAt(surface, reading?.primerNames.orEmpty(), reading?.partners.orEmpty(), System.currentTimeMillis())
+
+    /** [note] with the clock passed in, so the tests can walk five minutes in one line. */
+    @Synchronized
+    internal fun noteAt(surface: String?, primers: Collection<String>, partners: Collection<String>, now: Long): Pairing? {
+        if (surface == null) return null
+        val t = trails.getOrPut(surface) { Trail() }
+        for (p in primers) see(t.primers, p, now, FilterTuning.PAIR_WINDOW_MS)
+        for (p in partners) see(t.partners, p, now, FilterTuning.PAIR_WINDOW_MS)
+        // Forget what has lapsed rather than carry it: the maps are bounded by the
+        // vocabulary either way, but an hour-old "girl" has no business being looked at.
+        t.primers.values.removeAll { now - it.lastAt > FilterTuning.PRIMER_WINDOW_MS }
+        t.partners.values.removeAll { now - it.lastAt > FilterTuning.PAIR_WINDOW_MS }
+        return pairingOf(t, now)
     }
 
     /** Is a primer still live for [surface]? This is what Settings.primed is built from. */
+    @Synchronized
     fun isPrimed(surface: String?): Boolean {
-        val at = seenAt[surface ?: return false] ?: return false
-        if (System.currentTimeMillis() - at <= FilterTuning.PRIMER_WINDOW_MS) return true
-        seenAt.remove(surface)                     // expired: forget it rather than re-check forever
-        return false
+        val t = trails[surface ?: return false] ?: return false
+        val now = System.currentTimeMillis()
+        // Primers outlive the pairing window (PRIMER_WINDOW_MS > PAIR_WINDOW_MS), so the
+        // multiplier can still be armed after the pair has lapsed. Expired ones are dropped
+        // here rather than re-checked forever.
+        t.primers.values.removeAll { now - it.lastAt > FilterTuning.PRIMER_WINDOW_MS }
+        if (t.primers.isEmpty() && t.partners.isEmpty()) trails.remove(surface)
+        return t.primers.isNotEmpty()
+    }
+
+    /** The pairing live for [surface] right now, without recording anything. */
+    @Synchronized
+    fun pairing(surface: String?): Pairing? {
+        val t = trails[surface ?: return null] ?: return null
+        return pairingOf(t, System.currentTimeMillis())
     }
 
     /** Everything forgotten. Used by the dev console's "reset" and by tests. */
-    fun clear() = seenAt.clear()
+    @Synchronized
+    fun clear() = trails.clear()
+
+    /**
+     * A sighting refreshes lastAt; one arriving after the family had lapsed starts a new
+     * firstAt, so the gap the cover reports is measured from a sighting that still counts.
+     */
+    private fun see(map: HashMap<String, Sighting>, name: String, now: Long, windowMs: Long) {
+        val s = map[name]
+        if (s == null || now - s.lastAt > windowMs) map[name] = Sighting(now, now)
+        else s.lastAt = now
+    }
+
+    /**
+     * The newest live primer against the newest live partner. "Live" is measured from the
+     * LAST sighting, so a primer that keeps being on screen keeps its half of the pair open;
+     * the gap the user is shown is between FIRST sightings, because that is when each half
+     * of the trail actually began.
+     */
+    private fun pairingOf(t: Trail, now: Long): Pairing? {
+        val window = FilterTuning.PAIR_WINDOW_MS
+        val primer = t.primers.entries.filter { now - it.value.lastAt <= window }.maxByOrNull { it.value.lastAt }
+        val partner = t.partners.entries.filter { now - it.value.lastAt <= window }.maxByOrNull { it.value.lastAt }
+        if (primer == null || partner == null) {
+            t.paired = false
+            return null
+        }
+        val fresh = !t.paired
+        t.paired = true
+        val primerFirst = primer.value.firstAt <= partner.value.firstAt
+        return Pairing(
+            primer = primer.key,
+            partner = partner.key,
+            first = if (primerFirst) primer.key else partner.key,
+            second = if (primerFirst) partner.key else primer.key,
+            gapMs = Math.abs(primer.value.firstAt - partner.value.firstAt),
+            fresh = fresh,
+        )
+    }
 }
 
 

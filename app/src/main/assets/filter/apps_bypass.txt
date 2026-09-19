@@ -18,3 +18,18 @@ Puffin Browser = com.cloudmosa.puffinFree
 UC Browser = com.UCMobile.intl
 Tor Browser = org.torproject.torbrowser
 Orbot = org.torproject.android
+
+# ── Downloaders with a BUILT-IN BROWSER, and video grabbers (2026-09-19) ────────────
+# 1DM and ADM ship their own browser tab, which is a browser this app has never heard
+# of; Snaptube / VidMate / TubeMate exist to pull video off any site. Torrent clients are
+# the other way the file arrives once the sites are blocked. "Think like an addict."
+1DM = idm.internet.download.manager
+1DM+ = idm.internet.download.manager.plus
+Advanced Download Manager = com.dv.adm
+Snaptube = com.snaptube.premium
+VidMate = com.nemo.vidmate
+TubeMate = devian.tubemate.home
+Flud = com.delphicoder.flud
+LibreTorrent = org.proninyaroslav.libretorrent
+BitTorrent = com.bittorrent.client
+uTorrent = com.utorrent.client

@@ -105,3 +105,45 @@ label: OnlyFans
 domains: onlyfans.com, onlyfans.co, ofans.com
 strong: onlyfans, subscribe to see, ppv message, tip menu
 hints: onlyfans, fansly, ofans
+
+# ── THE FEDIVERSE (2026-09-19) ─────────────────────────────────────────────────────
+# The list of clients can never be complete here more than anywhere - a Lemmy client is
+# a weekend project and there are new ones monthly - so this is where the real coverage
+# lives. A Lemmy client cannot avoid saying "communities" and the name of an instance; a
+# Mastodon client cannot avoid "federated" and "boosted". Markers are whole phrases on
+# purpose: "toot" would match "tooth", "boost" matches a phone booster, "instance" is
+# every cloud dashboard. Two DIFFERENT ones on one screen, twice, minutes apart.
+# ⚠️ HINTS are only the DISTINCTIVE app names. "thunder", "summit", "connect", "primal"
+# are deliberately left out: a hint is worth a whole marker once anything strong is on
+# screen, and an email in Thunderbird that mentions lemmy.world must not make Thunderbird
+# a Lemmy client. Those apps are on apps_ugc.txt by package instead.
+
+service: lemmy
+label: Lemmy / PieFed
+domains: join-lemmy.org, lemmy.world, lemmy.ml, lemm.ee, sh.itjust.works, lemmy.ca, lemmy.one, lemmy.zip, lemmy.today, lemmy.dbzer0.com, lemmy.blahaj.zone, lemdro.id, lemmynsfw.com, beehaw.org, programming.dev, feddit.org, feddit.de, feddit.uk, sopuli.xyz, discuss.tchncs.de, hexbear.net, lemmygrad.ml, piefed.social, fedia.io, kbin.earth
+strong: lemmy, piefed, local communities, all communities, subscribed communities, cross-posted to, crossposted to, select an instance, choose an instance, lemmy.world, lemmy.ml
+hints: lemmy, piefed, voyager, jerboa, raccoon, liftoff, combustible, interstellar, blorp, muffed, memmy, for lemmy, boost for, sync for
+
+service: mastodon
+label: Mastodon / the fediverse
+domains: joinmastodon.org, mastodon.social, mastodon.online, mastodon.world, mastodon.cloud, mastodon.xyz, mastodonapp.uk, mas.to, mstdn.social, mstdn.jp, fosstodon.org, hachyderm.io, infosec.exchange, mastodon.art, techhub.social, universeodon.com, c.im, toot.community, kolektiva.social, social.vivaldi.net, misskey.io, baraag.net, pawoo.net
+strong: mastodon, fediverse, local timeline, federated timeline, boosted by, favourited by, favorited by, joinmastodon, choose a server, pick a server
+hints: mastodon, for mastodon, tusky, megalodon, moshidon, fedilab, pachli, tooot, trunks, subway tooter, zonepane, dhaaga, kaiteki, misskey, milktea, fedilab, twidere, twitpane, openvibe
+
+service: pixelfed
+label: Pixelfed
+domains: pixelfed.social, pixelfed.org, pixelfed.de
+strong: pixelfed, pixelfed.social, pixelfed stories, discover pixelfed
+hints: pixelfed, pixelix, pixeldroid
+
+service: bluesky
+label: Bluesky
+domains: bsky.app, bsky.social, blueskyweb.xyz, atproto.com
+strong: bluesky, starter pack, at protocol, bsky.social, bsky.app
+hints: bluesky, bsky, graysky, skeets, openvibe
+
+service: nostr
+label: Nostr
+domains: primal.net, snort.social, iris.to, coracle.social, nostrudel.ninja, njump.me, nostr.com, damus.io, yakihonne.com
+strong: nostr, relays, relay list, zaps, lightning address, npub, nsec
+hints: nostr, amethyst, yakihonne, damus, nostrmo, freerse

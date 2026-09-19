@@ -54,14 +54,91 @@ X Lite = com.twitter.android.lite
 Reddit = com.reddit.frontpage
 Discord = com.discord
 
+# ── THE FEDIVERSE (2026-09-19) ───────────────────────────────────────────────────────
+# Lemmy / PieFed / Mbin (the Reddit that nobody can ban), Mastodon and friends, Pixelfed,
+# Misskey, Bluesky, Nostr. Every one of these is a feed of strangers' uploads with
+# moderation set per instance - and whole instances exist for the content this app blocks
+# (lemmynsfw, baraag, pawoo). The client is the icon; the detector in ProxyClients.kt /
+# clients_services.txt is what catches the ones not listed here. Packages verified
+# against Play / F-Droid / IzzyOnDroid listings, 2026-09-19.
+
+# Lemmy / PieFed / Mbin clients
+Voyager = app.vger.voyager
+Jerboa = com.jerboa
+Summit for Lemmy = com.idunnololz.summit
+Thunder = com.hjiangsu.thunder
+Raccoon for Lemmy = com.livefast.eattrash.raccoonforlemmy.android
+Connect for Lemmy = com.kuroneko.lemmy_connect
+Blorp = xyz.blorpblorp.app
+Eternity = eu.toldi.infinityforlemmy
+Sync for Lemmy = io.syncapps.lemmy_sync
+Boost for Lemmy = com.rubenmayayo.lemmy
+Liftoff = com.liftoffapp.liftoff
+Combustible = com.thebrokenrail.combustible
+Muffed = com.freshfieldreds.muffed
+Interstellar (Mbin) = one.jwr.interstellar
+Raccoon for Friendica = com.livefast.eattrash.raccoonforfriendica
+
+# Mastodon / Pleroma / Misskey clients
+Mastodon = org.joinmastodon.android
+Tusky = com.keylesspalace.tusky
+Megalodon = org.joinmastodon.android.sk
+Moshidon = org.joinmastodon.android.moshinda
+Fedilab = fr.gouv.etalab.mastodon
+Fedilab (Play) = app.fedilab.android
+Pachli = app.pachli
+Subway Tooter = jp.juggler.subwaytooter
+Husky = su.xash.husky
+trunks = com.decad3nce.trunks
+ZonePane = com.zonepane
+Flare = dev.dimension.flare
+Focus for Mastodon = allen.town.focus.mastodon
+Dhaaga = io.suvam.dhaaga.lite
+Kaiteki = moe.craftplacer.kaiteki
+Mint (Misskey) = me.sanao1006.mint.release
+Milktea (Misskey) = jp.panta.misskeyandroidclient
+Twidere = org.mariotaku.twidere
+TwitPane = com.twitpane
+AndStatus = org.andstatus.app
+Openvibe = com.plebstr.client
+
+# Pixelfed
+Pixelfed = com.pixelfed
+Pixelix = com.daniebeler.pfpixelix
+PixelDroid = org.pixeldroid.app
+
+# Bluesky (the official app is above) and Nostr
+Graysky = dev.mozzius.graysky
+Amethyst (Nostr) = com.vitorpamplona.amethyst
+Primal (Nostr) = net.primal.android
+YakiHonne (Nostr) = com.yakihonne.yakihonne
+
+# ── OTHER SOCIAL NETWORKS WITH LAX MODERATION (2026-09-19) ──────────────────────────
+VK = com.vkontakte.android
+OK.ru = ru.ok.android
+MeWe = com.mewe
+Minds = com.minds.mobile
+Truth Social = com.truthsocial.android.app
+Parler = com.parler.parler
+GETTR = com.gettr.gettr
+We Heart It = com.weheartit
+Quora = com.quora.android
+Kick = com.kick.mobile
+
 # ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Memmy (Lemmy)
+# Lemonade (Lemmy - may be Linux-only)
+# Luma (Lemmy - could not find it at all; may be a different name)
+# Cookie (Lemmy - could not find it at all; may be a different name)
+# tooot (Mastodon)
+# Gab
+# Vero
 # Clapper
 # Rizzle
 # Zigazoo
 # We Heart It
 # Moj
 # Vigo Video
-# Kick
 # Yubo
 # YouNow
 # Superlive

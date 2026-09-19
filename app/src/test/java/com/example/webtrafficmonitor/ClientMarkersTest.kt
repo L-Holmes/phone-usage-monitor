@@ -168,6 +168,33 @@ class ClientMarkersTest {
         }
     }
 
+    // ── THE FEDIVERSE (2026-09-19) ─────────────────────────────────────────────────
+
+    @Test
+    fun `a lemmy client gives itself away`() {
+        assertEquals("lemmy", match(
+            "Subscribed communities  ·  Local communities  ·  Cross-posted to !android@lemmy.world",
+        )?.service?.id)
+        // A screen that only mentions an instance, in an app whose name is distinctive.
+        assertEquals("lemmy", match("Sign in to lemmy.world", "Voyager app.vger.voyager")?.service?.id)
+        assertEquals("mastodon", match("Local timeline  ·  Federated timeline  ·  Boosted by 12")?.service?.id)
+        assertEquals("bluesky", match("Discover  ·  Starter pack  ·  Sign in with bsky.social")?.service?.id)
+        assertEquals("nostr", match("npub1abc...  ·  Relays  ·  Zaps")?.service?.id)
+    }
+
+    @Test
+    fun `an email that mentions an instance does not make the mail app a client`() {
+        // The false positive the hints are trimmed against: "thunder" is a Lemmy client
+        // and also Thunderbird. One instance name in an email must not be two markers.
+        assertNull(match(
+            "From: Sam  ·  Subject: that thread on lemmy.world I mentioned",
+            "Thunderbird net.thunderbird.android",
+        ))
+        assertNull(match("Choose a server  ·  Fastest  ·  United Kingdom"))   // a VPN screen
+        assertNull(match("Starter pack  ·  600 V-Bucks  ·  Buy now"))         // a game shop
+        assertNull(match("Custom feeds  ·  Discover  ·  Saved"))              // an RSS reader
+    }
+
     @Test
     fun `generic forum vocabulary does not make an app Reddit`() {
         // Deliberate: "upvote", "downvote" and "karma" are NOT strong markers, because every

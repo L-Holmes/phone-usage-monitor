@@ -605,6 +605,15 @@ object BlockedCategories {
             "apps_ugc.txt", "domains_ugc.txt",
         ),
         Category(
+            "media", "Image, GIF & video search and viewers",
+            why = "Apps whose whole job is fetching pictures and clips from the open web: " +
+                "GIF keyboards, image search, wallpaper and stock-photo apps, art sites, " +
+                "video hosts, manga readers. Each one is a search box that reaches every " +
+                "image on the internet, and the sites behind it are already on a list.",
+            appsTitle = "Image, GIF & video search / viewers",
+            appsFile = "apps_media.txt", domainsFile = "domains_media.txt",
+        ),
+        Category(
             "adult", "Sexualised content",
             "The hand-maintained core of the adult block, kept separate from the downloaded " +
                 "blocklist so a host can never quietly fall out of it.",

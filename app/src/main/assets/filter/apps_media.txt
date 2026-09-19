@@ -1,0 +1,75 @@
+# IMAGE, GIF & VIDEO SEARCH / VIEWER APPS  -  blocked outright, in every mode above Off.
+#
+# 2026-09-19. The report: "need to block more apps ... GIF / image / video viewing apps
+# (GIPHY, ImageSearchMan, OmniGIF, tumblr, vimeo) ... think like an addict - think of all
+# bypasses and apps to get images". This is that list. The thing every entry has in common
+# is a SEARCH BOX in front of somebody else's image library: a GIF keyboard, an image
+# search app, a wallpaper app, a stock-photo app, an art community, a video host, a manga
+# reader that pulls from wherever. Inside an app there is no address bar to read and no
+# add-on to lean on, and the sites behind these are on domains_media.txt already.
+#
+# Format:  Friendly Name = package.name        ("#" = comment.)
+# LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# ⚠️ A package that isn't installed is simply never matched, so a wrong entry is harmless -
+#    but a wrong entry that happens to be a REAL other app is not. Everything below is a
+#    package name that was verified against its store listing or F-Droid page; the ones
+#    that could not be are listed at the bottom, commented out, WITH THEIR NAMES, so they
+#    can be filled in from the monitor log the first time one is opened. Do not guess.
+#
+# ⚠️ NOT HERE, ON PURPOSE: the GIF search built into keyboards and messengers (Gboard,
+#    WhatsApp, Messenger all embed Tenor/Giphy). Those apps cannot be blocked; the word
+#    filter reads what is typed into that search box, which is the only answer there is.
+
+# ── GIF search / keyboards ───────────────────────────────────────────────────────────
+GIPHY = com.giphy.messenger
+GIF Keyboard by Tenor = com.riffsy.FBMGIFApp
+OmniGIF = com.robin.huangwei.gifviewer
+
+# ── Image search ─────────────────────────────────────────────────────────────────────
+ImageSearchMan = sansunsen3.imagesearcher
+Bing = com.microsoft.bing
+Yandex = ru.yandex.searchplugin
+
+# ── Wallpapers (a search box over every image on the internet) ───────────────────────
+Zedge = net.zedge.android
+Walli = com.shanga.walli
+Backdrops = com.backdrops.wallpapers
+
+# ── Stock photo / art communities (nude and "boudoir" sections in every one) ─────────
+Pexels = com.pexels.app
+Pixabay = com.pixabay.pixabayapp
+DeviantArt = com.deviantart.android.damobile
+ArtStation = com.ballistiq.artstation
+Behance = com.behance.behance
+pixiv = jp.pxv.android
+
+# ── Meme / image feeds ───────────────────────────────────────────────────────────────
+9GAG = com.ninegag.android.app
+iFunny = mobi.ifunny
+
+# ── Video hosts (moderation that permits what YouTube removes) ──────────────────────
+Vimeo = com.vimeo.android.videoapp
+Dailymotion = com.dailymotion.dailymotion
+Rumble = com.rumble.battles
+Odysee = com.odysee.app
+BitChute = com.xamarin.example.BitChute
+TubeLab (PeerTube) = app.fedilab.tubelab
+
+# ── Manga / comic readers that pull from open sources (hentai a tap away) ───────────
+Tachiyomi = eu.kanade.tachiyomi
+TachiyomiSY = eu.kanade.tachiyomi.sy
+TachiyomiJ2K = eu.kanade.tachiyomi.j2k
+Mihon = app.mihon
+Aniyomi = xyz.jmir.tachiyomi.mi
+Kotatsu = org.koitharu.kotatsu
+Komikku = app.komikku
+
+# ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
+# Gfycat (service is dead; app may linger)
+# Imgflip
+# Unsplash
+# Wallhaven clients (several, unofficial)
+# Yokai (Tachiyomi fork)
+# Wombo Dream / Lensa and the other AI image generators - a category of their own if
+#   it turns out to matter; not added here because most of it is portrait filters

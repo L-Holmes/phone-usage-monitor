@@ -2533,13 +2533,19 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // over text we have already collected.
         detectProxyClient(packageName, host, title, content, url)
 
-        // ── PRIMERS: REMEMBER THE ADULT-ADJACENT THING, ACT ON NOTHING ──────────────
+        // ── PRIMERS: REMEMBER THE ADULT-ADJACENT THING, ACT ON THE PAIR ─────────────
         // Recorded whether or not this screen blocked, and deliberately so: the whole point
         // of the tier is that "live cam" on its own does nothing at the time. What it does
         // is arm the multiplier for the next few minutes IN THIS APP, so that if something
         // genuinely sexual follows it, that thing counts for more. Keyed on the package, not
         // the page, because the sequence this is here to catch happens across pages.
-        PrimerWatch.note(packageName, scoredReading?.primers ?: 0)
+        //
+        // And since 2026-09-19 it remembers the PARTNERS too - every word the filter
+        // recognised on this screen, scored or not - and says when a primer and a partner
+        // are both live in this app inside FilterTuning.PAIR_WINDOW_MS. That pair is acted
+        // on below; "reddit" then "girl" three minutes later is the trail, and the whole
+        // point is that neither half was enough by itself.
+        val pairing = PrimerWatch.note(packageName, scoredReading)
 
         // ── ONE WORD IS A QUESTION, NOT AN ANSWER (see RepeatGate) ──────────────────
         // A word detection on an APP SCREEN no longer closes the app by itself. It opens a
@@ -2553,7 +2559,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // second time, they are decisions already made, and they still land on sight. That
         // is also why the gate is skipped for web pages: this is about a word appearing in
         // an app you use for something else, not about the page you just opened.
-        val gatedReason = if (
+        val gated = if (
             baseReason != null && verdict != null && host == null &&
             !AppBlocklist.isBrowser(packageName)
         ) {
@@ -2561,6 +2567,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         } else {
             baseReason
         }
+        // ── A PRIMER PLUS A PARTNER, MINUTES APART, IS THE TRAIL (see pairedReason) ──
+        // Checked when nothing else blocked - including a detection the gate is HOLDING,
+        // because "girl" never produces a verdict for the gate to count at all, and the
+        // pair is already more confirmation than the gate's ladder asks for.
+        val gatedReason = gated ?: pairedReason(packageName, pairing)
 
         // ── THE APP THAT KEEPS ALMOST BLOCKING (see BorderlineWatch) ─────────────────
         // Nothing here has crossed the line, which is exactly why one screen can't be acted
@@ -2737,6 +2748,33 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 text
             }
         }
+    }
+
+    /**
+     * The block a PAIRING earns, or null. See PrimerWatch.Pairing and FilterTuning.PAIR_WINDOW_MS.
+     *
+     * Not put through RepeatGate: the pair is already two different signals, minutes apart,
+     * in one app, which is more confirmation than the gate's ladder asks for - and one of
+     * the two halves ("girl", "hot") never produces a verdict for the gate to count in the
+     * first place. Strict and above only, like BorderlineWatch: nothing here has crossed the
+     * line on its own, and Relaxed is the mode that only acts on things that have.
+     *
+     * Counted against the app's standing ONCE per pairing (AppTrust), on the event that
+     * formed it; every event after that just keeps the cover up while the pair is live.
+     */
+    private fun pairedReason(pkg: String, pairing: PrimerWatch.Pairing?): String? {
+        if (pairing == null) return null
+        if (Mode.isRelaxed(this) || Mode.isOff(this)) return null
+        if (pairing.fresh) AppTrust.noteBlocked(this, pkg)
+        val gap = when {
+            pairing.gapMs < 5_000L -> getString(R.string.br_paired_same_screen)
+            pairing.gapMs < 90_000L -> getString(R.string.br_paired_seconds_later, pairing.gapMs / 1_000)
+            else -> getString(R.string.br_paired_minutes_later, pairing.gapMs / 60_000)
+        }
+        return getString(
+            R.string.br_paired_block,
+            pairing.first, pairing.second, FilterTuning.PAIR_WINDOW_MS / 60_000, gap,
+        )
     }
 
     /**

@@ -50,6 +50,8 @@ there AND on-device, assets don't. `FilterData.langSet/langLines` read them via 
 (English master ∪ device language). Verified by `./gradlew testDebugUnitTest` (all pass →
 behaviour unchanged).
 - [x] `words_core/mixed/support/combo/extra_explicit/subtle/dual/ambiguous/person.txt`
+- [x] `words_partner.txt` (2026-09-19) — the context-gated words that count as a PAIRING partner
+      even bare ("girl", "hot", "babe", "teen"…); see `FilterTuning.PAIR_WINDOW_MS`
 - [x] `variant_explicit.txt`, `variant_dual.txt`
 - [x] `phrases_loud.txt`, `phrases_soft.txt`, `phrases_primer.txt`
 - [x] `medical_context.txt`
@@ -79,6 +81,12 @@ behaviour unchanged).
 Every word tier / phrase / exception / medical-context / family / gendered list is in
 `src/main/resources/filter/words/en/`; every domain/app/browser list is in `assets/filter/`.
 Only the optional low-value neutral specs above remain in code.
+
+### Category lists (apps_*.txt / domains_*.txt → `BlockedCategories`)
+`ugc`, `media` (added 2026-09-19: GIF/image search, wallpapers, stock photo, art sites, video
+hosts, manga readers), `adult`, `strangers`, `bypass`, `ai_companion`, `clients`, `vpn`. One
+`Category` entry in `ContentFilter.kt` per pair of files; the dev-tools page is generated
+from `BlockedCategories.ALL`, so a new category needs nothing else.
 
 ### Shared with the Firefox plugin
 Because these are now plain text files, the extension can eventually read the SAME files

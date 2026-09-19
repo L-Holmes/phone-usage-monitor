@@ -1,0 +1,88 @@
+# IMAGE, GIF & VIDEO SEARCH / VIEWER SITES  -  blocked in every mode above Off.
+#
+# The web half of apps_media.txt. A bare domain also covers its subdomains. One host per
+# line, "#" = comment. LANGUAGE-NEUTRAL. Loaded by FilterData -> BlockedCategories.
+#
+# The test for this file: is the site a SEARCH BOX or a FEED over strangers' images or
+# clips, with moderation you would not want to rely on? Image hosts and pastebins for
+# pictures are here too (imgbb, postimg, catbox, lightshot): once the sites themselves are
+# blocked, a bare image link on one of these is how the picture travels.
+
+# ── GIFs ─────────────────────────────────────────────────────────────────────────────
+giphy.com
+tenor.com
+gfycat.com
+
+# ── Wallpapers ───────────────────────────────────────────────────────────────────────
+zedge.net
+wallhaven.cc
+alphacoders.com
+wallpaperflare.com
+wallpapercave.com
+peakpx.com
+wallpapersden.com
+hdqwalls.com
+wallpaperaccess.com
+wallpapers.com
+
+# ── Stock photo / art communities ────────────────────────────────────────────────────
+pexels.com
+unsplash.com
+pixabay.com
+deviantart.com
+artstation.com
+behance.net
+newgrounds.com
+hentai-foundry.com
+
+# ── Meme / image feeds ───────────────────────────────────────────────────────────────
+9gag.com
+ifunny.co
+imgflip.com
+
+# ── Image hosts / pastebins for pictures ─────────────────────────────────────────────
+imgbb.com
+ibb.co
+postimg.cc
+postimages.org
+imgbox.com
+freeimage.host
+catbox.moe
+litterbox.catbox.moe
+prnt.sc
+lightshot.app
+gyazo.com
+imgchest.com
+imagetwist.com
+imagebam.com
+pixhost.to
+turboimagehost.com
+imgur.io
+cubeupload.com
+lensdump.com
+jpg.church
+jpg4.su
+
+# ── Video hosts ──────────────────────────────────────────────────────────────────────
+vimeo.com
+dailymotion.com
+rumble.com
+odysee.com
+bitchute.com
+streamable.com
+veoh.com
+metacafe.com
+liveleak.com
+peertube.tv
+tube.tchncs.de
+framatube.org
+
+# ── Manga / comic aggregators (the readers above pull from these) ────────────────────
+# (the hentai-only ones - nhentai, e-hentai, hitomi, tsumino - are on domains_adult.txt,
+#  as are redgifs, pixiv, furaffinity and inkbunny)
+mangadex.org
+mangakakalot.com
+manganato.com
+mangapark.net
+mangafire.to
+mangareader.to

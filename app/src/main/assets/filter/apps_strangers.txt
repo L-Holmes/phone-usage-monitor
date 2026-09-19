@@ -21,6 +21,15 @@ Telegram = org.telegram.messenger
 Telegram X = org.thunderdog.challegram
 Band = com.nhn.android.band
 
+# ── Imageboard clients (4chan and the rest, 2026-09-19) ─────────────────────────────
+# 4chan.org is banned in every mode; these are the same boards through an app.
+Clover = org.floens.chan
+Kuroba = com.github.adamantcheese.chan
+KurobaEx = com.github.k1rakishou.chan
+KurobaEx (F-Droid) = com.github.k1rakishou.chan.fdroid
+Dashchan = com.mishiranu.dashchan
+Kick = com.kick.mobile
+
 # ── Dating / hookup ──────────────────────────────────────────────────────────────────
 Tinder = com.tinder
 Bumble = com.bumble.app
@@ -38,7 +47,6 @@ HER = com.weareher.her
 Ashley Madison = com.ashleymadison.mobile
 
 # ── PACKAGE NAME NOT VERIFIED - fill these in from the monitor log, don't guess ──────
-# Kick
 # Yubo
 # YouNow
 # Superlive

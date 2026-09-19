@@ -1,12 +1,86 @@
 
 
 
+Its still possible to bypass and turn off the page monitoring permission in the settings... 
+    - Make it so that if I try and access that page, that it just blocks me from going on the settings app...
+    and dont make it to where i can open the app at all...
+    because here is a slight delay when the app opens to when the block screen comes on, allowing user to spam click...
+    prevent the spam click input, make the block screen show faster, and add extra caution if w edetect that user is truing to bypass the permissions by going on the settings.
+
+
+---------------------
+
+Also when I'm enabling permissions in the app by clicking on entries in the 'status' page...
+    - they don't update to say 'on' when i return to the app..
+    .. i have to swipe off the app then re-open...
+    they should update straight away..
+Also, don't show the 'open settings yourself' text. just have it as 'already enabled' (when you click on sometihhg nthat is already enabled..
+
+
+When block screen comes on, 
+it sometimes sort of freezes, so that I press the "return to home" button and nothing happens 
+-> then, after that, the app doesn't work, it doesn't monitor properly.. 
+--> then sometimes the block screen will popup like 5 mins later... On a different app (as if the app got stuck and delayed and showed it late).
+This happened when I clicked on the play store. 
+Not sure why certain apps like the play store seems to break the overlay... 
+
+
+
+
+
+
+
+---------------
+
+## OTHER DO LATER:
+====================================================
+
+Have user voting system when downloading new apps 
+- but app reviewers can't download an app they saw within 24 hours.
+
+====================================================
+
+----------------------
+
+If like 5 blocks in 10 mins, spread out, block non whitelist apps
+
+----------------------
+
+
+For the page that says what each adult content mode does, 
+its too confusing and wordy...
+do the comparison table where list, then list things only available to 
+Low then over high etc.
+Perhaps colour coded to show the minimum mode that thing appears in. 
+For things that vary, show there boxes side by side with the different values for each mode... 
+
+----------------------
+
+If user just downloaded an app, then on first use get a block... 
+(non whitelisted of course)
+Then we know bad! 
+Block that new app really easily!
+
+-------
+
 need to stop usre keep going back on the same app...
 then carrying on scrolling etc.
 
 block for a solid amount of time...
 
 dont allow them to keep getting blocked and returning...
+
+---------
+
+Once every two months for an emergency code??
+
+--------------------
+
+
+Make it so banning app...
+You can schedule when your high risk moments will be.. 
+At a calm time each week. 
+If you don't schedule it, it goes to the default harshness/times that the user setup (I.e. so when with my partner, don't need to worry...)
 
 -----
 block screen doesn't fit on horizontal. 

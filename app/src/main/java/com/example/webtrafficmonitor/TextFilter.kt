@@ -87,9 +87,41 @@ object FilterTuning {
     //     times as much.
     // "Live cam" then does exactly what the user asked of it: nothing on its own, and a
     // thumb on the scale if a real sexual word follows it a minute later.
+    //
+    // A primer FAMILY is worth PRIMER_WEIGHT in total, not per sighting: it is a note that
+    // the page mentioned something, and a page that mentions it twenty times has still
+    // only mentioned it. (Before 2026-09-19 it scored per occurrence up to PER_WORD_CAP,
+    // which let a page of camera listings read as "borderline" to BorderlineWatch and earn
+    // an hour's block by accumulation - the one-sighting block back in a longer coat.)
     const val PRIMER_WEIGHT = 2
     const val PRIMER_MULTIPLIER = 1.5f
     const val PRIMER_WINDOW_MS = 10 * 60_000L
+
+    // ── PAIRING: A PRIMER PLUS ONE REAL WORD, MINUTES APART, IS A BLOCK ─────────────
+    // 2026-09-19, and the primer's second job. The report: "Reddit" three times closed an
+    // app (it was a hard fragment in Super hardcore - one sighting was a full detection,
+    // and RepeatGate confirmed the third). Reddit is not sexual, and neither is "live cam";
+    // what they have in common is that they are WHERE people go, not WHAT they find there.
+    // So they are all primers now, and a primer can never block alone however often it
+    // appears - but a primer followed (or preceded) by a PARTNER, in the same app, inside
+    // PAIR_WINDOW_MS, is the trail this filter exists to notice, and that pair blocks.
+    //
+    // A PARTNER is a recognised, un-vetoed word from a tier that is suggestive BY ITSELF -
+    // Core, Mixed, Support, Subtle, Combo - or a LOUD phrase, whether or not it scored
+    // enough to matter ("sexy" is worth two points and blocks nothing alone). The
+    // context-gated tiers (Dual, Ambiguous) are NOT partners as a rule: "load", "package",
+    // "score" and "women" are ordinary vocabulary, which is the whole reason they score
+    // nothing bare, and ordinary vocabulary must not be half of a block. The short list in
+    // words_partner.txt ("girl", "hot", "babe", "teen"...) is the exception - the ones that
+    // lean sexual enough bare to be the second half of "reddit, then ...". The
+    // innocent-context EXCEPTIONS still veto ("hot weather" is not a partner), and the
+    // PERSON trigger words ("she", "her", "wife") never are: they are switches, not
+    // vocabulary, and "her" is in every message anyone has ever received.
+    //
+    // The scorer reports the primers and partners it saw (Reading.primerNames /
+    // Reading.partners); PrimerWatch holds the clock and says when they pair. Strict and
+    // above only, like BorderlineWatch: Relaxed acts on things that have crossed the line.
+    const val PAIR_WINDOW_MS = 5 * 60_000L
 
     const val CONTEXT_WINDOW = 4         // a DUAL/AMBIGUOUS/COMBO word counts only within this
     const val EXCEPTION_WINDOW = 3       // an innocent-context word within this vetoes a match
@@ -207,6 +239,8 @@ object BannedWords {
     val EXTRA_DUAL: Set<String> get() = FilterData.langSet("words_dual.txt")
     val EXTRA_AMBIGUOUS: Set<String> get() = FilterData.langSet("words_ambiguous.txt")
     val PERSON: Set<String> get() = FilterData.langSet("words_person.txt")
+    /** The context-gated words that are PAIRING partners even bare. See FilterTuning.PAIR_WINDOW_MS. */
+    val PARTNER: Set<String> get() = FilterData.langSet("words_partner.txt")
 
     // Evasion spellings (leetspeak/stretch are handled by the scorer's normaliser, not here).
     val VARIANT_EXPLICIT: Set<String> get() = FilterData.langSet("variant_explicit.txt")
@@ -335,14 +369,26 @@ object ModeFragments {
         val weight: Int,
         /** true = counts like a CORE word: exempt from the single-signal cap, blocks alone. */
         val hard: Boolean = false,
+        /**
+         * true = a PRIMER, not evidence: never blocks alone, arms the multiplier, and pairs
+         * with a partner word inside FilterTuning.PAIR_WINDOW_MS. See FilterTuning.PRIMER_*.
+         */
+        val primer: Boolean = false,
     )
 
     // Super-hardcore-only: Reddit, and the ways it gets typed around a filter. Reddit itself
     // is on the always-banned domain list; these catch it being reached some other way.
+    //
+    // ⚠️ 2026-09-19: PRIMERS, no longer hard. "Reddit" three times in an app - a news story,
+    // a video title, a chat - was three full detections and a closed app. Reddit is a place,
+    // not a word, and a place is only evidence next to what somebody went there for. So one
+    // of these now scores like "live cam": nothing on its own, however often, and a block
+    // only when a real word ("girl", "hot", "sexy") turns up in the same app within
+    // FilterTuning.PAIR_WINDOW_MS - before or after it. See FilterTuning.PAIR_WINDOW_MS.
     val SUPER_HARDCORE: List<Fragment> = listOf(
         "reddit", "redd", "red dit", "re ddit", "reddi t", "redd it",
         "eddit", "e ddit", "r eddit",
-    ).map { Fragment(it, "reddit", FilterTuning.EXPLICIT_WEIGHT, hard = true) }
+    ).map { Fragment(it, "reddit", FilterTuning.PRIMER_WEIGHT, primer = true) }
 
     // Strict and above.
     val STRICT_PLUS: List<Fragment> = listOf(
@@ -505,23 +551,28 @@ object FilterCatalogue {
             name = "Primers",
             points = FilterTuning.PRIMER_WEIGHT,
             behaviour = Behaviour.NEVER_BLOCKS,
-            what = "Adult-ADJACENT. Cannot block anything, ever - it arms a multiplier.",
-            examples = "live cam · hidden cam · adult content",
-            scores = "\"live cam\" then \"nude\" a minute later  -  the second one counts " +
-                "×${FilterTuning.PRIMER_MULTIPLIER}",
+            what = "Adult-ADJACENT. Never blocks alone - it arms a multiplier, and it PAIRS.",
+            examples = "live cam · hidden cam · adult content · reddit",
+            scores = "\"live cam\" then \"girl\" three minutes later, same app  -  " +
+                "a PAIR, and the app is blocked",
             passes = "\"live cam\" on its own, fifty times over  -  " +
                 "${FilterTuning.PRIMER_WEIGHT} pts, and nothing happens",
-            note = "The newest tier, added because ONE sighting of \"live cam\" used to " +
-                "close an app. These are phrases people meet without looking for anything: " +
-                "a traffic camera, a nest box, a policy page, a settings toggle.\n\nA " +
-                "primer is not evidence and is not treated as any: it does not count " +
-                "towards the \"two different signals\" rule, and its own " +
-                "${FilterTuning.PRIMER_WEIGHT} points are there so the block screen can " +
-                "show it was seen, not so it can add up to anything.\n\nWhat it does do " +
-                "is REMEMBER. For ${FilterTuning.PRIMER_WINDOW_MS / 60_000} minutes " +
+            note = "Added because ONE sighting of \"live cam\" used to close an app; " +
+                "\"reddit\" joined it when three sightings of that did the same. These " +
+                "are places and labels, not words: a traffic camera, a nest box, a policy " +
+                "page, a settings toggle, a site somebody mentioned. A primer is not " +
+                "evidence and is not treated as any: it does not count towards the " +
+                "\"two different signals\" rule, and a whole page of one primer is worth " +
+                "${FilterTuning.PRIMER_WEIGHT} points in total.\n\nWhat it does do is " +
+                "REMEMBER, two ways. For ${FilterTuning.PRIMER_WINDOW_MS / 60_000} minutes " +
                 "afterwards, in that same app, anything genuinely sexual scores " +
-                "×${FilterTuning.PRIMER_MULTIPLIER}. One is nothing; one followed by the " +
-                "real thing is a trail.",
+                "×${FilterTuning.PRIMER_MULTIPLIER}. And if a PARTNER - any word on any " +
+                "of the lists above or below, \"girl\", \"hot\", \"sexy\", whether or " +
+                "not it scored on its own - turns up in the same app within " +
+                "${FilterTuning.PAIR_WINDOW_MS / 60_000} minutes, before or after, the " +
+                "two together block. Neither half can do it alone; the pair is the " +
+                "trail. A primer's own words never count as its partner (\"hot girls\" " +
+                "cannot pair with itself), and it only pairs in Strict and above.",
             activeIn = ALWAYS,
         ) { BannedPhrases.PRIMER.sorted() },
 
@@ -653,12 +704,20 @@ object FilterCatalogue {
 
         Group(
             name = "Reddit fragments",
-            points = FilterTuning.EXPLICIT_WEIGHT,
-            behaviour = Behaviour.BLOCKS_ALONE,
-            what = "Reddit, and the ways it gets typed around a filter.",
+            points = FilterTuning.PRIMER_WEIGHT,
+            behaviour = Behaviour.NEVER_BLOCKS,
+            what = "Reddit, and the ways it gets typed around a filter. A PRIMER.",
             examples = "red dit · r eddit · reddi t",
+            scores = "\"reddit\" in a title, then \"sexy\" in the same app a minute " +
+                "later  -  a pair, blocked",
+            passes = "\"reddit\" in three titles in a row  -  nothing",
             note = "SUPER HARDCORE ONLY. Reddit is on the always-banned domain list in every " +
-                "mode anyway; these catch it being reached some other way.",
+                "mode anyway; these catch it being reached some other way.\n\nUntil " +
+                "19 Sep 2026 these blocked alone, like a Core word, and three mentions of " +
+                "Reddit in an ordinary app closed it. Now they are primers: never a block " +
+                "by themselves, however many, but paired with any real word in the same " +
+                "app inside ${FilterTuning.PAIR_WINDOW_MS / 60_000} minutes they are. " +
+                "See Primers.",
             activeIn = SUPER_ONLY,
         ) { ModeFragments.SUPER_HARDCORE.map { fragmentLine(it) } },
     )
@@ -723,7 +782,10 @@ object FilterCatalogue {
                 "the only one with a memory. It cannot fire on its own: a screen with " +
                 "nothing but primers on it is multiplied by nothing, because " +
                 "×${FilterTuning.PRIMER_MULTIPLIER} of zero is zero. Scoped to the app, " +
-                "and forgotten when you close it for long enough.",
+                "and forgotten when you close it for long enough.\n\nThe same memory " +
+                "has a sharper edge in Strict and above: a primer and any real word in " +
+                "the same app inside ${FilterTuning.PAIR_WINDOW_MS / 60_000} minutes is " +
+                "a PAIR, and a pair blocks outright - see the Primers row above.",
         ) { BannedPhrases.PRIMER.sorted() },
         Scaler(
             "The page reads medical",
@@ -831,7 +893,11 @@ object FilterCatalogue {
 
     private fun fragmentLine(f: ModeFragments.Fragment): String =
         "\"${f.text}\"  -  ${f.weight} pts, counts as \"${f.family}\"" +
-            if (f.hard) "  -  BLOCKS ALONE" else ""
+            when {
+                f.hard -> "  -  BLOCKS ALONE"
+                f.primer -> "  -  PRIMER, never alone"
+                else -> ""
+            }
 }
 
 
@@ -989,6 +1055,10 @@ object BorderlineScorer {
         val primers: Int = 0,
         /** Was the score multiplied because a primer was live? */
         val primed: Boolean = false,
+        /** WHICH primers ("live cam", "reddit") - what PrimerWatch remembers, by name. */
+        val primerNames: List<String> = emptyList(),
+        /** Families of every recognised, un-vetoed word - the pairing candidates. */
+        val partners: List<String> = emptyList(),
     ) {
         /**
          * Distinct signals that actually scored — what every min-families rule gates on.
@@ -999,6 +1069,10 @@ object BorderlineScorer {
          */
         val families: Int get() =
             detail.count { it.value.points > 0f && it.value.tier != TIER_PRIMER }
+
+        /** The share of the score that is primers - the part that is not evidence. */
+        val primerPoints: Int get() =
+            Math.round(detail.values.filter { it.tier == TIER_PRIMER }.sumOf { it.points.toDouble() }.toFloat())
     }
 
     /** Raw score for logging/flagging; null when nothing sexual was found. */
@@ -1062,10 +1136,26 @@ object BorderlineScorer {
         val bodyWords: Int,
         /** Primer phrases on this screen. What arms PrimerWatch. */
         val primers: Int = 0,
+        /** The primers by name ("live cam", "reddit"), so PrimerWatch can pair them. */
+        val primerNames: List<String> = emptyList(),
+        /**
+         * Every recognised, un-vetoed word family on the screen, whether or not it scored:
+         * the PARTNER half of a pairing (see FilterTuning.PAIR_WINDOW_MS). "girl" bare
+         * scores nothing and is still here; "naked mole rat" is vetoed and is not.
+         */
+        val partners: List<String> = emptyList(),
+        /** How much of [score] is primer points - never evidence, so never borderline. */
+        val primerPoints: Int = 0,
     ) {
-        /** Not enough to block, but not nothing either. What BorderlineWatch counts. */
+        /**
+         * Not enough to block, but not nothing either. What BorderlineWatch counts.
+         *
+         * Primer points are taken back out first: a screen of camera listings is not
+         * "nearly blocking", and letting it read that way for three minutes would give
+         * BorderlineWatch the one-sighting block the primer tier was made to remove.
+         */
         val borderline: Boolean
-            get() = suspicious > 0 || score >= FilterTuning.BORDERLINE_FLOOR
+            get() = suspicious > 0 || score - primerPoints >= FilterTuning.BORDERLINE_FLOOR
     }
 
     /** The verdict AND the reading behind it, from ONE scoring pass. */
@@ -1124,7 +1214,10 @@ object BorderlineScorer {
         Result(t.score, reasonFor(t.score), contributionsOf(t), t.suspicious, t.primers, t.primed)
 
     private fun readingOf(t: Tally): Reading =
-        Reading(t.score, t.families, t.suspicious, t.bodyWords, t.primers)
+        Reading(
+            t.score, t.families, t.suspicious, t.bodyWords, t.primers,
+            t.primerNames, t.partners, t.primerPoints,
+        )
 
     /** The per-family detail as a user-facing list, biggest share first. */
     private fun contributionsOf(t: Tally): List<Contribution> =
@@ -1148,8 +1241,16 @@ object BorderlineScorer {
     private fun reasonFor(score: Int): String = "Sexual / adult content (score $score)"
 
     // A hit worth counting: which family, what tier, base weight, and the exact matched word
-    // (for the gender multiplier). base == 0 means "recognised but scores nothing here".
-    private data class Hit(val fam: String, val tier: String, val base: Int, val word: String)
+    // (for the gender multiplier). base == 0 means "recognised but scores nothing here" -
+    // either because an innocent neighbour VETOED it ([vetoed]) or because a context-gated
+    // word had no context. The two zeros differ for pairing: a bare "girl" is still a
+    // partner, a "naked mole rat" is not.
+    private data class Hit(
+        val fam: String, val tier: String, val base: Int, val word: String,
+        val vetoed: Boolean = false,
+        /** Can this be the partner half of a pairing? False for the context-gated tiers unless listed. */
+        val partner: Boolean = true,
+    )
 
     private fun compute(title: String?, url: String?, body: String?, set: Settings): Tally {
         val a = active(set.relaxed)
@@ -1172,6 +1273,9 @@ object BorderlineScorer {
             bodyTokens to 1,
         )
         var suspicious = 0
+        // The pairing candidates: every family the word tiers recognised and no exception
+        // vetoed, scored or not. Insertion-ordered so the block screen can name the first.
+        val partners = LinkedHashSet<String>()
         for ((words, mult) in fields) {
             for (i in words.indices) {
                 val hit = resolve(words, i, a)
@@ -1187,8 +1291,12 @@ object BorderlineScorer {
                     )
                     continue
                 }
+                // A partner at full weight only: a side the gender switches have turned
+                // down is softened everywhere, pairing included.
+                val gender = genderMultiplier(hit.word, set)
+                if (hit.partner && !hit.vetoed && gender >= 1f) partners.add(hit.fam)
                 if (hit.base == 0) continue
-                val p = add(hit.fam, hit.tier, hit.base, mult, genderMultiplier(hit.word, set), detail)
+                val p = add(hit.fam, hit.tier, hit.base, mult, gender, detail)
                 if (hit.tier == TIER_EXPLICIT) explicitTotal += p else otherTotal += p
             }
             // The other half of the same trick: a word split across spaces. Glue short runs
@@ -1198,22 +1306,20 @@ object BorderlineScorer {
 
         // Phrases are matched on the whole (normalised) field, because the meaning is in the
         // ORDER — no single word of "try on haul" is bannable, the three together plainly are.
-        var primers = 0
+        val primerNames = LinkedHashSet<String>()
         for ((text, mult) in listOf(
             normalise(title) to FilterTuning.TITLE_URL_MULTIPLIER,
             normalise(url) to FilterTuning.TITLE_URL_MULTIPLIER,
             normalise(body) to 1,
         )) {
-            val (loud, soft) = scorePhrases(text, mult, set, detail)
+            val (loud, soft) = scorePhrases(text, mult, set, detail, partners)
             explicitTotal += loud
             otherTotal += soft
             // PRIMERS. Scored last and kept in `otherTotal` like any other soft signal, but
-            // counted separately: the COUNT is what the service hands to PrimerWatch, and
+            // counted separately: the NAMES are what the service hands to PrimerWatch, and
             // the points are a token amount that exists only so the breakdown on the block
             // screen can show the phrase was seen at all.
-            val (primerPts, primerCount) = scorePrimers(text, mult, detail)
-            otherTotal += primerPts
-            primers += primerCount
+            otherTotal += scorePrimers(text, mult, detail, primerNames)
         }
 
         // Mode-gated FRAGMENTS (ModeFragments): title and URL only, never the body. They are
@@ -1224,9 +1330,21 @@ object BorderlineScorer {
             normalise(title) to FilterTuning.TITLE_URL_MULTIPLIER,
             normalise(url) to FilterTuning.TITLE_URL_MULTIPLIER,
         )) {
-            val (hard, soft) = scoreFragments(text, mult, set, detail)
-            explicitTotal += hard
-            otherTotal += soft
+            val f = scoreFragments(text, mult, set, detail, primerNames)
+            explicitTotal += f.hard
+            otherTotal += f.soft + f.primer
+        }
+        val primers = primerNames.size
+
+        // A PRIMER'S OWN WORDS ARE NOT ITS PARTNER. "hot girls" is a primer phrase, and
+        // "hot" and "girls" are both context-gated words the loop above just recognised;
+        // "pole dance" contains "pole", "adult content" contains "adult". Left in, every
+        // one of those phrases would pair with itself on the screen it appeared on, and a
+        // primer would block on one sighting again - the exact thing the tier exists to
+        // prevent. Matched by stem so "girl" goes with "girls".
+        if (primerNames.isNotEmpty() && partners.isNotEmpty()) {
+            val primerWords = primerNames.flatMap { tokenize(it) }
+            partners.removeAll { fam -> primerWords.any { it.startsWith(fam) || fam.startsWith(it) } }
         }
 
         // Looking up a symptom is not looking at porn. Damp the SOFT signals hard when the
@@ -1259,6 +1377,7 @@ object BorderlineScorer {
             explicitHit = detail.values.any { it.tier == TIER_EXPLICIT && it.full && it.points > 0f },
             bodyWords = bodyTokens.size, suspicious = suspicious,
             primers = primers, primed = primed,
+            primerNames = primerNames.toList(), partners = partners.toList(),
         )
     }
 
@@ -1275,18 +1394,32 @@ object BorderlineScorer {
                 w in a.mixed -> return hitOrVeto(words, i, fam, "mixed", FilterTuning.MIXED_WEIGHT, w)
                 w in a.strong -> return hitOrVeto(words, i, fam, "strong", FilterTuning.STRONG_WEIGHT, w)
                 w in a.subtle -> return hitOrVeto(words, i, fam, "subtle", FilterTuning.SUBTLE_WEIGHT, w)
-                w in a.dual ->
-                    return if (hasSetNear(words, i, i, a.indicators)) hitOrVeto(words, i, fam, "dual", FilterTuning.DUAL_SEXUAL_WEIGHT, w)
-                    else Hit(fam, "dual", 0, w)
-                w in a.ambiguous ->
-                    return if (hasSetNear(words, i, i, a.ambigIndicators)) hitOrVeto(words, i, fam, "ambiguous", FilterTuning.AMBIGUOUS_WEIGHT, w)
-                    else Hit(fam, "ambiguous", 0, w)
-                w in a.combo ->
-                    return if (hasSetNear(words, i, i, BannedWords.PERSON)) hitOrVeto(words, i, fam, "combo", FilterTuning.COMBO_WEIGHT, w)
-                    else Hit(fam, "combo", 0, w)
+                // The context-gated tiers. Without context they score nothing, but they
+                // are still RECOGNISED (a bare "girl" is a pairing partner), so the
+                // exception check runs either way: a word an innocent neighbour excuses
+                // is not a partner any more than it is a score.
+                w in a.dual -> return gated(words, i, fam, "dual", FilterTuning.DUAL_SEXUAL_WEIGHT, w,
+                    hasSetNear(words, i, i, a.indicators))
+                w in a.ambiguous -> return gated(words, i, fam, "ambiguous", FilterTuning.AMBIGUOUS_WEIGHT, w,
+                    hasSetNear(words, i, i, a.ambigIndicators))
+                w in a.combo -> return gated(words, i, fam, "combo", FilterTuning.COMBO_WEIGHT, w,
+                    hasSetNear(words, i, i, BannedWords.PERSON))
             }
         }
         return null
+    }
+
+    /**
+     * A context-gated hit: scores [base] only with [inContext], vetoed like any other, and
+     * a pairing partner only if words_partner.txt says so - "load" and "package" are not.
+     */
+    private fun gated(
+        words: List<String>, i: Int, fam: String, tier: String, base: Int, word: String,
+        inContext: Boolean,
+    ): Hit {
+        val partner = word in BannedWords.PARTNER
+        if (hasExceptionNear(words, i, word)) return Hit(fam, tier, 0, word, vetoed = true, partner = partner)
+        return Hit(fam, tier, if (inContext) base else 0, word, partner = partner)
     }
 
     /**
@@ -1354,7 +1487,8 @@ object BorderlineScorer {
 
     /** A scoring hit, unless an innocent-context word vetoes it ("naked mole rat" → nothing). */
     private fun hitOrVeto(words: List<String>, i: Int, fam: String, tier: String, base: Int, word: String): Hit =
-        if (hasExceptionNear(words, i, word)) Hit(fam, tier, 0, word) else Hit(fam, tier, base, word)
+        if (hasExceptionNear(words, i, word)) Hit(fam, tier, 0, word, vetoed = true)
+        else Hit(fam, tier, base, word)
 
     /** The tier that is exempt from every softener: CORE words, LOUD phrases, hard fragments. */
     private const val TIER_EXPLICIT = "explicit"
@@ -1379,7 +1513,10 @@ object BorderlineScorer {
         d.count++
         if (d.counted >= FilterTuning.PER_WORD_CAP) return 0f     // over cap: ignored
         var pts = base * mult * gender
-        if (tier != TIER_EXPLICIT) {
+        if (tier == TIER_PRIMER) {
+            // One note per primer family, not one per sighting - see PRIMER_WEIGHT.
+            pts = minOf(pts, maxOf(0f, FilterTuning.PRIMER_WEIGHT - d.points))
+        } else if (tier != TIER_EXPLICIT) {
             pts = minOf(pts, maxOf(0f, FilterTuning.SINGLE_WORD_MAX - d.points))
         }
         if (pts <= 0f) return 0f
@@ -1409,44 +1546,51 @@ object BorderlineScorer {
     /** Returns (loudPoints, softPoints) — kept apart so the medical damper spares the loud ones. */
     private fun scorePhrases(
         text: String, mult: Int, set: Settings, detail: HashMap<String, Detail>,
+        partners: MutableSet<String>,
     ): Pair<Float, Float> {
         if (text.isBlank()) return 0f to 0f
-        fun run(phrases: Set<String>, weight: Int, tier: String): Float {
+        fun run(phrases: Set<String>, weight: Int, tier: String, partner: Boolean): Float {
             var s = 0f
             for (p in phrases) {
                 if (!text.contains(" $p ")) continue
-                s += add("phrase:$p", tier, weight, mult, phraseMultiplier(p, set), detail)
+                val gender = phraseMultiplier(p, set)
+                if (partner && gender >= 1f) partners.add(p)
+                s += add("phrase:$p", tier, weight, mult, gender, detail)
             }
             return s
         }
         // LOUD is treated like CORE (exempt from the single-word cap) so a loud phrase in a
-        // title blocks alone; SOFT is a weak, strict-only corroborator.
-        val loud = run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT, TIER_EXPLICIT)
-        val soft = if (!set.relaxed) run(BannedPhrases.SOFT, FilterTuning.PHRASE_SOFT_WEIGHT, "phrase") else 0f
+        // title blocks alone; SOFT is a weak, strict-only corroborator. Only LOUD phrases
+        // are pairing partners: "try on" and "photo shoot" are met by accident all day.
+        val loud = run(BannedPhrases.LOUD, FilterTuning.PHRASE_LOUD_WEIGHT, TIER_EXPLICIT, partner = true)
+        val soft = if (!set.relaxed) run(BannedPhrases.SOFT, FilterTuning.PHRASE_SOFT_WEIGHT, "phrase", partner = false) else 0f
         return loud to soft
     }
 
     /**
-     * PRIMER phrases against one normalised field. Returns (points, how many matched).
+     * PRIMER phrases against one normalised field. Returns the points; the phrases that
+     * matched are added to [names], which is what PrimerWatch remembers.
      *
      * Deliberately the dullest function in the file: no gender multiplier, no mode gate, no
      * context test. A primer is not a judgement about the page, so there is nothing here to
      * get wrong — it is a note that the page mentioned something adult-adjacent, worth two
-     * points and a fifteen-minute memory.
+     * points and a ten-minute memory.
      */
     private fun scorePrimers(
-        text: String, mult: Int, detail: HashMap<String, Detail>,
-    ): Pair<Float, Int> {
-        if (text.isBlank()) return 0f to 0
+        text: String, mult: Int, detail: HashMap<String, Detail>, names: MutableSet<String>,
+    ): Float {
+        if (text.isBlank()) return 0f
         var pts = 0f
-        var n = 0
         for (p in BannedPhrases.PRIMER) {
             if (!text.contains(" $p ")) continue
             pts += add("primer:$p", TIER_PRIMER, FilterTuning.PRIMER_WEIGHT, mult, 1f, detail)
-            n++
+            names.add(p)
         }
-        return pts to n
+        return pts
     }
+
+    /** What one field's fragments came to, split the way the medical damper needs them. */
+    private class FragmentPoints(val hard: Float, val soft: Float, val primer: Float)
 
     /**
      * MODE-GATED FRAGMENTS (see ModeFragments) against one normalised field. Returns
@@ -1458,12 +1602,22 @@ object BorderlineScorer {
      */
     private fun scoreFragments(
         text: String, mult: Int, set: Settings, detail: HashMap<String, Detail>,
-    ): Pair<Float, Float> {
-        if (text.isBlank()) return 0f to 0f
+        primerNames: MutableSet<String>,
+    ): FragmentPoints {
+        if (text.isBlank()) return FragmentPoints(0f, 0f, 0f)
         var hard = 0f
         var soft = 0f
+        var primer = 0f
         for (f in ModeFragments.active(strict = !set.relaxed, superHardcore = set.superHardcore)) {
             if (!text.contains(f.text)) continue
+            if (f.primer) {
+                // A primer fragment ("reddit") is a primer like any phrase: keyed with the
+                // phrase primers so the block screen reads it the same way, capped to one
+                // note per family however many of its spellings the title contains.
+                primer += add("primer:${f.family}", TIER_PRIMER, f.weight, mult, 1f, detail)
+                primerNames.add(f.family)
+                continue
+            }
             val tier = if (f.hard) TIER_EXPLICIT else "fragment"
             // Keyed by FAMILY, not by spelling: "bik ini" lands on the same budget as the
             // word "bikini", so an evasion and the real word are one signal, not two. The
@@ -1472,7 +1626,7 @@ object BorderlineScorer {
             val pts = add(f.family, tier, f.weight, mult, genderMultiplier(f.family, set), detail)
             if (f.hard) hard += pts else soft += pts
         }
-        return hard to soft
+        return FragmentPoints(hard, soft, primer)
     }
 
     private fun hasMedicalContext(title: String?, body: String?): Boolean {

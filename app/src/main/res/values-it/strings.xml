@@ -862,6 +862,10 @@
     <string name="br_repeat_block">%1$s\n\nFanno %2$d rilevamenti distinti in questa app in %3$d minuti. Uno da solo viene sempre lasciato passare - questo ha continuato a tornare.</string>
     <string name="br_new_app_block">%1$s\n\nQuesta app è nuova qui - sul tuo telefono da %2$d giorno/i - quindi basta un solo rilevamento. Un\'app che usi da mesi avrebbe avuto altre due possibilità prima di questa schermata.</string>
     <string name="br_home_block">%1$s\n\nSei a casa tua, in Super rigida. Qui non c\'è una seconda occhiata: la prima cosa rilevata chiude l\'app. In qualsiasi altro posto questa sarebbe stata lasciata passare.</string>
+    <string name="br_paired_block">\"%1$s\" e poi \"%2$s\" in questa app, entro %3$d minuti\n\nNessuna delle due blocca qualcosa da sola - \"%1$s\" potrebbe restare sullo schermo tutto il giorno. Ma \"%2$s\" è comparso %4$s, nella stessa app, e due cose diverse così vicine sono lo schema che questo filtro esiste per notare.</string>
+    <string name="br_paired_same_screen">sulla stessa schermata</string>
+    <string name="br_paired_seconds_later">%1$d secondi dopo</string>
+    <string name="br_paired_minutes_later">%1$d minuto/i dopo</string>
 
 
     <!-- ── String-arrays ─────────────────────────────────────────────────────────────── -->
