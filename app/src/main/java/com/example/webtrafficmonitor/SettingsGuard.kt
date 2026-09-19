@@ -81,6 +81,41 @@ import android.widget.TextView
 //       back on. See the long note on MonitorGuardService for exactly what that can and
 //       cannot do.
 //
+//  STILL BYPASSED (2026-09-19, same phone), and the report is worth quoting: "there is a
+//  slight delay when the app opens to when the block screen comes on, allowing user to
+//  spam click". Layer (3) wins the race for taps that arrive AFTER the cover, and loses
+//  it for the ones that arrive before - and there were two reasons a tap could get in
+//  before it:
+//
+//    • the framework itself. notificationTimeout=100 in the service config does not just
+//      coalesce content changes, it DELAYS EVERY EVENT by 100ms (sendMessageDelayed in
+//      AbstractAccessibilityServiceConnection.notifyAccessibilityEvent - the window-state
+//      event included). A tenth of a second is a whole tap.
+//    • Settings reopening ON THE TOGGLE PAGE. goHome() leaves its back stack exactly as
+//      it was, so every re-entry puts the switch back under the same spot of screen, and
+//      each re-entry is another go at the same 100ms.
+//
+//  FOUR MORE THINGS, all in PageMonitorAccessibilityService unless named:
+//
+//   (6) NO DELAY WHILE IT MATTERS (syncEventLatency). The 100ms stays for the Play Store
+//       - it is what stopped the ANRs - but it goes to 0 the moment a Settings app is in
+//       front or any lockout / hold is live. Settings does not fire the event storms the
+//       delay was for, so nothing is given back.
+//
+//   (7) COVER BEFORE THE WINDOW (preemptSettingsLaunch). While Settings is shut, the TAP
+//       on its icon - in the launcher, in recents, the gear in the shade - raises the
+//       cover. The window has not even been asked for yet; when it arrives it is under us.
+//
+//   (8) CLOSE SETTINGS, DO NOT JUST LEAVE IT (unwindSettings). After an ejection, Back is
+//       pressed under the cover until Settings has no pages left, THEN Home. A re-entry
+//       now lands on the Settings front page, three taps and three window events from
+//       the switch, instead of on the switch.
+//
+//   (9) EXTRA CAUTION (SettleHold + SettingsLockout.reentry). A lockout ejection covers
+//       the WHOLE PHONE for a few seconds afterwards, home screen included, with a
+//       countdown - and each re-entry into a shut Settings makes the next hold longer and
+//       adds minutes to the lockout. Spamming the app switcher costs more every time.
+//
 //  ⚠️ WHAT DELIBERATELY STAYS OPEN. ADB. Same reason as ever - see the note on
 //  ESCAPE_ROUTE_PAGES in AppConfig. A person who has locked themselves out badly needs
 //  a cable and a computer to get back, and nothing here closes that.
@@ -117,6 +152,8 @@ object SettingsLockout {
     private const val KEY_STRIKE_AT = "last_strike_at"
     private const val KEY_REASON = "last_reason"
     private const val KEY_TOTAL = "total_strikes"
+    private const val KEY_REENTRIES = "reentries"          // this lockout only
+    private const val KEY_REENTRY_MS = "reentry_ms"        // ...and what they have added to it
 
     /** An hour, a day, three days. The last rung repeats. */
     private val LADDER_MS = longArrayOf(
@@ -127,6 +164,16 @@ object SettingsLockout {
 
     /** Clean for this long and the ladder starts again from the bottom. */
     private const val DECAY_MS = 30L * 24 * 60 * 60 * 1000
+
+    /**
+     * WALKING BACK INTO A SHUT SETTINGS COSTS MORE SETTINGS. Ten minutes a time, up to an
+     * hour on top of whatever the ladder said. Flat rather than another ladder, because
+     * this is a smaller offence than the one that earned the lockout - a re-entry can be
+     * muscle memory reaching for Wi-Fi - and ten minutes is enough to make the deliberate
+     * version (open, get thrown out, open again, in the hope one tap lands) not worth it.
+     */
+    const val REENTRY_PENALTY_MS = 10L * 60 * 1000
+    private const val REENTRY_CAP_MS = 60L * 60 * 1000
 
     /**
      * One visit is one strike. Sitting on a Settings page fires events continuously and a
@@ -171,12 +218,42 @@ object SettingsLockout {
             .putLong(KEY_STRIKE_AT, now)
             .putString(KEY_REASON, cause)
             .putInt(KEY_TOTAL, p.getInt(KEY_TOTAL, 0) + 1)
+            .putInt(KEY_REENTRIES, 0)                  // a fresh lockout starts a fresh count
+            .putLong(KEY_REENTRY_MS, 0L)
             .apply()
         // The honest "look anyway" offer is meant to be on the table exactly when somebody
         // is reaching for the destructive option - which is what this is. See BypassWatch.
         BypassWatch.record(ctx, BypassWatch.Reason.ACCESSIBILITY)
         return until - now
     }
+
+    /**
+     * Settings came to the front while it was shut. Adds [REENTRY_PENALTY_MS] to the clock
+     * (up to [REENTRY_CAP_MS] per lockout) and returns what was added - 0 once the cap is
+     * reached, or when there is no lockout to extend.
+     *
+     * ONE CALL PER VISIT, and the caller decides what a visit is: the service sees a page
+     * change inside Settings as another event for the same package, and while it is pressing
+     * Back through the stack (unwindSettings) it sees several. Charging each of those would
+     * turn one re-entry into the whole cap. So this does no deduping of its own - see
+     * newSettingsVisit in the service.
+     */
+    @Synchronized
+    fun reentry(ctx: Context): Long {
+        if (!isActive(ctx)) return 0L
+        val p = prefs(ctx)
+        val soFar = p.getLong(KEY_REENTRY_MS, 0L)
+        val add = (REENTRY_CAP_MS - soFar).coerceIn(0L, REENTRY_PENALTY_MS)
+        p.edit()
+            .putInt(KEY_REENTRIES, p.getInt(KEY_REENTRIES, 0) + 1)
+            .putLong(KEY_REENTRY_MS, soFar + add)
+            .putLong(KEY_UNTIL, p.getLong(KEY_UNTIL, 0L) + add)
+            .apply()
+        return add
+    }
+
+    /** Re-entries charged against the CURRENT lockout. Reset by the next strike. */
+    fun reentries(ctx: Context): Int = prefs(ctx).getInt(KEY_REENTRIES, 0)
 
     fun remaining(ctx: Context): Long =
         (prefs(ctx).getLong(KEY_UNTIL, 0L) - System.currentTimeMillis()).coerceAtLeast(0L)
@@ -212,13 +289,23 @@ object SettingsLockout {
     /** What the next strike would cost, for the warning shown BEFORE it is earned. */
     fun nextPenaltyMs(ctx: Context): Long = LADDER_MS[level(ctx).coerceIn(0, LADDER_MS.lastIndex)]
 
-    /** The cover's text while Settings is shut. */
-    fun coverText(ctx: Context): String =
-        ctx.getString(
+    /**
+     * The cover's text while Settings is shut. Once a re-entry has been charged it SAYS SO,
+     * and says what the next one costs - the same rule as the lockout itself: a penalty
+     * nobody is told about only teaches "try again".
+     */
+    fun coverText(ctx: Context): String {
+        val base = ctx.getString(
             R.string.br_settings_locked,
             lastCause(ctx) ?: Cause.MONITORING_PAGE,
             Units.compactDuration(ctx, remaining(ctx)),
         )
+        if (reentries(ctx) == 0) return base
+        return base + "\n\n" + ctx.getString(
+            R.string.br_settings_reentry,
+            Units.compactDuration(ctx, REENTRY_PENALTY_MS),
+        )
+    }
 
     /** Dev console only. There is deliberately no user-facing way to call this. */
     fun clear(ctx: Context) {
@@ -318,6 +405,13 @@ object ReentryGuard {
         return true
     }
 
+    /** Is the guard armed for ANYTHING right now? (Decides the event-latency mode.) */
+    @Synchronized
+    fun anyArmed(): Boolean {
+        val now = android.os.SystemClock.uptimeMillis()
+        return states.values.any { now <= it.armedUntil }
+    }
+
     /** ms left on [pkg]'s hold, or 0. */
     @Synchronized
     fun holdRemaining(pkg: String?): Long {
@@ -341,6 +435,86 @@ object ReentryGuard {
     /** Forget everything (service teardown / dev console). */
     @Synchronized
     fun reset() = states.clear()
+}
+
+
+// =====================================================================================
+//  SettleHold  —  the whole phone, paused, for a few seconds after a lockout ejection
+// =====================================================================================
+/**
+ * ReentryGuard covers the app somebody was thrown out of. This covers EVERYTHING ELSE for
+ * a moment afterwards - the home screen, the app switcher, whatever they open next - so
+ * that "get thrown out, tap the Settings card in recents, get thrown out, tap it again" has
+ * a forced pause in it that grows every time round.
+ *
+ * WHY IT EXISTS WHEN THE RE-ENTRY IS ALREADY COVERED. The cover over a re-entered Settings
+ * is raised off the first window event, and however fast that is there is a gap before it
+ * between the window appearing and the event arriving. Each re-entry is another go at that
+ * gap. unwindSettings takes the switch out from under the gap (a re-entry lands on the
+ * Settings front page now, not the toggle); this takes the RHYTHM out of it. Someone
+ * spamming the app switcher gets a countdown they cannot tap through, and a longer one each
+ * time, which is a thing the urge can feel and the plan cannot survive.
+ *
+ * ONLY EVER STARTED BY A LOCKOUT EJECTION - our own off-switch pages, a tap at the switch,
+ * a re-entry into a shut Settings. A bounce off an escape-route page ("Multiple users") is
+ * a page we are less sure of, and covering the whole phone over a guess would be wrong.
+ *
+ * In memory, for the same reason as ReentryGuard: it measures seconds, and a process death
+ * mid-hold is not something a user can arrange. The persisted half of the same answer is
+ * SettingsLockout.reentry.
+ */
+object SettleHold {
+
+    /** The first hold. Long enough to read the cover; short enough to feel like a pause. */
+    private const val BASE_MS = 8_000L
+    private const val ESCALATE = 2.0f
+    private const val MAX_MS = 45_000L
+
+    /** A lockout ejection inside this window of the last one is the same campaign. */
+    private const val ARM_MS = 2 * 60_000L
+
+    private var holdUntil = 0L
+    private var armedUntil = 0L
+    private var nextHold = BASE_MS
+
+    /**
+     * Start a hold, or leave a running one exactly as it is. A running hold means the
+     * screen is already covered, so anything arriving now is our own unwinding of Settings
+     * or a page changing under the cover - not a person coming back for another go. The
+     * escalation is for THEM, and it happens on the first ejection after the cover lifts.
+     */
+    @Synchronized
+    fun start() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now < holdUntil) return
+        if (now > armedUntil) nextHold = BASE_MS
+        holdUntil = now + nextHold
+        armedUntil = holdUntil + ARM_MS
+        nextHold = (nextHold * ESCALATE).toLong().coerceAtMost(MAX_MS)
+    }
+
+    @Synchronized
+    fun remaining(): Long = (holdUntil - android.os.SystemClock.uptimeMillis()).coerceAtLeast(0L)
+
+    fun running(): Boolean = remaining() > 0L
+
+    /**
+     * The cover's text while the hold runs, or null. A countdown, like ReentryGuard.reason
+     * and for the same reason: the recheck loop re-asks every 400ms, so it ticks for free,
+     * and a wall that visibly ends is one people wait out.
+     */
+    fun reason(ctx: Context): String? {
+        val left = remaining()
+        if (left <= 0L) return null
+        return ctx.getString(
+            R.string.br_settle_hold,
+            Units.secs(ctx, (left + 999) / 1000),
+            Units.compactDuration(ctx, SettingsLockout.remaining(ctx)),
+        )
+    }
+
+    @Synchronized
+    fun reset() { holdUntil = 0L; armedUntil = 0L; nextHold = BASE_MS }
 }
 
 

@@ -8970,6 +8970,16 @@ private fun startWeekStrict() {
         }, SettingsLockout.level(this) == 0)
         row("Attempts recorded", "${SettingsLockout.totalStrikes(this)}")
         SettingsLockout.lastCause(this)?.let { row("Last attempt", it) }
+        // The 2026-09-19 layers: what a re-entry has cost so far, and whether the whole-phone
+        // pause is running (it never should be while this page is readable - the cover would
+        // be over it - so a non-zero here means the hold outlived a cover, which is a bug).
+        val reentries = SettingsLockout.reentries(this)
+        row("Re-entries this lockout",
+            if (reentries == 0) "none"
+            else "$reentries - each adds ${Units.compactDuration(this, SettingsLockout.REENTRY_PENALTY_MS)}",
+            reentries == 0)
+        val settle = SettleHold.remaining()
+        row("Settle hold (whole phone)", if (settle <= 0) "none" else "${(settle + 999) / 1000}s left", settle <= 0)
         row("Usage access (stand-in guard)",
             if (MonitorFallback.hasUsageAccess(this)) "granted" else "not granted - can only nag",
             MonitorFallback.hasUsageAccess(this))

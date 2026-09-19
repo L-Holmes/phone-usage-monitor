@@ -102,6 +102,13 @@ class OverlayController(private val context: Context) {
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var view: View? = null
 
+    // THE COVER IS BUILT ONCE AND KEPT (2026-09-19). Inflating overlay_block, wrapping it
+    // and binding it was on the critical path of every fresh cover, and the critical path is
+    // what a tap aimed at a Settings switch is racing. Hiding now detaches the window but
+    // keeps the view, so the next show() is an addView and nothing else. Dropped only if an
+    // addView ever fails part-way, because a view in an unknown state is not worth reusing.
+    private var built: FrameLayout? = null
+
     val isShowing: Boolean get() = view != null
 
     /**
@@ -164,25 +171,13 @@ class OverlayController(private val context: Context) {
             return
         }
 
-        val overlay = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
-        overlay.findViewById<TextView>(R.id.block_reason).text = reason
-        setDetailsOn(overlay, details)
-        overlay.findViewById<View>(R.id.btn_go_back).visibility =
+        val container = built ?: buildCover().also { built = it }
+        resetTransient(container)
+        container.findViewById<TextView>(R.id.block_reason).text = reason
+        setDetailsOn(container, details)
+        container.findViewById<View>(R.id.btn_go_back).visibility =
             if (showGoBack) View.VISIBLE else View.GONE
-        bindButtons(overlay, onGoBack, onLeave, onReport)
-
-        // Wrap the cover in a FrameLayout we control, so the temporary image layer
-        // can be laid ON TOP of the cover (and removed) without touching the XML.
-        // findViewById still reaches block_reason/buttons since they're descendants.
-        val container = FrameLayout(context).apply {
-            addView(
-                overlay,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                ),
-            )
-        }
+        bindButtons(container, onGoBack, onLeave, onReport)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -204,12 +199,50 @@ class OverlayController(private val context: Context) {
             // Never crash the service over a cover; log it instead.
             android.util.Log.e("OverlayController", "could not show block cover", t)
             // addView can throw AFTER the window was registered (BadTokenException happens
-            // before, an inflation failure can happen after). Ask for it to go either way.
+            // before, an inflation failure can happen after). Ask for it to go either way,
+            // and build afresh next time rather than trust this one.
             view = container
             detach()
+            built = null
         }
+    }
 
+    /**
+     * The cover, inflated and wrapped. The FrameLayout is ours so a temporary layer can be
+     * laid ON TOP of the cover (and removed) without touching the XML; findViewById still
+     * reaches block_reason and the buttons since they are descendants.
+     */
+    private fun buildCover(): FrameLayout {
+        val overlay = LayoutInflater.from(context).inflate(R.layout.overlay_block, null)
+        return FrameLayout(context).apply {
+            addView(
+                overlay,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+    }
 
+    /**
+     * Undo what the LAST showing left on the reused view: a status line that was flashed
+     * ("Leaving…"), a button caught mid press-animation when the cover came down. The
+     * layout's own defaults are an empty, invisible status and buttons at rest, and a
+     * reused cover has to start from those or it is visibly a used one.
+     */
+    private fun resetTransient(root: View) {
+        root.findViewById<TextView>(R.id.block_status)?.let {
+            it.animate().cancel()
+            it.text = ""
+            it.alpha = 0f
+        }
+        for (id in intArrayOf(R.id.btn_leave, R.id.btn_go_back, R.id.btn_report)) {
+            root.findViewById<View>(id)?.let {
+                it.animate().cancel()
+                it.scaleX = 1f; it.scaleY = 1f; it.alpha = 1f
+            }
+        }
     }
 
     /**

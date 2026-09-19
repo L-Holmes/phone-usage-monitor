@@ -1038,6 +1038,12 @@
     <!-- The few seconds after an ejection, so queued taps land here instead of on a switch.
          %1$s is an already-formatted count of seconds ("4 s") and it counts down. -->
     <string name="br_reentry_hold">Hold on - %1$s.\n\nYou were just sent out of here. Give it a moment before going back in.</string>
+    <!-- Appended to br_settings_locked once a re-entry has been charged. %1$s is the flat
+         penalty ("10m"). Told up front, for the same reason as the lockout itself. -->
+    <string name="br_settings_reentry">Opening Settings while it is closed adds %1$s to that, every time.</string>
+    <!-- The whole-phone pause after a lockout ejection (SettleHold). %1$s counts down in
+         seconds ("8 s"); %2$s is how long Settings stays closed. -->
+    <string name="br_settle_hold">Hold on - %1$s.\n\nYou went for the guard\'s off switch, so the phone is paused for a moment.\n\nSettings stays closed for %2$s. Going back in does not shorten that - it lengthens it.</string>
     <!-- The stand-in cover, drawn by MonitorGuardService while page monitoring is OFF. -->
     <string name="br_monitoring_off">Page monitoring is off.\n\nNothing but calls, texts and the essentials opens until it is back on.</string>
     <string name="monitor_off_fix">Turn page monitoring back on</string>

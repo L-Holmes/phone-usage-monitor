@@ -22,4 +22,11 @@
   changes were already gated at BLOCK_INTERVAL_MS (200ms), so for those it costs nothing at
   all; only the "you just opened something" window-state event is affected, and a tenth of a
   second is under the app-launch animation.
+
+  ⚠️ 2026-09-19: EXCEPT WHEN SOMEBODY IS TAPPING AT OUR OWN OFF SWITCH. A tenth of a second
+  is under the launch animation, but it is not under a tap that was planned before the window
+  appeared - which is how the Settings guard was being beaten. So this value is the RESTING
+  one: PageMonitorAccessibilityService.syncEventLatency sets it to 0 through setServiceInfo
+  whenever a Settings app is in front or a lockout / hold is live, and puts it back to this
+  afterwards. If you change the number here, change SLOW_EVENT_TIMEOUT_MS there to match.
 -->

@@ -743,6 +743,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // listing there has an Uninstall button, and taking somebody's app store away for an
         // hour because they opened our accessibility page is a penalty aimed at the wrong app.
         if (pkg in AppConfig.SETTINGS_ONLY_PACKAGES && SettingsLockout.enforcedNow(this)) {
+            // WALKING BACK IN COSTS MORE. A NEW visit only - not the page changes that
+            // follow inside the same one, and not the pages our own unwinding walks back
+            // through (those all arrive while a hold is running or within the eject
+            // debounce). See SettingsLockout.reentry for why it does no deduping itself.
+            if (stateChange && newSettingsVisit(pkg)) {
+                val added = SettingsLockout.reentry(this)
+                if (added > 0) android.util.Log.w(
+                    "PageMonitor", "re-entered a shut $pkg - lockout extended by ${added / 60_000} min",
+                )
+            }
             ejectFromSettings(pkg, SettingsLockout.coverText(this))
             return true
         }
@@ -895,13 +905,33 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var lastEjectPkg: String? = null
     private var lastEjectAt = 0L
 
+    /**
+     * Is this event the START of a visit to [pkg], as opposed to more of the one we are
+     * already throwing them out of? Everything that is not a person walking back in - a page
+     * changing under the cover, the pages unwindSettings presses Back through, the window
+     * events that follow an ejection - happens inside the eject debounce, under a running
+     * hold, or during the unwind. Read-only: ejectFromSettings owns the timestamps.
+     *
+     * NOT the first Settings we see after connecting. The lockout that outlives a process is
+     * the one struck for switching monitoring OFF, and the person we meet standing in
+     * Settings when it comes back on is the person who has just switched it back ON - from
+     * the toggle page, which is where they are. They pay the hour; they do not also pay for
+     * "re-entering" a room they never left.
+     */
+    private fun newSettingsVisit(pkg: String): Boolean {
+        if (unwindingPkg != null || SettleHold.running()) return false
+        val last = lastEjectPkg ?: return false
+        if (pkg != last) return true
+        return SystemClock.uptimeMillis() - lastEjectAt >= EJECT_DEBOUNCE_MS
+    }
+
     private fun ejectFromSettings(pkg: String, coverText: String) {
         // ⚠️ THE DEBOUNCE IS NOT AN OPTIMISATION. A Settings page in front fires
         // content-change events several times a second and every one of them arrives here,
         // so an undebounced version would ask the system for Home dozens of times over one
         // visit - performGlobalAction is a cross-process call, and hammering it during a
         // window transition is how it starts returning false (see goHome). The COVER is
-        // refreshed every time regardless; only the trip home is rationed.
+        // refreshed every time regardless; only the trip out is rationed.
         val now = SystemClock.uptimeMillis()
         val sameVisit = pkg == lastEjectPkg && now - lastEjectAt < EJECT_DEBOUNCE_MS
         lastEjectPkg = pkg
@@ -909,7 +939,68 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         ReentryGuard.arm(pkg)
         ReentryGuard.onForeground(pkg)        // start the hold NOW, not on the way back in
         showAppBlock(coverText, pkg)
-        if (!sameVisit) goHome()
+        if (pkg in AppConfig.SETTINGS_ONLY_PACKAGES) {
+            // A LOCKOUT EJECTION PAUSES THE WHOLE PHONE for a moment (SettleHold) - our own
+            // off-switch pages, a tap at the switch, a re-entry into a shut Settings. An
+            // escape-route bounce is not a lockout and does not: enforcedNow is false.
+            if (SettingsLockout.enforcedNow(this)) SettleHold.start()
+            // And Settings is CLOSED, not left: Back through its stack, then Home. A re-entry
+            // then lands on the front page, not on the switch. No-op if already underway.
+            unwindSettings(pkg)
+        } else if (!sameVisit) {
+            goHome()                          // the Play Store: its listing, not its stack
+        }
+        syncEventLatency(pkg)
+    }
+
+    /**
+     * CLOSE SETTINGS, DO NOT JUST LEAVE IT.
+     *
+     * Home on its own is what made the 2026-09-19 bypass possible to keep trying: Settings
+     * keeps its back stack, so every re-entry restored the toggle page with the switch under
+     * the same spot of screen, and every re-entry was another go at the gap before the
+     * cover. So after the cover is up, Back is pressed - under it, since the cover is not
+     * focusable and the key goes to Settings - every [UNWIND_STEP_MS] until Settings is no
+     * longer the app in front or [UNWIND_MAX_BACKS] have gone, and THEN Home (which is a
+     * no-op if the last Back already closed it). Settings' own front page is the deepest a
+     * re-entry can now land, three taps and three window events from the switch.
+     *
+     * Back rather than anything cleverer, deliberately. There is no global action to close
+     * an app; a CLEAR_TASK intent at Settings would bring a fresh Settings to the front to
+     * do it; and Back has a useful side effect - if a tap DID land on the switch and Android
+     * is showing its "Stop this service?" confirmation, Back is the button that says no.
+     *
+     * The pages walked back through each fire a window event, each of which lands in
+     * guardSettings, each of which calls ejectFromSettings again. That is fine and expected:
+     * the cover is refreshed, the unwind is already running, and newSettingsVisit knows not
+     * to charge for them.
+     */
+    private var unwindingPkg: String? = null
+    private var unwindBacksLeft = 0
+
+    private val unwindStep = object : Runnable {
+        override fun run() {
+            val pkg = unwindingPkg ?: return
+            val stillThere = unwindBacksLeft > 0 && currentForegroundPackage() == pkg
+            if (!stillThere) {
+                unwindingPkg = null
+                goHome()
+                return
+            }
+            unwindBacksLeft--
+            runCatching { performGlobalAction(GLOBAL_ACTION_BACK) }
+            mainHandler.postDelayed(this, UNWIND_STEP_MS)
+        }
+    }
+
+    private fun unwindSettings(pkg: String) {
+        if (unwindingPkg == pkg) return
+        unwindingPkg = pkg
+        unwindBacksLeft = UNWIND_MAX_BACKS
+        mainHandler.removeCallbacks(unwindStep)
+        // The first Back waits one step too: the cover has just been asked for, and a Back
+        // that lands before it is drawn is a Back the user can see happening.
+        mainHandler.postDelayed(unwindStep, UNWIND_STEP_MS)
     }
 
     /**
@@ -954,6 +1045,102 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         BypassWatch.record(this, reason)
     }
 
+    // ═════════════════════════════════════════════════════════════════════════════════
+    //  BEFORE THE WINDOW  —  the two things that shrink the gap the 2026-09-19 bypass used
+    // ═════════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * COVER OFF THE TAP THAT OPENS SETTINGS, not off the window it opens.
+     *
+     * While Settings is shut, the earliest signal we get that it is about to be in front is
+     * the click that asks for it: the icon in the launcher, the card in recents, the gear in
+     * the shade. All of those arrive as a click event from a launch surface with the app's
+     * label in the text, and all of them arrive a cold start (or at least an animation) before
+     * the window does. Raising the cover here means the window appears underneath it.
+     *
+     * A GUESS, and allowed to be: it costs a cover over the home screen for one recheck tick
+     * if the tap was something else called "Settings", and only while a lockout is running.
+     * Matched on the whole word so that a folder called "Settings and tools" is caught and
+     * "Presettings" is not. Launch surfaces only - a "Settings" item inside an ordinary
+     * app's own menu is that app's business.
+     */
+    private fun preemptSettingsLaunch(event: AccessibilityEvent): Boolean {
+        val pkg = event.packageName?.toString() ?: return false
+        if (pkg !in launchSurfaces) return false
+        if (!SettingsLockout.enforcedNow(this)) return false
+        val label = settingsLabel ?: return false
+        if (!label.containsMatchIn(eventText(event))) return false
+        android.util.Log.i("PageMonitor", "settings launch tapped in $pkg while shut - covering early")
+        showAppBlock(SettingsLockout.coverText(this), AppConfig.SETTINGS_ONLY_PACKAGES.first(), record = false)
+        // Give the window longer than one tick to arrive. A cold start of Settings can take
+        // most of a second, and a cover that lifts a beat before the window lands is the gap
+        // this exists to close. If the tap was something else, the home screen is covered for
+        // that long and no longer; if it was Settings, the window event takes over from here.
+        mainHandler.removeCallbacks(recheck)
+        mainHandler.postDelayed(recheck, PREEMPT_HOLD_MS)
+        return true
+    }
+
+    /** The launcher(s) and the system UI: where an app is opened FROM. Set at connect. */
+    private var launchSurfaces: Set<String> = emptySet()
+
+    /** The Settings app's label as this phone shows it, as a whole-word pattern. */
+    private var settingsLabel: Regex? = null
+
+    private fun resolveLaunchSurfaces() {
+        val surfaces = HashSet<String>(AppConfig.NOT_LOGGED_PACKAGES)
+        surfaces.addAll(AppConfig.IGNORED_PACKAGES)              // com.android.systemui
+        runCatching {
+            packageManager.resolveActivity(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+                PackageManager.MATCH_DEFAULT_ONLY,
+            )?.activityInfo?.packageName?.let { surfaces.add(it) }
+        }
+        launchSurfaces = surfaces
+        settingsLabel = AppConfig.SETTINGS_ONLY_PACKAGES.firstNotNullOfOrNull { settingsPkg ->
+            runCatching {
+                packageManager.getApplicationInfo(settingsPkg, 0).loadLabel(packageManager)
+                    .toString().trim().lowercase().takeIf { it.isNotEmpty() }
+            }.getOrNull()
+        }?.let { Regex("\\b" + Regex.escape(it) + "\\b") }
+    }
+
+    /**
+     * HOW LATE THE NEXT EVENTS MAY BE.
+     *
+     * notificationTimeout=100 in the service config is what stopped the Play Store event
+     * storm taking the process down, and it stays. But it is not only a coalescer - the
+     * framework delays EVERY event by it, the window-state event included - and a hundred
+     * milliseconds is the difference between the cover landing before a pre-planned tap and
+     * after it. So it is switched to 0 for as long as the delay could cost us something:
+     *
+     *   • a Settings app is in front (the toggle page is a couple of taps away, and the row
+     *     click that opens it is the event noteSettingsTap wants to see FIRST, not coalesced
+     *     away behind the tap that follows it);
+     *   • a lockout is on the clock, a settle hold is running, or a re-entry guard is armed
+     *     (the next Settings window has to be covered off its first event, not its first
+     *     event plus a tenth of a second).
+     *
+     * Settings does not fire the storms the delay was for. The Play Store does, and it is
+     * a guarded package but not a Settings one, so it never puts us in fast mode on its own.
+     * It CAN be used during a lockout hour, in fast mode - that is the one bounded cost of
+     * this, and the node budgets, the guard-scan throttle and the busy backoff that were the
+     * rest of the Play Store fix all still apply to every one of those events. One binder
+     * call per transition, and transitions are rare.
+     */
+    private var fastEvents = false
+
+    private fun syncEventLatency(frontPkg: String?) {
+        val want = frontPkg in AppConfig.SETTINGS_ONLY_PACKAGES ||
+            SettingsLockout.isActive(this) || SettleHold.running() || ReentryGuard.anyArmed()
+        if (want == fastEvents) return
+        val info = runCatching { serviceInfo }.getOrNull() ?: return
+        info.notificationTimeout = if (want) 0L else SLOW_EVENT_TIMEOUT_MS
+        runCatching { serviceInfo = info }
+            .onSuccess { fastEvents = want }
+            .onFailure { android.util.Log.w("PageMonitor", "could not change event latency", it) }
+    }
+
 
 
     override fun onServiceConnected() {
@@ -975,6 +1162,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         BlockRules.load(this)
         AppBlocklist.refresh(this)
         loadKeyboardPackages()
+        resolveLaunchSurfaces()
+        // A lockout can outlive the process: come back in the latency mode it calls for.
+        fastEvents = false
+        syncEventLatency(null)
         DomainBlocklist.warmUp(this)
         startGreyscaleWatch()
         startScreenWatch()
@@ -1379,6 +1570,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                     // Before anything else: was that tap aimed at our own off switch? The
                     // click event carries its own package and label, so this costs nothing
                     // and it is the single most direct signal we get. See noteSettingsTap.
+                    // And before THAT: was it the tap that opens a Settings we have shut?
+                    if (preemptSettingsLaunch(event)) return
                     if (noteSettingsTap(event)) return
                     val popup = CheckingGuard.recordTap(this)
                     if (popup != null) Toast.makeText(this, popup, Toast.LENGTH_LONG).show()
@@ -1410,6 +1603,13 @@ class PageMonitorAccessibilityService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
+        // Which event-latency mode the next events should arrive in. Off the window event
+        // and ahead of the Settings door, so Settings coming to the front is what switches
+        // the delay off - see syncEventLatency. Noise and keyboards say nothing about what
+        // is in front, so they do not get a vote.
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && !isNoise(packageName)) {
+            syncEventLatency(packageName)
+        }
         // Uninstall guard: while the lock is on, bounce out of our own App-info / uninstall /
         // "deactivate admin" pages in Settings.
         //
@@ -1679,12 +1879,26 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop. */
-    private fun showAppBlock(reason: String, blockedPackage: String) {
+    /**
+     * Shows (or keeps) the sticky cover for a blocked app and (re)arms the loop.
+     *
+     * [record] is false for a cover raised on a GUESS (preemptSettingsLaunch): if the guess
+     * is wrong the loop drops it within a tick, and a block that lasted 400ms over the home
+     * screen has no business in the block log.
+     */
+    private var blockUnrecorded = false
+
+    private fun showAppBlock(reason: String, blockedPackage: String, record: Boolean = true) {
         val controller = overlay ?: return
         val freshAppBlock = !appBlockActive          // ADD
         appBlockActive = true
-        if (freshAppBlock) BlockEventLog.recordApp(this, blockedPackage, reason)   // ADD
+        // A guessed cover that turned out right is logged by the first REAL block under it,
+        // not skipped because the cover was already up.
+        if (freshAppBlock) blockUnrecorded = !record
+        if ((freshAppBlock || blockUnrecorded) && record) {
+            BlockEventLog.recordApp(this, blockedPackage, reason)   // ADD
+            blockUnrecorded = false
+        }
         controller.show(
             reason = reason,
             onGoBack = {
@@ -1719,6 +1933,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // a block; ours can wait until the phone is actually unlocked. This also makes
         // the recheck loop drop an existing cover the moment the screen locks.
         if (keyguard.isKeyguardLocked) return null
+        // SETTINGS IS SHUT. By package, ahead of everything: no screen read, no mode check
+        // (enforcedNow does its own, and knows about the setup stand-down). guardSettings
+        // raises this cover off the event; being here as well is what keeps it up - the
+        // recheck loop and blockedVisibleApp ask THIS, and the answer must not depend on
+        // whether the re-entry hold below happens to be running.
+        if (pkg in AppConfig.SETTINGS_ONLY_PACKAGES && SettingsLockout.enforcedNow(this)) {
+            return SettingsLockout.coverText(this)
+        }
+        // THE SETTLE HOLD: the few seconds after a lockout ejection, over EVERYTHING - see
+        // SettleHold. Above the re-entry hold because it is the broader of the two, and
+        // above the mode check for the same reason the re-entry hold is.
+        SettleHold.reason(this)?.let { return it }
         // THE RE-ENTRY HOLD, above the mode check on purpose. It is not a policy about what
         // may be looked at - it is the last few seconds of an ejection that has already been
         // decided on, and the uninstall-lock bounce that triggers it runs in every mode,
@@ -3241,6 +3467,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // or a remembered page from an instance that is gone.
         ReentryGuard.reset()
         StickyGuardPage.forget()
+        SettleHold.reset()
+        mainHandler.removeCallbacks(unwindStep)
+        unwindingPkg = null
         RoomGuard.stop()
         HomeAreaWatch.stop()
         greyscaleSensor?.stop(); greyscaleSensor = null
@@ -3360,6 +3589,18 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         private const val GO_BACK_DEBOUNCE_MS = 700L
         // One trip home per visit to a guarded page - see ejectFromSettings.
         private const val EJECT_DEBOUNCE_MS = 1_200L
+        // Closing Settings after an ejection (unwindSettings): one Back per step, until it
+        // is gone or this many have been sent. Settings is at most four pages deep from the
+        // front page to any of our switches; eight covers a dialog or two on the way.
+        private const val UNWIND_STEP_MS = 250L
+        private const val UNWIND_MAX_BACKS = 8
+        // How long a cover raised off the Settings ICON (preemptSettingsLaunch) waits for the
+        // window before the recheck loop is allowed to take it down again.
+        private const val PREEMPT_HOLD_MS = 900L
+        // The service config's notificationTimeout, which syncEventLatency restores after a
+        // spell at 0. ⚠️ Keep equal to android:notificationTimeout in
+        // res/xml/accessibility_service_config.xml.
+        private const val SLOW_EVENT_TIMEOUT_MS = 100L
         // A page must stay blocked this long before Back/Leave writes a PERMANENT
         // ban for it - long enough to outlast the stale-content flicker while
         // navigating back through history, so innocent previous pages aren't banned.

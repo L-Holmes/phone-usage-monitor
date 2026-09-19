@@ -725,7 +725,10 @@ object AppConfig {
                 GuardAction.BOUNCE,
                 if (page.armsLockout)
                     "One of the app's own off switches. Landing here costs you Settings - " +
-                        "an hour the first time, a day the second, three days after that."
+                        "an hour the first time, a day the second, three days after that. " +
+                        "Settings is then closed rather than left open, the whole phone pauses " +
+                        "for a few seconds, and opening Settings again while it is closed adds " +
+                        "ten minutes each time."
                 else
                     "One of the four ways to take the guard down: uninstall it, force-stop it, " +
                         "deactivate its admin, or revoke a permission it runs on.",
