@@ -118,10 +118,19 @@ object FilterTuning {
     // PERSON trigger words ("she", "her", "wife") never are: they are switches, not
     // vocabulary, and "her" is in every message anyone has ever received.
     //
+    // ⚠️ 2026-10-04: "reddit" then "hot" was blocking, and that was too harsh - "hot" is
+    // a sort tab, a take, a deal, a summer. So a words_partner.txt word ALONE is no longer
+    // a partner. It needs COMPANY: another, different partner-list word within
+    // PAIR_COMPANY_WINDOW words of it ("hot girls", "naughty teen", "babe ... hookup"), or
+    // a sexual word near enough to make it score. "reddit" then "hot" is nothing now;
+    // "reddit" then "girl" is nothing now; "reddit" then "sexy" still pairs.
+    //
     // The scorer reports the primers and partners it saw (Reading.primerNames /
     // Reading.partners); PrimerWatch holds the clock and says when they pair. Strict and
     // above only, like BorderlineWatch: Relaxed acts on things that have crossed the line.
     const val PAIR_WINDOW_MS = 5 * 60_000L
+    /** How close a second partner-list word must be for a bare one to count. See above. */
+    const val PAIR_COMPANY_WINDOW = 2
 
     const val CONTEXT_WINDOW = 4         // a DUAL/AMBIGUOUS/COMBO word counts only within this
     const val EXCEPTION_WINDOW = 3       // an innocent-context word within this vetoes a match
@@ -438,6 +447,65 @@ object ModeFragments {
     }
 }
 
+// =====================================================================================
+//  REDDIT MARKS  —  "r/pics", "u/spez": not a mention of Reddit, Reddit itself
+// =====================================================================================
+//  2026-10-04. The word "reddit" is a MENTION - a news story, a chat, a video title - and
+//  it is a primer for exactly that reason. But "r/<name>" and "u/<name>" are Reddit's own
+//  furniture: every post in every client and front-end is labelled with them, and almost
+//  nothing else writes them. One is still a mention ("posted on r/news"). SEVERAL
+//  DIFFERENT ones on one screen is a feed - Reddit, a Reddit client nobody has listed
+//  yet, a front-end on a domain nobody has listed yet - and Reddit is banned in every
+//  mode. So this blocks on sight, like the banned domain it stands in for.
+//
+//  Matched on the RAW text (case and slashes intact), not the normalised one the scorer
+//  uses - normalising turns "r/pics" into "r pics", which is nothing. Kept honest by:
+//    • lowercase "r/" and "u/" only - that is how Reddit writes them; "U/L" and "U/kg"
+//      are lab units;
+//    • a name of 3+ characters, Reddit's own minimum ("r/c cars", "u/s scan" are not);
+//    • not inside a path or a longer token ("google.com/u/0", "w/r/t", "and/r/x");
+//    • a few unit spellings refused outright ("r/min" is revolutions per minute);
+//    • DISTINCT marks: the same "r/pics" fifty times is one sub, one mention.
+//  Search results are excluded by the CALLER (AccessibilityService): a results page that
+//  links to Reddit threads is not Reddit, and the link itself lands on a banned domain.
+object RedditMarks {
+
+    /** Distinct marks on one screen that mean "this is Reddit". */
+    const val TO_BLOCK = 3
+
+    /** Apps that are search results pages, and so list Reddit threads without being Reddit. */
+    val SEARCH_APPS = setOf("com.google.android.googlequicksearchbox")
+
+    // Optional leading "/" for the old "/r/pics" style. The lookbehind refuses a letter,
+    // digit, "/" or "." before it, so a URL path or "w/r/t" never starts a match; the
+    // lookahead refuses a longer name or a following "/" segment.
+    private val MARK = Regex("""(?<![A-Za-z0-9_/.])/?([ru])/([A-Za-z0-9_][A-Za-z0-9_-]{2,20})(?![A-Za-z0-9_/-])""")
+
+    /** "r/min" and friends: units, not subreddits. */
+    private val NOT_NAMES = setOf(
+        "min", "mins", "sec", "secs", "hr", "hrs", "hour", "hours", "day", "days",
+        "week", "month", "year", "rev", "mol", "mmol", "cal", "kcal",
+    )
+
+    /** The distinct marks in [texts], normalised to "r/name" / "u/name" in lowercase. */
+    fun find(vararg texts: String?): Set<String> {
+        val out = LinkedHashSet<String>()
+        for (t in texts) {
+            if (t.isNullOrEmpty()) continue
+            for (m in MARK.findAll(t)) {
+                val name = m.groupValues[2].lowercase()
+                if (name in NOT_NAMES) continue
+                out.add(m.groupValues[1] + "/" + name)
+            }
+        }
+        return out
+    }
+
+    /** The marks, if there are enough of them to say "this is Reddit"; null otherwise. */
+    fun onReddit(title: String?, content: String?): Set<String>? =
+        find(title, content).takeIf { it.size >= TO_BLOCK }
+}
+
 
 // =====================================================================================
 //  FILTER CATALOGUE  —  the filter, described in its own words
@@ -553,7 +621,7 @@ object FilterCatalogue {
             behaviour = Behaviour.NEVER_BLOCKS,
             what = "Adult-ADJACENT. Never blocks alone - it arms a multiplier, and it PAIRS.",
             examples = "live cam · hidden cam · adult content · reddit",
-            scores = "\"live cam\" then \"girl\" three minutes later, same app  -  " +
+            scores = "\"live cam\" then \"sexy\" three minutes later, same app  -  " +
                 "a PAIR, and the app is blocked",
             passes = "\"live cam\" on its own, fifty times over  -  " +
                 "${FilterTuning.PRIMER_WEIGHT} pts, and nothing happens",
@@ -566,13 +634,17 @@ object FilterCatalogue {
                 "${FilterTuning.PRIMER_WEIGHT} points in total.\n\nWhat it does do is " +
                 "REMEMBER, two ways. For ${FilterTuning.PRIMER_WINDOW_MS / 60_000} minutes " +
                 "afterwards, in that same app, anything genuinely sexual scores " +
-                "×${FilterTuning.PRIMER_MULTIPLIER}. And if a PARTNER - any word on any " +
-                "of the lists above or below, \"girl\", \"hot\", \"sexy\", whether or " +
-                "not it scored on its own - turns up in the same app within " +
+                "×${FilterTuning.PRIMER_MULTIPLIER}. And if a PARTNER - a word that is " +
+                "suggestive by itself (\"sexy\", \"nude\"), whether or not it scored " +
+                "on its own - turns up in the same app within " +
                 "${FilterTuning.PAIR_WINDOW_MS / 60_000} minutes, before or after, the " +
                 "two together block. Neither half can do it alone; the pair is the " +
-                "trail. A primer's own words never count as its partner (\"hot girls\" " +
-                "cannot pair with itself), and it only pairs in Strict and above.",
+                "trail.\n\nEveryday words like \"hot\" and \"girl\" are NOT " +
+                "partners alone (since 4 Oct 2026 - \"reddit\" then \"hot\" was " +
+                "closing apps). Two of them side by side are (\"hot girls\", " +
+                "\"naughty teen\"). A primer's own words never count as its partner " +
+                "(\"hot girls\" cannot pair with itself), and it only pairs in Strict " +
+                "and above.",
             activeIn = ALWAYS,
         ) { BannedPhrases.PRIMER.sorted() },
 
@@ -715,9 +787,12 @@ object FilterCatalogue {
                 "mode anyway; these catch it being reached some other way.\n\nUntil " +
                 "19 Sep 2026 these blocked alone, like a Core word, and three mentions of " +
                 "Reddit in an ordinary app closed it. Now they are primers: never a block " +
-                "by themselves, however many, but paired with any real word in the same " +
+                "by themselves, however many, but paired with a real word in the same " +
                 "app inside ${FilterTuning.PAIR_WINDOW_MS / 60_000} minutes they are. " +
-                "See Primers.",
+                "See Primers.\n\nReddit's own handles are a different matter: " +
+                "${RedditMarks.TO_BLOCK} or more different r/name or u/name on one " +
+                "screen is not a mention of Reddit, it IS Reddit, and that blocks on " +
+                "sight in every mode, like the banned domain.",
             activeIn = SUPER_ONLY,
         ) { ModeFragments.SUPER_HARDCORE.map { fragmentLine(it) } },
     )
@@ -1243,7 +1318,7 @@ object BorderlineScorer {
     // A hit worth counting: which family, what tier, base weight, and the exact matched word
     // (for the gender multiplier). base == 0 means "recognised but scores nothing here" -
     // either because an innocent neighbour VETOED it ([vetoed]) or because a context-gated
-    // word had no context. The two zeros differ for pairing: a bare "girl" is still a
+    // word had no context. The two zeros differ for pairing: "hot girls" is still a
     // partner, a "naked mole rat" is not.
     private data class Hit(
         val fam: String, val tier: String, val base: Int, val word: String,
@@ -1395,7 +1470,7 @@ object BorderlineScorer {
                 w in a.strong -> return hitOrVeto(words, i, fam, "strong", FilterTuning.STRONG_WEIGHT, w)
                 w in a.subtle -> return hitOrVeto(words, i, fam, "subtle", FilterTuning.SUBTLE_WEIGHT, w)
                 // The context-gated tiers. Without context they score nothing, but they
-                // are still RECOGNISED (a bare "girl" is a pairing partner), so the
+                // are still RECOGNISED ("hot girls" is a pairing partner), so the
                 // exception check runs either way: a word an innocent neighbour excuses
                 // is not a partner any more than it is a score.
                 w in a.dual -> return gated(words, i, fam, "dual", FilterTuning.DUAL_SEXUAL_WEIGHT, w,
@@ -1411,15 +1486,38 @@ object BorderlineScorer {
 
     /**
      * A context-gated hit: scores [base] only with [inContext], vetoed like any other, and
-     * a pairing partner only if words_partner.txt says so - "load" and "package" are not.
+     * a pairing partner only if words_partner.txt says so - "load" and "package" are not -
+     * AND it is not alone: a sexual word has put it in context, or another partner-list
+     * word sits beside it. A bare "hot" is a sort tab; "hot girls" is not. See
+     * FilterTuning.PAIR_COMPANY_WINDOW.
      */
     private fun gated(
         words: List<String>, i: Int, fam: String, tier: String, base: Int, word: String,
         inContext: Boolean,
     ): Hit {
-        val partner = word in BannedWords.PARTNER
+        val partner = word in BannedWords.PARTNER && (inContext || hasPartnerCompany(words, i, fam))
         if (hasExceptionNear(words, i, word)) return Hit(fam, tier, 0, word, vetoed = true, partner = partner)
         return Hit(fam, tier, if (inContext) base else 0, word, partner = partner)
+    }
+
+    /**
+     * Is there a DIFFERENT partner-list word within PAIR_COMPANY_WINDOW of token [i], one
+     * its own exceptions do not excuse? "girl ... girls" is one word said twice, not company,
+     * so the comparison is by stem, the same way a primer's own words are matched.
+     */
+    private fun hasPartnerCompany(words: List<String>, i: Int, fam: String): Boolean {
+        val lo = maxOf(0, i - FilterTuning.PAIR_COMPANY_WINDOW)
+        val hi = minOf(words.lastIndex, i + FilterTuning.PAIR_COMPANY_WINDOW)
+        for (j in lo..hi) {
+            if (j == i) continue
+            for (w in candidates(words[j])) {
+                if (w !in BannedWords.PARTNER) continue
+                val other = BannedWords.famOf(w)
+                if (other.startsWith(fam) || fam.startsWith(other)) continue
+                if (!hasExceptionNear(words, j, w)) return true
+            }
+        }
+        return false
     }
 
     /**

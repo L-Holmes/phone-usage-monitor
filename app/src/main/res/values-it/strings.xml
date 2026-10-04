@@ -188,35 +188,8 @@
     <string name="adult_block_men_sub">A torso nudo, rigonfiamenti e simili.</string>
     <string name="adult_medical_note">Le pagine mediche e di salute sono già trattate diversamente — cercare un sintomo non è come guardare porno, e il filtro conosce la differenza.</string>
 
-    <string name="moderules_title">Le regole, in parole semplici</string>
-    <string name="moderules_subtitle">Tutto ciò che l\'app ti fa, ed esattamente quando. Nessuna sorpresa.</string>
-    <string name="moderules_section_always">SEMPRE ATTIVE - IN OGNI MODALITÀ</string>
-    <string name="moderules_always_title">Queste non si disattivano mai</string>
-    <string name="moderules_always_sub">Anche in Rilassata. Off è l\'unica eccezione - vedi la sua scheda sotto.</string>
-    <string name="moderules_section_modes">LE MODALITÀ - COSA CAMBIA</string>
-    <string name="moderules_current">Sei in questa modalità in questo momento</string>
     <string name="moderules_lock">Il blocco rigido è attivo: ancora %1$s. Non puoi tornare a Rilassata finché non finisce. Puoi comunque salire a Super rigida.</string>
 
-    <string name="always_on_01">Un\'eccezione a tutto ciò che segue: la modalità OFF. In Off il monitoraggio è completamente disattivato e nessuna di queste regole viene applicata.</string>
-    <string name="always_on_02">I siti per adulti noti vengono bloccati del tutto. Oltre a Off, la modalità non fa differenza.</string>
-    <string name="always_on_03">Le pagine vengono analizzate per parole a sfondo sessuale. Se sono abbastanza, la pagina viene bloccata, in ogni modalità - Rilassata compresa.</string>
-    <string name="always_on_04">Tutto ciò che è nella tua lista di blocco viene bloccato - i siti, le pagine, i termini di ricerca e le parole chiave che ti sei vietato.</string>
-    <string name="always_on_05">I browser bloccati vengono coperti nel momento in cui li apri. Solo Firefox resta utilizzabile.</string>
-    <string name="always_on_06">Rifiuta un blocco sullo stesso sito abbastanza volte in un giorno e l\'intero sito viene vietato automaticamente per un po\'.</string>
-    <string name="always_on_07">I feed a formato breve (Reels, Shorts, stile TikTok) vengono bloccati se hai attivato quell\'interruttore.</string>
-    <string name="always_on_08">Le app in lista grigia (TikTok, Instagram e simili) hanno %1$d minuti all\'ora, poi si chiudono.</string>
-    <string name="always_on_09">Isolamento \"resisti all\'impulso\": %1$d minuti in cui si aprono solo gli elementi essenziali - chiamate, messaggi, sveglie, mappe. Non può essere annullato prima.</string>
-    <string name="always_on_10">Sbloccare una finestra rilassata è limitato: una volta al giorno, e solo %1$d volte in tutto.</string>
-    <string name="always_on_11">Non c\'è nessun pulsante \"guardo comunque\". Non è su nessuna schermata, di proposito - un pulsante così è solo una porta con una maniglia, e prima o poi l\'impulso prova la maniglia.</string>
-    <string name="always_on_12">C\'È ancora, ma ti viene offerto solo se punti al pulsante di disinstallazione, al blocco amministratore del dispositivo, all\'interruttore del monitoraggio, o provi a uscire da una modalità rigida bloccata. Punta all\'opzione distruttiva e ti verrà offerta invece quella onesta - un\'attesa, un impegno scritto, una finestra fissa, e tutto resta in piedi dopo.</string>
-    <string name="always_on_16">Scriverlo in modo diverso non serve a passare. Numeri al posto di lettere, lettere allungate, lettere sosia di altri alfabeti e parole spezzate dagli spazi vengono tutte ricomposte prima di qualsiasi controllo.</string>
-    <string name="always_on_17">Dentro un\'APP, una parola inequivocabile basta su una schermata breve - ma la stessa parola sepolta in una lunga pagina di testo ne richiede una seconda, perché una menzione non è una pagina che parla di quello.</string>
-    <string name="always_on_18">…e anche allora, un solo rilevamento non chiude un\'app. Dentro un\'app apre invece un caso: per %1$d secondi tutto viene ignorato, poi serve un secondo rilevamento, poi altri %2$d secondi ignorati, poi un terzo - %3$d osservazioni distinte prima che l\'app si chiuda. Le attese sono il punto: una domanda che hai scritto tu, o un messaggio che ti ha mandato qualcuno, non possono mai superarle.</string>
-    <string name="always_on_19">La lunghezza di quella scala dipende da quanto conosciamo l\'app. Un\'app NUOVA - sul telefono da meno di %1$d giorni e non ancora usata in %2$d giorni distinti - si chiude al PRIMO rilevamento: una nuova installazione è esattamente l\'aspetto che ha la ricerca di una scorciatoia attorno a un blocco. Un\'app che abbiamo già dovuto chiudere per i contenuti ne ha %3$d. Tutto il resto ha i %4$d pieni.</string>
-    <string name="always_on_20">Niente ti resta addosso per sempre. %1$d minuti senza altri rilevamenti in un\'app e il suo caso viene chiuso senza conferma; %2$d minuti senza alcun rilevamento in NESSUNA app e ogni conteggio, ovunque, torna a zero.</string>
-    <string name="always_on_13">L\'app non preme mai Indietro al posto tuo. Il blocco copre lo schermo e ti offre la via d\'uscita; non naviga mai nel tuo browser alle tue spalle.</string>
-    <string name="always_on_14">Un blocco basato sul punteggio delle parole mostra come ci è arrivato: la schermata di blocco elenca le parole che hanno davvero pesato, così vedi il perché - e puoi dirci quando abbiamo sbagliato.</string>
-    <string name="always_on_15">Una pagina web richiede un punteggio più alto di una schermata di app prima di essere bloccata, perché nel browser l\'estensione immagini legge la stessa pagina dall\'interno. Una parola inequivocabile blocca comunque entrambe, da sola.</string>
 
     <string name="manage_title">Gestisci i blocchi</string>
     <string name="manage_blocked_apps">App bloccate</string>
@@ -866,6 +839,7 @@
     <string name="br_paired_same_screen">sulla stessa schermata</string>
     <string name="br_paired_seconds_later">%1$d secondi dopo</string>
     <string name="br_paired_minutes_later">%1$d minuto/i dopo</string>
+    <string name="br_reddit_marks">Reddit: %1$s sulla stessa schermata\n\nUn solo nome r/ o u/ è una citazione. Diversi nomi insieme sono un feed di Reddit - da qualunque app o sito arrivi - e Reddit è bloccato in ogni modalità.</string>
 
 
     <!-- ── String-arrays ─────────────────────────────────────────────────────────────── -->
@@ -875,47 +849,6 @@
     <string-array name="opt_location"><item>Camera da letto</item><item>Bagno</item><item>Soggiorno</item><item>Cucina</item><item>Ufficio / scrivania</item><item>Fuori / in pubblico</item></string-array>
     <string-array name="opt_screen"><item>Telefono</item><item>Tablet</item><item>Computer / portatile</item><item>TV</item><item>Lo schermo di qualcun altro</item></string-array>
     <string-array name="opt_activity"><item>A letto / cercando di dormire</item><item>Appena sveglio</item><item>Scrollando i social</item><item>Guardando video o TV</item><item>Navigando sul web</item><item>Rimandando qualcosa che dovrei fare</item><item>Appena finito lavoro o studio</item><item>Annoiato senza niente da fare</item><item>Dopo qualcosa di stressante</item><item>Rilassandomi la sera</item></string-array>
-    <string-array name="mode_off_rules">
-        <item>Il monitoraggio è OFF. Niente viene analizzato e niente viene bloccato - nessuna delle regole \"Sempre attive\" viene applicata in questa modalità.</item>
-        <item>È la modalità iniziale su un\'installazione nuova.</item>
-        <item>PORTA A SENSO UNICO: una volta entrato in Rigida anche solo una volta, Off sparisce per sempre. Rilassata diventa la modalità più permissiva raggiungibile.</item>
-        <item>La configurazione che serve al blocco (monitoraggio delle pagine, schermata di blocco, Firefox e la sua estensione) è FACOLTATIVA mentre sei qui - l\'app non la richiede mai.</item>
-        <item>Scegli QUALSIASI altra modalità ed entrambe le autorizzazioni diventano obbligatorie: l\'app ti guida ad attivarle e non lascia questa schermata finché non lo sono.</item>
-        <item>La pagina Produttività e le sue statistiche di tempo schermo continuano a funzionare comunque.</item>
-    </string-array>
-    <string-array name="mode_relaxed_rules">
-        <item>Scala di grigi: disattivata. Lo schermo resta a colori.</item>
-        <item>Essere sdraiato o al buio non cambia nulla. Ogni app si apre comunque - e nessuna modalità blocca più in base alla postura.</item>
-        <item>Gli interruttori \"per chi è il filtro\" (Contenuti per adulti → Impostazioni) si possono modificare qui (e in Off). In qualsiasi modalità più rigida sono forzati al massimo.</item>
-        <item>Tutto in \"Sempre attive\" qui sopra vale ancora - il blocco non si ferma in Rilassata. Siti per adulti noti, reddit (e ogni suo mirror/frontend), imageboard, una lista curata di siti borderline e motori di ricerca diversi da Google restano bloccati anche qui.</item>
-        <item>Puoi uscire da questa modalità quando vuoi, a meno che sia attivo il blocco rigido di 7 giorni - ma se sei mai stato in Rigida, Off non è più tra le scelte.</item>
-    </string-array>
-    <string-array name="mode_strict_rules">
-        <item>GUARDIA NOTTURNA: eliminata, in tutte le modalità. Essere sdraiato non blocca più nessuna app - né qui né in Super rigida. Nemmeno il buio blocca nulla.</item>
-        <item>PORTA A SENSO UNICO: scegliere Rigida una volta rimuove Off per sempre da questa installazione. Potrai tornare a Rilassata - mai a Off.</item>
-        <item>L\'APP CHE CI VA SEMPRE VICINO: se in un\'app continuano a comparire parole borderline per qualche minuto, compare una schermata di avviso - e se la cosa prosegue, quell\'app si chiude per un\'ora. Niente qui ha superato il limite da solo; è lo schema il punto. Un tratto pulito annulla tutto.</item>
-        <item>LA CONFIGURAZIONE VIENE IMPOSTA, non solo richiesta: finché manca qualcosa - il permesso \"mostra sopra le altre app\", Firefox o la sua estensione - tutto tranne gli elementi essenziali viene coperto da una schermata che indica il passo che ti resta. Chiamate, messaggi, sveglie, mappe, Impostazioni, Firefox e questa app restano aperti, così puoi sempre finire (o tornare a Rilassata).</item>
-        <item>Gli interruttori \"per chi è il filtro\" sono BLOCCATI al massimo. Puoi cambiarli solo in Rilassata.</item>
-        <item>Scala di grigi: lo schermo diventa grigio mentre sei sdraiato.</item>
-        <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
-        <item>DOVE ABITI: la Rigida ti chiede, una volta sola, di salvare dov\'è casa. In Rigida non ci agisce nulla - lo configuri perché sia pronto se un giorno passi alla Super rigida, dove essere a casa è ciò che rende una sola parola sufficiente a chiudere un\'app. Sono GPS e Wi-Fi vicini, solo su questo dispositivo; non esce nulla dal telefono e una VPN non può spostarlo. Puoi configurarlo quando vuoi da Panoramica → Dove ti trovi.</item>
-        <item>LA CASA VIENE POI FISSATA. Da qui in su, dove abiti non è un\'impostazione modificabile in una serata storta: una casa salvata non si può spostare affatto. Puoi AGGIUNGERNE un\'altra quando vuoi, all\'istante, se vivi davvero in due posti - è sempre permesso, perché essere a casa rende le regole solo più severe. Rimuoverne una si chiede soltanto: resta attiva ancora per un po\', e non ti verrà detto per quanto né quando sparirà.</item>
-        <item>UNA PAROLA CONTINUA A NON CHIUDERE UN\'APP. La Rigida cambia che cosa conta come rilevamento - più liste di parole attive e un\'asticella più bassa - non quanti ne servono. È la stessa scala di ogni altra modalità: tre rilevamenti distinti per un\'app che hai da un po\', due per una che abbiamo già chiuso, uno per un\'app appena installata.</item>
-        <item>Il blocco rigido di 7 giorni (se lo avvii) ti impedisce di tornare a Rilassata per una settimana. Puoi comunque salire a Super rigida.</item>
-    </string-array>
-    <string-array name="mode_superhardcore_rules">
-        <item>GUARDIA NOTTURNA: eliminata. Prima, mentre eri sdraiato, qui si aprivano solo gli elementi essenziali - ora essere sdraiato non blocca più nulla, in nessuna modalità. Nemmeno il buio blocca qualcosa.</item>
-        <item>Scala di grigi: lo schermo diventa comunque grigio mentre sei sdraiato, come in Rigida. È l\'unica cosa che ora cambia con la postura.</item>
-        <item>Tutto in \"Sempre attive\" qui sopra vale ancora.</item>
-        <item>La regola dello schema borderline della Rigida vale anche qui.</item>
-        <item>A CASA BASTA UNA PAROLA - solo in questa modalità. Quando il telefono vede di essere a casa tua, la scala dei rilevamenti si riduce a uno: la prima parola sessuale rilevata in un\'app la chiude, senza seconde occhiate e senza aspettare di vedere se torna. Casa è dove succede, e questa è la modalità che lo dice.</item>
-        <item>Fuori casa - o se non riesce a capire dove ti trovi - vale la scala normale: tre rilevamenti distinti, a minuti di distanza. L\'incertezza non rende MAI le cose più severe, quindi una posizione vaga al supermercato non può portarti via un\'app.</item>
-        <item>Quella regola richiede prima di aver salvato casa (Panoramica → Dove ti trovi). Finché non lo fai, la Super rigida usa ovunque la scala normale.</item>
-        <item>LA CASA VIENE POI FISSATA. Da qui in su, dove abiti non è un\'impostazione modificabile in una serata storta: una casa salvata non si può spostare affatto. Puoi AGGIUNGERNE un\'altra quando vuoi, all\'istante, se vivi davvero in due posti - è sempre permesso, perché essere a casa rende le regole solo più severe. Rimuoverne una si chiede soltanto: resta attiva ancora per un po\', e non ti verrà detto per quanto né quando sparirà.</item>
-        <item>Fuori casa la scala dei rilevamenti è la stessa di ovunque: una parola in un\'app apre un caso invece di chiudere l\'app. Quello che questa modalità cambia in più è che cosa conta come rilevamento - le liste di frammenti (reddit e i suoi errori di scrittura) sono attive solo qui.</item>
-        <item>La configurazione viene imposta fuori da questa app esattamente come in Rigida: se manca qualcosa, si aprono solo gli elementi essenziali.</item>
-        <item>PORTA A SENSO UNICO: scegliere questa modalità è definitivo. Una volta attiva, nessuna modalità inferiore potrà più essere impostata su questo telefono - Rigida, Rilassata e Spenta spariscono dal selettore per sempre.</item>
-    </string-array>
     <string-array name="feel_neg"><item>Rimpianto</item><item>Intorpidito</item><item>Vuoto</item><item>In colpa</item></string-array>
     <string-array name="feel_pos"><item>Fiero</item><item>Sollevato</item><item>Lucido</item><item>In controllo</item></string-array>
     <string-array name="temptspec_scrolling_covers">

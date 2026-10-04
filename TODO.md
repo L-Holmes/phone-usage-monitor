@@ -2,30 +2,45 @@
 
 
 
-
----------------------
-
-Also when I'm enabling permissions in the app by clicking on entries in the 'status' page...
-    - they don't update to say 'on' when i return to the app..
-    .. i have to swipe off the app then re-open...
-    they should update straight away..
-Also, don't show the 'open settings yourself' text. just have it as 'already enabled' (when you click on sometihhg nthat is already enabled..
-
-
-When block screen comes on, 
-it sometimes sort of freezes, so that I press the "return to home" button and nothing happens 
--> then, after that, the app doesn't work, it doesn't monitor properly.. 
---> then sometimes the block screen will popup like 5 mins later... On a different app (as if the app got stuck and delayed and showed it late).
-This happened when I clicked on the play store. 
-Not sure why certain apps like the play store seems to break the overlay... 
+---------------
+hmmmm....
+seems to block all of settings app...
+should only block the specific pages where the user is trying to specifically uninstall this app... (there is logic to do this, not sure why settings itself is being blocked... i didn't even try and unsintall it...)
 
 
 
+------------
 
-
+HHHHMMMMMMMMMM
+- link it to like a settings app or something that the user would not want to loose...
+    - then have that auto self destruct if it sees that this app has been deleted... (to deter the user from deleting this app...)
 
 
 ---------------
+
+maybe _I_ just install this as the 'master' app or whatever on my phone, such that it can't be installed via safe mode?!?!?!
+
+---------------
+
+
+safe mode...
+- accountability..
+    - we have a server which pings their phone (risky)...
+    - and knows when they uninstall...
+- could regularly email a report to someone (like an accountability partner...)
+- could contact their listed accountability contact (again, risky)
+- could store something useful that would be wiped if they deleted the app..
+    - (hard to do...)
+    - e.g. if we have an app which stores all the users photos / notes etc....
+    - which will wipe itself it it sees that the app is gone...
+
+
+
+
+
+---------------------
+
+
 
 ## OTHER DO LATER:
 ====================================================

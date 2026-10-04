@@ -131,9 +131,11 @@ class MainActivity : AppCompatActivity() {
         onEntryLongClick = ::showEntryDetails,
     )
 
-    private lateinit var statusAccessibility: TextView
-    private lateinit var statusOverlay: TextView
-    private lateinit var statusLock: TextView
+    // The two consoles at the foot of the home page, kept so a resume can rebuild them IN
+    // PLACE (renderStatus) rather than either leaving them stale or rebuilding the whole
+    // page from the top and losing the user's scroll position.
+    private var sensorsConsoleView: View? = null
+    private var statusConsoleView: View? = null
     private lateinit var emptyList: TextView
     private lateinit var btnUninstallGuard: Button
     private lateinit var spinnerMode: Spinner
@@ -515,46 +517,107 @@ private fun modeDisplayName(id: String): String = when (id) {
     else -> AppConfig.modeName(id)
 }
 
-/** The plain-English rule bullets for a mode (from string-arrays; empty for unknown ids). */
-private fun modeRules(id: String): List<String> {
-    val arr = when (id) {
-        Mode.OFF -> R.array.mode_off_rules
-        Mode.RELAXED -> R.array.mode_relaxed_rules
-        Mode.STRICT -> R.array.mode_strict_rules
-        Mode.SUPERHARDCORE -> R.array.mode_superhardcore_rules
-        else -> return emptyList()
-    }
-    return resources.getStringArray(arr).toList()
+/**
+ * The colours a mode wears on the comparison screen (and nowhere else yet). A ramp, so the
+ * eye reads "further right, stricter" without a key: quiet grey for Off, the brand blue for
+ * Relaxed, amber for Strict, red for Super hardcore. All existing semantic tokens - this is
+ * a mapping, not a new palette role.
+ */
+private class ModeInk(val soft: Int, val text: Int, val strong: Int)
+
+private fun modeInk(id: String): ModeInk = when (id) {
+    Mode.RELAXED -> ModeInk(Palette.tintSoft, Palette.tintDeep, Palette.tint)
+    Mode.STRICT -> ModeInk(Palette.warningSoft, Palette.warningText, Palette.warning)
+    Mode.SUPERHARDCORE -> ModeInk(Palette.dangerSoft, Palette.dangerText, Palette.danger)
+    else -> ModeInk(Palette.surfaceSunken, Palette.labelSecondary, Palette.labelTertiary)
 }
 
-/** The "always on, in every mode" rules. The three time/limit lines take live values. */
-private fun alwaysOnRules(): List<String> = listOf(
-    getString(R.string.always_on_01),
-    getString(R.string.always_on_02),
-    getString(R.string.always_on_03),
-    getString(R.string.always_on_04),
-    getString(R.string.always_on_05),
-    getString(R.string.always_on_06),
-    getString(R.string.always_on_07),
-    getString(R.string.always_on_08, GreyUsage.LIMIT_MIN),
-    getString(R.string.always_on_09, (Lockdown.DURATION_MS / 60_000).toInt()),
-    getString(R.string.always_on_10, LoosenLimit.LIFETIME_MAX),
-    getString(R.string.always_on_11),
-    getString(R.string.always_on_12),
-    getString(R.string.always_on_13),
-    getString(R.string.always_on_14),
-    getString(R.string.always_on_15),
-    getString(R.string.always_on_16),
-    getString(R.string.always_on_17),
-    getString(R.string.always_on_18,
-        (RepeatGate.WAIT_FIRST_MS / 1000).toInt(), (RepeatGate.WAIT_SECOND_MS / 1000).toInt(),
-        RepeatGate.HITS_KNOWN),
-    getString(R.string.always_on_19,
-        AppTrust.ESTABLISHED_DAYS, AppTrust.ESTABLISHED_DAYS_SEEN,
-        RepeatGate.HITS_REPEAT, RepeatGate.HITS_KNOWN),
-    getString(R.string.always_on_20,
-        (RepeatGate.CASE_MS / 60_000).toInt(), (RepeatGate.QUIET_RESET_MS / 60_000).toInt()),
-)
+/** One rule on the comparison screen: a bold name and one plain sentence under it. */
+private class ModeRule(val name: String, val sub: String)
+
+/**
+ * The rules that START at [id] and stay on in every mode above it. Off starts nothing (it
+ * is the mode that switches everything off), so it returns empty and the screen says so in
+ * a sentence instead. Numbers come from the constants that enforce them, so the screen
+ * cannot drift from the code on those.
+ */
+private fun rulesStartingAt(id: String): List<ModeRule> {
+    fun r(name: Int, sub: Int, vararg args: Any) = ModeRule(getString(name), getString(sub, *args))
+    return when (id) {
+        Mode.RELAXED -> listOf(
+            r(R.string.modecmp_r_adult, R.string.modecmp_r_adult_sub),
+            r(R.string.modecmp_r_words, R.string.modecmp_r_words_sub),
+            r(R.string.modecmp_r_banlist, R.string.modecmp_r_banlist_sub),
+            r(R.string.modecmp_r_always, R.string.modecmp_r_always_sub),
+            r(R.string.modecmp_r_browsers, R.string.modecmp_r_browsers_sub),
+            r(R.string.modecmp_r_repeat, R.string.modecmp_r_repeat_sub),
+            r(R.string.modecmp_r_shorts, R.string.modecmp_r_shorts_sub),
+            r(R.string.modecmp_r_grey, R.string.modecmp_r_grey_sub, GreyUsage.LIMIT_MIN),
+            r(R.string.modecmp_r_lockdown, R.string.modecmp_r_lockdown_sub, (Lockdown.DURATION_MS / 60_000).toInt()),
+            r(R.string.modecmp_r_windows, R.string.modecmp_r_windows_sub, LoosenLimit.LIFETIME_MAX),
+            r(R.string.modecmp_r_nobutton, R.string.modecmp_r_nobutton_sub),
+            r(R.string.modecmp_r_noback, R.string.modecmp_r_noback_sub),
+            r(R.string.modecmp_r_working, R.string.modecmp_r_working_sub),
+            r(R.string.modecmp_r_ladder, R.string.modecmp_r_ladder_sub,
+                RepeatGate.HITS_KNOWN, RepeatGate.HITS_REPEAT, RepeatGate.HITS_NEW,
+                (RepeatGate.CASE_MS / 60_000).toInt()),
+        )
+        Mode.STRICT -> listOf(
+            r(R.string.modecmp_r_greyscale, R.string.modecmp_r_greyscale_sub),
+            r(R.string.modecmp_r_morewords, R.string.modecmp_r_morewords_sub),
+            r(R.string.modecmp_r_borderline, R.string.modecmp_r_borderline_sub, BorderlineWatch.PENALTY_LABEL),
+            r(R.string.modecmp_r_switches, R.string.modecmp_r_switches_sub),
+            r(R.string.modecmp_r_setup, R.string.modecmp_r_setup_sub),
+            r(R.string.modecmp_r_house, R.string.modecmp_r_house_sub),
+            r(R.string.modecmp_r_weeklock, R.string.modecmp_r_weeklock_sub),
+        )
+        Mode.SUPERHARDCORE -> listOf(
+            r(R.string.modecmp_r_home1, R.string.modecmp_r_home1_sub),
+            r(R.string.modecmp_r_reddit, R.string.modecmp_r_reddit_sub),
+        )
+        else -> emptyList()
+    }
+}
+
+/** A row of the comparison grid: one name, one short value per mode, in AppConfig.MODES order. */
+private class ModeVariant(val name: String, val values: List<String>)
+
+/**
+ * The things whose VALUE changes from mode to mode - as opposed to the rules above, which
+ * are simply on or off from a given mode up. These are the ones a list cannot show, and
+ * the ones people actually compare: what leaving costs, how many detections, whether the
+ * setup is a request or a wall.
+ */
+private fun modeVariants(): List<ModeVariant> {
+    val yes = getString(R.string.modecmp_yes); val no = getString(R.string.modecmp_no)
+    val na = getString(R.string.modecmp_na)
+    val ladder = getString(R.string.modecmp_v_ladder_known,
+        RepeatGate.HITS_KNOWN, RepeatGate.HITS_REPEAT, RepeatGate.HITS_NEW)
+    val enforced = getString(R.string.modecmp_v_setup_strict)
+    val yours = getString(R.string.modecmp_v_switches_yours)
+    val locked = getString(R.string.modecmp_v_switches_locked)
+    val notAsked = getString(R.string.modecmp_v_house_off)
+    // Column order is AppConfig.MODES: Off, Relaxed, Strict, Super hardcore.
+    return listOf(
+        ModeVariant(getString(R.string.modecmp_v_leave), listOf(
+            getString(R.string.modecmp_v_leave_off), getString(R.string.modecmp_v_leave_relaxed),
+            getString(R.string.modecmp_v_leave_strict), getString(R.string.modecmp_v_leave_super))),
+        ModeVariant(getString(R.string.modecmp_v_words), listOf(
+            getString(R.string.modecmp_v_words_off), getString(R.string.modecmp_v_words_relaxed),
+            getString(R.string.modecmp_v_words_strict), getString(R.string.modecmp_v_words_super))),
+        ModeVariant(getString(R.string.modecmp_v_ladder), listOf(
+            na, ladder, ladder,
+            getString(R.string.modecmp_v_ladder_super, RepeatGate.HITS_NEW, RepeatGate.HITS_KNOWN))),
+        ModeVariant(getString(R.string.modecmp_v_setup), listOf(
+            getString(R.string.modecmp_v_setup_off), getString(R.string.modecmp_v_setup_relaxed),
+            enforced, enforced)),
+        ModeVariant(getString(R.string.modecmp_v_greyscale), listOf(no, no, yes, yes)),
+        ModeVariant(getString(R.string.modecmp_v_switches), listOf(yours, yours, locked, locked)),
+        ModeVariant(getString(R.string.modecmp_v_house), listOf(
+            notAsked, notAsked, getString(R.string.modecmp_v_house_strict),
+            getString(R.string.modecmp_v_house_super))),
+    )
+}
 
 /**
  * The in-app language picker. Lists LocaleHelper.SUPPORTED (system default first, then each
@@ -3713,99 +3776,194 @@ private fun showAdultSettings() {
 }
 
 /**
- * "What each mode does" - the plain-English rulebook.
+ * "What each mode does" - the comparison screen.
  *
  * ┌──────────────────────────────────────────────────────────────────────────────────┐
  * │  AI / MAINTAINER: DO NOT let this screen drift out of date.                       │
  * │                                                                                  │
- * │  It is generated from AppConfig.ALWAYS_ON_RULES and AppConfig.MODES[].summary -   │
- * │  so there is nothing to edit HERE when behaviour changes. Edit those lists in     │
- * │  AppConfig, in the SAME change that alters the behaviour. That is the contract:   │
- * │  if a user can feel a rule, this screen must state it, in words a tired person    │
- * │  can understand at 1am.                                                           │
- * │                                                                                  │
- * │  Whenever you touch anything that branches on Mode (greyscale, block              │
- * │  thresholds, sensors, lock behaviour), re-read those lists and fix them.          │
+ * │  It is generated from rulesStartingAt() and modeVariants() above, whose text     │
+ * │  lives in strings.xml as modecmp_r_* (the list) and modecmp_v_* (the grid).      │
+ * │  Whenever you touch anything that branches on Mode (greyscale, word tiers,       │
+ * │  the detection ladder, setup enforcement, the one-way doors), change the         │
+ * │  matching line in the SAME commit. If a user can feel a rule, this screen must   │
+ * │  state it - in a few words a tired person can take in at 1am.                    │
  * └──────────────────────────────────────────────────────────────────────────────────┘
+ *
+ * THE SHAPE (2026-09-20). This used to be four cards of prose - twenty "always on"
+ * paragraphs and then every mode restating what the one below it said. Nobody could
+ * answer "what actually changes if I go up?" from it. Now it is two things: ONE list of
+ * rules, each filed under the lowest mode it starts in and wearing that mode's colour,
+ * so the eye can scan for "what does Strict add"; and a four-column grid for the handful
+ * of things whose VALUE differs, side by side, because those are the ones a list cannot
+ * show. The current mode is marked in both.
  */
 private fun showModeRules() {
     inSubPage = true; onReportScreen = false
     val dp = resources.displayMetrics.density; val pad = (Space.page * dp).toInt()
     val current = Mode.current(this)
+    val modes = AppConfig.MODES.map { it.id }
     val root = vbox(pad)
-    root.addView(titleText(getString(R.string.moderules_title)))
+    root.addView(titleText(getString(R.string.modecmp_title)))
     root.addView(TextView(this).apply {
-        text = getString(R.string.moderules_subtitle)
-        textSize = 14f; setTextColor(Palette.labelTertiary); setPadding(0, 0, 0, (12 * dp).toInt())
+        text = getString(R.string.modecmp_subtitle)
+        textSize = Type.footnote; setTextColor(Palette.labelTertiary)
+        setLineSpacing(0f, Type.lineSpacing); setPadding(0, 0, 0, (Space.sm * dp).toInt())
     })
 
     val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
-    fun sectionHeader(text: String, colour: Int) = list.addView(TextView(this).apply {
-        this.text = text; textSize = 12f; setTypeface(typeface, Typeface.BOLD)
-        setTextColor(colour); setPadding(0, (14 * dp).toInt(), 0, (8 * dp).toInt())
+    /** A mode's name as a small coloured pill. [filled] = the strong colour, for headers. */
+    fun chip(id: String, filled: Boolean = false, text: String = modeDisplayName(id)): TextView {
+        val ink = modeInk(id)
+        return TextView(this).apply {
+            this.text = text
+            textSize = Type.caption; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(if (filled) Palette.onFill else ink.text)
+            gravity = Gravity.CENTER
+            background = surfaceBg(if (filled) ink.strong else ink.soft, Radius.chip, stroke = null)
+            setPadding((Space.xs * dp).toInt(), (Space.xxs * dp).toInt(), (Space.xs * dp).toInt(), (Space.xxs * dp).toInt())
+        }
+    }
+
+    fun sectionHeader(text: String) = list.addView(TextView(this).apply {
+        this.text = text; textSize = Type.caption; setTypeface(typeface, Typeface.BOLD)
+        setTextColor(Palette.labelTertiary); letterSpacing = 0.06f
+        setPadding((Space.xxs * dp).toInt(), (Space.lg * dp).toInt(), 0, (Space.xs * dp).toInt())
     })
 
-    fun rulesCard(title: String, sub: String?, rules: List<String>, accent: Int, highlight: Boolean) {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = Radius.card * dp
-                setColor(Palette.surface)
-                setStroke(((if (highlight) 2.5f else 1.5f) * dp).toInt(),
-                    if (highlight) accent else Palette.hairline)
-            }
-            val p = (16 * dp).toInt(); setPadding(p, (14 * dp).toInt(), p, (14 * dp).toInt())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = (10 * dp).toInt() }
+    // ── The legend: four chips, one per mode, the current one marked ────────────────
+    list.addView(LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        modes.forEachIndexed { i, id ->
+            // MATCH_PARENT height on every column, so the row measures them uniformly
+            // and a two-line "Super hardcore" chip does not leave the others short.
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                    if (i > 0) marginStart = (Space.xxs * dp).toInt()
+                }
+                addView(chip(id, filled = id == current).apply {
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+                })
+                // The marker sits under EVERY column so the chips line up; only the
+                // current one has words in it.
+                addView(TextView(this@MainActivity).apply {
+                    text = if (id == current) getString(R.string.modecmp_current) else " "
+                    textSize = 10f; setTypeface(typeface, Typeface.BOLD)
+                    setTextColor(modeInk(id).text); gravity = Gravity.CENTER
+                    setPadding(0, (Space.xxs * dp).toInt(), 0, 0)
+                })
+            })
         }
-        card.addView(TextView(this).apply {
-            text = title; textSize = 17f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Palette.label)
+    })
+
+    // ── The list, grouped by the lowest mode each rule starts in ────────────────────
+    sectionHeader(getString(R.string.modecmp_section_list))
+    list.addView(TextView(this).apply {
+        text = getString(R.string.modecmp_off_note)
+        textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+        setLineSpacing(0f, Type.lineSpacing); setPadding(0, 0, 0, (Space.sm * dp).toInt())
+    })
+    for (id in modes) {
+        val rules = rulesStartingAt(id)
+        if (rules.isEmpty()) continue
+        val ink = modeInk(id)
+        val last = id == modes.last()
+        // Group header: the mode's chip, worded as a threshold ("From Strict", "Super
+        // hardcore only") so the grouping explains itself.
+        list.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (Space.xs * dp).toInt(), 0, (Space.xs * dp).toInt())
+            addView(chip(id, filled = true, text = getString(
+                if (last) R.string.modecmp_only else R.string.modecmp_from, modeDisplayName(id))))
         })
-        if (sub != null) card.addView(TextView(this).apply {
-            text = sub; textSize = 13f; setTextColor(accent)
-            setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, (2 * dp).toInt(), 0, 0)
-        })
-        rules.forEach { rule ->
-            card.addView(TextView(this).apply {
-                text = "•  $rule"
-                textSize = 14f; setTextColor(Palette.labelSecondary)
-                setLineSpacing(0f, 1.15f)
-                setPadding(0, (9 * dp).toInt(), 0, 0)
+        val card = glassCard(Space.md)
+        rules.forEachIndexed { i, rule ->
+            if (i > 0) card.addView(separator())
+            // A thin bar in the mode's colour down the left of every row: the colour is
+            // the whole point of the grouping, and it has to survive a fast scroll.
+            card.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(View(this@MainActivity).apply {
+                    background = surfaceBg(ink.strong, Radius.pill, stroke = null)
+                    layoutParams = LinearLayout.LayoutParams((3 * dp).toInt(), LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                        marginEnd = (Space.sm * dp).toInt()
+                        topMargin = (2 * dp).toInt(); bottomMargin = (2 * dp).toInt()
+                    }
+                })
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    addView(TextView(this@MainActivity).apply {
+                        text = rule.name; textSize = Type.callout
+                        setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+                    })
+                    addView(TextView(this@MainActivity).apply {
+                        text = rule.sub; textSize = Type.footnote; setTextColor(Palette.labelSecondary)
+                        setLineSpacing(0f, Type.lineSpacing); setPadding(0, (2 * dp).toInt(), 0, 0)
+                    })
+                })
             })
         }
         list.addView(card)
     }
 
-    sectionHeader(getString(R.string.moderules_section_always), Palette.labelTertiary)
-    rulesCard(getString(R.string.moderules_always_title), getString(R.string.moderules_always_sub),
-        alwaysOnRules(), Palette.successText, highlight = false)
-
-    sectionHeader(getString(R.string.moderules_section_modes), Palette.labelTertiary)
-    AppConfig.MODES.forEach { spec ->
-        val isCurrent = spec.id == current
-        rulesCard(
-            title = modeDisplayName(spec.id),
-            sub = if (isCurrent) getString(R.string.moderules_current) else null,
-            rules = modeRules(spec.id),
-            accent = Palette.tint,
-            highlight = isCurrent,
-        )
+    // ── The grid: the things whose value changes, side by side ──────────────────────
+    sectionHeader(getString(R.string.modecmp_section_varies))
+    val grid = glassCard(Space.sm)
+    val gap = (Space.xxs * dp).toInt()
+    fun fourAcross(build: (Int, String) -> View) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        modes.forEachIndexed { i, id ->
+            addView(build(i, id).apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                    if (i > 0) marginStart = gap
+                }
+            })
+        }
     }
+    // Column headers once, at the top: the same chips as the legend.
+    grid.addView(fourAcross { _, id -> chip(id, filled = id == current) })
+    modeVariants().forEach { variant ->
+        grid.addView(TextView(this).apply {
+            text = variant.name; textSize = Type.footnote
+            setTypeface(typeface, Typeface.BOLD); setTextColor(Palette.label)
+            setPadding(0, (Space.md * dp).toInt(), 0, (Space.xs * dp).toInt())
+        })
+        grid.addView(fourAcross { i, id ->
+            val ink = modeInk(id)
+            val mine = id == current
+            TextView(this).apply {
+                text = variant.values.getOrElse(i) { "" }
+                textSize = 11f; setLineSpacing(0f, 1.15f)
+                setTextColor(if (mine) Palette.label else Palette.labelSecondary)
+                gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
+                // The current mode's column is outlined in its colour the whole way down,
+                // so a reader can find their own answer without scanning back to the header.
+                background = surfaceBg(
+                    if (mine) ink.soft else Palette.surfaceSunken, Radius.chip,
+                    stroke = if (mine) ink.strong else null, strokeWidthDp = 1.5f,
+                )
+                setPadding((6 * dp).toInt(), (Space.xs * dp).toInt(), (6 * dp).toInt(), (Space.xs * dp).toInt())
+            }
+        })
+    }
+    list.addView(grid)
 
     if (Mode.isLocked(this)) {
         list.addView(TextView(this).apply {
             text = getString(R.string.moderules_lock, Mode.timeLeft(this@MainActivity))
-            textSize = 13f; setTextColor(Palette.warningText); setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, (6 * dp).toInt(), 0, (10 * dp).toInt())
+            textSize = Type.footnote; setTextColor(Palette.warningText); setTypeface(typeface, Typeface.BOLD)
+            setLineSpacing(0f, Type.lineSpacing)
+            setPadding(0, (Space.xs * dp).toInt(), 0, (Space.sm * dp).toInt())
         })
     }
 
     root.addView(ScrollView(this).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        isVerticalScrollBarEnabled = false
         addView(list)
     })
     setContentWithThumb(root) { showReportScreen() }
@@ -9003,13 +9161,34 @@ private fun startWeekStrict() {
         row("Premium mode", if (Premium.isOn(this)) "on (dev override)" else "off", Premium.isOn(this))
     }
 
+    /**
+     * Refresh the home page's status rows to what the permissions ARE now.
+     *
+     * ⚠️ 2026-09-20 - THIS USED TO DO NOTHING. It updated three TextViews left over from the
+     * XML dashboard, which the programmatic home page never assigns, so the very first line
+     * returned early on every call. The visible effect: tap "Page monitoring - Off", grant it
+     * in Settings, come back, and the row still says Off until the app is swiped away and
+     * reopened - every resume was calling this, and this was declining to look.
+     *
+     * The rows live inside consoles that are BUILT, not bound, so the honest refresh is to
+     * build them again and swap the new one in where the old one sat. Same parent, same
+     * index, same height, so the page does not move under the user. Both consoles get it:
+     * the sensors one answers location/Bluetooth grants exactly the way the status one
+     * answers the OS permissions.
+     */
     private fun renderStatus() {
-        if (!::statusOverlay.isInitialized) return
-        setDot(statusOverlay, "Block overlay permission", Settings.canDrawOverlays(this))
-        setDot(statusAccessibility, "Page monitoring", isAccessibilityEnabled())
-        setDot(statusLock, "Uninstall lock",
-            UninstallGuard.isEnabled(this) && UninstallGuard.isAdminActive(this))
+        replaceInPlace(statusConsoleView) { permissionConsole() }
+        replaceInPlace(sensorsConsoleView) { sensorsConsole() }
         renderActiveTimers()
+    }
+
+    /** Swap [old] for a freshly built view at the same spot in its parent (no-op if detached). */
+    private fun replaceInPlace(old: View?, fresh: () -> View) {
+        val parent = old?.parent as? ViewGroup ?: return
+        val index = parent.indexOfChild(old)
+        if (index < 0) return
+        parent.removeViewAt(index)
+        parent.addView(fresh(), index)
     }
 
     private fun renderActiveTimers() {
@@ -9020,11 +9199,6 @@ private fun startWeekStrict() {
     private fun minLeft(ms: Long): String {
         val m = ms / 60000; val s = (ms / 1000) % 60
         return if (m > 0) Units.mins(this, m) else Units.secs(this, s)
-    }
-
-    private fun setDot(view: TextView, label: String, on: Boolean) {
-        view.text = "${if (on) "\u25CF" else "\u25CB"}  $label - ${if (on) "On" else "Off"}"
-        view.setTextColor(if (on) Palette.success else Palette.labelTertiary)
     }
 
     /** A self-contained mode dropdown (used on the sexual-urge page). Drives Mode
@@ -9164,7 +9338,9 @@ private fun startWeekStrict() {
      * place outside Developer tools that the house is set up from, and in Super hardcore it
      * is the thing deciding whether one word closes an app (HomeRule).
      */
-    private fun sensorsConsole(): View {
+    private fun sensorsConsole(): View = buildSensorsConsole().also { sensorsConsoleView = it }
+
+    private fun buildSensorsConsole(): View {
         val dp = resources.displayMetrics.density
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -9329,7 +9505,9 @@ private fun startWeekStrict() {
     }
 
     /** The permission/status console, rendered programmatically for the home page. */
-    private fun permissionConsole(): View {
+    private fun permissionConsole(): View = buildPermissionConsole().also { statusConsoleView = it }
+
+    private fun buildPermissionConsole(): View {
         val dp = resources.displayMetrics.density
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -9367,7 +9545,7 @@ private fun startWeekStrict() {
         // and without it that guard can only nag - see MonitorFallback.hasUsageAccess.
         row(getString(R.string.status_usage_access), MonitorFallback.hasUsageAccess(this)) {
             if (MonitorFallback.hasUsageAccess(this)) {
-                Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, getString(R.string.status_usage_access_why), Toast.LENGTH_LONG).show()
                 runCatching { startActivity(MonitorFallback.usageAccessIntent(this)) }
@@ -9423,7 +9601,7 @@ private fun startWeekStrict() {
      */
     private fun requestOverlayPermission() {
         if (Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_SHORT).show()
             return
         }
         startActivity(
@@ -9515,7 +9693,7 @@ private fun startWeekStrict() {
         // Same one-way rule as requestOverlayPermission: while monitoring is ON, this is a
         // shortcut to the switch that turns it off, and we do not carry people to that.
         if (isAccessibilityEnabled()) {
-            Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.status_already_on), Toast.LENGTH_SHORT).show()
             return
         }
         val cn = ComponentName(this, PageMonitorAccessibilityService::class.java).flattenToString()

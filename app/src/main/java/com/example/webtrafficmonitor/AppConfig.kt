@@ -99,16 +99,17 @@ object AppConfig {
     // ┌───────────────────────────────────────────────────────────────────────────────┐
     // │  AI / MAINTAINER - READ THIS BEFORE CHANGING ANY MODE BEHAVIOUR               │
     // │                                                                               │
-    // │  The plain-English rules the user reads on the "What each mode does" screen   │
-    // │  (Main.kt -> showModeRules) now live in res/values/strings.xml as the         │
-    // │  string-arrays mode_<id>_rules and the always_on_* strings (so they can be    │
-    // │  translated). This ModeSpec holds ONLY the behaviour flags.                   │
+    // │  The rules the user reads on the "What each mode does" screen (Main.kt ->     │
+    // │  showModeRules) live in res/values/strings.xml as modecmp_r_* (one list,      │
+    // │  each rule filed under the lowest mode it starts in) and modecmp_v_* (a grid  │
+    // │  of the values that differ per mode), wired up in Main.rulesStartingAt and    │
+    // │  Main.modeVariants. This ModeSpec holds ONLY the behaviour flags.             │
     // │                                                                               │
     // │  Whenever you change what a mode does - here, or anywhere in the code that    │
     // │  branches on Mode.current()/Mode.isStrict()/Mode.isSuperHardcore()/spec() -   │
-    // │  you MUST update that mode's mode_<id>_rules in strings.xml in the same        │
-    // │  change. A rule the user can't see is a rule they'll feel blindsided by.      │
-    // │  Keep each line short, concrete and in plain English, never internal names.   │
+    // │  you MUST update the matching modecmp_* line in the same change. A rule the   │
+    // │  user can't see is a rule they'll feel blindsided by. Keep each line short,   │
+    // │  concrete and in plain English, never internal names.                        │
     // └───────────────────────────────────────────────────────────────────────────────┘
     data class ModeSpec(
         val id: String,
@@ -126,7 +127,7 @@ object AppConfig {
         val nightGuard: Boolean = false,
         // NOT WIRED INTO THE SCORER. flagThreshold is dev-console display only - the live
         // scorer uses one flat FilterTuning.THRESHOLD for every mode. Do NOT describe it in
-        // the mode_<id>_rules strings until it is actually wired, or the screen becomes a lie.
+        // the modecmp_* strings until it is actually wired, or the screen becomes a lie.
         val flagThreshold: Int,
         // These two ARE live, but only as the night-guard's triggers (see nightGuard above).
         val flagLyingDown: Boolean = false,
@@ -197,8 +198,8 @@ object AppConfig {
     const val NIGHT_GUARD_LIGHT_RELEASE = 1.6f
     fun modeName(id: String): String = MODES.firstOrNull { it.id == id }?.displayName ?: id
 
-    // ALWAYS-ON rules + per-mode rule bullets now live in res/values/strings.xml
-    // (always_on_* and mode_*_rules), resolved at display time in Main.showModeRules.
+    // The user-facing rules live in res/values/strings.xml (modecmp_r_* and modecmp_v_*),
+    // resolved at display time in Main.showModeRules.
     // ModeSpec keeps only the behaviour flags; the user-facing prose is the string master.
 
     // === Ambient light (from the phone's light sensor, in lux) =======================

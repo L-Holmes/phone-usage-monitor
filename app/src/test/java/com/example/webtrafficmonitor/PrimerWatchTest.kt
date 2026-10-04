@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The pairing rule: a primer ("reddit", "live cam") and a partner ("girl", "sexy") in one
+ * The pairing rule: a primer ("reddit", "live cam") and a partner ("sexy", "hot girls") in one
  * app inside PAIR_WINDOW_MS is a block; either one alone, for any length of time, is not.
  *
  * Driven through a fake clock. Every case here is a promise the block screen makes.
@@ -29,20 +29,20 @@ class PrimerWatchTest {
 
     @Test
     fun `a partner alone never pairs either`() {
-        val app = fresh("app.girl.alone")
+        val app = fresh("app.sexy.alone")
         for (i in 0..30) {
-            assertNull(PrimerWatch.noteAt(app, emptyList(), listOf("girl"), t0 + i * 20_000L))
+            assertNull(PrimerWatch.noteAt(app, emptyList(), listOf("sexy"), t0 + i * 20_000L))
         }
     }
 
     @Test
-    fun `reddit then girl three minutes later is a pair`() {
-        val app = fresh("app.reddit.girl")
+    fun `reddit then sexy three minutes later is a pair`() {
+        val app = fresh("app.reddit.sexy")
         assertNull(PrimerWatch.noteAt(app, listOf("reddit"), emptyList(), t0))
-        val p = PrimerWatch.noteAt(app, emptyList(), listOf("girl"), t0 + 3 * min)
+        val p = PrimerWatch.noteAt(app, emptyList(), listOf("sexy"), t0 + 3 * min)
         assertTrue("must pair", p != null)
         assertEquals("reddit", p!!.first)
-        assertEquals("girl", p.second)
+        assertEquals("sexy", p.second)
         assertEquals(3 * min, p.gapMs)
         assertTrue("the first report is fresh", p.fresh)
         // The next event in the same app keeps the pair, but it is no longer new.
@@ -51,12 +51,12 @@ class PrimerWatchTest {
     }
 
     @Test
-    fun `girl then reddit pairs too - the order does not matter`() {
-        val app = fresh("app.girl.reddit")
-        assertNull(PrimerWatch.noteAt(app, emptyList(), listOf("girl"), t0))
+    fun `sexy then reddit pairs too - the order does not matter`() {
+        val app = fresh("app.sexy.reddit")
+        assertNull(PrimerWatch.noteAt(app, emptyList(), listOf("sexy"), t0))
         val p = PrimerWatch.noteAt(app, listOf("reddit"), emptyList(), t0 + 2 * min)
         assertTrue(p != null)
-        assertEquals("girl", p!!.first)
+        assertEquals("sexy", p!!.first)
         assertEquals("reddit", p.second)
     }
 
@@ -74,18 +74,18 @@ class PrimerWatchTest {
         assertNull(PrimerWatch.noteAt(app, listOf("reddit"), emptyList(), t0))
         assertNull(
             "six minutes later is outside a five-minute window",
-            PrimerWatch.noteAt(app, emptyList(), listOf("girl"), t0 + FilterTuning.PAIR_WINDOW_MS + min),
+            PrimerWatch.noteAt(app, emptyList(), listOf("sexy"), t0 + FilterTuning.PAIR_WINDOW_MS + min),
         )
     }
 
     @Test
     fun `a pair lapses once one half is stale`() {
         val app = fresh("app.lapse")
-        PrimerWatch.noteAt(app, listOf("reddit"), listOf("girl"), t0)
+        PrimerWatch.noteAt(app, listOf("reddit"), listOf("sexy"), t0)
         assertTrue(PrimerWatch.noteAt(app, emptyList(), emptyList(), t0 + 4 * min) != null)
         assertNull(PrimerWatch.noteAt(app, emptyList(), emptyList(), t0 + FilterTuning.PAIR_WINDOW_MS + 1_000L))
         // And when they meet again it is a NEW pairing, reported fresh.
-        val p = PrimerWatch.noteAt(app, listOf("reddit"), listOf("girl"), t0 + 20 * min)
+        val p = PrimerWatch.noteAt(app, listOf("reddit"), listOf("sexy"), t0 + 20 * min)
         assertTrue(p != null && p.fresh)
     }
 
@@ -95,7 +95,7 @@ class PrimerWatchTest {
         assertNull(PrimerWatch.noteAt("app.one", listOf("reddit"), emptyList(), t0))
         assertNull(
             "a partner in a different app is not this app's partner",
-            PrimerWatch.noteAt("app.two", emptyList(), listOf("girl"), t0 + min),
+            PrimerWatch.noteAt("app.two", emptyList(), listOf("sexy"), t0 + min),
         )
     }
 }

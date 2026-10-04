@@ -10,6 +10,12 @@
 # "package", "score" and "women" are ordinary vocabulary - and ordinary vocabulary must not
 # be half of a block. The handful below are the ones that lean sexual enough to be, bare:
 # "reddit" then "girl" three minutes later is the report that created the pairing rule.
+#
+# ⚠️ 2026-10-04: ...and "reddit" then "hot" was the report that it had gone too far. So a
+#    word here is NOT a partner on its own any more. It needs company: a DIFFERENT word
+#    from this list within FilterTuning.PAIR_COMPANY_WINDOW words of it ("hot girls",
+#    "naughty teen", "babe" + "hookup"), or a sexual word near enough to make it score.
+#    Bare "hot" (a sort tab, a take, a summer) and bare "girl" pair with nothing.
 # One word per line. "#" = comment. LANGUAGE-SPECIFIC (English). Loaded by FilterData.
 #
 # ⚠️ Every word here should also have its everyday senses in exceptions.txt ("hot: weather,

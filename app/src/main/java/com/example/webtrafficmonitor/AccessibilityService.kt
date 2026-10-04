@@ -231,6 +231,28 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         }
     }
 
+    // ── ONE LOOK AT THE LIVE SCREEN, on behalf of events too old to act on ──────────
+    // Debounced: a wedge clears as a BURST of stale events, and one look answers all of
+    // them. Delayed a little so the burst has drained first and the look is at what is in
+    // front NOW. With a cover up it is the recheck loop's job, so it is nudged instead.
+    private var liveLookPending = false
+
+    private val liveLook = Runnable {
+        liveLookPending = false
+        if (appBlockActive) {
+            mainHandler.removeCallbacks(recheck)
+            mainHandler.post(recheck)
+        } else {
+            blockedVisibleApp()?.let { showAppBlock(it.second, it.first) }
+        }
+    }
+
+    private fun lookAtLiveWindows() {
+        if (liveLookPending) return
+        liveLookPending = true
+        mainHandler.postDelayed(liveLook, LIVE_LOOK_MS)
+    }
+
     /**
      * Take the cover down because the service stopped being able to think, not because the
      * block ended. Only ever reached after a stall long enough that the cover's own buttons
@@ -305,11 +327,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
     private var passId = 0L
     private var passRootId = -1L
     private var passRoot: AccessibilityNodeInfo? = null
+    // When this pass began - the per-pass ceiling in beginWalkBudget is measured from here.
+    private var passStartedAt = 0L
 
     private fun beginPass() {
         passId++
         passRootId = -1L
         passRoot = null
+        passStartedAt = SystemClock.uptimeMillis()
         // Every pass starts with an allowance. Without this a pass that ran out would leave
         // walkNodes at zero, and passRoot() - which refuses to start a blocking read once the
         // budget is gone - would hand back null for the whole of the NEXT event too.
@@ -342,6 +367,22 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * is still a fraction of what this used to cost when it was unbounded.
      */
     private fun beginWalkBudget(nodes: Int = WALK_NODES_CHROME, ms: Long = WALK_MS_CHROME) {
+        // ⚠️ 2026-09-20 - THE CEILING ON THE WHOLE PASS. Each phase's deadline stops us
+        // STARTING a read after it, but a read already in flight cannot be stopped, and the
+        // framework lets it run for five seconds. Against an app whose UI thread has gone
+        // away - the Play Store mid-install - that is what every read costs, so a pass was
+        // "root, five seconds; first child of the guard walk, five seconds; first child of
+        // the chrome walk, five seconds..." - one hung call PER PHASE, twenty-odd seconds
+        // per event, with the cover's own buttons queued behind all of it. That is the
+        // freeze. Once a pass has spent more than PASS_MAX_MS in total, the phases still to
+        // come get no allowance at all: one hung call per event, not five.
+        val spent = SystemClock.uptimeMillis() - passStartedAt
+        if (spent > PASS_MAX_MS) {
+            walkNodes = 0
+            walkUntil = 0L
+            walkTruncated = true
+            return
+        }
         walkNodes = nodes
         walkUntil = SystemClock.uptimeMillis() + ms
         walkTruncated = false
@@ -398,11 +439,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             // split-screen pane or in a PiP window is still on screen (§2.6).
             // OUR OWN APP IS NEVER COVERED. It is the only route to lowering the mode or
             // finishing the setup, so a cover that survives over it is unescapable.
-            val front = currentForegroundPackage()
-            val hit = if (front == packageName) null else blockedVisibleApp()
+            // ONE deadline for the whole tick (see windowOwner): however many sweeps this
+            // makes, it can collect at most one hung read between them, not one each.
+            val sweep = newSweep()
+            val front = currentForegroundPackage(sweep)
+            val hit = if (front == packageName) null else blockedVisibleApp(sweep)
             when {
                 hit != null -> showAppBlock(hit.second, hit.first) // keeps cover + reposts
-                front != null || rootInActiveWindow?.packageName?.toString() == packageName -> {
+                front != null || ourAppInFront(sweep) -> {
                     appBlockActive = false
                     overlay?.hide()
                 }
@@ -1540,11 +1584,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // already in flight when the deadline passed and could not be cancelled. An app that
         // answers slowly once will answer slowly again in a moment, and the capped backoff is
         // what keeps a third of the main thread free while it does.
-        busyUntil = SystemClock.uptimeMillis() + minOf(elapsed * 2, MAX_BACKOFF_MS)
+        //
+        // A pass that took SECONDS is a different animal from one that took 200ms: nothing
+        // in the tree costs that, it means a read sat waiting on an app that would not
+        // answer, and the next read will too. The proportional rule would stand back for
+        // its capped two seconds and then walk straight back into the same wait - 70% of
+        // the main thread gone for as long as the app stays like that. Stand well back.
+        val now = SystemClock.uptimeMillis()
+        busyUntil = now + if (elapsed >= HUNG_PASS_MS) HUNG_BACKOFF_MS
+            else minOf(elapsed * 2, MAX_BACKOFF_MS)
         android.util.Log.w(
             "PageMonitor",
             "slow pass: ${elapsed}ms for ${event?.packageName}" +
-                (if (walkTruncated) " (read budget spent)" else ""),
+                (if (walkTruncated) " (read budget spent)" else "") +
+                (if (elapsed >= HUNG_PASS_MS) " - HUNG, backing off ${HUNG_BACKOFF_MS}ms" else ""),
         )
     }
 
@@ -1556,6 +1609,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         beginPass()
 
         val type = event.eventType
+        // Every event says which window it came from and who owns it. Learn that here, from
+        // ALL of them, before any of the early returns below - see windowOwners.
+        event.packageName?.toString()?.let { noteWindowOwner(event, it) }
 
         // Scroll/tap counting for the dopamine baseline. Cheap and first: these fire in
         // bursts, so they must never fall through into the expensive page-reading path.
@@ -1609,6 +1665,30 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // is in front, so they do not get a vote.
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && !isNoise(packageName)) {
             syncEventLatency(packageName)
+        }
+
+        // ── AN OLD EVENT DESCRIBES A SCREEN THAT IS GONE ────────────────────────────
+        // An event this late means the main thread was wedged (or the process was) between
+        // it being sent and us reading it. Everything below this line either READS the
+        // screen or RAISES A COVER off the event's package, and doing either from a stale
+        // event is how "a block screen popped up five minutes later, on a different app"
+        // happens: the judgement was about the Play Store, the cover landed on whatever was
+        // in front by the time we got to it.
+        //
+        // ⚠️ 2026-09-20 - THIS CHECK USED TO SIT BELOW THE APP-BLOCK LOOKUP, on the theory
+        // that a set lookup is "correct to run late". The lookup is; the COVER it raised was
+        // not. A backlog of events from an app that is timed-blocked re-covered the phone
+        // once per stale event, over whatever the user had moved on to. The guard scan sat
+        // above it too, and would eject somebody from Settings they had left minutes ago.
+        //
+        // So a late event is dropped whole - but not ignored. The screen it described may
+        // still be the one in front, so ONE look at the live window state is queued (which
+        // is what the recheck loop does anyway, and is cheap now that window ownership comes
+        // off the events rather than off a root read). If the app is still there, that look
+        // covers it, off current facts.
+        if (SystemClock.uptimeMillis() - event.eventTime > STALE_EVENT_MS) {
+            lookAtLiveWindows()
+            return
         }
         // Uninstall guard: while the lock is on, bounce out of our own App-info / uninstall /
         // "deactivate admin" pages in Settings.
@@ -1701,16 +1781,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val uptime = SystemClock.uptimeMillis()
 
-        // ── AN OLD EVENT DESCRIBES A SCREEN THAT IS GONE ────────────────────────────
-        // Everything above this line is cheap and correct to run late: an app on the block
-        // list is on the block list whenever we hear about it. Everything BELOW reads a
-        // screen and judges it, and doing that from a stale event is what produced "a block
-        // screen popped up five minutes later, on a different app" - the judgement was about
-        // the Play Store, the cover landed on whatever was in front by the time we got to it.
-        //
-        // So a late event is dropped rather than acted on. With the node budget above in
-        // place these should be rare; when they are not, dropping them is exactly right.
-        if (uptime - event.eventTime > STALE_EVENT_MS) return
+        // (Stale events were dropped further up, before anything that could raise a cover.)
 
         // Blocking now runs on a MUCH shorter leash than logging. The old single 700ms gate
         // ran both, and it is why a banned word gave you a clear look at the results before
@@ -2674,6 +2745,16 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // that is then applied to the same screen twice over - the scorer already handles
         // the same-screen case itself (see compute()).
         val settings = filterSettings(packageName)
+        // ── REDDIT BY ITS FURNITURE (see RedditMarks) ───────────────────────────────
+        // Several different "r/name" / "u/name" handles on one screen is Reddit, whichever
+        // app or domain it came through. Not on a search results page (Google, in a browser
+        // or in its own app): a list of links TO Reddit threads is not Reddit, and the links
+        // land on a banned domain anyway. A browser whose bar we cannot read gets the same
+        // benefit of the doubt, because that is most often exactly such a page.
+        val redditMarks = if (
+            !SafeSearch.isSearchHost(host) && packageName !in RedditMarks.SEARCH_APPS &&
+            (host != null || !AppBlocklist.isBrowser(packageName))
+        ) RedditMarks.onReddit(title, content) else null
         val baseReason = when {
                appGuard != null -> appGuard
                extGuard != null -> extGuard
@@ -2701,6 +2782,11 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                // The hand-maintained ban list (reddit + its frontends/mirrors, imageboards,
                // borderline shops): banned in EVERY mode.
                host != null && AlwaysBlocklist.isBlocked(host) -> getString(R.string.br_blocked_site, host)
+               // ...and Reddit reached any other way: a client nobody has listed, a front-end
+               // on a domain nobody has listed. Same standing as the ban list - on sight, every
+               // mode, not through RepeatGate - because it is the same site.
+               redditMarks != null ->
+                   getString(R.string.br_reddit_marks, redditMarks.take(RedditMarks.TO_BLOCK).joinToString("  "))
                // The hand-maintained category site lists. Same standing as the ban list
                // above - absolute, in every mode above Off - but they can say WHICH kind of
                // site it was, which is a more useful sentence to be shown.
@@ -2769,7 +2855,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // And since 2026-09-19 it remembers the PARTNERS too - every word the filter
         // recognised on this screen, scored or not - and says when a primer and a partner
         // are both live in this app inside FilterTuning.PAIR_WINDOW_MS. That pair is acted
-        // on below; "reddit" then "girl" three minutes later is the trail, and the whole
+        // on below; "reddit" then "sexy" three minutes later is the trail, and the whole
         // point is that neither half was enough by itself.
         val pairing = PrimerWatch.note(packageName, scoredReading)
 
@@ -3027,28 +3113,91 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         return if (why == null) head else "$head\n$why"
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    //  WHO OWNS WHICH WINDOW  -  learned from the events, not read off the apps
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    //  ⚠️ 2026-09-20. AccessibilityWindowInfo does not say which package a window belongs
+    //  to. The only way to find out was window.root - a blocking call INTO THAT APP, five
+    //  second ceiling, Knox hook on top on this Samsung - and the two sweeps below made it
+    //  for every on-screen window, from the recheck loop, EVERY 400ms WHILE A COVER IS UP.
+    //  Against an app whose UI thread is busy (the Play Store installing something) that
+    //  loop alone could pin the main thread, and the main thread is what delivers the tap
+    //  on the cover's "Go to home screen" button. The node budgets never touched this path.
+    //
+    //  But every accessibility event already carries BOTH halves: the id of the window it
+    //  came from and the package that owns it - and the system checks the package against
+    //  the sending uid, so a launcher widget cannot claim to be YouTube. So handleEvent
+    //  records the pair from every event it sees, and the sweeps ask the map first. Window
+    //  ids are never reused within a boot, so an entry is right for as long as it exists.
+    //  A root read happens only for a window we have never heard from, and never once a
+    //  sweep has already spent its few milliseconds. In steady state that is zero reads:
+    //  the launcher's own window-state event, fired as Home lands, is what teaches the map
+    //  that the launcher is in front, and the cover comes down off that with no call into
+    //  anybody at all.
+    private val windowOwners = object : java.util.LinkedHashMap<Int, String>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, String>?): Boolean =
+            size > WINDOW_OWNERS_MAX
+    }
+
+    private fun noteWindowOwner(event: AccessibilityEvent, pkg: String) {
+        val id = event.windowId
+        if (id < 0) return           // UNDEFINED_WINDOW_ID: toasts, notifications
+        windowOwners[id] = pkg
+    }
+
+    /**
+     * The package that owns [window]: from the map when we know, from a root read when we
+     * do not - and not even that once [deadline] has passed, because a read that starts now
+     * can hold the thread for five seconds whatever the deadline says.
+     */
+    private fun windowOwner(window: AccessibilityWindowInfo, deadline: Long): String? {
+        windowOwners[window.id]?.let { return it }
+        if (SystemClock.uptimeMillis() > deadline) return null
+        val pkg = runCatching { window.root?.packageName?.toString() }.getOrNull() ?: return null
+        windowOwners[window.id] = pkg
+        return pkg
+    }
+
+    /** A fresh sweep deadline: how long from now root reads may still be STARTED. */
+    private fun newSweep(): Long = SystemClock.uptimeMillis() + WINDOW_SWEEP_MS
+
     /** The package of the application window that is actually in front, or null. */
-    private fun currentForegroundPackage(): String? {
+    private fun currentForegroundPackage(deadline: Long = newSweep()): String? {
         try {
             var looked = 0
             for (window in windows) {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
                 if (!window.isActive && !window.isFocused) continue
-                // ⚠️ window.root is a BLOCKING CROSS-PROCESS READ of that app, with the same
-                // five-second ceiling as everything else in this file (see pageMatches). The
-                // window list can be long, and this runs from the recheck loop every 400ms
-                // while a cover is up - i.e. exactly when the phone must stay responsive. Cap
-                // how many we are willing to ask.
+                // The window list can be long, and this runs from the recheck loop every
+                // 400ms while a cover is up - i.e. exactly when the phone must stay
+                // responsive. Cap how many we are willing to even consider.
                 if (looked++ >= MAX_WINDOWS_QUERIED) break
-                val pkg = window.root?.packageName?.toString() ?: continue
+                val pkg = windowOwner(window, deadline) ?: continue
                 if (isNoise(pkg)) continue
                 return pkg
             }
         } catch (_: Throwable) {
             // fall through to the fallback below
         }
+        // The old fallback, kept for the case where the window list itself failed - but
+        // it is a root read of the active app, and it obeys the same deadline.
+        if (SystemClock.uptimeMillis() > deadline) return null
         val pkg = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() ?: return null
         return if (isNoise(pkg)) null else pkg
+    }
+
+    /**
+     * Is OUR OWN app the one in front? currentForegroundPackage filters us out as noise, and
+     * the recheck loop needs the answer separately: a cover must never survive over the one
+     * screen the mode can be lowered from. Same map, same deadline, same reluctance to read.
+     */
+    private fun ourAppInFront(deadline: Long = newSweep()): Boolean {
+        val active = runCatching {
+            windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive }
+        }.getOrNull()
+        if (active != null) return windowOwner(active, deadline) == packageName
+        if (SystemClock.uptimeMillis() > deadline) return false
+        return runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() == packageName
     }
 
     /**
@@ -3065,7 +3214,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      *
      * So blocking asks this instead, and covers if ANY of them is blocked.
      */
-    private fun visibleAppPackages(): List<String> {
+    private fun visibleAppPackages(deadline: Long = newSweep()): List<String> {
         val out = ArrayList<String>(3)
         try {
             var looked = 0
@@ -3073,14 +3222,14 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
                 if (!isReallyOnScreen(window)) continue
                 if (looked++ >= MAX_WINDOWS_QUERIED) break     // see currentForegroundPackage
-                val pkg = window.root?.packageName?.toString() ?: continue
+                val pkg = windowOwner(window, deadline) ?: continue
                 if (isNoise(pkg)) continue
                 if (pkg !in out) out.add(pkg)
             }
         } catch (_: Throwable) {
             // windows can throw mid-transition; the caller falls back to the focused package
         }
-        if (out.isEmpty()) currentForegroundPackage()?.let { out.add(it) }
+        if (out.isEmpty()) currentForegroundPackage(deadline)?.let { out.add(it) }
         return out
     }
 
@@ -3115,8 +3264,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      * setup finished, so a cover over it is a cover nobody can get out from under. isNoise
      * already excludes us; this is the second belt.
      */
-    private fun blockedVisibleApp(): Pair<String, String>? {
-        for (pkg in visibleAppPackages()) {
+    private fun blockedVisibleApp(deadline: Long = newSweep()): Pair<String, String>? {
+        for (pkg in visibleAppPackages(deadline)) {
             if (pkg == packageName) continue
             appBlockReason(pkg)?.let { return pkg to it }
         }
@@ -3176,11 +3325,20 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             collectAddressCandidates(root, depth = 0, out = candidates)
         }
 
-        collectFrom(passRoot())
+        val root = passRoot()
+        collectFrom(root)
         try {
             for (window in windows) {
                 if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
                 if (!isReallyOnScreen(window)) continue
+                // Already read: the active window's root is the one we started from.
+                if (root != null && window.id == root.windowId) continue
+                // A window we KNOW belongs to somebody else is skipped without the root
+                // read collectFrom would otherwise make just to find that out.
+                val owner = windowOwners[window.id]
+                if (owner != null && forPackage != null && owner != forPackage) continue
+                // window.root is a blocking read of that app: charged like any other.
+                if (!canWalk()) break
                 collectFrom(window.root)
             }
         } catch (_: Throwable) {
@@ -3571,11 +3729,31 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // How many windows we will do a blocking root read on in one sweep. Split screen is
         // two, plus a PiP; beyond that the list is apps that merely still exist.
         private const val MAX_WINDOWS_QUERIED = 4
+        // ...and how long a sweep may keep STARTING root reads for. Reads are rare now (see
+        // windowOwners) and a started one cannot be stopped, so this is a cap on how many
+        // hung calls one sweep can collect, not on how long a hung call takes.
+        private const val WINDOW_SWEEP_MS = 40L
+        // Window ids remembered against their owning package. Ids are never reused within a
+        // boot, so this is only a bound on memory; a few dozen covers every window a phone
+        // has open, plus the recently closed.
+        private const val WINDOW_OWNERS_MAX = 64
+        // The ceiling on ONE PASS, across all its phases - see beginWalkBudget. Well above
+        // what the phase budgets add up to (~130ms) and above the slowest healthy pass ever
+        // measured on the phone (563ms, Play Store, 2026-08-27), so it only bites on a hang.
+        private const val PASS_MAX_MS = 600L
+        // How long after a stale event the live look at the windows happens (lookAtLiveWindows).
+        private const val LIVE_LOOK_MS = 300L
         // A pass slower than this makes us stand back for as long as it took.
         private const val SLOW_PASS_MS = 60L
         // ...and however slow a pass was, never go quiet for longer than this. A backoff is
         // a courtesy to the main thread, not a licence to stop watching the screen.
         private const val MAX_BACKOFF_MS = 2_000L
+        // ...UNLESS the pass hung. A pass over this long had a read sit waiting on an app
+        // that would not answer (nothing in a tree walk costs seconds), and it will not
+        // answer the next one either. Stand back for long enough that at least half the
+        // main thread stays free even if every pass hangs - see noteEventCost.
+        private const val HUNG_PASS_MS = 1_500L
+        private const val HUNG_BACKOFF_MS = 5_000L
         // The stall watchdog. The beat is cheap; the thresholds are what matter. WARN is
         // "something is wrong and it should be in the log"; PANIC is "the cover's own buttons
         // have been undeliverable for long enough that the phone is unusable, take it down".

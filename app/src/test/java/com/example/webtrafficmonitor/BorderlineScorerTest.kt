@@ -591,11 +591,11 @@ class BorderlineScorerTest {
 
     @Test
     fun `the scorer reports the partners a screen carries, scored or not`() {
-        // "girl" and "hot" are context-gated: bare, they score nothing. They are still
-        // recognised, and that recognition is what the pairing rule runs on.
-        val bare = BorderlineScorer.read(null, null, "a girl in a hot car")
+        // "naughty" and "teen" are context-gated: bare, they score nothing. Side by side
+        // they are still recognised, and that recognition is what the pairing rule runs on.
+        val bare = BorderlineScorer.read(null, null, "naughty teen")
         assertEquals(0, bare.score)
-        assertEquals(listOf("girl", "hot"), bare.partners)
+        assertEquals(listOf("naughty", "teen"), bare.partners)
         assertEquals(listOf("sexy"), BorderlineScorer.read(null, null, "sexy").partners)
         // Ordinary text has no partners at all.
         assertEquals(emptyList<String>(), BorderlineScorer.read(null, null, "the rules of chess").partners)
@@ -614,6 +614,24 @@ class BorderlineScorerTest {
             assertEquals("'$text' must carry no partner", emptyList<String>(),
                 BorderlineScorer.read(null, null, text).partners)
         }
+    }
+
+    @Test
+    fun `an everyday partner word alone is not a partner`() {
+        // 2026-10-04: "reddit" then "hot" was closing apps. A words_partner.txt word needs
+        // COMPANY - another, different one right beside it - before it is half of a pair.
+        for (text in listOf(
+            "Hot", "sort by hot new top rising", "a girl in a hot car", "she is a girl",
+            "girl girls girl", "the teen years ahead of us all",
+        )) {
+            assertEquals("'$text' must carry no partner", emptyList<String>(),
+                BorderlineScorer.read(null, null, text).partners)
+        }
+        // Company: two different ones within PAIR_COMPANY_WINDOW words.
+        assertEquals(listOf("hot", "babe"), BorderlineScorer.read(null, null, "hot babe").partners)
+        assertEquals(listOf("hot", "teen"), BorderlineScorer.read(null, null, "hot young teen").partners)
+        // A strong word needs no company.
+        assertEquals(listOf("sexy"), BorderlineScorer.read(null, null, "something sexy").partners)
     }
 
     @Test

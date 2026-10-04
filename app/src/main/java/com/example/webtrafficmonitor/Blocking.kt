@@ -893,6 +893,10 @@ object TamperWatch {
  * order. The service blocks on a pairing in Strict and above. Neither half can do it alone:
  * "reddit" for an hour is nothing, and so is "girl" for an hour.
  *
+ * ⚠️ 2026-10-04: and a bare "girl" or "hot" is no longer a partner at all - "reddit" then
+ * "hot" was closing apps. The scorer only reports one with company ("hot girls"); see
+ * FilterTuning.PAIR_COMPANY_WINDOW. Nothing here changed: it pairs what it is handed.
+ *
  * Scoped to the APP, not the page: someone reading a page of camera listings and then
  * opening a tab is one session, and a browser is where that sequence actually happens. In
  * memory only, and deliberately: a primer that survived a reboot would be a punishment

@@ -231,81 +231,102 @@
     <string name="adult_block_men_sub">Shirtless, bulges and the like.</string>
     <string name="adult_medical_note">Health and medical pages are already treated differently — looking up a symptom is not the same as looking at porn, and the filter knows the difference.</string>
 
-    <!-- ── Mode rules screen (Main.kt) ───────────────────────────────────────────────── -->
-    <string name="moderules_title">The rules, in plain English</string>
-    <string name="moderules_subtitle">Everything this app does to you, and exactly when. No surprises.</string>
-    <string name="moderules_section_always">ALWAYS ON - IN EVERY MODE</string>
-    <string name="moderules_always_title">These never switch off</string>
-    <string name="moderules_always_sub">Even in Relaxed. Off is the one exception - see its card below.</string>
-    <string name="moderules_section_modes">THE MODES - WHAT CHANGES</string>
-    <string name="moderules_current">You are in this mode right now</string>
+    <!-- ── Mode comparison screen (Main.kt -> showModeRules) ────────────────────────
+         One list of rules, grouped by the LOWEST mode each starts in, then a four-column
+         grid for the things whose value changes from mode to mode. Keep every line short:
+         a rule is one bold name and one plain sentence, a grid cell is a few words.
+         When behaviour changes, change it here in the same commit (see AppConfig.MODES). -->
+    <string name="modecmp_title">What each mode does</string>
+    <string name="modecmp_subtitle">Every rule, and the lowest mode it starts in. The colour is that mode.</string>
+    <string name="modecmp_current">you are here</string>
+    <string name="modecmp_off_note">Off scans nothing and blocks nothing. Everything below starts at Relaxed and stays on in every mode above it.</string>
+    <string name="modecmp_section_list">WHAT\'S ON, FROM WHICH MODE</string>
+    <string name="modecmp_from">From %1$s</string>
+    <string name="modecmp_only">%1$s only</string>
+    <string name="modecmp_section_varies">WHAT CHANGES BETWEEN MODES</string>
+    <string name="modecmp_yes">Yes</string>
+    <string name="modecmp_no">No</string>
+    <string name="modecmp_na">–</string>
     <string name="moderules_lock">Strict lock is running: %1$s left. You cannot go back to Relaxed until it ends. You can still go up to Super hardcore.</string>
 
-    <!-- Always-on rules (shown in every mode). 8/9/10 and 18/19/20 take numeric args. -->
-    <string name="always_on_01">One exception to everything below: OFF mode. In Off, monitoring is completely disabled and none of these rules run.</string>
-    <string name="always_on_02">Known adult sites are blocked outright. Beyond Off, mode makes no difference.</string>
-    <string name="always_on_03">Pages are scanned for sexual words. Every word carries a weight and they add up to a score - enough of them and the page is blocked, in every mode including Relaxed. No single word ever does it alone.</string>
-    <string name="always_on_04">Anything on your ban list is blocked - the sites, pages, search terms and keywords you have banned yourself from.</string>
-    <string name="always_on_05">Blocked browsers are covered the moment you open them. Only Firefox is left usable.</string>
-    <string name="always_on_06">Dismiss a block on the same site enough times in one day and the whole site gets banned automatically for a while.</string>
-    <string name="always_on_07">Short-form feeds (Reels, Shorts, TikTok-style) are blocked if you have that switch on.</string>
-    <string name="always_on_08">Greylisted apps (TikTok, Instagram and friends) get %1$d minutes per hour, then they close.</string>
-    <string name="always_on_09">\"Ride out the urge\" lockdown: %1$d minutes where only the essentials - calls, texts, alarms, maps - will open. It cannot be cancelled early.</string>
-    <string name="always_on_10">Unlocking a relaxed window is limited: once a day, and only %1$d times ever.</string>
-    <string name="always_on_11">There is no \"let me look anyway\" button. It is not on any screen, on purpose - a button like that is just a door with a handle, and sooner or later the urge tries the handle.</string>
-    <string name="always_on_12">It IS still there, but you only get offered it if you go for the uninstall button, the device-admin lock, the monitoring switch, or try to escape a locked strict mode. Reach for the destructive option and you\'ll be offered the honest one instead - a wait, a written commitment, a fixed window, and everything still standing afterwards.</string>
-    <string name="always_on_13">The app never presses Back for you. Blocking covers the screen and offers you the way out; it never navigates your browser behind your back.</string>
-    <string name="always_on_14">A word-score block shows its working: the block screen lists the words that actually carried the score, so you can see why - and tell us when we got it wrong.</string>
-    <string name="always_on_15">A web page needs a higher word score than an app screen before it is blocked, because in a browser the image add-on is reading the same page from the inside. One unmistakable word still blocks either, on its own.</string>
-    <string name="always_on_16">Spelling it differently does not get past it. Numbers for letters, stretched letters, lookalike letters from other alphabets, and words split across spaces are all put back together before anything is checked.</string>
-    <string name="always_on_17">Inside an APP, one unmistakable word is enough on a short screen - but the same word buried in a long page of text needs a second one, because a mention is not the same as a page about it.</string>
-    <string name="always_on_18">…and even then, one detection does not close an app. Inside an app it opens a case instead: everything is then ignored for %1$d seconds, it takes a second detection after that, then another %2$d seconds ignored, then a third - %3$d separate looks before the app closes. The waits are the point. One question you typed, or one message somebody sent you, can never get past them.</string>
-    <string name="always_on_19">How long that ladder is depends on how well the app is known. A NEW app - under %1$d days on the phone and not yet used on %2$d separate days - closes on the FIRST detection: a new install is exactly what looking for a way round a blocker looks like. An app we have already had to close for content gets %3$d. Everything else gets the full %4$d.</string>
-    <string name="always_on_20">Nothing is held against you forever. %1$d minutes with no further detection in an app and its case is dropped unconfirmed; %2$d minutes with nothing detected in ANY app and every count everywhere goes back to zero.</string>
+    <!-- From Relaxed (on in every mode above Off) -->
+    <string name="modecmp_r_adult">Known adult sites</string>
+    <string name="modecmp_r_adult_sub">Blocked outright.</string>
+    <string name="modecmp_r_words">Sexual words are scored</string>
+    <string name="modecmp_r_words_sub">Words on a page add up; enough of them and it is blocked. Misspellings, split words and lookalike letters are put back together first. One unmistakable word blocks on its own.</string>
+    <string name="modecmp_r_banlist">Your own ban list</string>
+    <string name="modecmp_r_banlist_sub">The sites, pages, search terms and keywords you have banned yourself from.</string>
+    <string name="modecmp_r_always">reddit, imageboards, other search engines</string>
+    <string name="modecmp_r_always_sub">Every reddit mirror and frontend, a hand-picked borderline list, and any search engine but Google.</string>
+    <string name="modecmp_r_browsers">Other browsers</string>
+    <string name="modecmp_r_browsers_sub">Covered the moment they open. Only Firefox stays usable.</string>
+    <string name="modecmp_r_repeat">Repeat dismissals</string>
+    <string name="modecmp_r_repeat_sub">Dismiss a block on one site enough times in a day and the whole site is banned for a while.</string>
+    <string name="modecmp_r_shorts">Short-form feeds</string>
+    <string name="modecmp_r_shorts_sub">Reels, Shorts and TikTok-style feeds, if that switch is on.</string>
+    <string name="modecmp_r_grey">Greylisted apps</string>
+    <string name="modecmp_r_grey_sub">TikTok, Instagram and friends get %1$d minutes an hour, then close.</string>
+    <string name="modecmp_r_lockdown">\"Ride out the urge\" lockdown</string>
+    <string name="modecmp_r_lockdown_sub">%1$d minutes where only calls, texts, alarms and maps open. It cannot be cancelled early.</string>
+    <string name="modecmp_r_windows">Relaxed windows</string>
+    <string name="modecmp_r_windows_sub">Once a day, and only %1$d times ever.</string>
+    <string name="modecmp_r_nobutton">No \"let me look anyway\" button</string>
+    <string name="modecmp_r_nobutton_sub">Only offered if you reach for uninstall, the admin lock or the monitoring switch - and then as a wait and a written commitment, not a door.</string>
+    <string name="modecmp_r_noback">Never presses Back for you</string>
+    <string name="modecmp_r_noback_sub">A block covers the screen and offers the way out. It never drives your browser.</string>
+    <string name="modecmp_r_working">Blocks show their working</string>
+    <string name="modecmp_r_working_sub">The words that carried the score are listed, so you can tell us when it is wrong.</string>
+    <string name="modecmp_r_ladder">One word never closes an app by itself</string>
+    <string name="modecmp_r_ladder_sub">Inside an app a detection opens a case. It takes %1$d separate detections, minutes apart - %2$d for an app we have closed before, %3$d for a brand-new install. A case is dropped after %4$d quiet minutes.</string>
 
-    <!-- Per-mode rule bullets (shown on the mode-rules screen). Keep in step with the mode
-         behaviour flags in AppConfig.MODES. -->
-    <string-array name="mode_off_rules">
-        <item>Monitoring is OFF. Nothing is scanned and nothing is blocked - none of the \"Always on\" rules run in this mode.</item>
-        <item>This is the starting mode on a fresh install.</item>
-        <item>ONE-WAY DOOR: once you have EVER entered Strict, Off disappears for good. Relaxed becomes the loosest mode this install can reach.</item>
-        <item>The setup the blocker needs (page monitoring, the block screen, Firefox and its add-on) is OPTIONAL while you are here - the app never demands it.</item>
-        <item>Pick ANY other mode and both permissions become required: the app walks you through turning them on, and won\'t leave this screen until they are.</item>
-        <item>The Productivity page and its screen-time stats keep working either way.</item>
-    </string-array>
-    <string-array name="mode_relaxed_rules">
-        <item>Greyscale: off. Your screen stays in colour.</item>
-        <item>Lying down or sitting in the dark changes nothing. Every app still opens - and no mode blocks on posture any more.</item>
-        <item>The \"who is the filter for\" switches (Adult content -&gt; Settings) can be changed here (and in Off). In any stricter mode they are forced fully on.</item>
-        <item>Everything in \"Always on\" above still applies - blocking does not stop in Relaxed. Known adult sites, reddit (and every mirror/frontend of it), imageboards, a hand-picked borderline list and non-Google search engines are all still blocked here.</item>
-        <item>You can switch out of this mode whenever you like, unless the 7-day strict lock is running - but if you have ever been Strict, Off is no longer one of the choices.</item>
-    </string-array>
-    <string-array name="mode_strict_rules">
-        <item>NIGHT GUARD: gone, in every mode. Lying down never blocks an app any more - not here, and not in Super hardcore. A dark room blocks nothing either.</item>
-        <item>ONE-WAY DOOR: picking Strict once removes Off from this install for good. You can drop back to Relaxed later - never to Off.</item>
-        <item>THE APP THAT KEEPS ALMOST BLOCKING: if a run of borderline words keeps coming up in one app for a few minutes, you get a warning screen saying so - and if it carries on, that app closes for an hour. Nothing here has crossed the line on its own; the pattern is the point. A clean stretch undoes it.</item>
-        <item>WHERE YOU LIVE: Strict asks you, once, to save where home is. Nothing in Strict acts on it - you are setting it up so it is ready if you ever go to Super hardcore, where being at home is what makes one word enough to close an app. It is GPS and nearby Wi-Fi, on this device only; nothing leaves the phone, and a VPN cannot move it. Set it up any time from Overview → Where you are.</item>
-        <item>THE HOUSE IS THEN FIXED. From here up, where you live is not a setting you can edit on a bad night - there is no way to move a saved house at all. You can ADD another one at any time, instantly, if you genuinely live in two places: that is always allowed, because being at home only ever makes the rules stricter. Removing one is asked for rather than done - it stays on for a while first, and you will not be told how long or when it finally goes.</item>
-        <item>ONE WORD STILL DOESN\'T CLOSE AN APP. Strict changes what counts as a detection - more word lists are live and the bar is lower - not how many it takes. It is the same ladder as every other mode: three separate detections for an app you have had a while, two for one we have closed before, one for a newly installed app.</item>
-        <item>THE SETUP IS ENFORCED, not just asked for: while anything is still missing - the \"appear on top\" permission, Firefox, or its add-on - everything except the essentials is covered with a screen naming the step you still owe. Calls, texts, alarms, maps, Settings, Firefox and this app all stay open, so you can always finish it (or drop back to Relaxed).</item>
-        <item>The \"who is the filter for\" switches are LOCKED fully on. You can only change those in Relaxed.</item>
-        <item>Greyscale: your screen turns grey while you are lying down.</item>
-        <item>Everything in \"Always on\" above still applies.</item>
-        <item>The 7-day strict lock (if you start it) stops you dropping back to Relaxed for a week. You can still go UP to Super hardcore.</item>
-    </string-array>
-    <string-array name="mode_superhardcore_rules">
-        <item>NIGHT GUARD: gone. Lying down used to block everything but the essentials here - it no longer blocks anything, in any mode. A dark room does not block anything either.</item>
-        <item>Greyscale: your screen still turns grey while you are lying down, same as Strict. That is now the only thing posture changes.</item>
-        <item>Everything in \"Always on\" above still applies.</item>
-        <item>The borderline-pattern rule from Strict applies here too.</item>
-        <item>AT HOME, ONE WORD IS ENOUGH - only in this mode. When the phone can see it is at your house, the detection ladder collapses to one: the first sexual word detected in an app closes it, with no second look and no waiting to see whether it comes back. The house is where it happens, and this is the mode that says so.</item>
-        <item>Out of the house - or if it cannot tell where you are - the ordinary ladder applies: three separate detections, minutes apart. Being unsure NEVER makes anything stricter, so a vague fix in a supermarket cannot take an app away.</item>
-        <item>That rule needs the house saved first (Overview → Where you are). Until it is, Super hardcore uses the ordinary ladder everywhere.</item>
-        <item>THE HOUSE IS THEN FIXED. From here up, where you live is not a setting you can edit on a bad night - there is no way to move a saved house at all. You can ADD another one at any time, instantly, if you genuinely live in two places: that is always allowed, because being at home only ever makes the rules stricter. Removing one is asked for rather than done - it stays on for a while first, and you will not be told how long or when it finally goes.</item>
-        <item>Away from home the detection ladder is the same as everywhere else: one word in an app opens a case rather than closing the app. What this mode changes on top of that is what counts as a detection - the fragment lists (reddit and its misspellings) are only live here.</item>
-        <item>The setup is enforced outside this app exactly as it is in Strict: anything still missing and only the essentials open.</item>
-        <item>ONE-WAY DOOR: choosing this mode is permanent. Once it is on, no lower mode can ever be set again on this phone - Strict, Relaxed and Off all leave the picker for good.</item>
-    </string-array>
+    <!-- From Strict -->
+    <string name="modecmp_r_greyscale">Grey screen when lying down</string>
+    <string name="modecmp_r_greyscale_sub">Your screen turns grey while you are lying down. It never blocks anything.</string>
+    <string name="modecmp_r_morewords">More words count</string>
+    <string name="modecmp_r_morewords_sub">Subtler words, and split spellings like \"bik ini\" or \"ling erie\".</string>
+    <string name="modecmp_r_borderline">The app that keeps almost blocking</string>
+    <string name="modecmp_r_borderline_sub">A run of near-misses in one app for a few minutes gets a warning; if it carries on, that app closes for %1$s. A clean stretch undoes it.</string>
+    <string name="modecmp_r_switches">Filter switches locked on</string>
+    <string name="modecmp_r_switches_sub">The \"who is the filter for\" switches are forced fully on. They can only be changed in Relaxed.</string>
+    <string name="modecmp_r_setup">Setup is enforced</string>
+    <string name="modecmp_r_setup_sub">Anything still missing - the \"appear on top\" permission, Firefox, its add-on - and everything but the essentials is covered until it is done.</string>
+    <string name="modecmp_r_house">Home is saved, once</string>
+    <string name="modecmp_r_house_sub">Asked once (GPS and nearby Wi-Fi, kept on the phone). A saved house cannot be moved; adding one is instant, removing one takes a while.</string>
+    <string name="modecmp_r_weeklock">The 7-day lock</string>
+    <string name="modecmp_r_weeklock_sub">Start it and you cannot drop to Relaxed for a week. You can still go up.</string>
+
+    <!-- Super hardcore only -->
+    <string name="modecmp_r_home1">At home, one word is enough</string>
+    <string name="modecmp_r_home1_sub">When the phone can see it is at your house, the first sexual word in an app closes it - no second look. Unsure where you are means the ordinary ladder.</string>
+    <string name="modecmp_r_reddit">reddit spellings are primers</string>
+    <string name="modecmp_r_reddit_sub">\"reddit\" and the ways it gets typed around a filter do nothing alone - but paired with a real word in the same app within minutes, they block.</string>
+
+    <!-- The grid: one name, then a value per mode (Off, Relaxed, Strict, Super hardcore). -->
+    <string name="modecmp_v_leave">Leaving the mode</string>
+    <string name="modecmp_v_leave_off">Any time</string>
+    <string name="modecmp_v_leave_relaxed">Any time. Off is gone once you have ever been Strict.</string>
+    <string name="modecmp_v_leave_strict">Down to Relaxed, unless the 7-day lock is on. Never Off.</string>
+    <string name="modecmp_v_leave_super">Never. It is permanent.</string>
+    <string name="modecmp_v_words">Words that count</string>
+    <string name="modecmp_v_words_off">None</string>
+    <string name="modecmp_v_words_relaxed">The core lists, plus hot/sexy next to a person</string>
+    <string name="modecmp_v_words_strict">+ subtler words and split spellings</string>
+    <string name="modecmp_v_words_super">+ reddit spellings, as primers</string>
+    <string name="modecmp_v_ladder">Detections to close an app</string>
+    <string name="modecmp_v_ladder_known">%1$d (%2$d if closed before, %3$d if new)</string>
+    <string name="modecmp_v_ladder_super">%1$d at home, %2$d away</string>
+    <string name="modecmp_v_setup">The setup</string>
+    <string name="modecmp_v_setup_off">Optional</string>
+    <string name="modecmp_v_setup_relaxed">Required, walked through first</string>
+    <string name="modecmp_v_setup_strict">Enforced: essentials only until done</string>
+    <string name="modecmp_v_greyscale">Grey screen lying down</string>
+    <string name="modecmp_v_switches">Filter switches</string>
+    <string name="modecmp_v_switches_yours">Yours to change</string>
+    <string name="modecmp_v_switches_locked">Locked on</string>
+    <string name="modecmp_v_house">Where you live</string>
+    <string name="modecmp_v_house_off">Not asked</string>
+    <string name="modecmp_v_house_strict">Asked once, then fixed</string>
+    <string name="modecmp_v_house_super">Home makes one word enough</string>
 
     <!-- ── Manage blocks screen (Main.kt) ────────────────────────────────────────────── -->
     <string name="manage_title">Manage blocks</string>
@@ -1051,8 +1072,10 @@
     <string name="monitor_off_body">The guard is not running. Tap to put it back on.</string>
     <string name="monitor_off_channel">Monitoring switched off</string>
     <!-- Tapping a permission row that is already ON. The row stops being a shortcut once
-         the permission is granted - see the note on permissionConsole. -->
-    <string name="status_already_on">Already on. To change it, open Settings yourself - this app will not take you there.</string>
+         the permission is granted - see the note on permissionConsole. Deliberately just
+         the fact: it used to add "open Settings yourself - this app will not take you
+         there", which read as a dare, and the one-way rule needs no announcing. -->
+    <string name="status_already_on">Already enabled</string>
     <string name="status_usage_access">Usage access (backup guard)</string>
     <string name="status_usage_access_why">Lets the app keep blocking if page monitoring is ever switched off.</string>
     <!-- The block cover's "why": the words that carried the score. %1$s word, %2$d times seen, %3$d percent of the score. -->
@@ -1095,6 +1118,8 @@
     <string name="br_paired_same_screen">on the same screen</string>
     <string name="br_paired_seconds_later">%1$d seconds later</string>
     <string name="br_paired_minutes_later">%1$d minute(s) later</string>
+    <!-- RedditMarks: several different r/ or u/ handles on one screen. 1 = the first few, space-separated. -->
+    <string name="br_reddit_marks">Reddit: %1$s on one screen\n\nOne r/ or u/ name is a mention. Several different ones together are a Reddit feed - whichever app or site it came through - and Reddit is blocked in every mode.</string>
 
     <!-- ── Pause gate overlay (Overlay.kt) ─────────────────────────────────────────── -->
 </resources>
