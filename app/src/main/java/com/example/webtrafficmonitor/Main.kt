@@ -9149,6 +9149,24 @@ private fun startWeekStrict() {
             if (offAt == 0L) "never"
             else "${MonitorHealth.offCount(this)}x, last ${relativeWhen(offAt)}",
             offAt == 0L)
+        // DEBUG BUILDS ONLY. A reinstall no longer strikes a lockout (see
+        // MonitorHealth.noteMonitoringOff), but one struck before that fix - or struck on
+        // purpose while testing - can still have all of Settings shut. This is the way back
+        // out without wiping app data. Inert in a release build (SettingsLockout.clear
+        // refuses there), so the row is hidden there too.
+        if (BuildConfig.IS_TESTING && SettingsLockout.isActive(this)) {
+            list.addView(TextView(this).apply {
+                text = "✕  Clear settings lockout (debug build)"; textSize = 14f
+                setTextColor(Palette.tint)
+                setPadding(0, (9 * dp).toInt(), 0, (9 * dp).toInt())
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    SettingsLockout.clear(this@MainActivity)
+                    Toast.makeText(this@MainActivity, "Settings lockout cleared", Toast.LENGTH_SHORT).show()
+                    showDevConsole()
+                }
+            })
+        }
 
         header("Active timers")
         row("App lockdown", if (Lockdown.isActive(this)) "${minLeft(Lockdown.remaining(this))} left" else "none", Lockdown.isActive(this))

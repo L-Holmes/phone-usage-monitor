@@ -50,12 +50,12 @@ Barinsta = me.austinhuang.instagrabber
 # ── X / Twitter ───────────────────────────────────────────────────────────
 Fritter = com.jonjomckay.fritter
 
-# ── YouTube ──────────────────────────────────────────────────────────────
-NewPipe = org.schabi.newpipe
-LibreTube = com.github.libretube
-SkyTube = free.rm.skytube.oss
-YouTube Vanced = com.vanced.android.youtube
-ReVanced YouTube = app.revanced.android.youtube
+# ── YouTube: DELIBERATELY NOT BLOCKED AS CLIENTS (2026-10-20) ────────────────────
+# Removed on the owner's instruction: "everything is fine blocking third party but not
+# YouTube." NewPipe / LibreTube / SkyTube / Vanced / ReVanced are no longer blocked as
+# third-party YouTube clients, and the YouTube service is gone from clients_services.txt
+# too, so the detector cannot re-add them. YouTube's own app is handled elsewhere
+# (greylist / media), not here.
 
 # ── Twitch ─────────────────────────────────────────────────────────────────
 Twire = com.perflyst.twire

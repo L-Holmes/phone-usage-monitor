@@ -106,3 +106,9 @@ Kindle = com.amazon.kindle
 Kobo = com.kobobooks.android
 Google Translate = com.google.android.apps.translate
 LinkedIn = com.linkedin.android
+
+# ── Your own apps (2026-10-20) ──────────────────────────────────────────────────
+# Helper apps the owner built themselves. Never blocked, never scanned, and never caught
+# by the third-party-client detector (Whitelist.isSafeApp short-circuits it). Add your own
+# here by package name.
+Macro Play = uk.co.orfo.macroplay

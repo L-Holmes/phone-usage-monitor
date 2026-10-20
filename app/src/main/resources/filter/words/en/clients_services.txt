@@ -82,11 +82,13 @@ domains: pinterest.com, pinimg.com, pin.it
 strong: pinterest, idea pins, your boards, save this pin
 hints: pinterest, pin it
 
-service: youtube
-label: YouTube
-domains: youtube.com, youtu.be, ytimg.com, googlevideo.com
-strong: youtube, watch later, subscriptions feed, youtube shorts, channel subscribers
-hints: youtube, newpipe, libretube, skytube, vanced, invidious, piped
+# ── YouTube: DELIBERATELY NOT A CLIENT SERVICE (2026-10-20) ─────────────────────────
+# Removed on the owner's instruction: "everything is fine blocking third party but not
+# YouTube." The detector was flagging a hand-built YouTube play/pause helper
+# (uk.co.orfo.macroplay, on apps_safe.txt) as "a third-party YouTube app" because it shows
+# YouTube's own vocabulary. There is no youtube block here any more, so no app can be caught
+# as a YouTube client - neither the helper nor NewPipe/LibreTube/Vanced (also off
+# apps_clients.txt). YouTube's OWN app is unaffected; it is handled as a greylist/media app.
 
 service: twitch
 label: Twitch

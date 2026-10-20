@@ -279,6 +279,11 @@ object ProxyClients {
     /** The service this app was caught being a client of, or null. */
     fun detected(c: Context, pkg: String?): Detected? {
         if (pkg.isNullOrBlank()) return null
+        // A user-whitelisted app (apps_safe.txt or the user's own list) is never a client.
+        // The detector is a heuristic that ends in a whole app being taken away, so an app
+        // the user has explicitly vouched for overrules it - see detectProxyClient, which
+        // also stops recording new suspicions for these.
+        if (Whitelist.isSafeApp(c, pkg)) return null
         val p = prefs(c)
         if (p.getBoolean(CLEARED + pkg, false)) return null
         val svc = p.getString(CONFIRMED + pkg, null) ?: return null

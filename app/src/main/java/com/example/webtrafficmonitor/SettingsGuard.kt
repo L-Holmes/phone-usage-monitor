@@ -601,7 +601,16 @@ object MonitorHealth {
             .putLong(KEY_OFF_AT, System.currentTimeMillis())
             .putInt(KEY_OFF_COUNT, p.getInt(KEY_OFF_COUNT, 0) + 1)
             .apply()
-        SettingsLockout.strike(ctx, SettingsLockout.Cause.MONITORING_STOPPED)
+        // ⚠️ NOT IN A DEBUG BUILD (2026-10-20). Every `adb install -r` drops the
+        // accessibility service from the enabled list, so onUnbind lands here and used to
+        // strike MONITORING_STOPPED - locking the developer out of ALL of Settings for an
+        // hour on the next launch, a lockout they never earned ("I didn't even try to
+        // uninstall it"). The whole-Settings lockout is a release protection; a reinstall
+        // must not arm it. Real strikes (an off-switch page, a revoked overlay) are
+        // untouched, and the off-count above still records, so the feature stays testable.
+        if (!BuildConfig.IS_TESTING) {
+            SettingsLockout.strike(ctx, SettingsLockout.Cause.MONITORING_STOPPED)
+        }
     }
 
     /** When monitoring was last switched off, or 0. */

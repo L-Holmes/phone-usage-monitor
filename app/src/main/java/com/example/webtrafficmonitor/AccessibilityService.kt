@@ -267,7 +267,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         appBlockActive = false
         shownBlockHost = null
         shownBlockUrl = null
-        controller.hide()
+        controller.hide(immediate = true)
         mainHandler.removeCallbacks(recheck)
         mainHandler.postDelayed(recheck, RECHECK_MS)
     }
@@ -448,7 +448,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 hit != null -> showAppBlock(hit.second, hit.first) // keeps cover + reposts
                 front != null || ourAppInFront(sweep) -> {
                     appBlockActive = false
-                    overlay?.hide()
+                    // Our own app may NEVER stay covered (it is the only route to lowering
+                    // the mode), so drop instantly when it is what came to the front;
+                    // otherwise honour the anti-flash floor.
+                    overlay?.hide(immediate = front == packageName || ourAppInFront(sweep))
                 }
                 else -> {
                     mainHandler.removeCallbacks(this)
@@ -596,6 +599,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             onLeave = { leaveBlockedPage(pkg, controller) },
             onReport = {},
             showGoBack = false,
+            minVisibleMs = OverlayController.BLOCK_SCREEN_MIN_VISIBLE_MS,
         )
     }
 
@@ -1199,7 +1203,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // A reconnect after the process was killed must not inherit a cover. The window died
         // with the old process, but our own idea of one has to be cleared with it or the
         // first evaluation would think a cover is already up and never raise a real one.
-        overlay?.hide()
+        overlay?.hide(immediate = true)
         appBlockActive = false
         overlay = OverlayController(this)
         FilterData.init(this)          // load word/app/domain lists from assets/filter/
@@ -1772,7 +1776,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         // above keep running (the Productivity stats are not adult-content monitoring),
         // and the uninstall-guard bounce stays, because that belongs to the uninstall lock.
         if (Mode.isOff(this)) {
-            if (!appBlockActive) overlay?.let { if (it.isShowing) it.hide() }
+            if (!appBlockActive) overlay?.let { if (it.isShowing) it.hide(immediate = true) }
             shownBlockHost = null
             shownBlockUrl = null
             return
@@ -1989,6 +1993,8 @@ class PageMonitorAccessibilityService : AccessibilityService() {
             // there is no web page underneath, so "go back one page" would be nonsense.
             // Exit is the only offer.
             showGoBack = false,
+            // Stays up at least 2s so a brief misdetection cannot flash it on and off.
+            minVisibleMs = OverlayController.BLOCK_SCREEN_MIN_VISIBLE_MS,
         )
         mainHandler.removeCallbacks(recheck)
         mainHandler.postDelayed(recheck, RECHECK_MS)
@@ -2093,6 +2099,10 @@ class PageMonitorAccessibilityService : AccessibilityService() {
      */
     private fun detectProxyClient(pkg: String, host: String?, title: String?, content: String?, url: String?) {
         if (Mode.isOff(this)) return
+        // A user-whitelisted app (apps_safe.txt / the user's own list) is vouched for: never
+        // record it as a suspect or a proof. ProxyClients.detected ignores it too, so the
+        // block path agrees - but stopping here keeps the review list clean as well.
+        if (Whitelist.isSafeApp(this, pkg)) return
 
         // THE HANDOFF. A browser showing a service's own AUTHORIZE url is an app asking to
         // sign in, and the app that asked is the one that was in front a moment ago. This is
@@ -2101,7 +2111,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         if (AppBlocklist.isBrowser(pkg)) {
             val handoff = ClientMarkers.serviceForAuthUrl(host, url) ?: return
             val asker = RecentAppsTracker.recentlyBefore(pkg)
-                .firstOrNull { ClientMarkers.isScannable(it, packageName) } ?: return
+                .firstOrNull { ClientMarkers.isScannable(it, packageName) && !Whitelist.isSafeApp(this, it) } ?: return
             val why = getString(R.string.proxy_why_signin, host.orEmpty())
             if (ProxyClients.proof(this, asker, handoff, why)) {
                 android.util.Log.w("PageMonitor", "proxy client (sign-in handoff): $asker -> ${handoff.id}")
@@ -3003,6 +3013,9 @@ class PageMonitorAccessibilityService : AccessibilityService() {
                 // in a browser (host != null there, and only there). A non-web screen
                 // guard or an in-app keyword match has no page to go back to.
                 showGoBack = host != null,
+                // 2s floor: a borderline word that clears as the page scrolls no longer
+                // blinks the cover on and off.
+                minVisibleMs = OverlayController.BLOCK_SCREEN_MIN_VISIBLE_MS,
             )
             // show() only sets the text on first display; keep the reason live.
             if (!freshShow) controller.setReason(reason)
@@ -3632,7 +3645,7 @@ class PageMonitorAccessibilityService : AccessibilityService() {
         HomeAreaWatch.stop()
         greyscaleSensor?.stop(); greyscaleSensor = null
         if (greyscaleApplied) { Greyscale.setEnabled(this, false); greyscaleApplied = false }
-        overlay?.hide()
+        overlay?.hide(immediate = true)
         closeUsageSegment()                                    // bank the time we were mid-way through
         runCatching { unregisterReceiver(screenReceiver) }
         runCatching { unregisterReceiver(bluetoothReceiver) }

@@ -109,6 +109,20 @@ class OverlayController(private val context: Context) {
     // addView ever fails part-way, because a view in an unknown state is not worth reusing.
     private var built: FrameLayout? = null
 
+    // MINIMUM ON-SCREEN TIME (2026-10-20). A cover that goes up and comes straight back down
+    // - a borderline keyword that clears as the page scrolls, a guard that misfired for a
+    // frame - FLASHES, which the user reported as "it flashes on and off and it's annoying".
+    // So once a cover is attached it stays for at least a floor: a hide() that arrives too
+    // early is DEFERRED to the remaining time rather than detaching now. A show() in the
+    // meantime cancels the deferral and keeps the same cover up, so nothing flickers. This
+    // never SHORTENS a cover and never holds one past when it should go - it only stops the
+    // sub-floor blink. Explicit teardown (monitoring off, our own app in front, service
+    // teardown) passes immediate = true to bypass it; see hide().
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var shownAtUptime = 0L
+    private var minVisibleMs = 0L
+    private var pendingHide: Runnable? = null
+
     val isShowing: Boolean get() = view != null
 
     /**
@@ -130,10 +144,16 @@ class OverlayController(private val context: Context) {
      *      one. detach() below makes both states impossible to hold.
      */
     private fun detach() {
+        clearPendingHide()
         val existing = view ?: return
         view = null
         runCatching { windowManager.removeViewImmediate(existing) }
             .onFailure { android.util.Log.w("OverlayController", "stale cover would not detach", it) }
+    }
+
+    private fun clearPendingHide() {
+        pendingHide?.let { mainHandler.removeCallbacks(it) }
+        pendingHide = null
     }
 
     /**
@@ -156,8 +176,15 @@ class OverlayController(private val context: Context) {
         onReport: () -> Unit,
         showGoBack: Boolean = true,
         details: String? = null,
+        minVisibleMs: Long = LOCK_MIN_VISIBLE_MS,
     ) {
+        // A (re-)show keeps the cover up: cancel any deferred hide waiting to take it down.
+        clearPendingHide()
         view?.let { existing ->
+            // Already on screen (an upgrade to a different block, or a refreshed reason). It
+            // has been continuously visible, so leave shownAtUptime alone; just carry the
+            // stricter of the two floors so a 2s block re-shown mid-flash still owes its 2s.
+            this.minVisibleMs = maxOf(this.minVisibleMs, minVisibleMs)
             existing.findViewById<TextView>(R.id.block_reason).text = reason
             setDetailsOn(existing, details)
             // The cover can be re-shown for a DIFFERENT kind of block (a page cover
@@ -195,6 +222,9 @@ class OverlayController(private val context: Context) {
         try {
             windowManager.addView(container, params)
             view = container
+            // Start the floor from the moment it actually attached.
+            shownAtUptime = SystemClock.uptimeMillis()
+            this.minVisibleMs = minVisibleMs
         } catch (t: Throwable) {
             // Never crash the service over a cover; log it instead.
             android.util.Log.e("OverlayController", "could not show block cover", t)
@@ -283,7 +313,23 @@ class OverlayController(private val context: Context) {
      * the one window in the app where "eventually" is not good enough - it is covering the
      * whole screen and the user is trying to get out from under it.
      */
-    fun hide() = detach()
+    /**
+     * Take the cover down - but not before it has had its minimum on-screen time, unless
+     * [immediate]. A hide that arrives inside the floor is deferred to the remaining time; a
+     * show() before then cancels it and the cover never blinks. [immediate] is for the cases
+     * where the cover MUST go now and a flash is impossible anyway: monitoring switched off,
+     * our own app in front (it may never be covered), a main-thread stall, service teardown.
+     */
+    fun hide(immediate: Boolean = false) {
+        if (view == null) { clearPendingHide(); return }
+        if (immediate) { detach(); return }
+        val remaining = minVisibleMs - (SystemClock.uptimeMillis() - shownAtUptime)
+        if (remaining <= 0L) { detach(); return }
+        if (pendingHide != null) return                 // already waiting out the floor
+        val r = Runnable { pendingHide = null; detach() }
+        pendingHide = r
+        mainHandler.postDelayed(r, remaining)
+    }
 
     /** Update just the cover's reason text (used by the live block countdown). */
     fun setReason(reason: String) {
@@ -336,4 +382,11 @@ class OverlayController(private val context: Context) {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
         }
+
+    companion object {
+        /** The floor for a lock/guard cover (the user asked for "a minimum of 1 second"). */
+        const val LOCK_MIN_VISIBLE_MS = 1_000L
+        /** The floor for a content/app block screen ("minimum amount of time ... 2 seconds"). */
+        const val BLOCK_SCREEN_MIN_VISIBLE_MS = 2_000L
+    }
 }

@@ -1,21 +1,5 @@
 
 
-
-
----------------
-hmmmm....
-seems to block all of settings app...
-should only block the specific pages where the user is trying to specifically uninstall this app... (there is logic to do this, not sure why settings itself is being blocked... i didn't even try and unsintall it...)
-
-
-
-------------
-
-HHHHMMMMMMMMMM
-- link it to like a settings app or something that the user would not want to loose...
-    - then have that auto self destruct if it sees that this app has been deleted... (to deter the user from deleting this app...)
-
-
 ---------------
 
 maybe _I_ just install this as the 'master' app or whatever on my phone, such that it can't be installed via safe mode?!?!?!
@@ -33,6 +17,15 @@ safe mode...
     - (hard to do...)
     - e.g. if we have an app which stores all the users photos / notes etc....
     - which will wipe itself it it sees that the app is gone...
+
+
+
+-------------------
+
+Monitoring app idea
+If the sensors move, we block non whitelisted apps for a while!!!
+E.g. 3 hours or 24 hours!?!? 
+
 
 
 
